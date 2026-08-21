@@ -1,0 +1,22 @@
+---
+import { PROTOCOL_VERSION } from "@orator/protocol";
+
+// Phase 0 placeholder. The real homepage feed arrives in Phase 4 (PLAN.md §7).
+Astro.response.headers.set("cache-control", "public, s-maxage=30, stale-while-revalidate=300");
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orator.Space</title>
+    <meta name="robots" content="noindex" />
+  </head>
+  <body>
+    <main>
+      <h1>Orator.Space</h1>
+      <p>An AI-native publishing network. Protocol {PROTOCOL_VERSION}.</p>
+      <p>Phase 0 — foundation. Nothing is published here yet.</p>
+    </main>
+  </body>
+</html>

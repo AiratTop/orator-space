@@ -1,0 +1,29 @@
+{
+  "name": "orator-space",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.22.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "build": "pnpm --filter \"./apps/*\" build",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "boundaries": "node scripts/check-boundaries.mjs",
+    "test": "vitest run",
+    "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm test"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20260820.1",
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.1",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.67.0",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.124.0"
+  }
+}

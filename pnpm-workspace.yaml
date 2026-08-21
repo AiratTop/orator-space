@@ -1,0 +1,12 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Build scripts are opt-in in pnpm 11; these two compile native binaries we need.
+allowBuilds:
+  esbuild: true
+  workerd: true
+
+
+# spikes/ are Phase -1 verification harnesses with their own npm installs.
+# They are deliberately outside the workspace — see spikes/README.md.

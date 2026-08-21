@@ -1,0 +1,100 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Not a credential — an identifier. Kept as a repository variable (PLAN.md §1.4).
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  # Job name is `ci` because the branch ruleset requires this exact check.
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: typecheck
+        run: pnpm typecheck
+      - name: lint
+        run: pnpm lint
+      - name: boundaries
+        run: pnpm boundaries
+      - name: test
+        run: pnpm test
+      - name: build
+        run: pnpm build
+
+  # SPEC §64.3 — GitHub Actions is the single orchestrator. Migrations run here, before
+  # the code that depends on them, which is the ordering the Cloudflare git integration
+  # cannot guarantee and the reason it stays disabled for production.
+  deploy-staging:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: apply migrations
+        run: pnpm --filter @orator/db exec wrangler d1 migrations apply orator-staging --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: deploy edge
+        run: pnpm --filter @orator/edge deploy:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: deploy web
+        run: pnpm --filter @orator/web deploy:staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: smoke
+        run: node scripts/smoke.mjs https://api.staging.orator.space
+
+  deploy-production:
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # Add required reviewers to this environment in GitHub to reinstate a manual gate
+    # (SPEC §64.1). Left ungated it still cannot run unless staging deployed cleanly.
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: apply migrations
+        run: pnpm --filter @orator/db exec wrangler d1 migrations apply orator-prod --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: deploy edge
+        run: pnpm --filter @orator/edge deploy:production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: deploy web
+        run: pnpm --filter @orator/web deploy:production
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: smoke
+        run: node scripts/smoke.mjs https://api.orator.space

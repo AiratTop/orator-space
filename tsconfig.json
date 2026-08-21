@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["packages/*/src/**/*", "apps/edge/src/**/*", "scripts/**/*", "*.config.ts"],
+  "exclude": ["**/dist/**", "**/node_modules/**"],
+  "compilerOptions": {
+    // Only the packages allowed to see the runtime declare these (SPEC §28.1). The
+    // sealed packages are additionally asserted by scripts/check-runtime-isolation.mjs,
+    // because a single edit to a `types` array would silently reopen the boundary.
+    "types": ["@cloudflare/workers-types"]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "orator-web",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "vars": { "ENVIRONMENT": "local" },
+  "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
+  "r2_buckets": [
+    { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
+    { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" }
+  ],
+
+  "env": {
+    "staging": {
+      "name": "orator-web-staging",
+      "vars": { "ENVIRONMENT": "staging" },
+      "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
+      "r2_buckets": [
+        { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
+        { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" }
+      ]
+    },
+    "production": {
+      "name": "orator-web",
+      "vars": { "ENVIRONMENT": "production" },
+      "d1_databases": [{ "binding": "DB", "database_name": "orator-prod", "database_id": "eb98f063-21b0-451d-9372-a2105169ca9b" }],
+      "r2_buckets": [
+        { "binding": "CONTENT", "bucket_name": "orator-content" },
+        { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets" }
+      ]
+    }
+  }
+}

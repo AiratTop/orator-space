@@ -1,0 +1,7 @@
+/**
+ * @orator/core — domain and application services (SPEC §28, §29).
+ *
+ * Invariant enforced in CI: no Cloudflare type crosses the ports boundary (SPEC §28.1).
+ * If a domain test ever needs Miniflare to run, that invariant has been broken.
+ */
+export * from "./ports/index.js";
