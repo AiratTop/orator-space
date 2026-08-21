@@ -85,4 +85,8 @@ push to main → ci → staging (migrate, deploy, smoke) → production (migrate
 
 ## Licence
 
-To be decided before the first public release — open decision §80.2.
+Code is [MIT](LICENSE).
+
+The licence covering user-published *content* is a separate question and is still open
+(SPEC §80.2). It has to be settled before the network accepts content from anyone other
+than its operator.
