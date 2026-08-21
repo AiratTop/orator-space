@@ -27,6 +27,9 @@ import {
   type AuthorSummary,
   type FeedPage,
   type ReadingRepo,
+  type CommentRecord,
+  type EdgeRecord,
+  type SocialRepo,
   type TokenRecord,
   type TokenRepo,
 } from "../ports/index.js";
@@ -58,6 +61,9 @@ export interface MemoryState {
   keys: Map<string, KeyRecord>;
   audit: AuditEntry[];
   outbox: OutboxEntry[];
+  comments: Map<string, CommentRecord>;
+  edges: Map<string, EdgeRecord>;
+  follows: Set<string>;
 }
 
 /** Controls the doubles expose to tests, beyond the ports themselves. */
@@ -83,6 +89,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     keys: new Map(),
     audit: [],
     outbox: [],
+    comments: new Map(),
+    edges: new Map(),
+    follows: new Set(),
   };
 
   let current = options.now ?? new Date("2026-08-21T12:00:00.000Z");
@@ -120,6 +129,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         keys: new Map(state.keys),
         audit: [...state.audit],
         outbox: [...state.outbox],
+        comments: new Map(state.comments),
+        edges: new Map(state.edges),
+        follows: new Set(state.follows),
       };
       try {
         const outcomes = [];
@@ -558,6 +570,115 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+
+  /**
+   * Comments, edges and follows in memory (SPEC §17, §18, §19).
+   *
+   * The author fields are projected from `principals` on read rather than copied on write,
+   * so a test that renames a principal does not leave a comment claiming the old name —
+   * which is the same reason the D1 adapter joins instead of denormalising.
+   */
+  const withAuthor = (comment: CommentRecord): CommentRecord => {
+    const author = state.principals.get(comment.authorPrincipalId);
+    if (author === undefined) return comment;
+    return {
+      ...comment,
+      authorUsername: author.username,
+      authorKind: author.kind,
+      ...(author.ownerPrincipalId === undefined ? {} : { authorOwnerPrincipalId: author.ownerPrincipalId }),
+    };
+  };
+
+  const followKey = (follower: string, followee: string) => `${follower}\u0000${followee}`;
+
+  const social: SocialRepo = {
+    async findComment(id) {
+      const comment = state.comments.get(id);
+      return comment === undefined ? null : withAuthor(comment);
+    },
+    async listComments(articleId, limit, after) {
+      return [...state.comments.values()]
+        .filter((comment) => comment.articleId === articleId && (after === null || comment.id > after))
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit)
+        .map(withAuthor);
+    },
+    async countComments(articleId) {
+      return [...state.comments.values()].filter(
+        (comment) => comment.articleId === articleId && comment.status === "visible",
+      ).length;
+    },
+    insertComment: (comment) =>
+      asWrite(() => {
+        state.comments.set(comment.id, {
+          id: comment.id,
+          articleId: comment.articleId,
+          parentCommentId: comment.parentCommentId,
+          rootCommentId: comment.rootCommentId,
+          depth: comment.depth,
+          authorPrincipalId: comment.authorPrincipalId,
+          stance: comment.stance,
+          contentMarkdown: comment.contentMarkdown,
+          contentHash: comment.contentHash,
+          status: "visible",
+          createdAt: comment.createdAt,
+          editedAt: null,
+        });
+        return 1;
+      }),
+    setCommentStatus: (id, status, at) =>
+      asWrite(() => {
+        const comment = state.comments.get(id);
+        if (comment === undefined) return 0;
+        state.comments.set(id, { ...comment, status, editedAt: at });
+        return 1;
+      }),
+
+    async findEdge(id) {
+      return state.edges.get(id) ?? null;
+    },
+    async listEdgesFor(articleId, limit, after) {
+      return [...state.edges.values()]
+        .filter(
+          (edge) =>
+            (edge.srcArticleId === articleId || edge.dstArticleId === articleId) &&
+            (after === null || edge.id > after),
+        )
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit);
+    },
+    insertEdge: (edge) =>
+      asWrite(() => {
+        // The unique index the schema puts on (src, kind, dst) — modelled, because the
+        // service depends on the write failing rather than on checking first.
+        const duplicate = [...state.edges.values()].some(
+          (existing) =>
+            existing.srcArticleId === edge.srcArticleId &&
+            existing.kind === edge.kind &&
+            existing.dstArticleId !== null &&
+            existing.dstArticleId === edge.dstArticleId,
+        );
+        if (duplicate) throw new ConstraintViolation("UNIQUE constraint failed: edges", "unique");
+        state.edges.set(edge.id, edge);
+        return 1;
+      }),
+    deleteEdge: (id) => asWrite(() => (state.edges.delete(id) ? 1 : 0)),
+
+    async isFollowing(followerId, followeeId) {
+      return state.follows.has(followKey(followerId, followeeId));
+    },
+    insertFollow: (followerId, followeeId) =>
+      asWrite(() => {
+        state.follows.add(followKey(followerId, followeeId));
+        return 1;
+      }),
+    deleteFollow: (followerId, followeeId) =>
+      asWrite(() => (state.follows.delete(followKey(followerId, followeeId)) ? 1 : 0)),
+    async countFollowers(principalId) {
+      return [...state.follows].filter((key) => key.endsWith(`\u0000${principalId}`)).length;
+    },
+  };
+
   return {
     db: database,
     principals,
@@ -568,6 +689,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     eventBus,
     articles,
     reading,
+    social,
     events,
     idempotency,
     content: createMemoryContentStore(),

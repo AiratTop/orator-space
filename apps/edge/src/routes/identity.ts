@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import {
   createKeyChallenge,
   issueToken,
@@ -8,12 +7,11 @@ import {
   registerHuman,
   revokeAgentKey,
   revokeToken,
-  SCOPES,
   type PrincipalRecord,
   type RequestContext,
 } from "@orator/core";
-import { ErrorType } from "@orator/protocol";
-import { problemResponse, respond } from "../http.js";
+import { ErrorType, schemas } from "@orator/protocol";
+import { parse, problemResponse, respond } from "../http.js";
 import type { Env } from "../index.js";
 
 type Vars = { requestId: string; ctx: RequestContext };
@@ -28,35 +26,9 @@ type Ctx = Parameters<typeof problemResponse>[0];
  */
 export const identityRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 
-function parse<T>(c: Ctx, schema: z.ZodType<T>, body: unknown) {
-  const result = schema.safeParse(body);
-  if (result.success) return { data: result.data } as const;
-  return {
-    response: problemResponse(
-      c,
-      {
-        type: ErrorType.ValidationFailed,
-        title: "Request body is not valid",
-        // Field-level detail, because an error an agent cannot act on programmatically
-        // is a defect in the API rather than a message (SPEC §45.1).
-        detail: result.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "),
-        extra: { errors: result.error.issues.map((i) => ({ field: i.path.join("."), code: i.code })) },
-      },
-      new URL(c.req.url).pathname,
-    ),
-  } as const;
-}
-
-const usernameField = z.string().min(1).max(64);
-
-const humanSchema = z.object({
-  username: usernameField,
-  display_name: z.string().max(120).nullish(),
-  email: z.string().email().nullish(),
-});
 
 identityRoutes.post("/v1/humans", async (c) => {
-  const parsed = parse(c, humanSchema, await c.req.json().catch(() => null));
+  const parsed = parse(c, schemas.registerHumanRequest, await c.req.json().catch(() => null));
   if ("response" in parsed) return parsed.response;
 
   const result = await registerHuman(c.get("ctx"), {
@@ -83,15 +55,8 @@ identityRoutes.post("/v1/humans", async (c) => {
   );
 });
 
-const agentSchema = z.object({
-  username: usernameField,
-  display_name: z.string().max(120).nullish(),
-  model: z.string().max(120).nullish(),
-  provider: z.string().max(120).nullish(),
-});
-
 identityRoutes.post("/v1/agents", async (c) => {
-  const parsed = parse(c, agentSchema, await c.req.json().catch(() => null));
+  const parsed = parse(c, schemas.createAgentRequest, await c.req.json().catch(() => null));
   if ("response" in parsed) return parsed.response;
   return respond(
     c,
@@ -142,15 +107,8 @@ identityRoutes.get("/v1/principals/by-username/:username", async (c) => {
   return respond(c, { ok: true, value: publicView(record) });
 });
 
-const tokenSchema = z.object({
-  principal_id: z.string(),
-  name: z.string().min(1).max(80),
-  scopes: z.array(z.enum(SCOPES)).optional(),
-  expires_at: z.string().datetime().nullish(),
-});
-
 identityRoutes.post("/v1/tokens", async (c) => {
-  const parsed = parse(c, tokenSchema, await c.req.json().catch(() => null));
+  const parsed = parse(c, schemas.issueTokenRequest, await c.req.json().catch(() => null));
   if ("response" in parsed) return parsed.response;
 
   const result = await issueToken(c.get("ctx"), {
@@ -206,15 +164,8 @@ identityRoutes.post("/v1/agents/:id/keys/challenge", async (c) =>
   respond(c, createKeyChallenge(c.get("ctx"), c.req.param("id")), 201),
 );
 
-const keySchema = z.object({
-  public_key: z.string().min(40).max(100),
-  nonce: z.string().length(26),
-  signature: z.string().min(80).max(100),
-  label: z.string().max(80).nullish(),
-});
-
 identityRoutes.post("/v1/agents/:id/keys", async (c) => {
-  const parsed = parse(c, keySchema, await c.req.json().catch(() => null));
+  const parsed = parse(c, schemas.registerKeyRequest, await c.req.json().catch(() => null));
   if ("response" in parsed) return parsed.response;
   return respond(
     c,

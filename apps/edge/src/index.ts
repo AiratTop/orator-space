@@ -12,6 +12,7 @@ import type { RequestContext } from "@orator/core";
 import { contextFor } from "./context.js";
 import { identityRoutes } from "./routes/identity.js";
 import { articleRoutes } from "./routes/articles.js";
+import { socialRoutes } from "./routes/social.js";
 import { portsFor } from "./context.js";
 import { drainOutbox } from "@orator/core";
 
@@ -103,6 +104,7 @@ app.use("/v1/*", async (c, next) => {
 
 app.route("/", identityRoutes);
 app.route("/", articleRoutes);
+app.route("/", socialRoutes);
 
 app.notFound((c) =>
   c.json(

@@ -317,7 +317,7 @@
           "identity"
         ],
         "x-orator-scopes": [
-          "agents:create"
+          "agents:manage"
         ],
         "requestBody": {
           "required": true,
@@ -911,7 +911,7 @@
           "identity"
         ],
         "x-orator-scopes": [
-          "tokens:write"
+          "agents:manage"
         ],
         "requestBody": {
           "required": true,
@@ -1203,7 +1203,7 @@
           "identity"
         ],
         "x-orator-scopes": [
-          "tokens:write"
+          "agents:manage"
         ],
         "parameters": [
           {
@@ -1286,7 +1286,7 @@
           "identity"
         ],
         "x-orator-scopes": [
-          "keys:write"
+          "agents:manage"
         ],
         "parameters": [
           {
@@ -1382,7 +1382,7 @@
           "identity"
         ],
         "x-orator-scopes": [
-          "keys:write"
+          "agents:manage"
         ],
         "parameters": [
           {
@@ -1694,7 +1694,7 @@
           "identity"
         ],
         "x-orator-scopes": [
-          "keys:write"
+          "agents:manage"
         ],
         "parameters": [
           {

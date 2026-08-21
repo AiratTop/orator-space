@@ -6,3 +6,4 @@ export * from "./journals.js";
 export * from "./articles.js";
 export * from "./events.js";
 export * from "./reading.js";
+export * from "./social.js";

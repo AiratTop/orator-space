@@ -1,30 +1,12 @@
 /**
- * Token scopes (SPEC §43.1).
+ * Scope presets and helpers (SPEC §43.1).
  *
- * `articles:write` and `articles:publish` are separate on purpose: it lets an owner hand
- * an assistant the ability to prepare drafts without the ability to publish them, which
- * is the shape of the main product workflow (§4.3).
+ * The list of scopes itself lives in `protocol`: it is a wire contract, appearing in token
+ * requests, in OpenAPI and in the MCP tool definitions. What lives here is what the domain
+ * does with it — which bundles are handed out, and how a request is checked.
  */
-export const SCOPES = [
-  "articles:read",
-  "articles:write",
-  "articles:publish",
-  "comments:read",
-  "comments:write",
-  "media:write",
-  "edges:write",
-  "follows:write",
-  "agents:read",
-  "agents:manage",
-  "events:read",
-  "admin:moderate",
-  "admin:manage",
-] as const;
-
-export type Scope = (typeof SCOPES)[number];
-
-const SCOPE_SET: ReadonlySet<string> = new Set(SCOPES);
-export const isScope = (value: string): value is Scope => SCOPE_SET.has(value);
+export { isAdminScope, isScope, SCOPES, type Scope } from "@orator/protocol";
+import { isScope, type Scope } from "@orator/protocol";
 
 /**
  * What a token gets when the caller asks for nothing. Read-only: a token that could
@@ -38,12 +20,16 @@ export const AGENT_PRESET: readonly Scope[] = [
   "articles:read",
   "articles:write",
   "articles:publish",
+  // Tombstoning its own work, yes. Erasing the bytes takes more than a scope: §23.3
+  // requires a human actor, because destroying evidence is an accountable act.
+  "articles:delete",
   "comments:read",
   "comments:write",
   "edges:write",
   "follows:write",
   "events:read",
   "media:write",
+  "profile:write",
 ];
 
 /**
@@ -69,5 +55,3 @@ export function parseScopes(input: readonly string[]): { scopes: Scope[] } | { i
 export const hasScope = (granted: readonly Scope[], required: Scope): boolean =>
   granted.includes(required);
 
-/** Admin scopes are never granted implicitly; they are always requested explicitly. */
-export const isAdminScope = (scope: Scope): boolean => scope.startsWith("admin:");

@@ -11,6 +11,7 @@ import {
   createPrincipalRepo,
   createR2ContentStore,
   createReadingRepo,
+  createSocialRepo,
   createTokenRepo,
   systemClock,
 } from "@orator/adapters-cf";
@@ -31,6 +32,7 @@ export function portsFor(env: Env): Ports {
     eventBus: createQueueEventBus(env.EVENTS),
     articles: createArticleRepo(env.DB),
     reading: createReadingRepo(env.DB),
+    social: createSocialRepo(env.DB),
     events: createEventRepo(env.DB),
     idempotency: createIdempotencyRepo(env.DB),
     content: createR2ContentStore(env.CONTENT),

@@ -13,5 +13,6 @@ export * from "./ids.js";
 export * from "./errors.js";
 export * from "./cursor.js";
 export * from "./negotiate.js";
-export * from "./schemas.js";
+export * from "./scopes.js";
+export * as schemas from "./schemas.js";
 export * from "./api.js";

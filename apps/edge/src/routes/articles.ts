@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import {
   createArticle,
   createRevision,
@@ -10,8 +9,8 @@ import {
   withIdempotency,
   type RequestContext,
 } from "@orator/core";
-import { ErrorType } from "@orator/protocol";
-import { problemResponse, respond } from "../http.js";
+import { ErrorType, schemas } from "@orator/protocol";
+import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
 import type { Env } from "../index.js";
 
 type Vars = { requestId: string; ctx: RequestContext };
@@ -19,48 +18,7 @@ type Ctx = Parameters<typeof problemResponse>[0];
 
 export const articleRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 
-function parse<T>(c: Ctx, schema: z.ZodType<T>, body: unknown) {
-  const result = schema.safeParse(body);
-  if (result.success) return { data: result.data } as const;
-  return {
-    response: problemResponse(
-      c,
-      {
-        type: ErrorType.ValidationFailed,
-        title: "Request body is not valid",
-        detail: result.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "),
-        extra: { errors: result.error.issues.map((i) => ({ field: i.path.join("."), code: i.code })) },
-      },
-      new URL(c.req.url).pathname,
-    ),
-  } as const;
-}
 
-/**
- * SPEC §34.1 — required on every endpoint that creates something.
- *
- * Enforced rather than optional: an autonomous agent that retries without a key produces
- * duplicates, and the platform cannot tell them apart afterwards. Refusing the request is
- * the only point at which that is still fixable.
- */
-function requireIdempotencyKey(c: Ctx) {
-  const key = c.req.header("idempotency-key");
-  if (key === undefined || key.length < 8 || key.length > 255) {
-    return {
-      response: problemResponse(
-        c,
-        {
-          type: ErrorType.ValidationFailed,
-          title: "Idempotency-Key header is required",
-          detail:
-            "Send a unique key of 8-255 characters per logical request, and reuse it when retrying that same request.",
-        },
-        new URL(c.req.url).pathname,
-      ),
-    } as const;
-  }
-  return { key } as const;
-}
 
 /**
  * Hands the outbox to the queue right after responding (SPEC §35.2).
@@ -79,22 +37,12 @@ function deliverInBackground(c: Ctx, ctx: RequestContext) {
   );
 }
 
-const createSchema = z.object({
-  title: z.string().min(1).max(300),
-  content: z.string().min(1),
-  slug: z.string().max(120).nullish(),
-  language: z.string().max(20).optional(),
-  visibility: z.enum(["public", "unlisted", "private"]).optional(),
-  authorship_disclosure: z.enum(["human_authored", "ai_assisted", "ai_generated"]).optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
-
 articleRoutes.post("/v1/articles", async (c) => {
   const idem = requireIdempotencyKey(c);
   if ("response" in idem) return idem.response;
 
   const body = await c.req.json().catch(() => null);
-  const parsed = parse(c, createSchema, body);
+  const parsed = parse(c, schemas.createArticleRequest, body);
   if ("response" in parsed) return parsed.response;
 
   const ctx = c.get("ctx");
@@ -119,18 +67,12 @@ articleRoutes.post("/v1/articles", async (c) => {
   return respond(c, result, 201);
 });
 
-const revisionSchema = z.object({
-  title: z.string().min(1).max(300),
-  content: z.string().min(1),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
-
 articleRoutes.post("/v1/articles/:id/revisions", async (c) => {
   const idem = requireIdempotencyKey(c);
   if ("response" in idem) return idem.response;
 
   const body = await c.req.json().catch(() => null);
-  const parsed = parse(c, revisionSchema, body);
+  const parsed = parse(c, schemas.createRevisionRequest, body);
   if ("response" in parsed) return parsed.response;
 
   // SPEC §34.3 — the quoted form is what an ETag looks like on the way back in.
@@ -151,18 +93,12 @@ articleRoutes.post("/v1/articles/:id/revisions", async (c) => {
   return respond(c, result, result.value.unchanged ? 200 : 201);
 });
 
-const publishSchema = z.object({
-  revision_id: z.string().length(26).optional(),
-  signature: z.string().min(80).max(100).nullish(),
-  signature_key_id: z.string().length(26).nullish(),
-});
-
 articleRoutes.post("/v1/articles/:id/publish", async (c) => {
   const idem = requireIdempotencyKey(c);
   if ("response" in idem) return idem.response;
 
   const body = (await c.req.json().catch(() => ({}))) ?? {};
-  const parsed = parse(c, publishSchema, body);
+  const parsed = parse(c, schemas.publishRequest, body);
   if ("response" in parsed) return parsed.response;
 
   const ctx = c.get("ctx");
