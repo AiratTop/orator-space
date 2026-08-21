@@ -1,0 +1,8 @@
+- Read SPEC.md before making architectural changes.
+- Do not introduce dependencies without justification.
+- Do not change stable entity IDs once defined.
+- Do not create separate repositories unless explicitly required.
+- Keep the project as a monorepo.
+- Prefer simple architecture over premature abstraction.
+- Never modify production infrastructure without explicit instruction.
+- Update SPEC.md when an architectural decision changes.
