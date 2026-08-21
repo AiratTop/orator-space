@@ -29,25 +29,116 @@
 
 Задачи, которые нельзя выполнить из репозитория.
 
-| # | Действие | Когда | Комментарий |
+### 1.1. Cloudflare
+
+| Ресурс | Production | Staging | Комментарий |
 |---|---|---|---|
-| 1 | Включить Workers Paid на аккаунте Cloudflare | до Phase 0 | нужен для Durable Objects, Queues, Analytics Engine |
-| 2 | Завести `orator.space` в Cloudflare, проверить активность зоны | до Phase 0 | домен уже есть |
-| 3 | Создать D1: `orator-prod`, `orator-staging` | Phase 0 | id попадают в `wrangler.jsonc` |
-| 4 | Создать R2-бакеты: `orator-content`, `orator-media`, `orator-backups` (×2 для staging) | Phase 0 | `orator-content` — immutable, §32 |
-| 5 | Создать Queue: `orator-events` + dead-letter | Phase 0 | |
-| 6 | Создать Analytics Engine dataset | Phase 0 | |
-| 7 | Настроить бюджетный алерт на аккаунте | до Phase 3 | `SPEC.md` §67.2 — агенты работают круглосуточно |
-| 8 | GitHub: включить branch protection на `main`, создать environments `staging` / `production` | Phase 0 | секреты живут в environments |
-| 8a | **Отключить автодеплой production из git-интеграции Cloudflare** | Phase 0 | разворачивает GitHub Actions, иначе порядок миграций не определён — §64.3 |
-| 9 | Записать в GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Phase 0 | токен с правами на Workers/D1/R2/Queues |
-| 10 | Решить поддомен staging: `*.staging.orator.space` или отдельный домен | Phase 0 | |
-| 11 | Добавить проверки в Gatus после Phase 4 | Phase 8 | `/health`, `/health/deep` — §66.7 |
-| 12 | Опубликовать Terms / Content Policy / Privacy | до публичного запуска | `[L]`, §61.1, §82 |
+| План | Workers Paid | — | нужен для Durable Objects, Queues, Analytics Engine |
+| D1 | `orator-prod` | `orator-staging` | id попадают в `wrangler.jsonc` |
+| R2 | `orator-content` | `orator-content-staging` | immutable, приватный (§32.1) |
+| R2 | `orator-media` | `orator-media-staging` | публичный через `media.orator.space` |
+| R2 | `orator-assets` | `orator-assets-staging` | sitemap, экспорты — **перезаписываемые** |
+| R2 | `orator-backups` | не нужен | только production (§31.5) |
+| Queue | `orator-events` | `orator-events-staging` | основная |
+| Queue | `orator-events-dlq` | `orator-events-staging-dlq` | dead-letter, см. 1.2 |
+| Analytics Engine | dataset `orator_events` | `orator_events_staging` | binding `AE`, см. 1.3 |
 
-**Что от вас не потребуется:** поднимать Docker-контейнеры для самого Orator. Ядро работает на одном Cloudflare (§66.6). Ваш self-hosted стек подключается позже и только как усиление.
+**MUST.** Бакеты не разделяются между окружениями. Тесты стирания и очистки осиротевших объектов удаляют данные (§32.1).
 
----
+### 1.2. Dead-letter queue
+
+Dead-letter — это **обычная очередь**, куда Cloudflare перекладывает сообщения, которые консьюмер не смог обработать за отведённое число попыток. Без неё такое сообщение теряется молча.
+
+```text
+1. создать вторую очередь: orator-events-dlq
+2. в конфигурации консьюмера orator-events указать её как dead_letter_queue
+3. алерт на любое сообщение в DLQ — §66.4
+```
+
+Консьюмера у самой DLQ нет: сообщения в ней разбираются вручную. Их появление означает дефект, а не нагрузку.
+
+### 1.3. Analytics Engine
+
+Нужны два имени:
+
+```text
+dataset name  → orator_events        (production)
+                orator_events_staging (staging)
+binding       → AE                   (одинаковый в обоих окружениях)
+```
+
+Dataset создаётся при первой записи через биндинг — предварительно ничего заполнять данными не нужно. Одного dataset достаточно: разграничение типов событий делается измерением внутри записи, а не отдельными dataset. Добавить второй позже можно без миграции.
+
+### 1.4. GitHub
+
+| Что | Где | Значение |
+|---|---|---|
+| `CLOUDFLARE_ACCOUNT_ID` | repository **variable**, не secret | одно на оба окружения |
+| `CLOUDFLARE_API_TOKEN` | **environment secret** в `staging` | токен, видящий только staging-ресурсы |
+| `CLOUDFLARE_API_TOKEN` | **environment secret** в `production` | отдельный токен |
+
+**Почему две пары.** `ACCOUNT_ID` — идентификатор, не учётные данные; ему место в variables. Токены обязаны быть разными: назначение environment-секретов в том, что job, работающий со staging, физически не может обратиться к production. Один общий токен это свойство отменяет.
+
+Права токена: `Workers Scripts: Edit`, `D1: Edit`, `Workers R2 Storage: Edit`, `Queues: Edit`, `Account Settings: Read`. Ограничить по возможности конкретными ресурсами окружения.
+
+### 1.5. Branch protection
+
+Использовать **Rulesets** (новый механизм), не classic — classic является legacy.
+
+`Settings → Rules → Rulesets → New branch ruleset`:
+
+```text
+Name:            main protection
+Enforcement:     Active
+Target branches: Include default branch
+
+Включить:
+  [x] Restrict deletions
+  [x] Block force pushes
+  [x] Require a pull request before merging
+        Required approvals: 0
+  [x] Require status checks to pass
+        добавить: ci
+  [x] Require linear history
+
+Не включать:
+  [ ] Require signed commits          — усложняет работу без выигрыша здесь
+  [ ] Require deployments to succeed  — деплой оркеструется пайплайном (§64.3)
+```
+
+**Порядок важен.** `Require status checks` можно настроить только после того, как проверка хотя бы раз выполнилась: GitHub предлагает выбрать из имён, которые уже видел. Поэтому: сначала Phase 0 и первый прогон CI, затем ruleset.
+
+**Про `Required approvals: 0`.** Апрув самому себе поставить нельзя, поэтому единственный разработчик с ненулевым значением заблокирует себе merge. Ноль сохраняет полезное: ветка, diff и обязательный прогон CI до попадания в `main` — что существенно, когда код пишет агент.
+
+### 1.6. Домены и маршруты
+
+Все — Workers Custom Domains: Cloudflare создаёт DNS-запись сам, отдельно её заводить не нужно.
+
+| Имя | Куда | Что обслуживает |
+|---|---|---|
+| `orator.space` | `apps/web` | страницы, `/p/*`, `/@*`, `/t/*`, sitemap, robots |
+| `www.orator.space` | redirect rule → apex | 301 |
+| `api.orator.space` | `apps/edge` | REST API |
+| `mcp.orator.space` | `apps/edge` | MCP |
+| `media.orator.space` | `apps/edge` | отдача из бакета `media` через биндинг (§57.4) |
+| `docs.orator.space` | позже | Phase 8+ |
+| `status.orator.space` | внешний узел | Gatus, вне Cloudflare-воркеров |
+| `*.staging.orator.space` | staging-воркеры | те же четыре имени с префиксом |
+
+**MUST.** Бакеты `content`, `assets` и `backups` не получают публичных имён. Доступ к ним — только через биндинг из воркера. Публичный доступ имеет один бакет — `media`, и тот опосредованно (§57.4).
+
+Sitemap отдаётся с `orator.space/sitemap.xml`: воркер читает готовый шард из `assets`. Отдельного имени для этого бакета не требуется.
+
+### 1.7. Остальное
+
+| # | Действие | Когда |
+|---|---|---|
+| 1 | Отключить автодеплой production из git-интеграции Cloudflare | Phase 0 — §64.3 |
+| 2 | Бюджетный алерт на аккаунте Cloudflare | до Phase 3 — §67.2 |
+| 3 | Проверки в Gatus: `/health`, `/health/deep` | Phase 8 — §66.7 |
+| 4 | Terms / Content Policy / Privacy | до публичного запуска — §61.1, §82 |
+
+**Что не потребуется:** Docker для самого Orator. Ядро работает на одном Cloudflare (§66.6). Внешний стек подключается в Phase 8 и только как усиление.
 
 ## 2. Phase −1 — Проверка допущений
 
