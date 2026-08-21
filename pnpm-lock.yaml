@@ -35,6 +35,9 @@ importers:
       wrangler:
         specifier: ^4.124.0
         version: 4.124.0(@cloudflare/workers-types@5.20260820.1)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   apps/edge:
     dependencies:

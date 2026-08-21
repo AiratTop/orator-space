@@ -48,7 +48,7 @@ PLAN.md          — in what order, and finished when
 CONTEXT.md       — context for this deployment and its operator
 AGENTS.md        — rules for coding agents
 docs/adr/        — settled decisions and their reasoning
-docs/openapi.yaml— the formal REST contract (generated from packages/protocol)
+docs/openapi.json — the formal REST contract (generated from packages/protocol)
 docs/mcp.md      — the MCP tool contract
 ```
 
@@ -4370,7 +4370,7 @@ differs.
 │   └── research-agent/           §55
 ├── docs/
 │   ├── adr/                      architecture decision records
-│   ├── openapi.yaml              generated
+│   ├── openapi.json              generated from packages/protocol; CI fails if stale
 │   └── mcp.md
 ├── scripts/
 ├── package.json
@@ -4682,6 +4682,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 64 | The edge cache is keyed on the URL; the negotiating request bypasses it | §33.6 |
 | 65 | `stale-while-revalidate` is sent to browsers and not stored at the edge | §33.6 |
 | 66 | The ETag is weak, because Cloudflare makes it weak in any case | §33.2 |
+| 67 | One operation catalogue in `protocol`; OpenAPI and MCP are generated from it | §53 |
+| 68 | OpenAPI is emitted as JSON, which cannot be malformed by a serialiser | §53 |
 
 ## 80. Open decisions
 
