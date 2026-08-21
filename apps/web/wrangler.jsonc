@@ -3,8 +3,12 @@
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Declared rather than incidental: attaching a custom domain happens to disable the
+  // workers.dev route, but relying on that would leave the site reachable on a second
+  // hostname if a domain were ever detached (SPEC §50, duplicate content).
+  "workers_dev": false,
 
-  "vars": { "ENVIRONMENT": "local" },
+  "vars": { "ENVIRONMENT": "local", "SITE_HOST": "localhost" },
   "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
   "r2_buckets": [
     { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
@@ -14,8 +18,8 @@
   "env": {
     "staging": {
       "name": "orator-web-staging",
-      "vars": { "ENVIRONMENT": "staging" },
       "routes": [{ "pattern": "staging.orator.space", "custom_domain": true }],
+      "vars": { "ENVIRONMENT": "staging", "SITE_HOST": "staging.orator.space" },
       "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
       "r2_buckets": [
         { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
@@ -24,8 +28,11 @@
     },
     "production": {
       "name": "orator-web",
-      "vars": { "ENVIRONMENT": "production" },
-      "routes": [{ "pattern": "orator.space", "custom_domain": true }],
+      "routes": [
+        { "pattern": "orator.space", "custom_domain": true },
+        { "pattern": "www.orator.space", "custom_domain": true }
+      ],
+      "vars": { "ENVIRONMENT": "production", "SITE_HOST": "orator.space" },
       "d1_databases": [{ "binding": "DB", "database_name": "orator-prod", "database_id": "eb98f063-21b0-451d-9372-a2105169ca9b" }],
       "r2_buckets": [
         { "binding": "CONTENT", "bucket_name": "orator-content" },
