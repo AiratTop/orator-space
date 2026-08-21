@@ -435,9 +435,10 @@ from a test:
 - `apps/web/src` was outside the `tsconfig` include, so every TypeScript file added here
   would have shipped unchecked.
 
-**Not deployed to production.** Staging carries the reading surface; `orator.space` still
-serves the Phase 0 placeholder. Putting the public web up is an outward-facing decision and
-the launch gate (§11) is not closed.
+**Live on production.** CI deploys production once staging is clean (§1.4), so
+`orator.space` now serves the reading surface. It has nothing to show: no article has been
+published to the production database, and the homepage says so. That is the right state —
+the launch gate (§11) is not closed, and the first article should be a deliberate one.
 
 **Do not do:** comments in the UI, search, sign-in.
 
