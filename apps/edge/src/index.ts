@@ -20,10 +20,16 @@ export interface Env {
 
 type Surface = "api" | "mcp" | "media" | "unknown";
 
-/** SPEC §63 — one Worker, three public surfaces, distinguished by Host. */
+/**
+ * SPEC §63 — one Worker, three public surfaces, distinguished by Host.
+ *
+ * Staging uses `api-staging.orator.space` rather than `api.staging.orator.space`:
+ * Cloudflare's Universal SSL covers the apex and one level of subdomain, so a
+ * second-level name would attach as a route and then fail TLS (ADR 0003).
+ */
 export function surfaceFor(hostname: string): Surface {
-  const first = hostname.split(".")[0] ?? "";
-  if (first === "api" || first === "mcp" || first === "media") return first;
+  const label = (hostname.split(".")[0] ?? "").replace(/-(staging|preview)$/, "");
+  if (label === "api" || label === "mcp" || label === "media") return label;
   return "unknown";
 }
 
