@@ -33,6 +33,8 @@ jobs:
         run: pnpm lint
       - name: boundaries
         run: pnpm boundaries
+      - name: schema
+        run: pnpm schema
       - name: test
         run: pnpm test
       - name: build
