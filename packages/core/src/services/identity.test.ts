@@ -152,7 +152,7 @@ describe("tokens (SPEC §42.2, §43.1)", () => {
 
   it("refuses to grant a scope the issuer does not hold", async () => {
     // Without this, scope limits are advisory: any token could mint a stronger one.
-    const { owner, ctx } = await makeOwner();
+    const { owner } = await makeOwner();
     const limited = contextFor(actorFor(owner.principalId, { scopes: ["articles:read"] }));
     const result = await issueToken(limited, {
       principalId: owner.principalId,
@@ -163,12 +163,11 @@ describe("tokens (SPEC §42.2, §43.1)", () => {
   });
 
   it("refuses admin scopes to a non-admin", async () => {
-    const { owner, ctx } = await makeOwner();
+    const { owner } = await makeOwner();
     const withAdmin = contextFor(actorFor(owner.principalId, { scopes: ["admin:manage"] }));
     expect(
       errorOf(await issueToken(withAdmin, { principalId: owner.principalId, name: "x", scopes: ["admin:manage"] })),
     ).toBe(ErrorType.Forbidden);
-    void ctx;
   });
 
   it("rejects an unknown scope by name", async () => {
