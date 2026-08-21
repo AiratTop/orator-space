@@ -2074,7 +2074,7 @@ The conclusion in version 2.2 stands; its stated reason did not.
 ```text
 Public article (anonymous GET):
   Cache-Control: public, s-maxage=60, stale-while-revalidate=86400
-  ETag: "<content_hash>"
+  ETag: W/"<content_hash>"
   Last-Modified: <the revision's published_at>
   Vary: Accept-Encoding          — but NOT Accept, see §33.5
 
@@ -2095,6 +2095,19 @@ response `private, no-store`.
 **Rationale.** Without that rule, a signed-in user's personalised feed lands in the shared
 cache and is served to someone else. It is the most common way data leaks on CDN
 architectures.
+
+**MUST — the ETag is weak.** `W/"<content_hash>"`, not `"<content_hash>"`.
+
+The hash identifies the revision's content; the bytes on the wire are that content in
+whatever encoding was negotiated. Those are semantically equivalent and not
+octet-identical, which is what a weak validator means. Cloudflare settles the question in
+any case: it rewrites a strong ETag to a weak one whenever it compresses a response, and
+every browser asks for compression. Verified on staging — `curl` sees a strong ETag and
+`curl --compressed` sees a weak one, from the same deployment.
+
+**MUST.** Comparison is weak on both sides: an intermediary may hand back either form, and
+a validator that only matched one of them would answer `200` to a request that deserved
+`304`.
 
 ### 33.3. Revalidation is cheap
 
@@ -2139,6 +2152,55 @@ secondary    — the Accept header, normalised on the way in
   caches on its own.
 
 Each variant then has its own stable cache key, and no fragmentation occurs.
+
+### 33.6. How a page actually reaches the edge cache
+
+**This section corrects an assumption the rest of §33 was built on.** Version 2.3 took it
+for granted that `Cache-Control: public, s-maxage=60` would put an article page in
+Cloudflare's cache. It does not, and the difference is not a detail: without it every
+reader costs a D1 query, and §33.1's whole argument — that a short freshness window is
+affordable because revalidation is cheap — describes a system that never caches anything.
+
+**Verified on staging.** A response composed by a Worker does not enter the edge cache on
+the strength of a header. Neither `Cache-Control` nor the targeted
+`Cloudflare-CDN-Cache-Control` (RFC 9213) produced a `cf-cache-status` header at all; both
+were deployed and measured. The cache sits in front of an *origin*, and a Worker that
+generates its own response has no origin behind it.
+
+**MUST.** The Worker calls the Cache API explicitly:
+
+```text
+GET → cache.match(url)          hit  → serve, or answer 304 from the stored validators
+                                miss → render → cache.put(url, response)
+```
+
+**MUST — the key is the URL alone.** Not the incoming `Request`, which carries
+`If-None-Match` and `Accept-Encoding`; a key that varies with them fragments one document
+into many entries, which is the trap §33.5 exists to avoid.
+
+**MUST — the one request that bypasses the cache.** An article page answers
+`Accept: text/markdown` with a redirect (§33.5), so its response depends on a request
+header. A URL-keyed cache cannot represent that, and answering such a request from stored
+HTML silently breaks content negotiation. The rule is to leave that request alone rather
+than to add `Accept` to the key: skipping the cache costs one redirect, and the redirect is
+`no-store` in any case. This was found by deploying the cache and watching negotiation stop
+working.
+
+**MUST — `stale-while-revalidate` is not stored.** The directive is correct for a browser,
+which revalidates in the background. Nothing in the Worker revalidates a stale entry, so an
+honoured `stale-while-revalidate=86400` would let the shared cache serve an article for a
+day after it was withdrawn. Unpublishing taking effect is a correctness property (§23.1),
+not a latency one. The browser receives the full policy; the copy the edge keeps is
+narrowed to its freshness lifetime. Verified: an unpublished article stops being served
+within the 60-second window.
+
+**MUST NOT.** This is not configured as a Cache Rule in the dashboard. The reasoning is
+§14.1's: a rule nobody can see in the repository is absent from anyone else's deployment
+(§82), and caching is load-bearing enough that it must be reviewable.
+
+**Consequence for §33.4.** Purge by URL through the Cloudflare API clears these entries as
+well — the Cache API and the CDN cache are the same storage. `cache.delete()` from inside a
+Worker is not an alternative: it affects only the colo that ran the request.
 
 ## 34. Consistency, idempotency, concurrency
 
@@ -4613,6 +4675,10 @@ Everything after it is growth, and its order is decided by observation rather th
 | 60 | `Accept: application/ld+json` resolves to the JSON representation | §48 |
 | 61 | One CSP holds in development and production; the dev toolbar is switched off | §57.2 |
 | 62 | Both local dev servers share one state directory, as they share one D1 | §68 |
+| 63 | A Worker's own response reaches the edge cache only through the Cache API | §33.6 |
+| 64 | The edge cache is keyed on the URL; the negotiating request bypasses it | §33.6 |
+| 65 | `stale-while-revalidate` is sent to browsers and not stored at the edge | §33.6 |
+| 66 | The ETag is weak, because Cloudflare makes it weak in any case | §33.2 |
 
 ## 80. Open decisions
 

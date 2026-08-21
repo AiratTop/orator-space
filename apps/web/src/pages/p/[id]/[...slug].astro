@@ -3,7 +3,7 @@ import { loadBody, renderMarkdown, verifyProvenance } from "@orator/core";
 import Layout from "../../../components/Layout.astro";
 import Byline from "../../../components/Byline.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle } from "../../../lib/article.js";
-import { CACHE, cacheHeaders } from "../../../lib/http.js";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../../../lib/http.js";
 import { ports, siteHost } from "../../../lib/ports.js";
 
 /**
@@ -28,7 +28,7 @@ let failure: keyof typeof FAILURE_MESSAGE | null = null;
 let provenance: Awaited<ReturnType<typeof verifyProvenance>> = "unsigned";
 
 if (article !== null && view !== null) {
-  cacheHeaders(Astro.response.headers, CACHE.article, article);
+  cacheHeaders(Astro.response.headers, CACHE.article, CDN_CACHE.article, article);
 
   const body = await loadBody(ports, view);
   if (body.ok) {
@@ -42,6 +42,7 @@ if (article !== null && view !== null) {
 } else {
   Astro.response.status = 404;
   Astro.response.headers.set("cache-control", CACHE.private);
+  Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
 }
 ---
 

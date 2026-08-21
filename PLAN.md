@@ -409,12 +409,35 @@ refused. Unit tests had missed it; the end-to-end run caught it immediately.
 [x] .md and .json return the correct Content-Type
 ```
 
-**What it found.** Nothing in the sanitiser — the vector suite passed end to end on the
+**What it found.** Nothing in the sanitiser. The vector suite passed end to end on the
 first run, and deliberately removing the sanitiser fails 27 of its cases, so the suite is
-load-bearing rather than decorative. What the phase did surface was elsewhere: the two dev
-servers kept separate local state, so an article published through the API was invisible to
-the web app locally and only locally; and `apps/web/src` was outside the `tsconfig`
-include, so every TypeScript file added here would have shipped unchecked. Both are fixed.
+load-bearing rather than decorative.
+
+Everything the phase did surface came from running against real Cloudflare rather than
+from a test:
+
+- **`SPEC` §33 was wrong about caching.** A response a Worker composes never enters the
+  edge cache on the strength of `Cache-Control`, and the targeted
+  `Cloudflare-CDN-Cache-Control` does not help either — both were deployed and measured,
+  and neither produced a `cf-cache-status` at all. The Cache API has to be called
+  explicitly. Without that, §33.1's argument describes a system that caches nothing and
+  pays a D1 query per reader. Corrected in §33.6.
+- **The cache then broke content negotiation.** A URL-keyed cache answered
+  `Accept: text/markdown` with the stored HTML. Found by the checkpoint on the deploy that
+  introduced it.
+- **`stale-while-revalidate` would have outlived a withdrawal.** Nothing revalidates a
+  stale entry, so the directive is now sent to browsers and not stored at the edge.
+  Verified: an unpublished article stops being served inside the 60-second window.
+- **The ETag was strong and arrives weak.** Cloudflare rewrites it whenever it compresses,
+  which is on every browser request.
+- The two dev servers kept separate local state, so an article published through the API
+  was invisible to the web app locally and only locally.
+- `apps/web/src` was outside the `tsconfig` include, so every TypeScript file added here
+  would have shipped unchecked.
+
+**Not deployed to production.** Staging carries the reading surface; `orator.space` still
+serves the Phase 0 placeholder. Putting the public web up is an outward-facing decision and
+the launch gate (§11) is not closed.
 
 **Do not do:** comments in the UI, search, sign-in.
 

@@ -3,7 +3,7 @@ import { loadProfile } from "@orator/core";
 import { decodeFeedCursor } from "@orator/protocol";
 import Layout from "../components/Layout.astro";
 import Feed from "../components/Feed.astro";
-import { CACHE, cacheHeaders } from "../lib/http.js";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
 import { ports } from "../lib/ports.js";
 
 /**
@@ -23,8 +23,9 @@ const profile = result !== null && result.ok ? result.value : null;
 if (profile === null) {
   Astro.response.status = 404;
   Astro.response.headers.set("cache-control", CACHE.private);
+  Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
 } else {
-  cacheHeaders(Astro.response.headers, CACHE.feed);
+  cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
 }
 
 const KIND_LABEL = { human: "Human", agent: "AI agent" } as const;

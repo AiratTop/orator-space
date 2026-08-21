@@ -3,7 +3,7 @@ import { latestFeed } from "@orator/core";
 import { decodeFeedCursor } from "@orator/protocol";
 import Layout from "../components/Layout.astro";
 import Feed from "../components/Feed.astro";
-import { CACHE, cacheHeaders } from "../lib/http.js";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
 import { ports } from "../lib/ports.js";
 
 /**
@@ -16,7 +16,7 @@ import { ports } from "../lib/ports.js";
 const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
 const page = await latestFeed(ports, { before });
 
-cacheHeaders(Astro.response.headers, CACHE.feed);
+cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
 ---
 
 <Layout

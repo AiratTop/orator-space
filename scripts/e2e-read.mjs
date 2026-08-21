@@ -215,9 +215,9 @@ if (!local) {
 const etag = page.headers.get("etag");
 check("the page carries an ETag", !!etag, etag ?? "");
 check(
-  "the ETag is the content hash",
-  etag === `"${created.body.contentHash}"`,
-  `${etag} vs "${created.body.contentHash}"`,
+  "the ETag is the content hash, as a weak validator",
+  etag === `W/"${created.body.contentHash}"`,
+  `${etag} vs W/"${created.body.contentHash}"`,
 );
 check(
   "the page is publicly cacheable with a short s-maxage",
@@ -229,8 +229,9 @@ const revalidated = await web(canonical, { headers: { "if-none-match": etag } })
 check("revalidation returns 304", revalidated.status === 304);
 check("the 304 carries no body", (await revalidated.text()).length === 0);
 
-const weak = await web(canonical, { headers: { "if-none-match": `W/${etag}` } });
-check("a weakened ETag from an intermediary still revalidates", weak.status === 304);
+// An intermediary may hand back the strong form, or ours with the weakness stripped.
+const strong = await web(canonical, { headers: { "if-none-match": (etag ?? "").replace(/^W\//, "") } });
+check("the strong form of the same tag still revalidates", strong.status === 304);
 
 const credentialed = await web(canonical, { headers: { authorization: "Bearer whatever" } });
 check(
@@ -241,14 +242,29 @@ check(
 check("and carries no ETag a shared cache could key on", credentialed.headers.get("etag") === null);
 
 if (!local) {
+  /**
+   * `cf-cache-status` is not the signal here, and expecting it was the first thing this
+   * checkpoint got wrong. That header describes Cloudflare's own cache in front of an
+   * origin; a page composed by a Worker never passes through it. What answers from cache
+   * is the Cache API, called explicitly, and it reports itself.
+   */
   const first = await web(canonical);
   await first.text();
   const second = await web(canonical);
-  await second.text();
-  const status = second.headers.get("cf-cache-status");
-  check("a repeat request is served from the edge cache", status === "HIT", status ?? "no cf-cache-status");
+  const secondBody = await second.text();
+  check("a repeat request is served from the edge cache", second.headers.get("x-orator-cache") === "hit",
+    second.headers.get("x-orator-cache") ?? "no marker");
+  check("the cached page is the same page", secondBody.includes("Ordinary prose"));
+  check("the cached page keeps its security headers", (second.headers.get("content-security-policy") ?? "").includes("frame-ancestors 'none'"));
+
+  const cachedRevalidation = await web(canonical, { headers: { "if-none-match": etag } });
+  check("a cache hit still answers a conditional request with 304", cachedRevalidation.status === 304);
+
+  const credentialedAfterHit = await web(canonical, { headers: { authorization: "Bearer whatever" } });
+  check("a credentialed request is never answered from the shared cache",
+    credentialedAfterHit.headers.get("x-orator-cache") === null);
 } else {
-  skip("a repeat request is served from the edge cache", "there is no edge cache in front of localhost");
+  skip("a repeat request is served from the edge cache", "there is no edge cache in front of a dev server");
 }
 
 // --- content negotiation (§48, §33.5) -------------------------------------------
@@ -266,6 +282,13 @@ const asBrowser = await web(canonical, {
   headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
 });
 check("a browser's Accept header still gets the page", asBrowser.status === 200);
+
+if (!local) {
+  // The cache is keyed on the URL, so the one request whose answer depends on a header has
+  // to bypass it. Getting this wrong serves cached HTML to a client that asked for markdown.
+  const negotiatedAfterCache = await web(canonical, { headers: { accept: "text/markdown" } });
+  check("negotiation still works once the page is in cache", negotiatedAfterCache.status === 302);
+}
 
 // --- the machine representations -------------------------------------------------
 const md = await web(`/p/${id}.md`);

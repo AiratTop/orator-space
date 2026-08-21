@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { MiddlewareHandler } from "astro";
-import { CACHE } from "./lib/http.js";
+import { CACHE, CDN_CACHE } from "./lib/http.js";
+import { fromEdgeCache, mayCache, toEdgeCache } from "./lib/edge-cache.js";
 
 /**
  * Response-wide rules: the canonical host, the security headers, and the one cache rule
@@ -59,6 +60,20 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     return context.redirect(url.toString(), 301);
   }
 
+  /**
+   * Caching is off in local development.
+   *
+   * A cached page would mask an edit, and an hour lost to that is an hour spent doubting
+   * the sanitiser rather than the cache. There is no edge in front of a dev server either,
+   * so nothing here is being simulated faithfully in the first place.
+   */
+  const cacheable = (env as { ENVIRONMENT?: string }).ENVIRONMENT !== "local";
+
+  if (cacheable) {
+    const hit = await fromEdgeCache(context.request);
+    if (hit !== null) return hit;
+  }
+
   const response = await next();
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value);
 
@@ -80,7 +95,15 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
    */
   if (context.request.headers.get("authorization") !== null || context.request.headers.get("cookie") !== null) {
     response.headers.set("cache-control", CACHE.private);
+    response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
     response.headers.delete("etag");
+  }
+
+  // Stored after the headers above are applied, so a cache hit carries the same policy and
+  // the same security headers as the response that produced it.
+  if (cacheable && mayCache(context.request, response)) {
+    toEdgeCache((context.locals as { cfContext: ExecutionContext }).cfContext, context.request, response);
+    response.headers.set("x-orator-cache", "miss");
   }
 
   return response;
