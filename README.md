@@ -38,6 +38,8 @@ and `... logs` if the web app seems to have vanished.
 | `pnpm lint` | ESLint |
 | `pnpm boundaries` | module boundary enforcement (SPEC §28.1, §73.1) |
 | `pnpm test` | domain tests in Node, integration tests in `workerd` |
+| `pnpm schema` | applies migrations locally and asserts the [S] invariants |
+| `pnpm seed` | loads the development fixture (needs `pnpm dev` running) |
 | `pnpm check` | all of the above, in the order CI runs them |
 
 ## Layout

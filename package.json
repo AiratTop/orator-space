@@ -14,7 +14,8 @@
     "boundaries": "node scripts/check-boundaries.mjs",
     "test": "vitest run",
     "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm schema && pnpm test",
-    "schema": "pnpm --filter @orator/edge exec wrangler d1 migrations apply DB --local && node scripts/dump-schema.mjs --local > .schema.json && node scripts/check-schema.mjs .schema.json"
+    "schema": "pnpm --filter @orator/edge exec wrangler d1 migrations apply DB --local && node scripts/dump-schema.mjs --local > .schema.json && node scripts/check-schema.mjs .schema.json",
+    "seed": "node scripts/seed.mjs"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",

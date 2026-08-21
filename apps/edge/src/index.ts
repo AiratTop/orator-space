@@ -67,6 +67,23 @@ app.get("/health", async (c) => {
   );
 });
 
+/**
+ * Fixture data for local development (PLAN.md §4). Registered only outside production —
+ * a route that wipes and rewrites the database has no business existing there at all,
+ * rather than existing and being guarded by a check someone could get wrong.
+ */
+app.post("/dev/seed", async (c) => {
+  if (c.env.ENVIRONMENT === "production") {
+    return c.json(
+      problem(ErrorType.NotFound, "Resource not found", { request_id: c.get("requestId") }),
+      404,
+      { "content-type": "application/problem+json" },
+    );
+  }
+  const { seed } = await import("./dev-seed.js");
+  return c.json(await seed(c.env));
+});
+
 app.notFound((c) =>
   c.json(
     problem(ErrorType.NotFound, "Resource not found", {
