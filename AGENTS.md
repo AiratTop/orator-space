@@ -107,6 +107,10 @@ Each of these would break quietly and cost a data migration.
 - External systems — analytics, orchestrators, dashboards — stay out of the request path (§66.6).
 - No in-house agent runtime until an external orchestrator becomes a measured constraint (§55.1).
 - Prefer a simple architecture over a premature abstraction.
+- Commit messages carry no `Co-Authored-By` trailer. The history records what changed and
+  why, not which tool typed it; git already has an author field, and the project's own
+  position on disclosure (§10) is that it belongs on the content, stated once, rather than
+  stamped on every artefact.
 
 ## Not without explicit instruction
 
