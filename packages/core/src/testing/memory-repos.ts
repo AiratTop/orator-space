@@ -1,4 +1,4 @@
-import type { OratorId } from "@orator/protocol";
+import type { FeedCursor, OratorId } from "@orator/protocol";
 import { encodeId } from "@orator/protocol";
 import {
   ConstraintViolation,
@@ -22,6 +22,11 @@ import {
   type PendingWrite,
   type PrincipalRecord,
   type PrincipalRepo,
+  type ArticleCard,
+  type ArticleView,
+  type AuthorSummary,
+  type FeedPage,
+  type ReadingRepo,
   type TokenRecord,
   type TokenRepo,
 } from "../ports/index.js";
@@ -450,6 +455,109 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+
+  /**
+   * The public read model (SPEC §49), assembled from the same maps the write path uses.
+   *
+   * Written as a projection rather than a second store on purpose: the value of this
+   * double is that a service which publishes and then reads sees exactly what it wrote,
+   * including the visibility rule. A separate fixture would let a test pass while the two
+   * disagreed, which is the defect the double exists to catch.
+   */
+  const summarise = (principal: PrincipalRecord): AuthorSummary => ({
+    id: principal.id,
+    kind: principal.kind,
+    username: principal.username,
+    displayName: principal.displayName,
+    bio: principal.bio,
+    ownerUsername:
+      principal.ownerPrincipalId === undefined
+        ? null
+        : (state.principals.get(principal.ownerPrincipalId)?.username ?? null),
+    model: principal.model ?? null,
+    trustLevel: principal.trustLevel ?? null,
+  });
+
+  const viewOf = (article: ArticleRecord): ArticleView | null => {
+    if (article.status !== "published" || article.visibility !== "public") return null;
+    if (article.publishedRevisionId === null) return null;
+    const revision = state.revisions.get(article.publishedRevisionId);
+    const author = state.principals.get(article.authorPrincipalId);
+    if (revision === undefined || author === undefined || author.status !== "active") return null;
+    const key = revision.signatureKeyId === null ? undefined : state.keys.get(revision.signatureKeyId);
+    return {
+      article,
+      revision,
+      author: summarise(author),
+      signingKey:
+        key === undefined
+          ? null
+          : { publicKey: key.publicKey, createdAt: key.createdAt, revokedAt: key.revokedAt },
+    };
+  };
+
+  const cardOf = (view: ArticleView): ArticleCard => ({
+    id: view.article.id,
+    slug: view.article.slug,
+    title: view.revision.title,
+    excerpt: view.revision.excerpt,
+    language: view.article.language,
+    authorshipDisclosure: view.article.authorshipDisclosure,
+    publishedAt: view.article.publishedAt ?? view.revision.createdAt,
+    readingTimeSeconds: view.revision.readingTimeSeconds,
+    contentHash: view.revision.contentHash,
+    signed: view.revision.signature !== null,
+    author: view.author,
+  });
+
+  const paginate = (views: ArticleView[], limit: number, before: FeedCursor | null): FeedPage => {
+    const sorted = views
+      .map(cardOf)
+      .sort((a, b) =>
+        a.publishedAt === b.publishedAt
+          ? b.id.localeCompare(a.id)
+          : b.publishedAt.localeCompare(a.publishedAt),
+      );
+    const after =
+      before === null
+        ? sorted
+        : sorted.filter(
+            (card) =>
+              card.publishedAt < before.publishedAt ||
+              (card.publishedAt === before.publishedAt && card.id < before.id),
+          );
+    const cards = after.slice(0, limit);
+    const last = cards[cards.length - 1];
+    return {
+      cards,
+      next: after.length > limit && last !== undefined ? { publishedAt: last.publishedAt, id: last.id } : null,
+    };
+  };
+
+  const reading: ReadingRepo = {
+    async findPublished(id) {
+      const article = state.articles.get(id);
+      return article === undefined ? null : viewOf(article);
+    },
+    async listLatest(limit, before) {
+      const views = [...state.articles.values()].map(viewOf).filter((v): v is ArticleView => v !== null);
+      return paginate(views, limit, before);
+    },
+    async listByAuthor(principalId, limit, before) {
+      const views = [...state.articles.values()]
+        .filter((article) => article.authorPrincipalId === principalId)
+        .map(viewOf)
+        .filter((v): v is ArticleView => v !== null);
+      return paginate(views, limit, before);
+    },
+    async findPrincipalByUsername(username) {
+      const principal = [...state.principals.values()].find(
+        (candidate) => candidate.username === username && candidate.status === "active",
+      );
+      return principal === undefined ? null : summarise(principal);
+    },
+  };
+
   return {
     db: database,
     principals,
@@ -459,6 +567,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     outbox,
     eventBus,
     articles,
+    reading,
     events,
     idempotency,
     content: createMemoryContentStore(),

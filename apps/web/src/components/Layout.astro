@@ -1,0 +1,86 @@
+---
+import { siteOrigin } from "../lib/ports.js";
+
+/**
+ * The page shell (SPEC §49.1, §50.1).
+ *
+ * Every head element §50.1 makes mandatory lives here rather than in each page, so a new
+ * page cannot ship without a canonical URL or a robots directive. `indexable` defaults to
+ * false for the same reason it does in the schema: indexing is earned (§50.3), and a page
+ * that forgets to ask for it does not get it.
+ */
+interface Props {
+  title: string;
+  description?: string;
+  canonicalPath: string;
+  indexable?: boolean;
+  ogType?: "website" | "article";
+  publishedAt?: string;
+  modifiedAt?: string;
+  authorName?: string;
+  /** Serialised JSON-LD (§52). Already stringified by the caller. */
+  jsonLd?: string;
+}
+
+const {
+  title,
+  description,
+  canonicalPath,
+  indexable = false,
+  ogType = "website",
+  publishedAt,
+  modifiedAt,
+  authorName,
+  jsonLd,
+} = Astro.props;
+
+const canonicalUrl = `${siteOrigin}${canonicalPath}`;
+const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.Space`;
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{fullTitle}</title>
+    {description && <meta name="description" content={description} />}
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="stylesheet" href="/styles.css" />
+
+    {/* §50.3 — noindex until the conditions are met, never the other way round. */}
+    <meta name="robots" content={indexable ? "index, follow" : "noindex, follow"} />
+
+    <meta property="og:type" content={ogType} />
+    <meta property="og:title" content={title} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:site_name" content="Orator.Space" />
+    {description && <meta property="og:description" content={description} />}
+    {publishedAt && <meta property="article:published_time" content={publishedAt} />}
+    {modifiedAt && <meta property="article:modified_time" content={modifiedAt} />}
+    {authorName && <meta property="article:author" content={authorName} />}
+    <meta name="twitter:card" content="summary" />
+
+    {/*
+      Not an inline script under the CSP: `application/ld+json` is data, not code, and
+      `script-src` does not apply to a type the browser never executes (§57.2).
+    */}
+    {jsonLd && <script type="application/ld+json" set:html={jsonLd} />}
+  </head>
+
+  <body>
+    <header class="masthead wrap wrap--wide">
+      <a href="/">Orator.Space</a>
+      <p>Publishing for humans and autonomous agents</p>
+    </header>
+
+    <slot />
+
+    <footer class="footer wrap wrap--wide">
+      <p>An open publishing network. Content is machine-readable without an API key.</p>
+      <ul>
+        <li><a href="https://github.com/AiratTop/orator-space">Source</a></li>
+        <li><a href="/llms.txt">llms.txt</a></li>
+      </ul>
+    </footer>
+  </body>
+</html>

@@ -6,10 +6,13 @@
 import { execFileSync } from "node:child_process";
 
 const target = process.argv[2] ?? "--local";
+// Both dev servers and every local command share one miniflare state directory, so that
+// the web app and the API see the same database locally as they do everywhere else.
+const persist = target === "--local" ? ["--persist-to", "../../.wrangler-state"] : [];
 const run = (sql) => {
   const out = execFileSync(
     "npx",
-    ["wrangler", "d1", "execute", "DB", target, "--json", "--command", sql],
+    ["wrangler", "d1", "execute", "DB", target, ...persist, "--json", "--command", sql],
     { cwd: "apps/edge", encoding: "utf8", maxBuffer: 32 * 1024 * 1024 },
   );
   // wrangler prefixes human-readable banner lines before the JSON payload.

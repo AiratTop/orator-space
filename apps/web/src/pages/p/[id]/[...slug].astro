@@ -1,0 +1,109 @@
+---
+import { loadBody, renderMarkdown, verifyProvenance } from "@orator/core";
+import Layout from "../../../components/Layout.astro";
+import Byline from "../../../components/Byline.astro";
+import { articleJsonLd, FAILURE_MESSAGE, gateArticle } from "../../../lib/article.js";
+import { CACHE, cacheHeaders } from "../../../lib/http.js";
+import { ports, siteHost } from "../../../lib/ports.js";
+
+/**
+ * The article page (SPEC §49.2, §13, §33, §48).
+ *
+ * One file serves `/p/{id}` and `/p/{id}/{slug}` alike, because §13 makes them the same
+ * resource: the id identifies, the slug decorates, and any slug resolves to the current one.
+ */
+const { id = "", slug } = Astro.params;
+const requestedSlug = typeof slug === "string" && slug.length > 0 ? slug : null;
+
+const gate = await gateArticle(Astro.request, id, { requestedSlug, negotiate: true });
+
+// Redirects and 304s leave before a single byte is rendered.
+if (gate.kind === "response") return gate.response;
+
+const article = gate.kind === "ok" ? gate.article : null;
+const view = article?.view ?? null;
+
+let html: string | null = null;
+let failure: keyof typeof FAILURE_MESSAGE | null = null;
+let provenance: Awaited<ReturnType<typeof verifyProvenance>> = "unsigned";
+
+if (article !== null && view !== null) {
+  cacheHeaders(Astro.response.headers, CACHE.article, article);
+
+  const body = await loadBody(ports, view);
+  if (body.ok) {
+    const rendered = renderMarkdown(body.value, { siteHost });
+    if (rendered.ok) html = rendered.html;
+    else failure = rendered.reason;
+    provenance = await verifyProvenance(view);
+  } else {
+    failure = "unavailable";
+  }
+} else {
+  Astro.response.status = 404;
+  Astro.response.headers.set("cache-control", CACHE.private);
+}
+---
+
+{article === null || view === null ? (
+  <Layout title="Not found" canonicalPath="/">
+    <main class="wrap">
+      <h1 class="title">Not found</h1>
+      <p>No published article has that address. It may be a draft, or it may have been removed.</p>
+      <p><a href="/">Back to the latest articles</a></p>
+    </main>
+  </Layout>
+) : (
+  <Layout
+    title={view.revision.title}
+    description={view.revision.excerpt ?? undefined}
+    canonicalPath={article.canonicalPath}
+    indexable={view.article.indexable}
+    ogType="article"
+    publishedAt={view.article.publishedAt ?? undefined}
+    modifiedAt={view.revision.createdAt}
+    authorName={`@${view.author.username}`}
+    jsonLd={articleJsonLd(view, provenance)}
+  >
+    <main class="wrap">
+      <article>
+        <h1 class="title">{view.revision.title}</h1>
+
+        <Byline
+          author={view.author}
+          disclosure={view.article.authorshipDisclosure}
+          publishedAt={view.article.publishedAt ?? undefined}
+          readingTimeSeconds={view.revision.readingTimeSeconds}
+          provenance={provenance}
+        />
+
+        {html === null ? (
+          <p class="notice">
+            {FAILURE_MESSAGE[failure ?? "unavailable"]}{" "}
+            <a href={`/p/${view.article.id}.md`}>The markdown source is still available.</a>
+          </p>
+        ) : (
+          /*
+           * The only `set:html` on the site. Its argument comes from renderMarkdown and
+           * nowhere else — the sanitiser (§57.1) is the whole of what stands between an
+           * author and this line, which is why it is one function with its own vector
+           * suite rather than something assembled per page.
+           */
+          <div class="prose" set:html={html} />
+        )}
+
+        {/*
+          §48 — the same article, addressed for machines. Stated on the page because the
+          reader is often the person wiring up the agent.
+        */}
+        <section class="machine">
+          <p>Machine-readable, no API key required:</p>
+          <ul>
+            <li><a href={`/p/${view.article.id}.md`} rel="alternate" type="text/markdown">markdown</a></li>
+            <li><a href={`/p/${view.article.id}.json`} rel="alternate" type="application/json">JSON</a></li>
+          </ul>
+        </section>
+      </article>
+    </main>
+  </Layout>
+)}

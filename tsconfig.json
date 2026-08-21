@@ -1,6 +1,6 @@
 {
   "extends": "./tsconfig.base.json",
-  "include": ["packages/*/src/**/*", "apps/edge/src/**/*", "scripts/**/*", "*.config.ts"],
+  "include": ["packages/*/src/**/*", "apps/edge/src/**/*", "apps/web/src/**/*", "scripts/**/*", "*.config.ts"],
   "exclude": ["**/dist/**", "**/node_modules/**"],
   "compilerOptions": {
     // Only the packages allowed to see the runtime declare these (SPEC §28.1). The

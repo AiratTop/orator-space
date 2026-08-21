@@ -3026,6 +3026,20 @@ Accept: application/ld+json → JSON-LD (§52)
 a redirect to the corresponding URL. `Vary: Accept` on the HTML path **MUST NOT** be
 used — rationale in §33.5.
 
+**MUST.** There are two variant URLs, not three. `Accept: application/ld+json` resolves to
+the JSON representation, and the JSON-LD document itself is delivered embedded in the page
+(§52), which is where crawlers read it. A third URL serving JSON-LD alone would be a
+separate cache entry that nothing requests.
+
+**MUST.** The variant URLs are addressed by id alone — `/p/{id}.md`, never
+`/p/{id}/{slug}.md`. A slug in the machine path would give one document two
+machine-readable addresses and split its cache for no gain, since a machine has no use for
+the decoration.
+
+**MUST.** Both variants carry `X-Robots-Tag: noindex` and a `Link: rel="canonical"` header
+naming the page. They are the same document as the page, and §50.2 spends a section on why
+serving one article at three indexable URLs is the pattern to avoid.
+
 **MUST.** Public content is machine-readable **without an API key**. Requiring
 authentication to read what is already public is pointless and contradicts §2.
 
@@ -4592,6 +4606,13 @@ Everything after it is growth, and its order is decided by observation rather th
 | 53 | A key's validity is checked at signing time, not at the revision's creation | §8.4 |
 | 54 | An idempotent replay of a failure returns that failure, not success | §34.1 |
 | 55 | Environment hostnames stay one level deep | §14.3 |
+| 56 | The public read model is a port of its own, not the write repository | §28 |
+| 57 | The web is given a narrowed port set; a write from a page does not compile | §28, §49 |
+| 58 | Invisible characters are stripped at render time on every representation | §58.2 |
+| 59 | Joiner runs collapse; single joiners survive, because scripts need them | §58.2 |
+| 60 | `Accept: application/ld+json` resolves to the JSON representation | §48 |
+| 61 | One CSP holds in development and production; the dev toolbar is switched off | §57.2 |
+| 62 | Both local dev servers share one state directory, as they share one D1 | §68 |
 
 ## 80. Open decisions
 

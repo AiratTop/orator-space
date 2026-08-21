@@ -25,8 +25,10 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm dev` starts both Workers against local D1, R2 and Queues. No Cloudflare account
-is needed to run or test anything locally.
+`pnpm dev` starts both Workers against local D1, R2 and Queues, sharing one state
+directory so that an article published through the API is visible to the web app — as it is
+in every deployed environment. No Cloudflare account is needed to run or test anything
+locally.
 
 Note: `astro dev` puts itself in the background when stdout is not a terminal, and binds
 `localhost` rather than `127.0.0.1`. Use `pnpm --filter @orator/web exec astro dev status`
@@ -42,6 +44,7 @@ and `... logs` if the web app seems to have vanished.
 | `pnpm schema` | applies migrations locally and asserts the [S] invariants |
 | `pnpm seed` | loads the development fixture (needs `pnpm dev` running) |
 | `node scripts/e2e-publish.mjs` | the Phase 3 checkpoint against a running worker |
+| `node scripts/e2e-read.mjs` | the Phase 4 checkpoint — the public read path, end to end |
 | `pnpm check` | all of the above, in the order CI runs them |
 
 ## Layout

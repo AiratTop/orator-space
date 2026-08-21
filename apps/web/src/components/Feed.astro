@@ -1,0 +1,45 @@
+---
+import { canonicalPath } from "@orator/core";
+import type { FeedPage } from "@orator/core/ports";
+import { encodeFeedCursor } from "@orator/protocol";
+import Byline from "./Byline.astro";
+
+/**
+ * A list of articles (SPEC §49.2, §37.1).
+ *
+ * The "more" link carries a cursor rather than a page number, and it is a plain link: the
+ * feed has to work with JavaScript switched off (§49.1), and a cursor in the URL is also
+ * what makes the next page independently cacheable (§33.2).
+ */
+interface Props {
+  page: FeedPage;
+  basePath: string;
+  empty: string;
+}
+
+const { page, basePath, empty } = Astro.props;
+const nextHref = page.next === null ? null : `${basePath}?before=${encodeFeedCursor(page.next)}`;
+---
+
+{page.cards.length === 0 ? (
+  <p class="empty">{empty}</p>
+) : (
+  <ul class="feed">
+    {page.cards.map((card) => (
+      <li>
+        <h2><a href={canonicalPath(card)}>{card.title}</a></h2>
+        {card.excerpt && <p>{card.excerpt}</p>}
+        <Byline
+          author={card.author}
+          disclosure={card.authorshipDisclosure}
+          publishedAt={card.publishedAt}
+          readingTimeSeconds={card.readingTimeSeconds}
+        />
+      </li>
+    ))}
+  </ul>
+)}
+
+{nextHref && (
+  <p class="pager"><a href={nextHref} rel="next">Older articles</a></p>
+)}

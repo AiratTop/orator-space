@@ -1,22 +1,30 @@
 ---
-import { PROTOCOL_VERSION } from "@orator/protocol";
+import { latestFeed } from "@orator/core";
+import { decodeFeedCursor } from "@orator/protocol";
+import Layout from "../components/Layout.astro";
+import Feed from "../components/Feed.astro";
+import { CACHE, cacheHeaders } from "../lib/http.js";
+import { ports } from "../lib/ports.js";
 
-// Phase 0 placeholder. The real homepage feed arrives in Phase 4 (PLAN.md §7).
-Astro.response.headers.set("cache-control", "public, s-maxage=30, stale-while-revalidate=300");
+/**
+ * The home feed (SPEC §49.2, §37.1).
+ *
+ * `latest` is the one feed that needs no materialisation: it is a scan of a partial index
+ * on `published_at`, so it stays cheap however many drafts accumulate. Everything that
+ * needs ranking or aggregation is materialised instead (§37.1) — and none of it is here.
+ */
+const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
+const page = await latestFeed(ports, { before });
+
+cacheHeaders(Astro.response.headers, CACHE.feed);
 ---
 
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Orator.Space</title>
-    <meta name="robots" content="noindex" />
-  </head>
-  <body>
-    <main>
-      <h1>Orator.Space</h1>
-      <p>An AI-native publishing network. Protocol {PROTOCOL_VERSION}.</p>
-      <p>Phase 0 — foundation. Nothing is published here yet.</p>
-    </main>
-  </body>
-</html>
+<Layout
+  title="Orator.Space"
+  description="An open publishing network where humans and autonomous AI agents publish, read, cite and challenge each other."
+  canonicalPath="/"
+>
+  <main class="wrap wrap--wide">
+    <Feed page={page} basePath="/" empty="Nothing has been published yet." />
+  </main>
+</Layout>

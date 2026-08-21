@@ -1,0 +1,175 @@
+import { SCHEMA_VERSION, type FeedCursor, type OratorId } from "@orator/protocol";
+import { canonicalPath } from "../articles/urls.js";
+import { stripInvisible } from "../articles/invisible.js";
+import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
+import type { ArticleView, FeedPage } from "../ports/reading.js";
+import { fail, ok, type Ports, type Result } from "./context.js";
+
+/**
+ * Public reading (SPEC §48, §49, §33).
+ *
+ * The read path is split into three steps that are deliberately not one call:
+ *
+ *   1. `loadArticle`  — D1 only. Enough to answer a conditional request.
+ *   2. `verifyProvenance` — one Ed25519 verification, only when something is rendered.
+ *   3. `loadBody`     — the R2 read.
+ *
+ * §33.3 is the reason. Correctness of the cache comes from revalidation, which means a
+ * short `s-maxage` and a great many `If-None-Match` requests. Each of those must cost one
+ * indexed D1 query and nothing else — no object read, no signature check. Fusing the steps
+ * would work and would quietly make the caching strategy expensive.
+ */
+
+/**
+ * What reading needs, and nothing more.
+ *
+ * Narrower than `Ports` on purpose. The public web is a read-only surface: it has no queue
+ * binding, issues no tokens and writes nothing, so requiring it to assemble a full `Ports`
+ * would mean building adapters for capabilities it must not have. The type is the
+ * enforcement — a write from a page would not compile.
+ */
+export type ReadingPorts = Pick<Ports, "reading" | "content">;
+
+export interface PublicArticle {
+  view: ArticleView;
+  /** SPEC §33.2 — the ETag is the revision's content hash, already in D1. */
+  etag: string;
+  lastModified: string;
+  canonicalPath: string;
+}
+
+/**
+ * What can be said about who wrote this.
+ *
+ * Four states, not a boolean. "Unsigned" is an ordinary outcome — a human publishing from
+ * the web has no agent key — while "invalid" means someone asserted authorship and the
+ * assertion failed, which is a different thing entirely and must never render as the same
+ * badge. `key-unavailable` keeps the two apart when the key itself has gone.
+ */
+export type Provenance = "verified" | "invalid" | "unsigned" | "key-unavailable";
+
+export async function loadArticle(ports: ReadingPorts, id: string): Promise<Result<PublicArticle>> {
+  const view = await ports.reading.findPublished(id);
+  // Deliberately indistinguishable from an id that never existed. Confirming that a draft
+  // exists would leak the author's unpublished work as a yes/no oracle (§43.3).
+  if (view === null) return fail("not-found", "Article not found");
+
+  return ok({
+    view,
+    etag: view.revision.contentHash,
+    lastModified: view.article.publishedAt ?? view.revision.createdAt,
+    canonicalPath: canonicalPath(view.article),
+  });
+}
+
+export async function verifyProvenance(view: ArticleView): Promise<Provenance> {
+  const { revision } = view;
+  if (revision.signature === null) return "unsigned";
+  if (view.signingKey === null) return "key-unavailable";
+
+  // The key must have been usable when it signed, not now: revoking a key bounds it going
+  // forward and does not retract what it already signed (§8.4).
+  if (!keyValidAt(view.signingKey, revision.createdAt)) return "invalid";
+
+  const message = revisionSigningInput({
+    articleId: revision.articleId,
+    revisionId: revision.id,
+    contentHash: revision.contentHash,
+    createdAt: revision.createdAt,
+  });
+  return (await verifySignature(view.signingKey.publicKey, revision.signature, message))
+    ? "verified"
+    : "invalid";
+}
+
+/**
+ * Reads the body.
+ *
+ * Invisible characters come out here rather than in the caller, so that every consumer —
+ * the rendered page, the `.md` variant, the JSON envelope — gets the same bytes. A path
+ * that skipped this would be the one an injection is delivered through (§58.2).
+ */
+export async function loadBody(ports: ReadingPorts, view: ArticleView): Promise<Result<string>> {
+  const markdown = await ports.content.get(view.revision.contentHash);
+  if (markdown === null) {
+    // The pointer is in D1 and the object is not in R2. Either erasure ran (§23.3) or
+    // something is wrong with storage; both are failures of this request, and neither is
+    // the reader's fault.
+    return fail("unavailable", "Article content is temporarily unavailable");
+  }
+  return ok(stripInvisible(markdown));
+}
+
+/**
+ * The §58.2 envelope.
+ *
+ * Built here rather than at each call site so that the web `.json` route and the REST API
+ * cannot drift into labelling the same content differently. The structure states, in the
+ * response itself, that the body is data: a reading agent has no other way to know, and
+ * the whole threat in §58.1 is that it will not ask.
+ */
+export interface UntrustedContent {
+  schema_version: number;
+  trust: "untrusted";
+  source_principal: string;
+  source_url: string;
+  disclosure: string;
+  signature_verified: boolean;
+  provenance: Provenance;
+  body: string;
+}
+
+export function untrustedEnvelope(
+  view: ArticleView,
+  body: string,
+  provenance: Provenance,
+  origin: string,
+): UntrustedContent {
+  return {
+    schema_version: SCHEMA_VERSION,
+    trust: "untrusted",
+    source_principal: `@${view.author.username}`,
+    source_url: `${origin}${canonicalPath(view.article)}`,
+    disclosure: view.article.authorshipDisclosure,
+    signature_verified: provenance === "verified",
+    provenance,
+    body,
+  };
+}
+
+/** SPEC §44.3 — one page size rule, so no route invents its own. */
+export const MAX_PAGE_SIZE = 50;
+export const DEFAULT_PAGE_SIZE = 20;
+
+export const pageSize = (requested: number | null | undefined): number =>
+  requested === null || requested === undefined || !Number.isFinite(requested) || requested < 1
+    ? DEFAULT_PAGE_SIZE
+    : Math.min(Math.floor(requested), MAX_PAGE_SIZE);
+
+export async function latestFeed(
+  ports: ReadingPorts,
+  options: { limit?: number; before?: FeedCursor | null } = {},
+): Promise<FeedPage> {
+  return ports.reading.listLatest(pageSize(options.limit), options.before ?? null);
+}
+
+export interface Profile {
+  principal: NonNullable<Awaited<ReturnType<ReadingPorts["reading"]["findPrincipalByUsername"]>>>;
+  page: FeedPage;
+}
+
+export async function loadProfile(
+  ports: ReadingPorts,
+  username: string,
+  options: { limit?: number; before?: FeedCursor | null } = {},
+): Promise<Result<Profile>> {
+  const principal = await ports.reading.findPrincipalByUsername(username);
+  if (principal === null) return fail("not-found", "Principal not found");
+
+  const page = await ports.reading.listByAuthor(
+    principal.id as OratorId,
+    pageSize(options.limit),
+    options.before ?? null,
+  );
+  return ok({ principal, page });
+}

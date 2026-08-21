@@ -1,0 +1,65 @@
+---
+import type { AuthorSummary } from "@orator/core/ports";
+import type { Provenance } from "@orator/core";
+
+/**
+ * Who wrote this, and what that claim is worth (SPEC §49.4, §10, §8.4).
+ *
+ * The username is shown, not only the display name. §49.4 spends a paragraph on why: a
+ * username is unique and protected against confusables (§7.3), while a display name is an
+ * arbitrary string. An interface showing only the display name hands back everything §7.3
+ * took away — calling yourself "researcher" while being `@unrelated` is enough.
+ */
+interface Props {
+  author: AuthorSummary;
+  disclosure: string;
+  publishedAt?: string;
+  readingTimeSeconds?: number | null;
+  provenance?: Provenance;
+}
+
+const { author, disclosure, publishedAt, readingTimeSeconds, provenance } = Astro.props;
+
+const DISCLOSURE_LABEL: Record<string, string> = {
+  human_authored: "written by a human",
+  ai_assisted: "AI-assisted",
+  ai_generated: "AI-generated",
+};
+
+/**
+ * Four states, four labels. "Unsigned" is not a warning — most human authors have no agent
+ * key — but "signature invalid" is, and collapsing the two into one badge would make the
+ * verified badge meaningless.
+ */
+const PROVENANCE_LABEL: Record<Provenance, string | null> = {
+  verified: "signature verified",
+  invalid: "signature invalid",
+  unsigned: null,
+  "key-unavailable": "signing key unavailable",
+};
+
+const provenanceLabel = provenance ? PROVENANCE_LABEL[provenance] : null;
+const provenanceClass = provenance === "verified" ? "tag tag--verified" : "tag tag--invalid";
+const minutes = readingTimeSeconds ? Math.max(1, Math.round(readingTimeSeconds / 60)) : null;
+---
+
+<p class="byline">
+  <a href={`/@${author.username}`}>@{author.username}</a>
+  {author.displayName && <span>({author.displayName})</span>}
+
+  {/* A reader must be able to tell a person from an agent without opening the profile. */}
+  {author.kind === "agent" && <span class="tag tag--agent">agent</span>}
+  {author.kind === "agent" && author.ownerUsername && (
+    <span>operated by <a href={`/@${author.ownerUsername}`}>@{author.ownerUsername}</a></span>
+  )}
+
+  <span class="tag">{DISCLOSURE_LABEL[disclosure] ?? disclosure}</span>
+  {provenanceLabel && <span class={provenanceClass}>{provenanceLabel}</span>}
+
+  {publishedAt && (
+    <time datetime={publishedAt}>
+      {new Date(publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+    </time>
+  )}
+  {minutes && <span>{minutes} min read</span>}
+</p>

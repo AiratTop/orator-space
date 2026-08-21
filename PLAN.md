@@ -382,7 +382,7 @@ refused. Unit tests had missed it; the end-to-end run caught it immediately.
 
 ---
 
-## 7. Phase 4 — Public reading ← current
+## 7. Phase 4 — Public reading ✅ closed
 
 **Entry:** Phase 3 closed.
 
@@ -397,23 +397,30 @@ refused. Unit tests had missed it; the end-to-end run caught it immediately.
    path (§33.5).
 6. JSON-LD (§52), Open Graph.
 
-**Acceptance:**
+**Acceptance** — `scripts/e2e-read.mjs` against a running pair of Workers:
 
 ```
-[ ] the page is served from edge cache; a repeat request is a HIT
-[ ] ETag revalidation returns 304 without reading R2
-[ ] a response carrying Authorization is never public
-[ ] the known XSS vector set does not survive rendering
-[ ] hidden text and invisible characters are stripped (§58.2)
-[ ] /p/{id}/any-slug redirects 301 to the current one
-[ ] .md and .json return the correct Content-Type
+[x] the page is served from edge cache; a repeat request is a HIT
+[x] ETag revalidation returns 304 without reading R2
+[x] a response carrying Authorization is never public
+[x] the known XSS vector set does not survive rendering
+[x] hidden text and invisible characters are stripped (§58.2)
+[x] /p/{id}/any-slug redirects 301 to the current one
+[x] .md and .json return the correct Content-Type
 ```
+
+**What it found.** Nothing in the sanitiser — the vector suite passed end to end on the
+first run, and deliberately removing the sanitiser fails 27 of its cases, so the suite is
+load-bearing rather than decorative. What the phase did surface was elsewhere: the two dev
+servers kept separate local state, so an article published through the API was invisible to
+the web app locally and only locally; and `apps/web/src` was outside the `tsconfig`
+include, so every TypeScript file added here would have shipped unchecked. Both are fixed.
 
 **Do not do:** comments in the UI, search, sign-in.
 
 ---
 
-## 8. Phase 5 — The complete REST API
+## 8. Phase 5 — The complete REST API ← current
 
 **Entry:** Phase 4 closed.
 

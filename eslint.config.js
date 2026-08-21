@@ -16,7 +16,7 @@ export default tseslint.config(
   {
     // Node scripts run outside the TypeScript project, so the compiler is not there to
     // vouch for these; they are the Web-standard globals Node has provided for years.
-    files: ["scripts/**/*.mjs", "*.config.js"],
+    files: ["scripts/**/*.mjs", "*.config.js", "apps/*/*.config.mjs"],
     languageOptions: {
       globals: {
         console: "readonly",

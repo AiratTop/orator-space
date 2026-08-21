@@ -12,6 +12,7 @@ import type {
   KeyRepo,
   OutboxRepo,
   PrincipalRepo,
+  ReadingRepo,
   TokenRepo,
 } from "../ports/index.js";
 import type { Actor } from "../identity/authz.js";
@@ -26,6 +27,8 @@ export interface Ports {
   outbox: OutboxRepo;
   eventBus: EventBus;
   articles: ArticleRepo;
+  /** The public read model (SPEC §49). Separate from `articles`; see ports/reading.ts. */
+  reading: ReadingRepo;
   events: EventRepo;
   idempotency: IdempotencyRepo;
   content: ContentStore;

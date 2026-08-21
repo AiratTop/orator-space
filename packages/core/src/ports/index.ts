@@ -47,3 +47,4 @@ export interface Metrics {
 export * from "./database.js";
 export * from "./repos.js";
 export * from "./articles.js";
+export * from "./reading.js";

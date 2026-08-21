@@ -7,3 +7,6 @@ dist/
 *.log
 *.tsbuildinfo
 .schema.json
+
+# Shared local miniflare state for both dev servers (see apps/web/astro.config.mjs).
+.wrangler-state/

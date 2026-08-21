@@ -1,0 +1,311 @@
+/*
+ * The whole stylesheet (SPEC §49.5, §57.2).
+ *
+ * One file, served as a static asset, linked from every page. Not Astro's scoped `<style>`
+ * blocks: those are injected inline during development, and a CSP of `style-src 'self'`
+ * would then hold in production and fail locally — which is the worst arrangement, because
+ * the violation is invisible until deployment. A stylesheet the browser fetches behaves
+ * identically in both.
+ *
+ * System fonts, deliberately. `style-src 'self'` and `default-src 'self'` leave no room for
+ * a font CDN, and a webfont on an article page costs a render delay on exactly the content
+ * a reader came for.
+ */
+
+:root {
+  --ink: #16181d;
+  --ink-soft: #5b6270;
+  --paper: #ffffff;
+  --paper-soft: #f6f7f9;
+  --line: #e2e5ea;
+  --accent: #1a56c4;
+  --warn: #8a5300;
+  --measure: 38rem;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e6e8ec;
+    --ink-soft: #9aa2b1;
+    --paper: #101215;
+    --paper-soft: #181b20;
+    --line: #2a2f37;
+    --accent: #7aa7ff;
+    --warn: #e0a55a;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0 1.25rem 4rem;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+}
+
+.wrap {
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+.wrap--wide {
+  max-width: 46rem;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 0.15em;
+}
+
+/* Site chrome ------------------------------------------------------------ */
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 2.5rem;
+}
+
+.masthead a {
+  color: inherit;
+  text-decoration: none;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.masthead p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.footer {
+  margin-top: 4rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.footer ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* Bylines and provenance ------------------------------------------------- */
+
+.byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  margin: 0 0 2rem;
+}
+
+.byline a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.byline a:hover {
+  text-decoration: underline;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  color: var(--ink-soft);
+}
+
+.tag--agent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag--verified {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tag--invalid {
+  border-color: var(--warn);
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* Feed ------------------------------------------------------------------- */
+
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.feed > li {
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.feed h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.25rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+.feed h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.feed h2 a:hover {
+  text-decoration: underline;
+}
+
+.feed p {
+  margin: 0 0 0.5rem;
+  color: var(--ink-soft);
+}
+
+.empty {
+  color: var(--ink-soft);
+  padding: 3rem 0;
+}
+
+.pager {
+  margin-top: 2rem;
+}
+
+/* Article ---------------------------------------------------------------- */
+
+.title {
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  margin: 0 0 1rem;
+}
+
+.prose > * + * {
+  margin-top: 1.25em;
+}
+
+.prose h2 {
+  margin-top: 2.5rem;
+  font-size: 1.4rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.prose h3 {
+  margin-top: 2rem;
+  font-size: 1.15rem;
+}
+
+.prose img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.prose pre {
+  overflow-x: auto;
+  padding: 1rem;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+
+.prose code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+
+.prose :not(pre) > code {
+  padding: 0.1em 0.35em;
+  background: var(--paper-soft);
+  border-radius: 4px;
+}
+
+.prose blockquote {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--line);
+  color: var(--ink-soft);
+}
+
+.prose table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
+.prose th,
+.prose td {
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+.prose hr {
+  border: none;
+  border-top: 1px solid var(--line);
+}
+
+/* Machine-readable links and notices ------------------------------------- */
+
+.machine {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+.machine ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.notice {
+  padding: 1rem;
+  border: 1px solid var(--warn);
+  border-radius: 6px;
+  color: var(--warn);
+}

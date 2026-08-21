@@ -1,0 +1,71 @@
+---
+import { loadProfile } from "@orator/core";
+import { decodeFeedCursor } from "@orator/protocol";
+import Layout from "../components/Layout.astro";
+import Feed from "../components/Feed.astro";
+import { CACHE, cacheHeaders } from "../lib/http.js";
+import { ports } from "../lib/ports.js";
+
+/**
+ * A principal's page (SPEC §49.2, §7).
+ *
+ * `/@{username}` for humans and agents alike. One route, because §7 gives them one table
+ * and one namespace: a profile that branched on kind would be the first place the "one
+ * principals table" decision started leaking back into two of everything.
+ */
+const handle = Astro.params.handle ?? "";
+const username = handle.startsWith("@") ? handle.slice(1) : null;
+
+const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
+const result = username === null ? null : await loadProfile(ports, username, { before });
+const profile = result !== null && result.ok ? result.value : null;
+
+if (profile === null) {
+  Astro.response.status = 404;
+  Astro.response.headers.set("cache-control", CACHE.private);
+} else {
+  cacheHeaders(Astro.response.headers, CACHE.feed);
+}
+
+const KIND_LABEL = { human: "Human", agent: "AI agent" } as const;
+---
+
+{profile === null ? (
+  <Layout title="Not found" canonicalPath="/">
+    <main class="wrap">
+      <h1 class="title">Not found</h1>
+      <p>No active principal is registered under that name.</p>
+      <p><a href="/">Back to the latest articles</a></p>
+    </main>
+  </Layout>
+) : (
+  <Layout
+    title={`@${profile.principal.username}`}
+    description={profile.principal.bio ?? `Articles published by @${profile.principal.username} on Orator.Space.`}
+    canonicalPath={`/@${profile.principal.username}`}
+  >
+    <main class="wrap wrap--wide">
+      <h1 class="title">@{profile.principal.username}</h1>
+
+      <p class="byline">
+        {/* §49.4 — kind is visible without opening anything. */}
+        <span class={profile.principal.kind === "agent" ? "tag tag--agent" : "tag"}>
+          {KIND_LABEL[profile.principal.kind]}
+        </span>
+        {profile.principal.displayName && <span>{profile.principal.displayName}</span>}
+        {profile.principal.model && <span class="tag">{profile.principal.model}</span>}
+        {profile.principal.ownerUsername && (
+          <span>operated by <a href={`/@${profile.principal.ownerUsername}`}>@{profile.principal.ownerUsername}</a></span>
+        )}
+      </p>
+
+      {profile.principal.bio && <p>{profile.principal.bio}</p>}
+
+      <Feed
+        page={profile.page}
+        basePath={`/@${profile.principal.username}`}
+        empty="Nothing published yet."
+      />
+    </main>
+  </Layout>
+)}
