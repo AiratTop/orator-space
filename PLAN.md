@@ -125,14 +125,17 @@ Target branches: Include default branch
 | `api.orator.space` | `apps/edge` | REST API |
 | `mcp.orator.space` | `apps/edge` | MCP |
 | `media.orator.space` | `apps/edge` | отдача из бакета `media` через биндинг (§57.4) |
-| `media.staging.orator.space` | `apps/edge` staging | тот же воркер, биндинг на staging-бакет |
+| `media-staging.orator.space` | `apps/edge` staging | тот же воркер, биндинг на staging-бакет |
 | `docs.orator.space` | позже | Phase 8+ |
 | `status.orator.space` | внешний узел | Gatus, вне Cloudflare-воркеров |
-| `*.staging.orator.space` | staging-воркеры | те же четыре имени с префиксом |
+| `staging.orator.space` | `apps/web` staging | — |
+| `api-staging` · `mcp-staging` `.orator.space` | `apps/edge` staging | **один уровень вложенности** |
+
+**Про имена staging.** Universal SSL покрывает апекс и один уровень поддомена, поэтому `api.staging.orator.space` привязался бы как маршрут и не прошёл TLS — деплой выглядит успешным, сервис недоступен. Используются `api-staging.orator.space` и т.д. (ADR 0003). Все домены привязаны и проверены.
 
 **MUST — ни один бакет не получает собственного публичного домена.** R2 позволяет привязать custom domain прямо к бакету; в нашей архитектуре это не используется ни для одного бакета, включая `media`.
 
-Домен принадлежит **воркеру**, а какой бакет он читает — определяет биндинг в его `wrangler.jsonc`. Поэтому `media.orator.space` и `media.staging.orator.space` указывают на разные воркеры, а не на разные бакеты, и один и тот же код обслуживает оба.
+Домен принадлежит **воркеру**, а какой бакет он читает — определяет биндинг в его `wrangler.jsonc`. Поэтому `media.orator.space` и `media-staging.orator.space` указывают на разные воркеры, а не на разные бакеты, и один и тот же код обслуживает оба.
 
 Sitemap отдаётся с `orator.space/sitemap.xml`: воркер читает готовый шард из `assets`. Отдельного имени для этого бакета не требуется.
 
@@ -141,20 +144,18 @@ Sitemap отдаётся с `orator.space/sitemap.xml`: воркер читае�
 | # | Действие | Когда |
 |---|---|---|
 | 1 | **Не подключать** Worker к репозиторию через git-интеграцию Cloudflare при создании. Разворачивает GitHub Actions | Phase 0 — §64.3 |
-| 1a | **Снять HTTP Pull Consumer с очереди `orator-events`** | до Phase 3 — см. ниже |
+| 1a | ~~Снять HTTP Pull Consumer с очереди `orator-events`~~ ✅ сделано | — |
 | 2 | Бюджетный алерт на аккаунте Cloudflare | до Phase 3 — §67.2 |
 | 3 | Проверки в Gatus: `/health`, `/health/deep` | Phase 8 — §66.7 |
 | 4 | Terms / Content Policy / Privacy | до публичного запуска — §61.1, §82 |
+| 5 | Добавить проксируемую DNS-запись для `www.orator.space` | сейчас — правило редиректа без записи не срабатывает |
+| 6 | Убрать из `/etc/hosts` строки `api/app/docs.orator.space → 127.0.0.1` | сейчас — они затеняют production локально (ADR 0003) |
 
 **Про пункт 1a.** Обе очереди были созданы с HTTP Pull Consumer. У очереди может быть только один консьюмер — push или pull, — поэтому воркер не может к ней подключиться: `wrangler deploy` завершается ошибкой `already has a consumer`, уже развернув воркер без консьюмера.
 
 Архитектура (§35.3) требует push-консьюмера: обработчик выполняет инвалидацию кеша, индексацию, пересборку sitemap и запись событий внутри воркера. Pull-модель вынесла бы эту работу наружу без выигрыша — внешние оркестраторы читают `GET /v1/events` (§20.5), а не очередь.
 
-На staging консьюмер снят и воркер развёрнут. На `orator-events` он остался — это production-инфраструктура, и без вашего указания я её не меняю. Команда:
-
-```sh
-npx wrangler queues consumer http remove orator-events
-```
+Снят на обоих окружениях, push-консьюмеры подключены и работают.
 
 **Что не потребуется:** Docker для самого Orator. Ядро работает на одном Cloudflare (§66.6). Внешний стек подключается в Phase 8 и только как усиление.
 
@@ -213,7 +214,7 @@ npx wrangler queues consumer http remove orator-events
 [ ] pnpm install && pnpm dev поднимает оба воркера локально
 [ ] pnpm ci проходит целиком
 [ ] намеренное нарушение границы импорта роняет CI
-[ ] https://api.staging.orator.space/health отвечает
+[ ] https://api-staging.orator.space/health отвечает
 [ ] README проверен «с нуля»: клон → запуск, без вопросов автору
 ```
 
