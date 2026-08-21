@@ -24,6 +24,11 @@ export interface ContentStore {
   get(contentHash: string): Promise<string | null>;
   /** SPEC §23.3 — refcount is checked by the caller before deletion. */
   delete(contentHash: string): Promise<void>;
+  /**
+   * The opaque `content_ref` stored on a revision. Only the adapter knows its shape, so
+   * moving content elsewhere later changes one implementation rather than the domain.
+   */
+  refFor(contentHash: string): string;
 }
 
 /** SPEC §35 — appended inside the same batch as the domain write, never separately. */
@@ -41,3 +46,4 @@ export interface Metrics {
 
 export * from "./database.js";
 export * from "./repos.js";
+export * from "./articles.js";

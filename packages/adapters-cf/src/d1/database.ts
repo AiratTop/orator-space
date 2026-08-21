@@ -21,9 +21,10 @@ function classify(message: string): ConstraintViolation["constraint"] {
 export function createD1Database(db: D1Database): Database {
   return {
     async commit(writes) {
-      if (writes.length === 0) return;
+      if (writes.length === 0) return [];
       try {
-        await db.batch(writes.map(asStatement));
+        const results = await db.batch(writes.map(asStatement));
+        return results.map((result) => ({ changes: result.meta?.changes ?? 0 }));
       } catch (error) {
         const message = String((error as Error)?.message ?? error);
         // Constraint failures are the schema doing its job, and callers branch on them

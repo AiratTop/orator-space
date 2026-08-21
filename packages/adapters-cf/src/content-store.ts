@@ -51,5 +51,7 @@ export function createR2ContentStore(bucket: R2Bucket): ContentStore {
     async delete(contentHash: string): Promise<void> {
       await bucket.delete(PREFIX + contentHash);
     },
+
+    refFor: contentRef,
   };
 }

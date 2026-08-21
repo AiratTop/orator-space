@@ -1,0 +1,379 @@
+import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
+import type { ArticleRecord, Disclosure, RevisionRecord } from "../ports/index.js";
+import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
+import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
+import { slugify, validateContent } from "../articles/content.js";
+import { fail, ok, type RequestContext, type Result } from "./context.js";
+
+const DENIAL_DETAIL: Record<DenialReason, string> = {
+  suspended: "This principal is suspended.",
+  "insufficient-scope": "The token does not carry the required scope.",
+  "not-owner": "This principal does not own the article.",
+  "cross-agent": "An agent cannot act on a sibling agent's articles, even under the same owner.",
+  "requires-moderator": "This action requires a moderator or administrator.",
+};
+
+const denied = <T>(reason: DenialReason): Result<T> =>
+  fail(
+    reason === "insufficient-scope" ? ErrorType.InsufficientScope : ErrorType.Forbidden,
+    "Not permitted",
+    DENIAL_DETAIL[reason],
+  );
+
+const ownershipOf = (article: ArticleRecord) => ({
+  authorPrincipalId: article.authorPrincipalId,
+  ...(article.authorOwnerPrincipalId === undefined
+    ? {}
+    : { authorOwnerPrincipalId: article.authorOwnerPrincipalId }),
+});
+
+/**
+ * Disclosure is derived, not merely accepted (SPEC §10).
+ *
+ * An agent cannot claim its output was written by a human. The client may narrow within
+ * what is true, never contradict it — a self-declared field would make the guarantee
+ * worthless exactly where it matters.
+ */
+function resolveDisclosure(authorKind: "human" | "agent", requested: Disclosure | undefined): Disclosure {
+  if (authorKind === "agent") return "ai_generated";
+  return requested ?? "ai_assisted";
+}
+
+export interface CreateArticleInput {
+  title: string;
+  content: string;
+  slug?: string | null;
+  language?: string;
+  visibility?: "public" | "unlisted" | "private";
+  authorshipDisclosure?: Disclosure;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ArticleSummary {
+  id: OratorId;
+  revisionId: OratorId;
+  slug: string | null;
+  status: string;
+  contentHash: string;
+  url: string;
+}
+
+/**
+ * Creates a draft article and its first revision (SPEC §16).
+ *
+ * The body goes to R2 before anything is written to D1: if content storage fails, no row
+ * exists pointing at a body that is not there.
+ */
+export async function createArticle(
+  ctx: RequestContext,
+  input: CreateArticleInput,
+): Promise<Result<ArticleSummary>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  const permitted = canCreate(actor, "articles:write");
+  if (!permitted.allowed) return denied(permitted.reason);
+
+  const validated = validateContent(input.title, input.content);
+  if ("error" in validated) {
+    return fail(ErrorType.ValidationFailed, "Article content is not valid", validated.error);
+  }
+
+  const articleId = ctx.ports.ids.next();
+  const revisionId = ctx.ports.ids.next();
+  const createdAt = ctx.ports.clock.now().toISOString();
+  const contentHash = await ctx.ports.content.put(validated.content);
+  const slug = input.slug === undefined ? slugify(validated.title) : input.slug;
+
+  await ctx.ports.db.commit([
+    ctx.ports.articles.insertArticle({
+      id: articleId,
+      authorPrincipalId: actor.principalId as OratorId,
+      slug: slug === "" ? null : slug,
+      language: input.language ?? "en",
+      authorshipDisclosure: resolveDisclosure(actor.kind, input.authorshipDisclosure),
+      visibility: input.visibility ?? "public",
+      createdAt,
+    }),
+    ctx.ports.articles.insertRevision({
+      id: revisionId,
+      articleId,
+      parentRevisionId: null,
+      title: validated.title,
+      excerpt: validated.excerpt,
+      contentRef: ctx.ports.content.refFor(contentHash),
+      contentHash,
+      contentBytes: validated.contentBytes,
+      readingTimeSeconds: validated.readingTimeSeconds,
+      metadata: { schema_version: SCHEMA_VERSION, ...(input.metadata ?? {}) },
+      createdByPrincipalId: actor.principalId as OratorId,
+      viaTokenId: ctx.tokenId,
+      createdAt,
+    }),
+    ctx.ports.articles.setCurrentRevision(articleId, revisionId, null, createdAt),
+  ]);
+
+  // No event: a draft is not activity. Publishing is what the network observes (§20).
+  return ok({
+    id: articleId,
+    revisionId,
+    slug: slug === "" ? null : slug,
+    status: "draft",
+    contentHash,
+    url: urlFor(articleId, slug),
+  });
+}
+
+export interface CreateRevisionInput {
+  title: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  /** SPEC §34.3 — the revision the caller believes is current. */
+  ifMatch?: string | null;
+}
+
+export async function createRevision(
+  ctx: RequestContext,
+  articleId: string,
+  input: CreateRevisionInput,
+): Promise<Result<{ id: OratorId; contentHash: string; unchanged: boolean }>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  const article = await ctx.ports.articles.findById(articleId);
+  if (article === null || article.status === "removed") {
+    return fail(ErrorType.NotFound, "Article not found");
+  }
+
+  const permitted = canModify(actor, ownershipOf(article), "articles:write");
+  if (!permitted.allowed) return denied(permitted.reason);
+
+  const validated = validateContent(input.title, input.content);
+  if ("error" in validated) {
+    return fail(ErrorType.ValidationFailed, "Article content is not valid", validated.error);
+  }
+
+  if (input.ifMatch !== undefined && input.ifMatch !== null && input.ifMatch !== article.currentRevisionId) {
+    return fail(
+      ErrorType.PreconditionFailed,
+      "Article has changed since you last read it",
+      "Re-read the article and reapply your change.",
+      { current_revision_id: article.currentRevisionId },
+    );
+  }
+
+  const current = article.currentRevisionId === null ? null : await ctx.ports.articles.findRevision(article.currentRevisionId);
+  const contentHash = await ctx.ports.content.put(validated.content);
+
+  // A retrying agent that resends identical content should not accumulate empty
+  // revisions; over a week of retries that is thousands of rows saying nothing (§16.4).
+  if (current !== null && current.contentHash === contentHash && current.title === validated.title) {
+    return ok({ id: current.id, contentHash, unchanged: true });
+  }
+
+  const revisionId = ctx.ports.ids.next();
+  const createdAt = ctx.ports.clock.now().toISOString();
+
+  const [, pointer] = await ctx.ports.db.commit([
+    ctx.ports.articles.insertRevision({
+      id: revisionId,
+      articleId: article.id,
+      parentRevisionId: article.currentRevisionId,
+      title: validated.title,
+      excerpt: validated.excerpt,
+      contentRef: ctx.ports.content.refFor(contentHash),
+      contentHash,
+      contentBytes: validated.contentBytes,
+      readingTimeSeconds: validated.readingTimeSeconds,
+      metadata: { schema_version: SCHEMA_VERSION, ...(input.metadata ?? {}) },
+      createdByPrincipalId: actor.principalId as OratorId,
+      viaTokenId: ctx.tokenId,
+      createdAt,
+    }),
+    // Conditional on the pointer we read, so a concurrent writer loses rather than
+    // silently overwriting. Reading first and then writing would be a race (§34.3).
+    ctx.ports.articles.setCurrentRevision(article.id, revisionId, article.currentRevisionId, createdAt),
+  ]);
+
+  if ((pointer?.changes ?? 0) === 0) {
+    return fail(
+      ErrorType.Conflict,
+      "Another revision was created concurrently",
+      "Re-read the article and reapply your change.",
+    );
+  }
+
+  return ok({ id: revisionId, contentHash, unchanged: false });
+}
+
+export interface PublishInput {
+  /** Defaults to the current revision. */
+  revisionId?: string;
+  /** SPEC §8.4 — signed after the revision exists, because the server assigns its id. */
+  signature?: string | null;
+  signatureKeyId?: string | null;
+}
+
+/**
+ * Publishes by moving a pointer (SPEC §16.3).
+ *
+ * The critical path ends here: everything downstream — indexing, sitemap, cache purge,
+ * notifications — is driven by the outbox row written in this same transaction (§36).
+ */
+export async function publishArticle(
+  ctx: RequestContext,
+  articleId: string,
+  input: PublishInput = {},
+): Promise<Result<{ id: OratorId; revisionId: string; url: string; publishedAt: string; signed: boolean }>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  const article = await ctx.ports.articles.findById(articleId);
+  if (article === null || article.status === "removed") {
+    return fail(ErrorType.NotFound, "Article not found");
+  }
+
+  const permitted = canModify(actor, ownershipOf(article), "articles:publish");
+  if (!permitted.allowed) return denied(permitted.reason);
+
+  const revisionId = input.revisionId ?? article.currentRevisionId;
+  if (revisionId === null) {
+    return fail(ErrorType.ValidationFailed, "Article has no revision to publish");
+  }
+  const revision = await ctx.ports.articles.findRevision(revisionId);
+  if (revision === null || revision.articleId !== article.id) {
+    return fail(ErrorType.NotFound, "Revision not found");
+  }
+
+  const writes = [];
+  let signed = false;
+
+  const signature = input.signature ?? null;
+  const signatureKeyId = input.signatureKeyId ?? null;
+  if (signature !== null && signatureKeyId !== null) {
+    const verdict = await verifyRevisionSignature(ctx, article, revision, signature, signatureKeyId);
+    if (!verdict.ok) return verdict;
+    writes.push(ctx.ports.articles.attachSignature(revision.id, signature, signatureKeyId));
+    signed = true;
+  }
+
+  const publishedAt = ctx.ports.clock.now().toISOString();
+  writes.push(
+    ctx.ports.articles.publish(article.id, revision.id, publishedAt),
+    // Same transaction. A queue send after the commit is not atomic with it, and the gap
+    // is silent: the article publishes and nothing downstream ever hears (§35.1).
+    ctx.ports.outbox.enqueue({
+      id: ctx.ports.ids.next(),
+      eventType: "article.published",
+      aggregateType: "article",
+      aggregateId: article.id,
+      payload: {
+        schema_version: SCHEMA_VERSION,
+        revision_id: revision.id,
+        content_hash: revision.contentHash,
+        author_principal_id: article.authorPrincipalId,
+        slug: article.slug,
+        signed,
+      },
+      requestId: ctx.requestId,
+      createdAt: publishedAt,
+    }),
+    ctx.ports.events.insert({
+      id: ctx.ports.ids.next(),
+      type: "article.published",
+      actorPrincipalId: article.authorPrincipalId,
+      subjectType: "article",
+      subjectId: article.id,
+      audiencePrincipalId: null,
+      visibility: "public",
+      payload: { schema_version: SCHEMA_VERSION, title: revision.title },
+      createdAt: publishedAt,
+    }),
+  );
+
+  await ctx.ports.db.commit(writes);
+
+  return ok({
+    id: article.id,
+    revisionId: revision.id,
+    url: urlFor(article.id, article.slug),
+    publishedAt,
+    signed,
+  });
+}
+
+async function verifyRevisionSignature(
+  ctx: RequestContext,
+  article: ArticleRecord,
+  revision: RevisionRecord,
+  signature: string,
+  keyId: string,
+): Promise<Result<true>> {
+  const key = await ctx.ports.keys.findById(keyId);
+  if (key === null) return fail(ErrorType.ValidationFailed, "Signing key not found");
+  if (key.agentPrincipalId !== article.authorPrincipalId) {
+    return fail(
+      ErrorType.ValidationFailed,
+      "Signing key does not belong to the author",
+      "A revision may only be signed by a key registered to the principal it is attributed to.",
+    );
+  }
+  if (!keyValidAt(key, revision.createdAt)) {
+    return fail(
+      ErrorType.ValidationFailed,
+      "Key was not valid when the revision was created",
+      "The key was either revoked before this revision, or registered after it.",
+    );
+  }
+
+  const message = revisionSigningInput({
+    articleId: article.id,
+    revisionId: revision.id,
+    contentHash: revision.contentHash,
+    createdAt: revision.createdAt,
+  });
+  if (!(await verifySignature(key.publicKey, signature, message))) {
+    return fail(
+      ErrorType.ValidationFailed,
+      "Signature does not verify",
+      "Sign the canonical string returned with the revision, exactly as given.",
+    );
+  }
+  return ok(true);
+}
+
+export async function unpublishArticle(
+  ctx: RequestContext,
+  articleId: string,
+): Promise<Result<{ id: string; status: string }>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  const article = await ctx.ports.articles.findById(articleId);
+  if (article === null || article.status === "removed") {
+    return fail(ErrorType.NotFound, "Article not found");
+  }
+  const permitted = canModify(actor, ownershipOf(article), "articles:publish");
+  if (!permitted.allowed) return denied(permitted.reason);
+
+  const at = ctx.ports.clock.now().toISOString();
+  await ctx.ports.db.commit([
+    // published_revision_id is kept: unpublishing is reversible and is not a deletion
+    // (SPEC §23.1). Removal is a different operation entirely.
+    ctx.ports.articles.unpublish(article.id, at),
+    ctx.ports.outbox.enqueue({
+      id: ctx.ports.ids.next(),
+      eventType: "article.unpublished",
+      aggregateType: "article",
+      aggregateId: article.id,
+      payload: { schema_version: SCHEMA_VERSION },
+      requestId: ctx.requestId,
+      createdAt: at,
+    }),
+  ]);
+  return ok({ id: article.id, status: "unpublished" });
+}
+
+/** Canonical URL (SPEC §11). The id carries identity; the slug is decoration. */
+export const urlFor = (articleId: string, slug: string | null): string =>
+  slug === null || slug === "" ? `/p/${articleId}` : `/p/${articleId}/${slug}`;

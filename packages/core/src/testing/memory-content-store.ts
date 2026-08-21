@@ -27,6 +27,7 @@ export function createMemoryContentStore(): ContentStore & { size(): number } {
     async delete(contentHash) {
       objects.delete(contentHash);
     },
+    refFor: (contentHash) => `r2:content/${contentHash}`,
     size: () => objects.size,
   };
 }

@@ -1,10 +1,14 @@
 import {
+  createArticleRepo,
   createAuditRepo,
   createD1Database,
+  createEventRepo,
+  createIdempotencyRepo,
   createIdGen,
   createKeyRepo,
   createOutboxRepo,
   createPrincipalRepo,
+  createR2ContentStore,
   createTokenRepo,
   systemClock,
 } from "@orator/adapters-cf";
@@ -22,6 +26,10 @@ export function portsFor(env: Env): Ports {
     keys: createKeyRepo(env.DB),
     audit: createAuditRepo(env.DB),
     outbox: createOutboxRepo(env.DB),
+    articles: createArticleRepo(env.DB),
+    events: createEventRepo(env.DB),
+    idempotency: createIdempotencyRepo(env.DB),
+    content: createR2ContentStore(env.CONTENT),
     clock: systemClock,
     ids: idGen,
   };

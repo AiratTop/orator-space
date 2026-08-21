@@ -7,3 +7,4 @@
 export * from "./ports/index.js";
 export * from "./identity/index.js";
 export * from "./services/index.js";
+export * from "./articles/index.js";

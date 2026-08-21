@@ -1,8 +1,12 @@
 import type { ErrorTypeName } from "@orator/protocol";
 import type {
+  ArticleRepo,
   AuditRepo,
   Clock,
+  ContentStore,
   Database,
+  EventRepo,
+  IdempotencyRepo,
   IdGen,
   KeyRepo,
   OutboxRepo,
@@ -19,6 +23,10 @@ export interface Ports {
   keys: KeyRepo;
   audit: AuditRepo;
   outbox: OutboxRepo;
+  articles: ArticleRepo;
+  events: EventRepo;
+  idempotency: IdempotencyRepo;
+  content: ContentStore;
   clock: Clock;
   ids: IdGen;
 }
