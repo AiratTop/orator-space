@@ -1,0 +1,21 @@
+---
+import { env } from "cloudflare:workers";
+const { id } = Astro.params;
+let dbOk = false, r2Ok = false, title = "not found";
+if ((env as any)?.DB) {
+  await (env as any).DB.exec("CREATE TABLE IF NOT EXISTS spike_articles (id TEXT PRIMARY KEY, title TEXT)");
+  await (env as any).DB.prepare("INSERT OR REPLACE INTO spike_articles (id,title) VALUES (?,?)").bind(id, `Article ${id}`).run();
+  const row = await (env as any).DB.prepare("SELECT title FROM spike_articles WHERE id=?").bind(id).first();
+  dbOk = !!row; title = row?.title ?? title;
+}
+if ((env as any)?.CONTENT) {
+  await (env as any).CONTENT.put(`content/spike-${id}`, "# body");
+  r2Ok = (await (env as any).CONTENT.get(`content/spike-${id}`)) !== null;
+}
+Astro.response.headers.set("cache-control", "public, s-maxage=60, stale-while-revalidate=86400");
+Astro.response.headers.set("etag", `"spike-${id}"`);
+Astro.response.headers.set("x-binding-d1", String(dbOk));
+Astro.response.headers.set("x-binding-r2", String(r2Ok));
+---
+<html lang="en"><head><title>{title}</title></head>
+<body><h1>{title}</h1><p data-d1={String(dbOk)} data-r2={String(r2Ok)}>ok</p></body></html>

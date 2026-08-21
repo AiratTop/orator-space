@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "orator-spike-platform",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [
+    { "binding": "DB", "database_name": "spike-db", "database_id": "local-spike" }
+  ],
+  "r2_buckets": [
+    { "binding": "CONTENT", "bucket_name": "spike-content" }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
+  "queues": {
+    "producers": [{ "binding": "EVENTS", "queue": "spike-events" }]
+  },
+  "triggers": { "crons": ["* * * * *"] }
+}

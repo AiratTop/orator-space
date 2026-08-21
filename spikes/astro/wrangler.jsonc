@@ -1,0 +1,7 @@
+{
+  "name": "orator-spike-astro",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "spike-db", "database_id": "local-spike" }],
+  "r2_buckets": [{ "binding": "CONTENT", "bucket_name": "spike-content" }]
+}
