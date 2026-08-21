@@ -1,92 +1,118 @@
 # AGENTS.md
 
-Правила для coding agents, работающих в этом репозитории.
-Полный контекст — `SPEC.md`. Здесь только то, что нарушается чаще всего.
+Rules for coding agents working in this repository.
+Full context is in `SPEC.md`. What follows is the subset that gets broken most often.
 
-## Приоритет требований
+## Requirement levels
 
-`SPEC.md` содержит более 250 требований MUST, разделённых на уровни (§0.5):
+`SPEC.md` carries over 250 MUST requirements, sorted into three levels (§0.5):
 
-- **`[S]`** — влияет на схему или публичный контракт, обязательно с первой миграции;
-- **`[L]`** — обязательно до открытия публичной регистрации;
-- **`[G]`** — по достижении измеренного порога, раньше — преждевременно.
+- **`[S]`** — affects the schema or a public contract; required from the first migration.
+- **`[L]`** — required before public registration opens.
+- **`[G]`** — required once a measured threshold is reached; earlier is premature.
 
-Не реализуй `[G]`-требования заранее. Не откладывай `[S]`.
+Do not implement `[G]` requirements ahead of time. Do not defer `[S]` ones.
 
-## Прежде чем писать код
+## Before writing code
 
-- Прочитай `SPEC.md` — он является источником истины по архитектуре.
-- Прочитай `CONTEXT.md` — доступные ресурсы и разделение ответственности. Наличие ресурса не является основанием вводить его в архитектуру.
-- Прочитай `PLAN.md` — он определяет порядок работ. Не начинай фазу, пока не выполнен её вход, и соблюдай раздел «не делать в этой фазе».
-- Расхождение кода и `SPEC.md` — это либо баг, либо непоставленный ADR. Молча расходиться нельзя.
-- Меняешь архитектурное решение — сначала ADR в `docs/adr/`, затем правка `SPEC.md`, затем код.
+- Read `SPEC.md`. It is the source of truth for architecture.
+- Read `CONTEXT.md` for available resources and the division of responsibility. A resource
+  being available is not a reason to introduce it into the architecture.
+- Read `PLAN.md` for the order of work. Do not start a phase before its entry criteria are
+  met, and respect each phase's "do not do in this phase" section.
+- A divergence between the code and `SPEC.md` is either a bug or an ADR that was never
+  written. Diverging silently is not an option.
+- Changing an architectural decision means an ADR in `docs/adr/` first, then the `SPEC.md`
+  edit, then the code.
 
-## Инварианты, которые нельзя нарушать
+## Invariants
 
-Каждый пункт нарушался бы «незаметно» и стоил бы миграции данных.
+Each of these would break quietly and cost a data migration.
 
-1. **Идентификаторы неизменяемы.** Article ID, principal ID, revision ID не меняются и не переиспользуются никогда — включая удалённые объекты (SPEC §11, §23.2).
-2. **Один ID на сущность.** Никаких пар internal/public. Формат — UUIDv7 в Crockford base32 (§12).
-3. **Никаких полиморфных ссылок на автора.** Только `author_principal_id → principals(id)` (§7).
-4. **Контент живёт в ревизиях, ревизии immutable.** Не добавляй `content_markdown` в `articles`. Не изменяй существующую ревизию (§16).
-5. **Публикация — смена указателя `published_revision_id`**, а не копирование контента (§16.3).
-6. **Доступ к контенту только через `ContentStore`.** Не читай `content_ref` напрямую (§16.2).
-7. **Запись домена и запись в `outbox` — один `db.batch()`.** Отправка в очередь вне транзакции не заменяет outbox (§35).
-8. **Все консьюмеры очереди идемпотентны по `event.id`.** Queues доставляет at-least-once и не гарантирует порядок (§34.2).
-9. **Cloudflare-типы не пересекают границу ports.** `D1Database`, `R2Bucket`, `Queue`, `Request`, `Response` — только в `packages/adapters-cf` и `apps/*`. Проверяется в CI (§28.1).
-10. **HTTP-адаптеры не ходят в базу.** Только вызовы application services (§28.1).
-11. **Авторизация — в application service, не в адаптере.** REST, MCP и Web обязаны получать одинаковый результат (§43.4).
-12. **Ответ с `Authorization` никогда не кешируется публично** (§33.2).
-13. **Санитизация — при рендеринге, не при сохранении.** Исходный markdown хранится как есть (§57.1).
-14. **Пользовательские медиа отдаются только с `media.orator.space`** (§57.4).
-15. **Метрики и просмотры не пишутся в D1.** Только Analytics Engine (§66.2).
-16. **Каждый JSON-блоб в БД содержит `schema_version`** (§46.4).
-17. **Курсорная пагинация, никакого offset.** Максимальный `limit` обязателен (§44.2, §67).
-18. **Ошибки — RFC 9457**, со стабильным `type` URI и `X-Request-Id` (§45).
-19. **Циклические FK не объявляются.** FK только на обязательной стороне пары (§7.4).
-20. **`erase` проверяет ссылки перед удалением объекта R2.** Контент дедуплицирован — прямое удаление уничтожит чужую статью (§23.3).
-21. **`Vary: Accept` не используется на HTML-пути.** Варианты контента — отдельные URL (§33.5).
-22. **Сессия веб-интерфейса не принимается на API.** Только токен (§9.1).
-23. **Каждая метрика содержит `audience_class`.** Без него продуктовая гипотеза непроверяема (§66.5).
-24. **Импорт контента идёт через публичный API**, не прямыми вставками в базу (§15.1).
-25. **Кросс-постинг требует `canonical_url`** и исключения из sitemap (§15.1).
-26. **Ядро работает на одном Cloudflare.** Внешние сервисы и self-hosted модели — только опциональное усиление, никогда не единственная реализация порта (§66.6, §61).
+1. **Identifiers are immutable.** Article, principal and revision ids never change and are
+   never reused, including for deleted objects (SPEC §11, §23.2).
+2. **One id per entity.** No internal/public pairs. UUIDv7 in Crockford base32 (§12).
+3. **No polymorphic reference to an author.** Only `author_principal_id → principals(id)` (§7).
+4. **Content lives in revisions, and revisions are immutable.** Do not add
+   `content_markdown` to `articles`. Do not modify an existing revision (§16).
+5. **Publishing moves the `published_revision_id` pointer**; it never copies content (§16.3).
+6. **Content is reached only through `ContentStore`.** Never read `content_ref` directly (§16.2).
+7. **A domain write and its outbox row go in one `db.batch()`.** Sending to the queue outside
+   the transaction is not a substitute for the outbox (§35).
+8. **Every queue consumer is idempotent by `event.id`.** Queues delivers at-least-once and
+   does not guarantee order (§34.2).
+9. **Cloudflare types do not cross the ports boundary.** `D1Database`, `R2Bucket`, `Queue`,
+   `Request`, `Response` belong to `packages/adapters-cf` and `apps/*` only. Enforced in CI (§28.1).
+10. **HTTP adapters do not touch storage.** They call application services (§28.1).
+11. **Authorisation lives in the application service, not the adapter.** REST, MCP and the
+    web app must reach the same verdict (§43.4).
+12. **A response carrying `Authorization` is never publicly cacheable** (§33.2).
+13. **Sanitisation happens at render time, not on write.** The stored markdown stays exactly
+    what the author sent (§57.1).
+14. **User media is served only from `media.orator.space`** (§57.4).
+15. **Metrics and page views are never written to D1.** Analytics Engine only (§66.2).
+16. **Every JSON blob in the database carries `schema_version`** (§46.4).
+17. **Cursor pagination, never offset.** A maximum `limit` is mandatory (§44.2, §67).
+18. **Errors follow RFC 9457**, with a stable `type` URI and `X-Request-Id` (§45).
+19. **Circular foreign keys are not declared.** The key goes on the mandatory side only (§7.4).
+20. **`erase` checks references before deleting an R2 object.** Content is deduplicated, so
+    an unchecked delete destroys someone else's article (§23.3).
+21. **`Vary: Accept` is not used on the HTML path.** Content variants live at separate URLs (§33.5).
+22. **A browser session is never accepted on the API.** Tokens only (§9.1).
+23. **Every metric carries `audience_class`.** Without it the product hypothesis cannot be
+    tested (§66.5).
+24. **Content is imported through the public API**, never by inserting into the database (§15.1).
+25. **Cross-posting requires `canonical_url`** and exclusion from the sitemap (§15.1).
+26. **The core runs on Cloudflare alone.** External services and self-hosted models are
+    optional reinforcement, never the only implementation of a port (§66.6, §61).
 
-## Ограничения платформы, которые ломают наивный код
+## Platform constraints that break naive code
 
-- **D1 не поддерживает интерактивные транзакции.** Нет `BEGIN … await … COMMIT`. Только `db.batch()` или одиночный statement. Паттерн Unit of Work не реализуем (§31.1).
-- **Проверки инвариантов выражаются условием в `WHERE`**, а не чтением перед записью.
-- **Миграции forward-only.** Любое несовместимое изменение схемы — только expand/contract в несколько релизов (§65).
-- **Purge by tag недоступен вне Enterprise.** Корректность кеша обеспечивается `s-maxage` + `ETag`, не purge (§33.1).
-- **Обработка изображений в Worker невозможна** по CPU и памяти. Трансформации — платформенные (§21.2).
-- **Чтение после записи требует Sessions API с bookmark**, иначе реплика вернёт устаревшие данные (§31.2).
-- **Минимальный интервал Cron Trigger — одна минута.** Дренаж outbox опирается на прямую отправку, cron — страховка (§35.2).
-- **D1 допускает максимум 100 bound-параметров на запрос.** Массовые вставки, бэкфилл и дренаж outbox разбиваются на части — иначе они молча ломаются на росте объёма.
-- **Сообщение очереди — не более 128 КБ.** Событие несёт идентификаторы, а не контент.
-- **`revision_id` назначает сервер.** Подпись ревизии двухшаговая: создать → подписать → опубликовать (§8.4).
+- **D1 has no interactive transactions.** There is no `BEGIN … await … COMMIT`, only
+  `db.batch()` or a single statement. The Unit of Work pattern is not implementable (§31.1).
+- **Invariants are expressed as a `WHERE` condition**, not as a read before a write.
+- **D1 permits 100 bound parameters per query.** Bulk inserts, backfills and outbox drains
+  must be chunked, or they break silently as volume grows.
+- **A queue message is capped at 128 KB.** Events carry identifiers, never content.
+- **Migrations are forward-only.** Any incompatible schema change goes through
+  expand/contract across several releases (§65).
+- **Purge by tag is available on every plan but rate-limited to a few requests a minute.**
+  Cache correctness comes from `s-maxage` plus `ETag`, not from purge (§33.1).
+- **Image processing in a Worker is not viable** on CPU or memory. Transformations are a
+  platform concern (§21.2).
+- **The minimum Cron Trigger interval is one minute.** The outbox drain relies on direct
+  delivery; cron is the safety net (§35.2).
+- **`revision_id` is assigned by the server.** Signing a revision is a two-step protocol:
+  create, then sign, then publish (§8.4).
+- **A read after a write needs the Sessions API with a bookmark**, or a replica returns
+  stale data (§31.2).
 
-## Модель угроз
+## Threat model
 
-- Весь контент недоверенный — включая произведённый агентами самой платформы.
-- Контент Orator попадает в контекст других моделей. Всё, что возвращается наружу и содержит пользовательский текст, размечается как недоверенные данные (§58).
-- Не логируй токены, email, IP в открытом виде, содержимое приватных статей и промптов (§66.3).
+- All content is untrusted, including content produced by the platform's own agents.
+- Orator's content ends up inside other models' context. Anything returned that contains
+  user text is labelled as untrusted data (§58).
+- Never log tokens, email addresses, raw IPs, private article bodies, or prompt contents (§66.3).
 
-## Дисциплина изменений
+## Change discipline
 
-- Монорепозиторий. Отдельные репозитории не создаются.
-- Новый npm-пакет — только если у него другой потребитель. Граница модуля обеспечивается правилом импорта, а не `package.json` (§27, §73).
-- Новый сервис — только по ADR с описанием измеренной проблемы (§27).
-- Новая абстракция провайдера — только когда есть вторая реальная реализация (§26.13, §69).
-- OAuth 2.1 для MCP не реализуется: авторизация MVP — bearer-токен (§42.3).
-- Новая зависимость — с обоснованием: работает в Workers runtime, поддерживается, приемлемый размер, совместимая лицензия (§74).
-- Предпочитай простую архитектуру преждевременной абстракции.
-- Внешние системы (аналитика, оркестраторы, дашборды) не находятся в критическом пути запроса (§66.6).
-- Собственный agent runtime не реализуется, пока внешний оркестратор не стал измеримым ограничением (§55.1).
+- Monorepo. Do not create separate repositories.
+- A new npm package only when it has a different consumer. A module boundary is a rule
+  about who may import whom, not a `package.json` (§27, §73).
+- A new service only with an ADR describing the measured problem it solves (§27).
+- A new provider abstraction only when a second real implementation exists (§26.13, §69).
+- OAuth 2.1 for MCP is not implemented: MVP authorisation is a bearer token (§42.3).
+- A new dependency needs justification: works in the Workers runtime, maintained, acceptable
+  size, compatible licence (§74).
+- External systems — analytics, orchestrators, dashboards — stay out of the request path (§66.6).
+- No in-house agent runtime until an external orchestrator becomes a measured constraint (§55.1).
+- Prefer a simple architecture over a premature abstraction.
 
-## Что нельзя делать без явного указания
+## Not without explicit instruction
 
-- Изменять production-инфраструктуру.
-- Применять миграции на production.
-- Публиковать пакеты.
-- Коммитить и пушить, если об этом не попросили.
-- Добавлять поля и таблицы для сущностей, отсутствующих в `SPEC.md` (например `publications` — §6, §15).
+- Changing production infrastructure.
+- Applying migrations to production.
+- Publishing packages.
+- Committing and pushing, unless asked.
+- Adding fields or tables for entities absent from `SPEC.md` — `publications`, for
+  instance (§6, §15).

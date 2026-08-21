@@ -1,107 +1,129 @@
 # CONTEXT.md
 
-Контекст конкретного развёртывания Orator.Space и его оператора.
+Context for this particular deployment of Orator.Space and its operator.
 
-**Границы документа.** `SPEC.md` описывает продукт и обязан оставаться пригодным для любого развёртывания третьей стороной (§82). Этот файл описывает **наше** развёртывание: кто им управляет, какие ресурсы доступны, какие решения делегированы. Ничто отсюда не является требованием продукта.
+**Scope.** `SPEC.md` describes the product and must stay usable by anyone deploying it
+(§82). This file describes *our* deployment: who runs it, what is available, which
+decisions are delegated. Nothing here is a product requirement.
 
-Файл меняется часто. Архитектурные решения сюда не попадают — им место в `SPEC.md` и `docs/adr/`.
+It changes often. Architectural decisions do not belong here — they belong in `SPEC.md`
+and `docs/adr/`.
 
 ---
 
-## Оператор
+## Operator
 
-**Airat** (`AiratTop`) — предприниматель, специалист по автоматизации бизнес-процессов, практикующий инженер AI-систем.
+**Airat** (`AiratTop`) — entrepreneur, business process automation specialist, practising
+AI systems engineer.
 
-Профиль, влияющий на разработку:
+What matters for development:
 
-- строит и эксплуатирует production-системы, а не прототипы: интеграции, внутренние инструменты, self-hosted инфраструктура;
-- имеет практический опыт с Cloudflare Workers;
-- разворачивает и сопровождает любой Docker-стек самостоятельно;
-- ориентирован на надёжность, наблюдаемость и стоимость эксплуатации, а не на демонстрации.
+- builds and operates production systems rather than prototypes: integrations, internal
+  tools, self-hosted infrastructure;
+- has hands-on experience with Cloudflare Workers;
+- deploys and maintains any Docker stack independently;
+- optimises for reliability, observability and running cost, not for demos.
 
-**Что это значит для coding-агента:**
+**What this means for a coding agent:**
 
-- объяснять не нужно — нужно быть точным;
-- компромисс и его причина ценнее рекомендации без обоснования;
-- «работает на демо» не является результатом; результат — то, что переживёт эксплуатацию;
-- операционные вопросы (провижининг, DNS, секреты, мониторинг) решаются оператором быстро и не являются блокером.
+- explanation is unnecessary; precision is;
+- a trade-off with its reasoning beats a recommendation without one;
+- "works in a demo" is not a result — surviving operation is;
+- operational questions (provisioning, DNS, secrets, monitoring) are resolved quickly by
+  the operator and are not blockers.
 
-## Статус проекта
+## Project status
 
-Side-проект с исследовательской целью:
+A side project with a research goal:
 
-1. проверить гипотезу `SPEC.md` §3.1;
-2. пройти полный цикл разработки и эксплуатации на инфраструктуре Cloudflare;
-3. получить работающий пример взаимодействия автономных агентов.
+1. test the hypothesis in `SPEC.md` §3.1;
+2. go through a full build-and-operate cycle on Cloudflare infrastructure;
+3. produce a working demonstration of autonomous agents interacting.
 
-**Из этого следует.** Сроков нет, но объём имеет значение: качество решений важнее скорости, а незавершённый проект — худший исход. Приоритет — уровень `[S]` (`SPEC.md` §0.5) и рабочий vertical slice.
+**Consequence.** There are no deadlines, but scope matters: decision quality beats speed,
+and an unfinished project is the worst outcome. Priority goes to the `[S]` level
+(`SPEC.md` §0.5) and to a working vertical slice.
 
-Источник вдохновения — EmDash от Cloudflare. Зависимости от него нет (§81).
+Inspired by Cloudflare's EmDash. There is no dependency on it (§81).
 
-## Доступные ресурсы
+## Available resources
 
 ### Cloudflare
 
 ```text
-план              Workers Paid
-домены            orator.space (целевой), airat.top (тестовый)
-делегирование     оба на Cloudflare, полный контроль DNS
-провижининг       D1, R2, Queues, Durable Objects, Analytics Engine — по запросу
+plan            Workers Paid
+domains         orator.space (target), airat.top (testing)
+delegation      both on Cloudflare, full DNS control
+provisioning    D1, R2, Queues, Durable Objects, Analytics Engine — on request
 ```
 
-Поддомены создаются по мере необходимости, ограничений нет.
+Subdomains are created as needed; there is no constraint.
 
 ### GitHub
 
 ```text
-репозиторий       существует
-ветки             создаются по запросу
-environments      staging / production
-секреты           CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
-развёртывание     GitHub Actions — единственный оркестратор production (§64.3)
+repository      public — github.com/AiratTop/orator-space
+branches        created on request
+environments    staging / production
+secrets         CLOUDFLARE_API_TOKEN per environment
+variables       CLOUDFLARE_ACCOUNT_ID (an identifier, not a credential)
+deployment      GitHub Actions is the sole orchestrator for production (§64.3)
 ```
 
-### Инфраструктура вне Cloudflare
+### Infrastructure outside Cloudflare
 
-Доступна, но **строго опциональна** (`SPEC.md` §66.6). Ядро обязано работать на одном Cloudflare.
+Available, but **strictly optional** (`SPEC.md` §66.6). The core must run on Cloudflare alone.
 
 ```text
-размещение        облачный сервер (например Hetzner), не локальная машина
-назначение        только администрирование и наблюдаемость
-кандидаты         Grafana · ClickHouse · Metabase · Gatus · n8n
+hosting         a cloud server, not a local machine
+purpose         administration and observability only
+candidates      Grafana · ClickHouse · Metabase · Gatus · n8n
 ```
 
-Оператор имеет практический опыт со всем перечисленным, плюс: Prometheus, Beszel, Postgres, MySQL, Redis, Qdrant, Ollama, Caddy, Authentik, Authelia, BigQuery, Looker Studio, AppSheet.
+The operator has practical experience with all of the above, plus Prometheus, Beszel,
+Postgres, MySQL, Redis, Qdrant, Ollama, Caddy, Authentik, Authelia, BigQuery, Looker
+Studio and AppSheet.
 
-**MUST для coding-агента.** Наличие этих сервисов не является основанием вводить их в архитектуру. Любое их использование — реализация порта (`SPEC.md` §28), причём никогда единственная.
+**MUST for a coding agent.** The availability of these services is not a reason to bring
+them into the architecture. Any use of one is an implementation of a port (`SPEC.md` §28),
+and never the only one.
 
-### Оркестрация агентов
+### Agent orchestration
 
-n8n на облачном сервере — референсный runtime автономного агента (`SPEC.md` §55.1). Собственный runtime не разрабатывается.
+n8n on a cloud server is the reference runtime for an autonomous agent (`SPEC.md` §55.1).
+No in-house runtime is being built.
 
-## Контент
+## Content
 
-Первые публикации — материалы оператора.
+The first publications are the operator's own material.
 
-**Ключевое свойство, определяющее ценность:**
+**The property that gives it value:**
 
-> Экспертиза принадлежит человеку. Модель выполняет запись и структурирование.
+> The expertise belongs to the human. The model transcribes and structures it.
 
-Это `ai_assisted` с человеком в роли автора (`SPEC.md` §10) и ровно тот случай, который §3.1 называет подтверждающим гипотезу: невоспроизводимый вход существует до того, как начинается генерация текста.
+That is `ai_assisted` with a human as the author (`SPEC.md` §10), and precisely the case
+§3.1 calls confirming: a non-reproducible input exists before any text is generated.
 
-Приоритет — разборы построенных систем и последствий принятых решений: то, что модель не может произвести, не имея этого опыта.
+Priority goes to accounts of systems that were built and the consequences of decisions that
+were made — what a model cannot produce without having lived through it.
 
-**Существующий блог** `blog.airat.top` (Hugo, статьи от лица AI) — **не переносится**. Он является примером подхода и источником отдельных кейсов, которые могут быть переписаны и опубликованы на Orator самостоятельно.
+**The existing blog** `blog.airat.top` (Hugo, written in the voice of an AI) is **not being
+migrated**. It is an example of the approach and a source of individual case studies that
+may be rewritten and published on Orator independently.
 
-**MUST.** Любая публикация, существующая также на внешнем домене, импортируется с `canonical_url` и исключается из sitemap (`SPEC.md` §15.1). Кросс-постинг без canonical вреден для обеих копий.
+**MUST.** Any publication that also exists on an external domain is imported with
+`canonical_url` and excluded from the sitemap (`SPEC.md` §15.1). Cross-posting without a
+canonical damages both copies.
 
-## Разделение ответственности
+## Division of responsibility
 
-| Кто | Что |
+| Who | What |
 |---|---|
-| **Оператор** | провижининг Cloudflare, DNS и поддомены, секреты, оплата, внешний стек, проверки Gatus, публичные правила, содержание статей |
-| **Coding-агент** | код, схема, миграции, тесты, CI, документация, скрипты импорта и проверок, ADR |
+| **Operator** | Cloudflare provisioning, DNS and subdomains, secrets, billing, external stack, Gatus checks, public policies, article content |
+| **Coding agent** | code, schema, migrations, tests, CI, documentation, import and verification scripts, ADRs |
 
-**MUST.** Агент не изменяет production-инфраструктуру и не применяет миграции на production без явного указания (`AGENTS.md`).
+**MUST.** The agent does not change production infrastructure and does not apply
+migrations to production without explicit instruction (`AGENTS.md`).
 
-**MUST.** Если для продолжения нужно действие оператора — агент называет его явно и конкретно, а не обходит и не имитирует.
+**MUST.** When continuing requires an action from the operator, the agent names it
+explicitly and specifically, rather than working around it or simulating it.
