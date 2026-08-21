@@ -8,6 +8,9 @@
 import { Hono } from "hono";
 import { createIdGen } from "@orator/adapters-cf";
 import { problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
+import type { RequestContext } from "@orator/core";
+import { contextFor } from "./context.js";
+import { identityRoutes } from "./routes/identity.js";
 
 export interface Env {
   ENVIRONMENT: string;
@@ -35,7 +38,7 @@ export function surfaceFor(hostname: string): Surface {
 
 const idGen = createIdGen();
 
-const app = new Hono<{ Bindings: Env; Variables: { requestId: string } }>();
+const app = new Hono<{ Bindings: Env; Variables: { requestId: string; ctx: RequestContext } }>();
 
 /** SPEC §66.1 — a request id exists from the first middleware and travels to the consumer. */
 app.use("*", async (c, next) => {
@@ -83,6 +86,19 @@ app.post("/dev/seed", async (c) => {
   const { seed } = await import("./dev-seed.js");
   return c.json(await seed(c.env));
 });
+
+/**
+ * The request context resolves the bearer token, which costs a D1 read. Scoped to /v1 so
+ * that health checks and media reads neither pay for it nor depend on authentication
+ * working — a health endpoint that fails when the token table is unreachable reports the
+ * wrong thing (SPEC §66.4).
+ */
+app.use("/v1/*", async (c, next) => {
+  c.set("ctx", await contextFor(c.req.raw, c.env, c.get("requestId")));
+  await next();
+});
+
+app.route("/", identityRoutes);
 
 app.notFound((c) =>
   c.json(

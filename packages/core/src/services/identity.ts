@@ -3,7 +3,7 @@ import { ConstraintViolation, type PendingWrite } from "../ports/index.js";
 import type { Actor, DenialReason } from "../identity/authz.js";
 import { canManageAgent } from "../identity/authz.js";
 import { canonicalizeUsername } from "../identity/username.js";
-import { AGENT_PRESET, DEFAULT_SCOPES, isAdminScope, parseScopes, type Scope } from "../identity/scopes.js";
+import { AGENT_PRESET, DEFAULT_SCOPES, isAdminScope, OWNER_PRESET, parseScopes, type Scope } from "../identity/scopes.js";
 import { generateToken, sha256Hex, isExpired } from "../identity/tokens.js";
 import { fingerprint, keyRegistrationInput, verifySignature } from "../identity/keys.js";
 import { fail, ok, type RequestContext, type Result, type Ports } from "./context.js";
@@ -75,10 +75,22 @@ export interface RegisterHumanInput {
   email?: string | null;
 }
 
+/**
+ * Registers a human and returns a first token.
+ *
+ * The token is part of the response because otherwise the account is inert: issuing a
+ * token requires authentication, and a newly registered principal has nothing to
+ * authenticate with. Until passkey sign-in exists (Phase 5) this is the only way in, and
+ * it stays afterwards because an API-first platform should let a caller register and act
+ * without a browser round trip.
+ *
+ * Registration therefore mints a credential, which makes it a rate-limiting target
+ * (SPEC §59.2, applied in Phase 8).
+ */
 export async function registerHuman(
   ctx: RequestContext,
   input: RegisterHumanInput,
-): Promise<Result<{ principalId: OratorId; username: string }>> {
+): Promise<Result<{ principalId: OratorId; username: string; token: string; scopes: Scope[] }>> {
   const name = canonicalizeUsername(input.username);
   if ("error" in name) {
     return fail(ErrorType.ValidationFailed, "Invalid username", name.error, { field: "username" });
@@ -88,9 +100,13 @@ export async function registerHuman(
   if (!available.ok) return available;
 
   const id = ctx.ports.ids.next();
+  const tokenId = ctx.ports.ids.next();
   const createdAt = ctx.ports.clock.now().toISOString();
+  const generated = await generateToken();
 
   try {
+    // Principal, account and first token in one commit: an account that exists without a
+    // way to reach it would be a state the API cannot recover from.
     await ctx.ports.db.commit([
       ctx.ports.principals.insertPrincipal({
         id,
@@ -101,6 +117,16 @@ export async function registerHuman(
         createdAt,
       }),
       ctx.ports.principals.insertHumanAccount(id, input.email ?? null, createdAt),
+      ctx.ports.tokens.insert({
+        id: tokenId,
+        principalId: id,
+        name: "initial",
+        tokenHash: generated.tokenHash,
+        prefix: generated.prefix,
+        scopes: OWNER_PRESET,
+        expiresAt: null,
+        createdAt,
+      }),
       journal({ ...ctx, actor: null }, "human.registered", { type: "principal", id }, "success", null),
     ]);
   } catch (error) {
@@ -112,7 +138,7 @@ export async function registerHuman(
     throw error;
   }
 
-  return ok({ principalId: id, username: name.username });
+  return ok({ principalId: id, username: name.username, token: generated.token, scopes: [...OWNER_PRESET] });
 }
 
 export interface RegisterAgentInput {

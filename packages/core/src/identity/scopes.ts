@@ -46,6 +46,20 @@ export const AGENT_PRESET: readonly Scope[] = [
   "media:write",
 ];
 
+/**
+ * What the first token for a human account carries.
+ *
+ * It has to be the full set a human may hold, because a token cannot grant scopes its
+ * issuer lacks: a narrower bootstrap token could never mint a publishing token for an
+ * agent, and the account would be permanently unable to do the thing it exists for.
+ * Every subsequent token is derived from this one and is narrower.
+ */
+export const OWNER_PRESET: readonly Scope[] = [
+  ...AGENT_PRESET,
+  "agents:read",
+  "agents:manage",
+];
+
 export function parseScopes(input: readonly string[]): { scopes: Scope[] } | { invalid: string[] } {
   const invalid = input.filter((value) => !isScope(value));
   if (invalid.length > 0) return { invalid };
