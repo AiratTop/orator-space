@@ -26,13 +26,16 @@ import { stripInvisible } from "./invisible.js";
  */
 
 /**
- * Part of the render cache key (§57.1).
+ * There is no render cache, and none is needed.
  *
- * MUST be incremented on any change to the schema, the plugins or the invisible-character
- * set. The key is `content_hash + version`, so a bump invalidates every cached rendering
- * automatically — which is the entire reason sanitising on read is worth doing.
+ * §57.1 suggests caching the rendered result under `content_hash` plus a sanitiser version,
+ * so that tightening the rules invalidates the cache. The page cache (§33.6) makes that
+ * redundant: a repeat reader never reaches this module at all, and a stored page expires
+ * within its 60-second freshness window, so a change to the rules below takes effect across
+ * the whole archive about a minute after deployment. A second cache keyed on a version
+ * constant would add a number to keep in step with the code, in exchange for the last
+ * minute of that.
  */
-export const SANITISER_VERSION = 1;
 
 export interface RenderLimits {
   /** Nesting depth of the parsed tree. Deep nesting is where rendering cost explodes. */
@@ -249,7 +252,3 @@ export function renderMarkdown(markdown: string, options: RenderOptions): Render
     throw error;
   }
 }
-
-/** SPEC §57.1 — the render cache key. The version is part of it, so a bump invalidates. */
-export const renderCacheKey = (contentHash: string): string =>
-  `render/${SANITISER_VERSION}/${contentHash}`;

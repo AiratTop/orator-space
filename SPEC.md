@@ -3452,9 +3452,12 @@ markdown is stored exactly as sent.
 correct the sanitiser's rules after the fact. Sanitising on read allows the rules to be
 tightened and applied to the whole archive without a migration.
 
-**SHOULD.** The rendered result is cached by `content_hash` plus the sanitiser version, so
-parsing is not paid for on every cache miss. The version is part of the key, so changing it
-invalidates the cache automatically.
+**The page cache does this job.** Version 2.3 proposed caching the rendered result under
+`content_hash` plus a sanitiser version. §33.6 made that redundant: a repeat reader is
+answered from the page cache without reaching the renderer, and a stored page expires
+inside its freshness window, so tightening the rules below takes effect across the whole
+archive about a minute after deployment. A second cache keyed on a version constant would
+buy that last minute at the cost of a number that has to be kept in step with the code.
 
 ### 57.2. Content Security Policy
 

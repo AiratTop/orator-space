@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_LIMITS, renderCacheKey, renderMarkdown, SANITISER_VERSION } from "./render.js";
+import { DEFAULT_LIMITS, renderMarkdown } from "./render.js";
 import { hasInvisible, stripInvisible } from "./invisible.js";
 
 const render = (markdown: string) => renderMarkdown(markdown, { siteHost: "orator.space" });
@@ -212,11 +212,5 @@ describe("document structure", () => {
     const output = html(`![alt](https://media.orator.space/x.png)`);
     expect(output).toContain(`loading="lazy"`);
     expect(output).toContain(`referrerpolicy="no-referrer"`);
-  });
-});
-
-describe("render cache key (§57.1)", () => {
-  it("carries the sanitiser version, so tightening the rules invalidates the cache", () => {
-    expect(renderCacheKey("abc")).toBe(`render/${SANITISER_VERSION}/abc`);
   });
 });
