@@ -39,6 +39,7 @@
 | 6 | Создать Analytics Engine dataset | Phase 0 | |
 | 7 | Настроить бюджетный алерт на аккаунте | до Phase 3 | `SPEC.md` §67.2 — агенты работают круглосуточно |
 | 8 | GitHub: включить branch protection на `main`, создать environments `staging` / `production` | Phase 0 | секреты живут в environments |
+| 8a | **Отключить автодеплой production из git-интеграции Cloudflare** | Phase 0 | разворачивает GitHub Actions, иначе порядок миграций не определён — §64.3 |
 | 9 | Записать в GitHub secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | Phase 0 | токен с правами на Workers/D1/R2/Queues |
 | 10 | Решить поддомен staging: `*.staging.orator.space` или отдельный домен | Phase 0 | |
 | 11 | Добавить проверки в Gatus после Phase 4 | Phase 8 | `/health`, `/health/deep` — §66.7 |
@@ -71,6 +72,9 @@
 | 11 | Astro + Cloudflare adapter | SSR, кастомные заголовки ответа, доступ к биндингам | §49.1, §63 |
 | 12 | MCP-клиент + bearer | что ваш MCP-хост передаёт заголовок `Authorization` | §42.3 — **критично, вся авторизация MVP на этом** |
 | 13 | D1 Time Travel | восстановление на момент времени работает | §31.5 |
+| 14 | **Ed25519 в Workers** | подпись и проверка через Web Crypto: доступность алгоритма и его точное имя | §8, §42.4 — **на этом стоит весь провенанс** |
+| 15 | Библиотека WebAuthn | работает ли выбранная реализация в Workers runtime | §9.1 |
+| 16 | Пайплайн markdown | remark/rehype + санитайзер в Workers: размер бандла и время CPU на статье в 100 КБ | §57.1 |
 
 **Критерий приёмки.** Файл `docs/adr/0001-platform-constraints.md` с результатами и датой проверки. Все утверждения `SPEC.md` §40, разошедшиеся с реальностью, исправлены в спецификации.
 
@@ -90,7 +94,7 @@
 4. `apps/edge` — Hono, `/health`, роутинг по hostname, свой `wrangler.jsonc`.
 5. Правила границ импорта (`dependency-cruiser`) по §73.1, включая запрет `@cloudflare/workers-types` вне `adapters-cf` и `apps/*`.
 6. Vitest: два проекта — доменный (без Miniflare) и интеграционный (`@cloudflare/vitest-pool-workers`).
-7. GitHub Actions: `typecheck → lint → boundaries → test → build`.
+7. GitHub Actions: `typecheck → lint → boundaries → test → build → deploy`. Автоматическое развёртывание из git-интеграции Cloudflare для production **отключено** — §64.3.
 8. Деплой обоих воркеров на staging.
 9. `README.md`: запуск с нуля без внешних шагов.
 
