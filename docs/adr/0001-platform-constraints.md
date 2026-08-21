@@ -120,6 +120,40 @@ Stack: `unified` + `remark-parse` + `remark-gfm` + `remark-rehype` + `rehype-san
 
 Cron expressions have no sub-minute field; `* * * * *` is the finest granularity, and wrangler accepts it. SPEC §35.2 (minute granularity, direct send as the primary path, cron as the safety net) stands as written.
 
+## Results — account-level, verified against the live account
+
+Account `c0da1776…`, Workers Paid. Resources confirmed present: D1 `orator-prod` / `orator-staging`; R2 `content` / `media` / `assets` (+ staging) and `backups`; Queues `orator-events` / `orator-events-dlq` (+ staging pair).
+
+| Item | Verified value |
+|---|---|
+| D1 max database size | **10 GB** (Workers Paid); 500 MB on Free |
+| D1 storage per account | 1 TB |
+| D1 bound parameters per query | **100** |
+| D1 SQL statement length | 100 KB |
+| D1 columns per table | 100 |
+| D1 Time Travel | **30 days**, bookmarks working — verified against `orator-prod` |
+| D1 read replication | **`disabled` by default** |
+| Queues message size | 128 KB |
+| Queues batch | 100 messages / 256 KB |
+| Queues retries before DLQ | 100 |
+| Queues throughput | 5,000 msg/s per queue |
+| Queues backlog cap | 25 GB per queue |
+| Queues consumer duration | 15 min wall, 30 s CPU (configurable to 5 min) |
+| Cache purge by URL | hundreds of URLs/s on every plan |
+| Cache purge by tag/prefix | available on **every** plan; **5 req/min on Free** zone |
+| Workers Logpush (Trace Events) | **available on Workers Paid** |
+
+### One SPEC claim was wrong
+
+Spec v2.2 §33.1 and §40 stated that *purge by tag and prefix are Enterprise-only*. **This is false** — all purge methods are available on every plan. What differs is rate: 5 requests per minute for tag/prefix purge on a Free zone, versus hundreds of URLs per second for single-URL purge.
+
+The architectural conclusion is unaffected and arguably strengthened: at thousands of publications per day (§1), a 5-per-minute ceiling means tag purge cannot be the correctness mechanism regardless of plan. §33.1 keeps revalidation as the guarantee and purge as an optimisation — but the stated reason has been corrected from *"unavailable"* to *"rate-limited below what we need"*.
+
+### Two constraints not previously recorded
+
+1. **D1 allows 100 bound parameters per query.** Bulk inserts, backfills and outbox drains must be chunked. This breaks silently at scale rather than in development, so it is now in `AGENTS.md`.
+2. **Queue messages are capped at 128 KB.** Confirms that event payloads carry identifiers, never content.
+
 ## Amendments to SPEC.md
 
 | # | Section | Change |
@@ -130,6 +164,10 @@ Cron expressions have no sub-minute field; `* * * * *` is the finest granularity
 | 4 | §30 | added: a framework may declare its own KV binding; that does not make KV a state store for Orator |
 | 5 | §16.2 / §32 | added: `onlyIf` takes the unquoted etag |
 | 6 | §49.1 | added: bindings via `cloudflare:workers`; adapter output layout |
+| 7 | §33.1, §40 | **corrected**: purge by tag is not Enterprise-only; the real constraint is its rate limit |
+| 8 | §31.2 | added: read replication is off by default |
+| 9 | §80.14 | closed — Workers Logpush available on Workers Paid |
+| 10 | `AGENTS.md` | added: 100 bound parameters per D1 query; 128 KB queue message cap |
 
 ## Not yet verified — requires a Cloudflare account
 
@@ -137,15 +175,13 @@ MUST be closed before the phase named.
 
 | # | Item | Needed by |
 |---|---|---|
-| 1 | D1 maximum database size, current value | Phase 1 |
-| 2 | D1 Time Travel restore | Phase 8 |
-| 3 | D1 read replication / Sessions API bookmarks | post-launch |
-| 4 | Queues at-least-once, ordering, dead-letter in practice | Phase 3 |
-| 5 | Cache purge by URL availability and rate limits on the plan | Phase 4 |
-| 6 | Logpush availability for Workers Trace Events and zone logs | Phase 5 |
-| 7 | Analytics Engine write + SQL API read | Phase 5 |
-| 8 | R2 presigned PUT against a real bucket | Phase 9 |
-| 9 | Durable Object idle cost in practice | Phase 8 |
+| 1 | Queues delivery in practice: at-least-once, ordering, DLQ hand-off | Phase 3 — needs a deployed consumer |
+| 2 | Analytics Engine write + SQL API read | Phase 5 — needs a deployed producer |
+| 3 | R2 presigned PUT | Phase 9 — needs R2 S3 credentials, separate from the OAuth token |
+| 4 | Durable Object idle cost in practice | Phase 8 — needs sustained traffic to measure |
+| 5 | Sessions API bookmarks once replication is enabled | post-launch |
+
+Each is verified inside the phase that first depends on it, rather than in advance: all four now require a real deployment to say anything true, and a deployment is what the next phases produce.
 
 ## Decision
 
