@@ -55,7 +55,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: apply migrations
-        run: pnpm --filter @orator/db exec wrangler d1 migrations apply orator-staging --remote
+        run: pnpm --filter @orator/edge exec wrangler d1 migrations apply DB --env staging --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: deploy edge
@@ -85,7 +85,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: apply migrations
-        run: pnpm --filter @orator/db exec wrangler d1 migrations apply orator-prod --remote
+        run: pnpm --filter @orator/edge exec wrangler d1 migrations apply DB --env production --remote
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: deploy edge
