@@ -248,16 +248,16 @@ export async function publishArticle(
   const writes = [];
   let signed = false;
 
+  const publishedAt = ctx.ports.clock.now().toISOString();
   const signature = input.signature ?? null;
   const signatureKeyId = input.signatureKeyId ?? null;
   if (signature !== null && signatureKeyId !== null) {
-    const verdict = await verifyRevisionSignature(ctx, article, revision, signature, signatureKeyId);
+    const verdict = await verifyRevisionSignature(ctx, article, revision, signature, signatureKeyId, publishedAt);
     if (!verdict.ok) return verdict;
     writes.push(ctx.ports.articles.attachSignature(revision.id, signature, signatureKeyId));
     signed = true;
   }
 
-  const publishedAt = ctx.ports.clock.now().toISOString();
   writes.push(
     ctx.ports.articles.publish(article.id, revision.id, publishedAt),
     // Same transaction. A queue send after the commit is not atomic with it, and the gap
@@ -308,6 +308,7 @@ async function verifyRevisionSignature(
   revision: RevisionRecord,
   signature: string,
   keyId: string,
+  signedAt: string,
 ): Promise<Result<true>> {
   const key = await ctx.ports.keys.findById(keyId);
   if (key === null) return fail(ErrorType.ValidationFailed, "Signing key not found");
@@ -318,11 +319,14 @@ async function verifyRevisionSignature(
       "A revision may only be signed by a key registered to the principal it is attributed to.",
     );
   }
-  if (!keyValidAt(key, revision.createdAt)) {
+  // The signature is made now, over a revision that may be much older: an author writes a
+  // draft, later registers a key, then signs and publishes. What matters is that the key
+  // is usable at signing time, not that it predates the content it attests to.
+  if (!keyValidAt(key, signedAt)) {
     return fail(
       ErrorType.ValidationFailed,
-      "Key was not valid when the revision was created",
-      "The key was either revoked before this revision, or registered after it.",
+      "Signing key is not currently valid",
+      "The key has been revoked. Register a new one and sign with that.",
     );
   }
 

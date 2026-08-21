@@ -11,6 +11,9 @@ import { problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
 import type { RequestContext } from "@orator/core";
 import { contextFor } from "./context.js";
 import { identityRoutes } from "./routes/identity.js";
+import { articleRoutes } from "./routes/articles.js";
+import { portsFor } from "./context.js";
+import { drainOutbox } from "@orator/core";
 
 export interface Env {
   ENVIRONMENT: string;
@@ -99,6 +102,7 @@ app.use("/v1/*", async (c, next) => {
 });
 
 app.route("/", identityRoutes);
+app.route("/", articleRoutes);
 
 app.notFound((c) =>
   c.json(
@@ -120,19 +124,89 @@ app.onError((err, c) => {
   );
 });
 
+interface OratorEvent {
+  id: string;
+  type: string;
+  aggregate_type: string;
+  aggregate_id: string;
+  request_id: string | null;
+  created_at: string;
+  payload: Record<string, unknown>;
+}
+
+/**
+ * Dispatches one domain event. Handlers are added as their subsystems arrive; an unknown
+ * type is acknowledged rather than retried, because clients are required to tolerate
+ * types they do not recognise (SPEC §20.4) and so is this one.
+ */
+async function handleEvent(event: OratorEvent, _env: Env): Promise<void> {
+  switch (event.type) {
+    case "article.published":
+    case "article.unpublished":
+    case "agent.created":
+      // Search indexing, sitemap shards, cache purge and OG generation attach here in
+      // Phases 4 and 5. Logged for now so the pipeline is observable end to end.
+      console.log(
+        JSON.stringify({
+          level: "info",
+          event: "queue.handled",
+          type: event.type,
+          aggregate_id: event.aggregate_id,
+          request_id: event.request_id,
+        }),
+      );
+      return;
+    default:
+      console.log(JSON.stringify({ level: "info", event: "queue.ignored", type: event.type }));
+  }
+}
+
 export default {
   fetch: app.fetch,
 
-  /** SPEC §35 — outbox drain runs here; consumers are added in Phase 3. */
-  async queue(batch: MessageBatch, _env: Env): Promise<void> {
+  /**
+   * Queue consumer (SPEC §35.3).
+   *
+   * Cloudflare Queues delivers at-least-once and does not guarantee order (ADR 0001), so
+   * every handler here must be idempotent and must read current state rather than assume
+   * the event describes it. Acking a message we cannot interpret is deliberate: retrying
+   * it forever would block the batch behind a message that will never succeed.
+   */
+  async queue(batch: MessageBatch<OratorEvent>, env: Env): Promise<void> {
     for (const message of batch.messages) {
-      console.log(JSON.stringify({ level: "info", queue: batch.queue, id: message.id }));
-      message.ack();
+      const event = message.body;
+      try {
+        await handleEvent(event, env);
+        message.ack();
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "queue.handler.failed",
+            type: event?.type,
+            id: event?.id,
+            request_id: event?.request_id,
+            error: String(error),
+          }),
+        );
+        // Retried with backoff; after max_retries it lands in the dead-letter queue,
+        // where its arrival is itself the alert (SPEC §66.4).
+        message.retry();
+      }
     }
   },
 
-  /** SPEC §35.2 — minute granularity is the floor; direct send remains the primary path. */
-  async scheduled(_event: ScheduledController, _env: Env): Promise<void> {
-    console.log(JSON.stringify({ level: "info", task: "outbox-drain", status: "not-implemented" }));
+  /**
+   * SPEC §35.2 — the safety net, not the primary path.
+   *
+   * Cron cannot run more often than once a minute (ADR 0001), so relying on it alone
+   * would make every dropped direct send cost a minute of pipeline delay.
+   */
+  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+    const ports = portsFor(env);
+    const result = await drainOutbox(ports, 25);
+    if (result.delivered > 0 || result.failed > 0 || result.remaining > 0) {
+      console.log(JSON.stringify({ level: "info", task: "outbox.drain", ...result }));
+    }
   },
 };

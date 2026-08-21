@@ -5,6 +5,7 @@ import type {
   Clock,
   ContentStore,
   Database,
+  EventBus,
   EventRepo,
   IdempotencyRepo,
   IdGen,
@@ -23,6 +24,7 @@ export interface Ports {
   keys: KeyRepo;
   audit: AuditRepo;
   outbox: OutboxRepo;
+  eventBus: EventBus;
   articles: ArticleRepo;
   events: EventRepo;
   idempotency: IdempotencyRepo;

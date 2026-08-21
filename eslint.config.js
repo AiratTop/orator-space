@@ -14,9 +14,20 @@ export default tseslint.config(
     rules: { "no-undef": "off" },
   },
   {
+    // Node scripts run outside the TypeScript project, so the compiler is not there to
+    // vouch for these; they are the Web-standard globals Node has provided for years.
     files: ["scripts/**/*.mjs", "*.config.js"],
     languageOptions: {
-      globals: { console: "readonly", process: "readonly", fetch: "readonly", setTimeout: "readonly" },
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        fetch: "readonly",
+        setTimeout: "readonly",
+        crypto: "readonly",
+        TextEncoder: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+      },
     },
   },
   {

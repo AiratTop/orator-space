@@ -363,3 +363,66 @@ describe("idempotency (SPEC §34.1)", () => {
     expect(errorOf(replay)).toBe(ErrorType.ValidationFailed);
   });
 });
+
+describe("signing a revision written before the key existed (regression)", () => {
+  it("accepts a key registered after the revision", async () => {
+    // Caught end to end: the check compared the key against the revision's creation time,
+    // so the ordinary sequence — draft, then register a key, then sign and publish — was
+    // refused. What matters is whether the key is usable when it signs.
+    const article = unwrap(await createArticle(ctxFor(agentActor()), { title: "Cold start", content: BODY }));
+    const revision = ports.state.revisions.get(article.revisionId)!;
+    const key = await generateKeyPairForTesting();
+    ports.state.keys.set("KEY-LATE", {
+      id: "KEY-LATE" as never,
+      agentPrincipalId: AUTHOR as never,
+      publicKey: key.publicKey,
+      fingerprint: "fp-late",
+      label: null,
+      status: "active",
+      // Registered a day after the revision was written.
+      createdAt: "2026-08-22T12:00:00.000Z",
+      revokedAt: null,
+    });
+    ports.setNow(new Date("2026-08-23T12:00:00.000Z"));
+
+    const signature = await key.sign(
+      revisionSigningInput({
+        articleId: article.id,
+        revisionId: revision.id,
+        contentHash: revision.contentHash,
+        createdAt: revision.createdAt,
+      }),
+    );
+    const published = unwrap(
+      await publishArticle(ctxFor(agentActor()), article.id, { signature, signatureKeyId: "KEY-LATE" }),
+    );
+    expect(published.signed).toBe(true);
+  });
+
+  it("still refuses a key that has been revoked", async () => {
+    const article = unwrap(await createArticle(ctxFor(agentActor()), { title: "Cold start", content: BODY }));
+    const revision = ports.state.revisions.get(article.revisionId)!;
+    const key = await generateKeyPairForTesting();
+    ports.state.keys.set("KEY-DEAD", {
+      id: "KEY-DEAD" as never,
+      agentPrincipalId: AUTHOR as never,
+      publicKey: key.publicKey,
+      fingerprint: "fp-dead",
+      label: null,
+      status: "revoked",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      revokedAt: "2026-08-10T00:00:00.000Z",
+    });
+    const signature = await key.sign(
+      revisionSigningInput({
+        articleId: article.id,
+        revisionId: revision.id,
+        contentHash: revision.contentHash,
+        createdAt: revision.createdAt,
+      }),
+    );
+    expect(
+      errorOf(await publishArticle(ctxFor(agentActor()), article.id, { signature, signatureKeyId: "KEY-DEAD" })),
+    ).toBe(ErrorType.ValidationFailed);
+  });
+});

@@ -15,7 +15,22 @@
     { "binding": "MEDIA", "bucket_name": "orator-media-staging" },
     { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" }
   ],
-  "queues": { "producers": [{ "binding": "EVENTS", "queue": "orator-events-staging" }] },
+  // The consumer is declared at the top level too, so `wrangler dev` runs the whole
+  // pipeline locally rather than only the half that produces messages. Without it the
+  // queue handler is never exercised until it reaches a deployed environment.
+  "queues": {
+    "producers": [{ "binding": "EVENTS", "queue": "orator-events-staging" }],
+    "consumers": [
+      {
+        "queue": "orator-events-staging",
+        "max_batch_size": 25,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "dead_letter_queue": "orator-events-staging-dlq"
+      }
+    ]
+  },
+  "triggers": { "crons": ["* * * * *"] },
 
   "env": {
     "staging": {

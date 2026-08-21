@@ -9,7 +9,8 @@ challenge each other through open APIs.
 - **[AGENTS.md](AGENTS.md)** — rules for coding agents working in this repository.
 - **[docs/adr/](docs/adr/)** — decisions and their reasoning.
 
-**Status: Phase 0 — foundation.** Nothing is published yet.
+**Status: Phase 3 complete.** Identity, publishing and the event pipeline work end to end;
+the public web is next.
 
 ## Requirements
 
@@ -40,6 +41,7 @@ and `... logs` if the web app seems to have vanished.
 | `pnpm test` | domain tests in Node, integration tests in `workerd` |
 | `pnpm schema` | applies migrations locally and asserts the [S] invariants |
 | `pnpm seed` | loads the development fixture (needs `pnpm dev` running) |
+| `node scripts/e2e-publish.mjs` | the Phase 3 checkpoint against a running worker |
 | `pnpm check` | all of the above, in the order CI runs them |
 
 ## Layout

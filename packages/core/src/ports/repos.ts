@@ -146,6 +146,28 @@ export interface OutboxEntry {
   createdAt: string;
 }
 
+export interface PendingOutboxRow extends OutboxEntry {
+  attempts: number;
+}
+
 export interface OutboxRepo {
   enqueue(entry: OutboxEntry): PendingWrite;
+  /** Oldest first: the id is monotonic, so this is also delivery order. */
+  listPending(now: string, limit: number): Promise<PendingOutboxRow[]>;
+  markSent(ids: readonly string[], at: string): PendingWrite;
+  /** Backs off, so a poison message does not occupy the drain. */
+  markFailed(id: string, error: string, nextAttemptAt: string): PendingWrite;
+  /** Depth and age of the backlog — the alert that catches a stalled pipeline (§66.4). */
+  pendingStats(): Promise<{ count: number; oldestCreatedAt: string | null }>;
+}
+
+/**
+ * Delivery of domain events to whatever carries them (SPEC §35.3).
+ *
+ * Separate from OutboxRepo because the two fail independently: that is the entire reason
+ * the outbox exists. Writing the row is transactional with the domain change; handing it
+ * to a queue is not, and cannot be.
+ */
+export interface EventBus {
+  publish(entries: readonly OutboxEntry[]): Promise<void>;
 }

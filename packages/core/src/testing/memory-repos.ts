@@ -16,6 +16,7 @@ import {
   type IdGen,
   type KeyRecord,
   type KeyRepo,
+  type EventBus,
   type OutboxEntry,
   type OutboxRepo,
   type PendingWrite,
@@ -54,7 +55,18 @@ export interface MemoryState {
   outbox: OutboxEntry[];
 }
 
-export function createMemoryPorts(options: { now?: Date } = {}): Ports & { state: MemoryState } {
+/** Controls the doubles expose to tests, beyond the ports themselves. */
+export interface MemoryControls {
+  state: MemoryState;
+  /** Moves the clock, for expiry, backoff and validity windows. */
+  setNow(date: Date): void;
+  /** Batches handed to the event bus, in order. */
+  published: OutboxEntry[][];
+  /** Makes the bus fail, to exercise the outbox recovery path. */
+  failBus(error: Error | null): void;
+}
+
+export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryControls {
   const state: MemoryState = {
     principals: new Map(),
     articles: new Map(),
@@ -389,7 +401,54 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & { state
   };
 
   const audit: AuditRepo = { record: (entry) => asWrite(() => void state.audit.push(entry)) };
-  const outbox: OutboxRepo = { enqueue: (entry) => asWrite(() => void state.outbox.push(entry)) };
+  const sentOutbox = new Set<string>();
+  const outboxMeta = new Map<string, { attempts: number; nextAttemptAt: string | null }>();
+
+  const outbox: OutboxRepo = {
+    enqueue: (entry) =>
+      asWrite(() => {
+        state.outbox.push(entry);
+        outboxMeta.set(entry.id, { attempts: 0, nextAttemptAt: null });
+      }),
+    async listPending(now, limit) {
+      return state.outbox
+        .filter((entry) => {
+          if (sentOutbox.has(entry.id)) return false;
+          const meta = outboxMeta.get(entry.id);
+          return meta === undefined || meta.nextAttemptAt === null || meta.nextAttemptAt <= now;
+        })
+        .slice(0, limit)
+        .map((entry) => ({ ...entry, attempts: outboxMeta.get(entry.id)?.attempts ?? 0 }));
+    },
+    markSent: (ids) =>
+      asWrite(() => {
+        for (const id of ids) sentOutbox.add(id);
+        return ids.length;
+      }),
+    markFailed: (id, _error, nextAttemptAt) =>
+      asWrite(() => {
+        const meta = outboxMeta.get(id) ?? { attempts: 0, nextAttemptAt: null };
+        outboxMeta.set(id, { attempts: meta.attempts + 1, nextAttemptAt });
+        return 1;
+      }),
+    async pendingStats() {
+      const pending = state.outbox.filter((entry) => !sentOutbox.has(entry.id));
+      return {
+        count: pending.length,
+        oldestCreatedAt: pending[0]?.createdAt ?? null,
+      };
+    },
+  };
+
+  /** Records what was handed to the bus, and can be told to fail (SPEC §35.2). */
+  const published: OutboxEntry[][] = [];
+  let busFailure: Error | null = null;
+  const eventBus: EventBus = {
+    async publish(entries) {
+      if (busFailure !== null) throw busFailure;
+      published.push([...entries]);
+    },
+  };
 
   return {
     db: database,
@@ -398,6 +457,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & { state
     keys,
     audit,
     outbox,
+    eventBus,
     articles,
     events,
     idempotency,
@@ -405,7 +465,12 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & { state
     clock,
     ids,
     state,
-    // Exposed for tests that need time to move.
-    ...({ setNow: (date: Date) => (current = date) } as object),
-  } as Ports & { state: MemoryState };
+    setNow: (date: Date) => {
+      current = date;
+    },
+    published,
+    failBus: (error: Error | null) => {
+      busFailure = error;
+    },
+  };
 }
