@@ -5,3 +5,5 @@
  * If a domain test ever needs Miniflare to run, that invariant has been broken.
  */
 export * from "./ports/index.js";
+export * from "./identity/index.js";
+export * from "./services/index.js";

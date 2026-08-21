@@ -23,10 +23,18 @@ export const RESERVED_USERNAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Confusable folding. A pragmatic subset of UTS #39: the Cyrillic and Greek letters that
- * render identically to Latin ones in common fonts, which is where realistic
- * impersonation lives. Deliberately not the full table — that is a large data file, and
- * the cost of the remaining gap is a name that looks *slightly* off rather than identical.
+ * Confusable folding, the second of two layers.
+ *
+ * The first layer is the ASCII allow-list below, which already refuses every non-Latin
+ * homoglyph outright — a Cyrillic 'е' never reaches this table. What the skeleton catches
+ * is confusion *inside* the allowed alphabet: digit-for-letter substitution and
+ * separators, where `0rat0r` and `re-searcher` are perfectly valid usernames that read as
+ * something else.
+ *
+ * The non-Latin entries are kept because `skeletonOf` is also the general "would these two
+ * read as the same name" predicate, used where input is not restricted to ASCII. A
+ * pragmatic subset of UTS #39 rather than the full table: the remaining gap costs a name
+ * that looks slightly off rather than identical.
  */
 const CONFUSABLES: ReadonlyMap<string, string> = new Map(
   Object.entries({

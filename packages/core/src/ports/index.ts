@@ -38,3 +38,6 @@ export interface Metrics {
   /** SPEC §66.5 — audience_class is mandatory on every metric. */
   count(name: string, dimensions: Record<string, string>, value?: number): void;
 }
+
+export * from "./database.js";
+export * from "./repos.js";
