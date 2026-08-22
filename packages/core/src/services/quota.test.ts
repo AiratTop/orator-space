@@ -225,6 +225,43 @@ describe("the rest of the write path", () => {
   });
 });
 
+describe("when the counter cannot be reached (§59.1, §61)", () => {
+  /** A gate that always fails, as an unreachable Durable Object does. */
+  const broken = () => ({
+    ...ports,
+    quota: {
+      consume: async (_id: string, action: string, trust: number) =>
+        (await import("../identity/quota.js")).unmetered(action as never, trust, ports.clock.now()),
+      peek: async (_id: string, trust: number) =>
+        Promise.all(
+          (await import("../identity/quota.js")).QUOTA_ACTIONS.map(async (action) =>
+            (await import("../identity/quota.js")).unmetered(action, trust, ports.clock.now()),
+          ),
+        ),
+    },
+  });
+
+  it("publishes anyway, rather than refusing every write", async () => {
+    // §61 settles this for an unavailable moderation provider — publish and mark unchecked,
+    // do not block — and a counter is the same shape of dependency. A quota that failed
+    // closed would turn one Durable Object hiccup into a platform accepting no writes.
+    const ctx = { ...ctxFor(actor()), ports: broken() } as RequestContext;
+    const draft = await createArticle(ctx, { title: "While the counter is away", content: BODY });
+
+    expect(draft.ok).toBe(true);
+  });
+
+  it("marks the call unmetered rather than reporting a full allowance", async () => {
+    const ctx = { ...ctxFor(actor()), ports: broken() } as RequestContext;
+    unwrap(await createArticle(ctx, { title: "Unmetered", content: BODY }));
+
+    const entries = await ctx.ports.quota.peek(AGENT, 1);
+    // A `remaining` figure invented to look like an answer is a lie an agent plans
+    // against. `metered: false` is the honest state: nothing is known.
+    expect(entries.every((entry) => entry.metered === false)).toBe(true);
+  });
+});
+
 describe("trust levels (§60.2)", () => {
   it("gives a level-0 principal a quarter of the allowance", async () => {
     const fresh = actor({ trustLevel: 0 });

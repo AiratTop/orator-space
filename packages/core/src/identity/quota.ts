@@ -100,6 +100,20 @@ export interface QuotaVerdict {
   resetAt: string;
   /** Seconds until `resetAt`, for `Retry-After`. At least one: zero means "immediately". */
   retryAfterSeconds: number;
+  /**
+   * False when the counter could not be reached and the call was allowed unmetered.
+   *
+   * §61 already settles what an unavailable dependency does here: content whose moderation
+   * provider is unreachable is published and marked unchecked, rather than blocked. The
+   * same reasoning applies to a counter — degrade the consequence, not the user's ability
+   * to act. A quota that fails closed turns one Durable Object hiccup into a platform that
+   * accepts no writes, and the flood limiter (§59.1) still bounds the damage meanwhile.
+   *
+   * It is never silently false: an unmetered call is logged and alerted on (§66.4). An
+   * attacker who can make the counter unreachable would otherwise have found a way to
+   * publish without limit and leave no trace of it.
+   */
+  metered: boolean;
 }
 
 /**
@@ -127,5 +141,16 @@ export function verdict(
     window,
     resetAt: new Date(ends).toISOString(),
     retryAfterSeconds: Math.max(1, Math.ceil((ends - at.getTime()) / 1000)),
+    metered: true,
   };
+}
+
+/**
+ * The verdict when the counter could not be reached (SPEC §59.1, §61).
+ *
+ * Allowed, and marked. The caller is told the truth about what is known — nothing — rather
+ * than a `remaining` figure invented to look like an answer.
+ */
+export function unmetered(action: QuotaAction, trustLevel: number, at: Date): QuotaVerdict {
+  return { ...verdict(action, 0, trustLevel, at), metered: false };
 }

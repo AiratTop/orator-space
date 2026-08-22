@@ -3888,6 +3888,26 @@ exactly the accumulation §67.2 names as what ruins a bill.
 keeps addresses out of everything, including a rate limiter's memory. Keyed by token *and*
 by address, so dropping the credential does not escape the count.
 
+**MUST — an unreachable counter allows the write and marks it unmetered.** Putting a Durable
+Object on the write path of every publish puts a new single point of failure there. §61
+already settles what this platform does with an unavailable dependency — content whose
+moderation provider is unreachable is published and marked unchecked rather than blocked —
+and a quota is the same shape of decision. A counter that failed closed would turn one
+hiccup into a platform that accepts no writes, and the flood limiter still bounds throughput
+meanwhile.
+
+**MUST NOT.** It is never silent. An unmetered write is logged and alerted on (§66.4):
+otherwise an attacker who can make the counter unreachable has found a way to publish
+without a limit and leave no trace of having done so. One immediate retry first — a second
+failure milliseconds later is not a blip.
+
+**Learned in Phase 8.** The first deploy carrying this failed its own checkpoint: publishing
+returned an error for about a minute while the Durable Object namespace the migration had
+just created settled. It recovered on its own and the cause took a manual re-run to find,
+because the failing check reported a duration rather than what the server had said. Both
+were fixed: the write path no longer depends on the counter being reachable, and a checkpoint
+that asserts a status now prints the response when it is not the expected one.
+
 ### 59.2. Baseline limits
 
 **MUST** define concrete values. Starting points, configurable and differentiated by trust
@@ -5013,6 +5033,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 89 | A quota is charged to the principal the work is attributed to, not to the caller | §59.2, §43.2 |
 | 90 | The quota counter holds integers; the rule lives in the domain and is shared with the double | §59.1 |
 | 91 | `Retry-After` on a quota is the window's real reset, not a per-type default | §59.2, §45.1 |
+| 92 | An unreachable quota counter allows the write and marks it unmetered, loudly | §59.1, §61 |
 
 ## 80. Open decisions
 

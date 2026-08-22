@@ -134,6 +134,23 @@ export async function withinQuota(
 
   const principalId = chargeTo ?? actor.principalId;
   const verdict = await ctx.ports.quota.consume(principalId, action, actor.trustLevel);
+
+  if (!verdict.metered) {
+    // Allowed, because §61's rule for an unavailable dependency is to degrade the
+    // consequence rather than block the caller — and never silently, because a limit that
+    // did not apply is exactly what an attacker who can break the counter is after.
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "quota.unmetered",
+        request_id: ctx.requestId,
+        principal_id: principalId,
+        action,
+      }),
+    );
+    return ok(verdict);
+  }
+
   if (verdict.allowed) return ok(verdict);
 
   return fail(

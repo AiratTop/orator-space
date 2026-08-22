@@ -2,6 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import {
   LIMITS,
   QUOTA_ACTIONS,
+  unmetered,
   verdict,
   windowEnd,
   windowStart,
@@ -96,9 +97,64 @@ export class QuotaCounter extends DurableObject {
 export function createQuotaGate(namespace: DurableObjectNamespace<QuotaCounter>): QuotaGate {
   const stubFor = (principalId: string) => namespace.get(namespace.idFromName(principalId));
 
+  /**
+   * One immediate retry, then the write is allowed unmetered (SPEC §59.1, §61).
+   *
+   * A Durable Object is a network hop, and putting one on the write path of every publish
+   * put a new single point of failure there. §61 already settles what this platform does
+   * with an unavailable dependency: content whose moderation provider is unreachable is
+   * published and marked unchecked rather than blocked. A quota is the same shape of
+   * decision — one hiccup must not mean the platform accepts no writes, and the flood
+   * limiter still bounds throughput while the counter is away.
+   *
+   * The retry is immediate and single. A backoff belongs where the caller is a queue
+   * consumer, not on a request a person or an agent is waiting on; and a second failure
+   * within milliseconds is not a blip.
+   */
+  async function attempt<T>(operation: () => Promise<T>, fallback: (error: unknown) => T): Promise<T> {
+    try {
+      return await operation();
+    } catch {
+      try {
+        return await operation();
+      } catch (error) {
+        return fallback(error);
+      }
+    }
+  }
+
+  const report = (principalId: string, action: string, error: unknown) =>
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "quota.unavailable",
+        // §66.4 alerts on this: an unmetered write is a limit that did not apply, and an
+        // attacker who could keep the counter unreachable would publish without one.
+        principal_id: principalId,
+        action,
+        error: String(error),
+      }),
+    );
+
   return {
     consume: (principalId, action, trustLevel) =>
-      stubFor(principalId).consume(action, trustLevel, Date.now()),
-    peek: (principalId, trustLevel) => stubFor(principalId).peek(trustLevel, Date.now()),
+      attempt(
+        () => stubFor(principalId).consume(action, trustLevel, Date.now()),
+        (error) => {
+          report(principalId, action, error);
+          return unmetered(action, trustLevel, new Date());
+        },
+      ),
+
+    peek: (principalId, trustLevel) =>
+      attempt(
+        () => stubFor(principalId).peek(trustLevel, Date.now()),
+        (error) => {
+          report(principalId, "peek", error);
+          // Reporting a full allowance would be a lie an agent plans against. Every entry
+          // says `metered: false`, which is the honest answer: nothing is known.
+          return QUOTA_ACTIONS.map((action) => unmetered(action, trustLevel, new Date()));
+        },
+      ),
   };
 }

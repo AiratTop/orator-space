@@ -239,7 +239,11 @@ const importedDraft = await api("POST", "/v1/articles", {
     authorship_disclosure: "ai_generated",
   },
 });
-check("the canonical is set at creation, not by a later patch", importedDraft.status === 201);
+check(
+  "the canonical is set at creation, not by a later patch",
+  importedDraft.status === 201,
+  importedDraft.status === 201 ? "" : JSON.stringify(importedDraft.body),
+)
 
 const importedArticle = await api("POST", `/v1/articles/${importedDraft.body.id}/publish`, {
   token: researcher.write,

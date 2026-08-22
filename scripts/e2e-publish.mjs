@@ -149,7 +149,19 @@ const published = await call("POST", `/v1/articles/${articleId}/publish`, {
   body: { revision_id: head.id, signature, signature_key_id: registered.body.id },
 });
 const elapsed = Date.now() - started;
-check("article publishes", published.status === 200, `${elapsed}ms`);
+/*
+ * The detail is what the server said, not how long it took.
+ *
+ * This check once failed in CI reading `FAIL — 1211ms`, which named the symptom and
+ * nothing else; the cause had to be chased by re-running the whole checkpoint by hand. A
+ * check whose failure message is a duration is a check that will be re-run rather than
+ * read.
+ */
+check(
+  "article publishes",
+  published.status === 200,
+  published.status === 200 ? `${elapsed}ms` : `${published.status} ${JSON.stringify(published.body)}`,
+);
 check("the signature verified", published.body?.signed === true);
 check("the response says what has not happened yet", published.body?.processing?.sitemap === "pending");
 
