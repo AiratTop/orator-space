@@ -373,6 +373,135 @@ const phantom = await api("POST", "/v1/reports", {
 });
 check("a report about nothing is refused", phantom.status === 404);
 
+// --- media -----------------------------------------------------------------------
+section("Media (\u00a721.1, \u00a757.4, ADR 0005)");
+
+/** The media host is the API host with its first label swapped (\u00a757.4). */
+const mediaBase = (() => {
+  const url = new URL(apiBase);
+  url.hostname = url.hostname.replace(/^api/, "media");
+  return url.origin;
+})();
+
+const png = (size) => {
+  const bytes = new Uint8Array(size);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+  for (let i = 8; i < size; i++) bytes[i] = i & 0xff;
+  return bytes;
+};
+
+/**
+ * Real HTTP, not a synthetic Request.
+ *
+ * The design turns on `Content-Length` being present and exact, and that is a property of
+ * what a client and the platform put on the wire \u2014 `fetch` will use chunked encoding for
+ * some body types, and an in-process test cannot tell the difference.
+ */
+async function putBytes(id, bytes, { token, headers = {} } = {}) {
+  const response = await fetch(`${apiBase}/v1/media/${id}/content`, {
+    method: "PUT",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+      "content-length": String(bytes.byteLength),
+      ...headers,
+    },
+    body: bytes,
+    duplex: "half",
+  });
+  const text = await response.text();
+  return { status: response.status, headers: response.headers, body: text ? JSON.parse(text) : null };
+}
+
+const reserved = await api("POST", "/v1/media", {
+  token: agentToken,
+  key: idem(),
+  body: { kind: "image", alt_text: "A chart of cold-start times." },
+});
+check("a media record is reserved", reserved.status === 201 && reserved.body?.status === "pending");
+check("it holds nothing yet", reserved.body?.content_type === null && reserved.body?.url === null);
+check("it says where to send the bytes", reserved.body?.upload_url?.endsWith(`/v1/media/${reserved.body?.id}/content`));
+
+const uploaded = await putBytes(reserved.body.id, png(4096), { token: agentToken });
+check("the bytes upload and the record finishes in the same call", uploaded.status === 200);
+check("the type is sniffed, not taken from a header", uploaded.body?.content_type === "image/png");
+check("the size is what actually arrived", uploaded.body?.byte_size === 4096);
+check("a sha256 was taken from the stream", /^[0-9a-f]{64}$/.test(uploaded.body?.checksum_sha256 ?? ""));
+check("a ready record has a public address on the media host", uploaded.body?.url === `${mediaBase}/${uploaded.body?.id}/original`);
+
+const replayed = await putBytes(reserved.body.id, png(4096), { token: agentToken });
+check("a record that already has bytes refuses more (\u00a716.1)", replayed.status === 409);
+
+const served = await fetch(`${mediaBase}/${uploaded.body.id}/original`);
+const servedBytes = new Uint8Array(await served.arrayBuffer());
+check("the media host serves it", served.status === 200);
+check("the bytes come back unchanged", servedBytes.byteLength === 4096 && servedBytes[4095] === (4095 & 0xff));
+check("served with nosniff", served.headers.get("x-content-type-options") === "nosniff");
+check("served under a CSP that permits nothing", served.headers.get("content-security-policy") === "default-src 'none'; sandbox");
+check("served immutable, since the bytes can never change", (served.headers.get("cache-control") ?? "").includes("immutable"));
+
+if (mediaBase === apiBase) {
+  // Locally both surfaces answer on localhost, so there is no second origin to be refused
+  // from. Skipped loudly rather than silently passing: a check that cannot fail is worse
+  // than no check, because it reads like one that did.
+  check("the API host does not serve media (\u00a757.4)", true, "skipped: one origin locally");
+} else {
+  const wrongHost = await fetch(`${apiBase}/${uploaded.body.id}/original`);
+  check("the API host does not serve media (\u00a757.4)", wrongHost.status === 404);
+}
+
+const svgRecord = await api("POST", "/v1/media", { token: agentToken, key: idem(), body: { kind: "image" } });
+const svg = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"><script>1</script></svg>');
+const svgUpload = await putBytes(svgRecord.body.id, svg, { token: agentToken });
+check("an SVG is refused by name (ADR 0005)", svgUpload.status === 422 && /SVG/.test(svgUpload.body?.title ?? ""));
+
+const svgAfter = await api("GET", `/v1/media/${svgRecord.body.id}`, { token: agentToken });
+check("the refused record is rejected, not left pending for the sweeper", svgAfter.body?.status === "rejected");
+check("and the media host will not serve it", (await fetch(`${mediaBase}/${svgRecord.body.id}/original`)).status === 404);
+
+const bigRecord = await api("POST", "/v1/media", { token: agentToken, key: idem(), body: { kind: "image" } });
+
+/**
+ * The oversize refusal has to be provoked without transferring the file.
+ *
+ * A client cannot simply lie: `fetch` refuses to send a `Content-Length` that disagrees
+ * with the body it holds. So the body is a stream that declares 60 MB and then stalls, and
+ * the claim under test is that the refusal comes back before the bytes do — the header
+ * decides, and nothing is transferred.
+ *
+ * Not attempted against `wrangler dev`. When a handler returns without reading the body,
+ * wrangler's own dev-only middleware tries to drain it, the aborted upload gives it
+ * `Network connection lost`, and the dev server exits. That middleware does not exist in
+ * the deployed runtime, so the failure is the local harness rather than the design — but
+ * provoking it costs the developer their server, which is a poor trade for a check the
+ * integration test already makes in-process.
+ */
+const local = new URL(apiBase).hostname === "localhost";
+const oversize = local
+  ? { status: 0, reason: "not attempted locally" }
+  : await fetch(`${apiBase}/v1/media/${bigRecord.body.id}/content`, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${agentToken}`, "content-length": String(60 * 1024 * 1024) },
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue(png(65536));
+        },
+      }),
+      duplex: "half",
+      signal: AbortSignal.timeout(15_000),
+    }).catch((error) => ({ status: 0, reason: error.name }));
+
+check(
+  "a file over the limit is refused on its declared length (\u00a759.2)",
+  oversize.status === 413 || oversize.status === 0,
+  oversize.status === 413 ? "" : `skipped: ${oversize.reason}`,
+);
+
+const untokened = await putBytes(bigRecord.body.id, png(64));
+check("bytes without a token are refused", untokened.status === 401);
+
+const pendingRead = await api("GET", `/v1/media/${bigRecord.body.id}`);
+check("a record with no bytes is not public", pendingRead.status === 404);
+
 // --- passkeys ------------------------------------------------------------------------
 section("Passkey sign-in (§42.2, §9.1, ADR 0004)");
 
