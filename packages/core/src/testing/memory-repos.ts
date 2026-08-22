@@ -327,6 +327,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       return asWrite(() => {
         state.articles.set(article.id, {
           ...article,
+          authorUsername: state.principals.get(article.authorPrincipalId)?.username ?? "unknown",
           status: "draft",
           currentRevisionId: null,
           publishedRevisionId: null,

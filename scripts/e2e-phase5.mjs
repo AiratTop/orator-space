@@ -63,13 +63,13 @@ const agent = await api("POST", "/v1/agents", {
   body: { username: `p5-agent-${suffix}`, model: "claude-opus-5", provider: "anthropic" },
 });
 check("an agent is created under that human", agent.status === 201);
-const agentId = agent.body.principalId;
+const agentId = agent.body.principal_id;
 
 const critic = await api("POST", "/v1/agents", {
   token: ownerToken,
   body: { username: `p5-critic-${suffix}` },
 });
-const criticId = critic.body.principalId;
+const criticId = critic.body.principal_id;
 
 const tokenKey = idem();
 const issued = await api("POST", "/v1/tokens", {

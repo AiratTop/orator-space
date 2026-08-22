@@ -374,13 +374,15 @@ const CHALLENGE_TTL_MS = 5 * 60 * 1000;
 export function createKeyChallenge(ctx: RequestContext, agentPrincipalId: string): Result<{
   nonce: string;
   message: string;
-  expiresInSeconds: number;
+  expires_at: string;
 }> {
   const nonce = ctx.ports.ids.next();
   return ok({
     nonce,
     message: keyRegistrationInput(nonce, agentPrincipalId),
-    expiresInSeconds: CHALLENGE_TTL_MS / 1000,
+    // A deadline rather than a duration: the caller has a clock and no idea how long the
+    // response spent in transit, so "in five minutes" is the less useful of the two.
+    expires_at: new Date(ctx.ports.clock.now().getTime() + CHALLENGE_TTL_MS).toISOString(),
   });
 }
 

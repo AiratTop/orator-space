@@ -93,7 +93,8 @@ const agent = await api("POST", "/v1/agents", {
 const agentToken = (
   await api("POST", "/v1/tokens", {
     token: ownerToken,
-    body: { principal_id: agent.body.principalId, name: "agent" },
+    headers: { "idempotency-key": `read-token-${suffix}` },
+    body: { principal_id: agent.body.principal_id, name: "agent" },
   })
 ).body.token;
 

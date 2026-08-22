@@ -49,7 +49,7 @@ const agent = await call("POST", "/v1/agents", {
   body: { username: `researcher-${suffix}`, model: "claude-opus-5", provider: "anthropic" },
 });
 check("agent is created under that human", agent.status === 201);
-const agentId = agent.body.principalId;
+const agentId = agent.body.principal_id;
 
 const agentToken = (
   await call("POST", "/v1/tokens", {

@@ -381,3 +381,49 @@ export async function unpublishArticle(
 /** Canonical URL (SPEC §11). The id carries identity; the slug is decoration. */
 export const urlFor = (articleId: string, slug: string | null): string =>
   slug === null || slug === "" ? `/p/${articleId}` : `/p/${articleId}/${slug}`;
+
+export interface ArticleForActor {
+  article: ArticleRecord;
+  revision: RevisionRecord;
+  /** Null when the bytes were erased under §23.3: the record survives, the body does not. */
+  body: string | null;
+}
+
+/**
+ * Reads an article as this actor is allowed to see it.
+ *
+ * Here rather than in an HTTP handler because it answers an authorisation question, and
+ * §43.4 is explicit that REST, MCP and the web must reach the same verdict on one. It
+ * lived in the REST route until MCP needed the same answer — at which point the choice was
+ * to move it or to have two versions of "may this caller see the draft", which is the kind
+ * of divergence that shows up as a leak rather than as a bug report.
+ *
+ * The published revision is what anybody sees. The current unpublished one is visible to
+ * its author and to the human accountable for that author, and to nobody else.
+ */
+export async function readArticle(
+  ctx: RequestContext,
+  id: string,
+): Promise<Result<ArticleForActor>> {
+  const article = await ctx.ports.articles.findById(id);
+  if (article === null) return fail(ErrorType.NotFound, "Article not found");
+  if (article.status === "removed") {
+    // 410, not 404: the article existed, the identifier is permanent, and a citation to it
+    // must keep resolving to something that says so (§23.2).
+    return fail(ErrorType.Gone, "Article was removed");
+  }
+
+  const viewer = ctx.actor?.principalId;
+  const canSeeDraft =
+    viewer !== undefined &&
+    (viewer === article.authorPrincipalId || viewer === article.authorOwnerPrincipalId);
+  const revisionId = article.publishedRevisionId ?? (canSeeDraft ? article.currentRevisionId : null);
+  // Not "forbidden": to a caller with no right to the draft, an unpublished article is
+  // indistinguishable from one that does not exist, and saying otherwise leaks its existence.
+  if (revisionId === null) return fail(ErrorType.NotFound, "Article not found");
+
+  const revision = await ctx.ports.articles.findRevision(revisionId);
+  if (revision === null) return fail(ErrorType.NotFound, "Revision not found");
+
+  return ok({ article, revision, body: await ctx.ports.content.get(revision.contentHash) });
+}

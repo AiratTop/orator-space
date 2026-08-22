@@ -9,11 +9,11 @@ import {
   revokeToken,
   updateProfile,
   withIdempotency,
-  type PrincipalRecord,
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
 import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { principalView } from "../views.js";
 import type { Env } from "../index.js";
 
 type Vars = { requestId: string; ctx: RequestContext };
@@ -60,39 +60,31 @@ identityRoutes.post("/v1/humans", async (c) => {
 identityRoutes.post("/v1/agents", async (c) => {
   const parsed = parse(c, schemas.createAgentRequest, await c.req.json().catch(() => null));
   if ("response" in parsed) return parsed.response;
+
+  const ctx = c.get("ctx");
+  const result = await registerAgent(ctx, {
+    username: parsed.data.username,
+    displayName: parsed.data.display_name ?? null,
+    model: parsed.data.model ?? null,
+    provider: parsed.data.provider ?? null,
+  });
+  if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
+
   return respond(
     c,
-    await registerAgent(c.get("ctx"), {
-      username: parsed.data.username,
-      displayName: parsed.data.display_name ?? null,
-      model: parsed.data.model ?? null,
-      provider: parsed.data.provider ?? null,
-    }),
+    {
+      ok: true,
+      value: {
+        principal_id: result.value.principalId,
+        username: result.value.username,
+        // The creating human. §7.2 makes this the point of an agent existing, so it is
+        // returned rather than left for a second call to discover.
+        owner_principal_id: ctx.actor?.principalId ?? null,
+      },
+    },
     201,
   );
 });
-
-/** Only what is safe for anyone to read. */
-function publicView(record: PrincipalRecord) {
-  return {
-    id: record.id,
-    kind: record.kind,
-    username: record.username,
-    display_name: record.displayName,
-    bio: record.bio,
-    created_at: record.createdAt,
-    ...(record.ownerPrincipalId === undefined
-      ? {}
-      : {
-          // Owner is public because accountability is the entire point of §7.2; model and
-          // provider are published so a reader can weigh the source (§4.2).
-          owner_principal_id: record.ownerPrincipalId,
-          model: record.model ?? null,
-          provider: record.provider ?? null,
-          trust_level: record.trustLevel ?? 0,
-        }),
-  };
-}
 
 const notFound = (c: Ctx) =>
   problemResponse(c, { type: ErrorType.NotFound, title: "Principal not found" }, new URL(c.req.url).pathname);
@@ -100,13 +92,13 @@ const notFound = (c: Ctx) =>
 identityRoutes.get("/v1/principals/:id", async (c) => {
   const record = await c.get("ctx").ports.principals.findById(c.req.param("id"));
   if (record === null || record.status === "deleted") return notFound(c);
-  return respond(c, { ok: true, value: publicView(record) });
+  return respond(c, { ok: true, value: principalView(record) });
 });
 
 identityRoutes.get("/v1/principals/by-username/:username", async (c) => {
   const record = await c.get("ctx").ports.principals.findByUsername(c.req.param("username").toLowerCase());
   if (record === null || record.status === "deleted") return notFound(c);
-  return respond(c, { ok: true, value: publicView(record) });
+  return respond(c, { ok: true, value: principalView(record) });
 });
 
 /**
@@ -160,16 +152,19 @@ identityRoutes.get("/v1/tokens", async (c) => {
   const tokens = await ctx.ports.tokens.listFor(ctx.actor.principalId);
   return respond(c, {
     ok: true,
-    value: tokens.map((token) => ({
-      id: token.id,
-      name: token.name,
-      prefix: token.prefix,
-      scopes: token.scopes,
-      created_at: token.createdAt,
-      last_used_at: token.lastUsedAt,
-      expires_at: token.expiresAt,
-      revoked_at: token.revokedAt,
-    })),
+    value: {
+      next_cursor: null,
+      items: tokens.map((token) => ({
+        id: token.id,
+        name: token.name,
+        prefix: token.prefix,
+        scopes: token.scopes,
+        created_at: token.createdAt,
+        last_used_at: token.lastUsedAt,
+        expires_at: token.expiresAt,
+        revoked_at: token.revokedAt,
+      })),
+    },
   });
 });
 
@@ -177,9 +172,11 @@ identityRoutes.delete("/v1/tokens/:id", async (c) =>
   respond(c, await revokeToken(c.get("ctx"), c.req.param("id"))),
 );
 
-identityRoutes.post("/v1/agents/:id/keys/challenge", async (c) =>
-  respond(c, createKeyChallenge(c.get("ctx"), c.req.param("id")), 201),
-);
+identityRoutes.post("/v1/agents/:id/keys/challenge", async (c) => {
+  const result = createKeyChallenge(c.get("ctx"), c.req.param("id"));
+  if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
+  return respond(c, { ok: true, value: result.value }, 201);
+});
 
 identityRoutes.post("/v1/agents/:id/keys", async (c) => {
   const parsed = parse(c, schemas.registerKeyRequest, await c.req.json().catch(() => null));
@@ -203,15 +200,18 @@ identityRoutes.get("/v1/agents/:id/keys", async (c) => {
     ok: true,
     // Revoked keys stay listed: a verifier still needs the material to check signatures
     // made before revocation, which revocation does not invalidate (SPEC §8.2).
-    value: keys.map((key) => ({
-      id: key.id,
-      public_key: key.publicKey,
-      fingerprint: key.fingerprint,
-      label: key.label,
-      status: key.status,
-      created_at: key.createdAt,
-      revoked_at: key.revokedAt,
-    })),
+    value: {
+      next_cursor: null,
+      items: keys.map((key) => ({
+        id: key.id,
+        public_key: key.publicKey,
+        fingerprint: key.fingerprint,
+        label: key.label,
+        status: key.status,
+        created_at: key.createdAt,
+        revoked_at: key.revokedAt,
+      })),
+    },
   });
 });
 
@@ -228,5 +228,5 @@ identityRoutes.patch("/v1/principals/:id", async (c) => {
     ...(parsed.data.bio === undefined ? {} : { bio: parsed.data.bio }),
   });
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
-  return respond(c, { ok: true, value: publicView(result.value) });
+  return respond(c, { ok: true, value: principalView(result.value) });
 });

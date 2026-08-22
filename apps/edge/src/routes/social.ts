@@ -8,13 +8,12 @@ import {
   follow,
   replyToComment,
   unfollow,
-  urlFor,
   withIdempotency,
-  type CommentRecord,
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
 import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { commentCreatedView, commentView, edgeView } from "../views.js";
 import type { Env } from "../index.js";
 
 /**
@@ -44,42 +43,6 @@ function deliverInBackground(c: Parameters<typeof problemResponse>[0], ctx: Requ
 }
 
 export const socialRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
-
-/**
- * SPEC §58.2 — a comment body is content written by an untrusted party, exactly like an
- * article, and it is labelled the same way. Comments are the shorter of the two and the
- * more likely to be read by a machine in bulk, which makes the label matter more here.
- */
-function commentView(comment: CommentRecord, origin: string) {
-  const removed = comment.status !== "visible";
-  return {
-    id: comment.id,
-    article_id: comment.articleId,
-    parent_comment_id: comment.parentCommentId,
-    root_comment_id: comment.rootCommentId,
-    depth: comment.depth,
-    author: {
-      principal_id: comment.authorPrincipalId,
-      username: comment.authorUsername ?? null,
-      kind: comment.authorKind ?? null,
-    },
-    stance: comment.stance,
-    content: {
-      trust: "untrusted" as const,
-      source_principal: comment.authorUsername === undefined ? null : `@${comment.authorUsername}`,
-      source_url: `${origin}${urlFor(comment.articleId, null)}#c-${comment.id}`,
-      disclosure: comment.authorKind === "agent" ? "ai_generated" : "human_authored",
-      signature_verified: false,
-      format: "text/markdown" as const,
-      // Withheld rather than the row hidden: the thread keeps its shape, and a reply to a
-      // removed comment still reads as a reply to something (§23.2).
-      body: removed ? null : comment.contentMarkdown,
-    },
-    status: comment.status,
-    created_at: comment.createdAt,
-    edited_at: comment.editedAt,
-  };
-}
 
 const originOf = (url: string) => new URL(url).origin;
 
@@ -115,7 +78,7 @@ socialRoutes.post("/v1/articles/:id/comments", async (c) => {
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
   deliverInBackground(c, ctx);
-  return respond(c, result, 201);
+  return respond(c, { ok: true, value: commentCreatedView(result.value) }, 201);
 });
 
 socialRoutes.get("/v1/comments/:id", async (c) => {
@@ -142,7 +105,7 @@ socialRoutes.post("/v1/comments/:id/replies", async (c) => {
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
   deliverInBackground(c, ctx);
-  return respond(c, result, 201);
+  return respond(c, { ok: true, value: commentCreatedView(result.value) }, 201);
 });
 
 socialRoutes.delete("/v1/comments/:id", async (c) =>
@@ -156,17 +119,7 @@ socialRoutes.get("/v1/articles/:id/edges", async (c) => {
   return respond(c, {
     ok: true,
     value: {
-      items: edges.map((edge) => ({
-        id: edge.id,
-        src_article_id: edge.srcArticleId,
-        kind: edge.kind,
-        dst_article_id: edge.dstArticleId,
-        dst_uri: edge.dstUri,
-        via_comment_id: edge.viaCommentId,
-        note: edge.note,
-        created_by_principal_id: edge.createdByPrincipalId,
-        created_at: edge.createdAt,
-      })),
+      items: edges.map(edgeView),
       next_cursor: edges.length === limit ? (edges.at(-1)?.id ?? null) : null,
     },
   });

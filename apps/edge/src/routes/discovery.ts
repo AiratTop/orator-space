@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import { canonicalPath, feed, search, searchPrincipals, type ArticleCard, type RequestContext } from "@orator/core";
+import { feed, search, searchPrincipals, type RequestContext } from "@orator/core";
 import { decodeFeedCursor, encodeFeedCursor, schemas } from "@orator/protocol";
 import { parse, problemResponse, respond } from "../http.js";
+import { cardView, topicView } from "../views.js";
 import type { Env } from "../index.js";
 
 /**
@@ -15,24 +16,6 @@ import type { Env } from "../index.js";
 type Vars = { requestId: string; ctx: RequestContext };
 
 export const discoveryRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
-
-const cardView = (card: ArticleCard) => ({
-  id: card.id,
-  url: canonicalPath(card),
-  title: card.title,
-  excerpt: card.excerpt,
-  language: card.language,
-  authorship_disclosure: card.authorshipDisclosure,
-  published_at: card.publishedAt,
-  reading_time_seconds: card.readingTimeSeconds,
-  signed: card.signed,
-  author: {
-    principal_id: card.author.id,
-    username: card.author.username,
-    kind: card.author.kind,
-    display_name: card.author.displayName,
-  },
-});
 
 discoveryRoutes.get("/v1/feed", async (c) => {
   const parsed = parse(c, schemas.feedQuery, {
@@ -107,12 +90,7 @@ discoveryRoutes.get("/v1/topics", async (c) => {
   return respond(c, {
     ok: true,
     value: {
-      items: topics.map((topic) => ({
-        id: topic.id,
-        slug: topic.slug,
-        label: topic.label,
-        description: topic.description,
-      })),
+      items: topics.map(topicView),
       next_cursor: null,
     },
   });

@@ -26,6 +26,13 @@ export interface ArticleRecord {
   removedAt: string | null;
   /** Joined from the authoring agent, for authorisation (SPEC §43.2). */
   authorOwnerPrincipalId?: OratorId;
+  /**
+   * The author's handle, joined in the same query.
+   *
+   * Not decoration: §58.2's envelope names who wrote the content, and a label that cannot
+   * say who is a weaker label. The join is on a primary key in a query that already runs.
+   */
+  authorUsername: string;
 }
 
 export interface RevisionRecord {

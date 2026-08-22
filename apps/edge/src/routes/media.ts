@@ -5,11 +5,11 @@ import {
   loadReadyMedia,
   readMedia,
   uploadMediaContent,
-  type MediaRecord,
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, problem, schemas } from "@orator/protocol";
 import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { mediaView } from "../views.js";
 import { portsFor } from "../context.js";
 import { surfaceFor, type Env } from "../index.js";
 
@@ -24,42 +24,6 @@ import { surfaceFor, type Env } from "../index.js";
 type Vars = { requestId: string; ctx: RequestContext };
 
 export const mediaRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
-
-/**
- * The public address of a file, on the isolated origin (§57.4).
- *
- * Derived from the host that was asked rather than from configuration: the API is reached
- * as `api.orator.space` or `api-staging.orator.space`, and the media host is the same name
- * with the first label swapped. A configured value would be one more thing to get wrong
- * per environment, and getting it wrong here means serving user content from the origin
- * that holds the session.
- */
-function mediaUrl(requestUrl: string, id: string): string {
-  const url = new URL(requestUrl);
-  const labels = url.hostname.split(".");
-  labels[0] = (labels[0] ?? "").replace(/^api/, "media");
-  return `${url.protocol}//${labels.join(".")}${url.port === "" ? "" : `:${url.port}`}/${id}/original`;
-}
-
-function mediaView(media: MediaRecord, requestUrl: string) {
-  return {
-    id: media.id,
-    owner_principal_id: media.ownerPrincipalId,
-    status: media.status,
-    kind: media.kind,
-    content_type: media.contentType,
-    byte_size: media.byteSize,
-    checksum_sha256: media.checksumSha256,
-    alt_text: media.altText,
-    source: media.source,
-    // Only a `ready` record has an address, because only a `ready` record has bytes (§21.1).
-    url: media.status === "ready" ? mediaUrl(requestUrl, media.id) : null,
-    upload_url:
-      media.status === "pending" ? new URL(`/v1/media/${media.id}/content`, requestUrl).toString() : null,
-    created_at: media.createdAt,
-    finalized_at: media.finalizedAt,
-  };
-}
 
 mediaRoutes.post("/v1/media", async (c) => {
   const idem = requireIdempotencyKey(c);

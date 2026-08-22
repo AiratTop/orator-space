@@ -34,7 +34,7 @@ beforeAll(async () => {
     json({ username: `rid-agent-${s}` }, { authorization: `Bearer ${ownerToken}` }),
     env,
   );
-  const agentId = ((await agent.json()) as { principalId: string }).principalId;
+  const agentId = ((await agent.json()) as { principal_id: string }).principal_id;
 
   const token = await app.request(
     "/v1/tokens",

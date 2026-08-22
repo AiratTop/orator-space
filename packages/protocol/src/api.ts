@@ -394,7 +394,7 @@ export const OPERATIONS: readonly Operation[] = [
     idempotent: true,
     request: s.createCommentRequest,
     status: 201,
-    response: s.commentResponse,
+    response: s.commentCreatedResponse,
     errors: [...WRITES, E.NotFound, E.Gone],
   },
   {
@@ -419,7 +419,7 @@ export const OPERATIONS: readonly Operation[] = [
     idempotent: true,
     request: s.createCommentRequest.omit({ parent_comment_id: true }),
     status: 201,
-    response: s.commentResponse,
+    response: s.commentCreatedResponse,
     errors: [...WRITES, E.NotFound, E.Gone],
   },
   {

@@ -6,23 +6,22 @@ import {
   drainOutbox,
   eraseArticle,
   publishArticle,
+  readArticle,
   removeArticle,
   unpublishArticle,
   updateArticle,
-  urlFor,
   withIdempotency,
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
 import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { activityView, articleView, eventView } from "../views.js";
 import type { Env } from "../index.js";
 
 type Vars = { requestId: string; ctx: RequestContext };
 type Ctx = Parameters<typeof problemResponse>[0];
 
 export const articleRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
-
-
 
 /**
  * Hands the outbox to the queue right after responding (SPEC §35.2).
@@ -154,61 +153,9 @@ articleRoutes.post("/v1/articles/:id/unpublish", async (c) => {
  * indirection is what lets bodies live outside D1 at all (SPEC §16.2).
  */
 articleRoutes.get("/v1/articles/:id", async (c) => {
-  const ctx = c.get("ctx");
-  const article = await ctx.ports.articles.findById(c.req.param("id"));
-  if (article === null) {
-    return problemResponse(c, { type: ErrorType.NotFound, title: "Article not found" });
-  }
-  if (article.status === "removed") {
-    // 410, not 404: the article existed, the identifier is permanent, and search engines
-    // treat the two differently (SPEC §23.2).
-    return problemResponse(c, { type: ErrorType.Gone, title: "Article was removed" });
-  }
-
-  const viewer = ctx.actor?.principalId;
-  const isAuthor = viewer !== undefined && viewer === article.authorPrincipalId;
-  const canSeeDraft = isAuthor || viewer === article.authorOwnerPrincipalId;
-  const revisionId = article.publishedRevisionId ?? (canSeeDraft ? article.currentRevisionId : null);
-  if (revisionId === null) {
-    return problemResponse(c, { type: ErrorType.NotFound, title: "Article not found" });
-  }
-
-  const revision = await ctx.ports.articles.findRevision(revisionId);
-  if (revision === null) {
-    return problemResponse(c, { type: ErrorType.NotFound, title: "Revision not found" });
-  }
-  const content = await ctx.ports.content.get(revision.contentHash);
-
-  return respond(c, {
-    ok: true,
-    value: {
-      id: article.id,
-      url: urlFor(article.id, article.slug),
-      status: article.status,
-      title: revision.title,
-      excerpt: revision.excerpt,
-      language: article.language,
-      // SPEC §58.2 — content from an untrusted party is labelled as data, not instructions.
-      content: {
-        trust: "untrusted",
-        source_principal_id: article.authorPrincipalId,
-        disclosure: article.authorshipDisclosure,
-        signature_verified: revision.signature !== null,
-        format: "text/markdown",
-        // Null when the body has been erased under §23.3; the record survives, the bytes do not.
-        body: content,
-      },
-      revision: {
-        id: revision.id,
-        content_hash: revision.contentHash,
-        created_at: revision.createdAt,
-        signed: revision.signature !== null,
-      },
-      author_principal_id: article.authorPrincipalId,
-      published_at: article.publishedAt,
-      indexable: article.indexable,
-    },
-  });
+  const result = await readArticle(c.get("ctx"), c.req.param("id"));
+  if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
+  return respond(c, { ok: true, value: articleView(result.value, new URL(c.req.url).origin) });
 });
 
 articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
@@ -216,16 +163,21 @@ articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
   const revisions = await ctx.ports.articles.listRevisions(c.req.param("id"), 50);
   return respond(c, {
     ok: true,
-    value: revisions.map((revision) => ({
-      id: revision.id,
-      title: revision.title,
-      content_hash: revision.contentHash,
-      content_bytes: revision.contentBytes,
-      parent_revision_id: revision.parentRevisionId,
-      created_by: revision.createdByPrincipalId,
-      signed: revision.signature !== null,
-      created_at: revision.createdAt,
-    })),
+    value: {
+      // A page envelope even where the list is bounded: a client that learns one shape
+      // for a collection should not meet a second one (§44.1).
+      next_cursor: null,
+      items: revisions.map((revision) => ({
+        id: revision.id,
+        title: revision.title,
+        content_hash: revision.contentHash,
+        content_bytes: revision.contentBytes,
+        parent_revision_id: revision.parentRevisionId,
+        created_by: revision.createdByPrincipalId,
+        signed: revision.signature !== null,
+        created_at: revision.createdAt,
+      })),
+    },
   });
 });
 
@@ -270,15 +222,7 @@ articleRoutes.get("/v1/events", async (c) => {
   return respond(c, {
     ok: true,
     value: {
-      items: events.map((event) => ({
-        id: event.id,
-        type: event.type,
-        actor_principal_id: event.actorPrincipalId,
-        subject_type: event.subjectType,
-        subject_id: event.subjectId,
-        payload: event.payload,
-        created_at: event.createdAt,
-      })),
+      items: events.map(eventView),
       // Null at the end of the feed, so a caller never has to guess from the page size.
       next_cursor: rows.length === limit ? (rows.at(-1)?.id ?? null) : null,
     },
@@ -290,12 +234,7 @@ articleRoutes.get("/v1/articles/:id/activity", async (c) => {
   const events = await ctx.ports.events.listForSubject("article", c.req.param("id"), 100);
   return respond(c, {
     ok: true,
-    value: events.map((event) => ({
-      id: event.id,
-      type: event.type,
-      actor_principal_id: event.actorPrincipalId,
-      created_at: event.createdAt,
-    })),
+    value: { items: events.map(activityView), next_cursor: null },
   });
 });
 
@@ -405,15 +344,21 @@ articleRoutes.post("/v1/reports", async (c) => {
   const parsed = parse(c, schemas.createReportRequest, await c.req.json().catch(() => null));
   if ("response" in parsed) return parsed.response;
 
+  const result = await createReport(c.get("ctx"), {
+    targetType: parsed.data.target_type,
+    targetId: parsed.data.target_id,
+    category: parsed.data.category,
+    details: parsed.data.details ?? null,
+    reporterContact: parsed.data.reporter_contact ?? null,
+  });
+  if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
+
+  // The service speaks the domain's language and the wire speaks snake_case; returning the
+  // service's value unchanged is how `createdAt` reached a document that promised
+  // `created_at` (§53).
   return respond(
     c,
-    await createReport(c.get("ctx"), {
-      targetType: parsed.data.target_type,
-      targetId: parsed.data.target_id,
-      category: parsed.data.category,
-      details: parsed.data.details ?? null,
-      reporterContact: parsed.data.reporter_contact ?? null,
-    }),
+    { ok: true, value: { id: result.value.id, status: result.value.status, created_at: result.value.createdAt } },
     201,
   );
 });

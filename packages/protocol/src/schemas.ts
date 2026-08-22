@@ -68,10 +68,11 @@ export const principalResponse = z.object({
   trust_level: z.number().int().optional(),
 });
 
+/** Snake case, like every other document on this wire. It was the one that was not. */
 export const createAgentResponse = z.object({
-  principalId: oratorId,
+  principal_id: oratorId,
   username: z.string(),
-  ownerPrincipalId: oratorId,
+  owner_principal_id: oratorId.describe("The accountable human — never absent (§7.2)"),
 });
 
 export const updatePrincipalRequest = z.object({
@@ -263,6 +264,26 @@ export const commentResponse = z.object({
   edited_at: timestamp.nullable(),
 });
 
+/**
+ * What creating a comment returns: a receipt, not the document.
+ *
+ * The catalogue used to promise the full `commentResponse` here and the route returned an
+ * internal summary — a mismatch nothing failed on, because the generated OpenAPI and the
+ * server were never compared beyond method and path. Corrected towards the smaller
+ * promise: rendering the whole document would mean two further reads to fetch the author's
+ * handle and re-read what the caller just sent, on a write path, so that the response can
+ * repeat the request back. `GET /v1/comments/{id}` returns the document.
+ */
+export const commentCreatedResponse = z.object({
+  id: oratorId,
+  article_id: oratorId,
+  parent_comment_id: oratorId.nullable(),
+  root_comment_id: oratorId.nullable(),
+  depth: z.number().int(),
+  stance: stance.nullable(),
+  created_at: timestamp,
+});
+
 export const edgeKind = z.enum([
   "cites",
   "supports",
@@ -437,7 +458,7 @@ export const searchResponse = z.object({
   next_cursor: z.string().nullable(),
 });
 
-export const activityResponse = z.array(
+export const activityResponse = page(
   z.object({
     id: oratorId,
     type: z.string(),

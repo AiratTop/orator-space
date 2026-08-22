@@ -27,6 +27,7 @@ interface ArticleRow {
   published_at: string | null;
   removed_at: string | null;
   author_owner_principal_id: string | null;
+  author_username: string;
 }
 
 interface RevisionRow {
@@ -51,9 +52,10 @@ interface RevisionRow {
  * (SPEC §43.2), and fetching it separately would mean two round trips on the hot path.
  */
 const ARTICLE_SELECT = `
-  SELECT a.*, ag.owner_principal_id AS author_owner_principal_id
+  SELECT a.*, ag.owner_principal_id AS author_owner_principal_id, p.username AS author_username
     FROM articles a
-    LEFT JOIN agents ag ON ag.principal_id = a.author_principal_id`;
+    LEFT JOIN agents ag ON ag.principal_id = a.author_principal_id
+    JOIN principals p ON p.id = a.author_principal_id`;
 
 function toArticle(row: ArticleRow | null): ArticleRecord | null {
   if (row === null) return null;
@@ -74,6 +76,7 @@ function toArticle(row: ArticleRow | null): ArticleRecord | null {
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
     removedAt: row.removed_at,
+    authorUsername: row.author_username,
     ...(row.author_owner_principal_id === null
       ? {}
       : { authorOwnerPrincipalId: row.author_owner_principal_id as OratorId }),

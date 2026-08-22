@@ -114,6 +114,7 @@ function toView(row: ViewRow): ArticleView {
   const article: ArticleRecord = {
     id: row.id as OratorId,
     authorPrincipalId: row.author_principal_id as OratorId,
+    authorUsername: row.a_username,
     slug: row.slug,
     status: row.status as ArticleRecord["status"],
     visibility: row.visibility as ArticleRecord["visibility"],

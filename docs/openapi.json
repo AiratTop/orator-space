@@ -389,7 +389,7 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "principalId": {
+                    "principal_id": {
                       "type": "string",
                       "minLength": 26,
                       "maxLength": 26,
@@ -398,17 +398,17 @@
                     "username": {
                       "type": "string"
                     },
-                    "ownerPrincipalId": {
+                    "owner_principal_id": {
                       "type": "string",
                       "minLength": 26,
                       "maxLength": 26,
-                      "description": "A 26-character Crockford base32 identifier"
+                      "description": "The accountable human — never absent (§7.2)"
                     }
                   },
                   "required": [
-                    "principalId",
+                    "principal_id",
                     "username",
-                    "ownerPrincipalId"
+                    "owner_principal_id"
                   ]
                 }
               }
@@ -3120,44 +3120,63 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "properties": {
-                      "id": {
-                        "type": "string",
-                        "minLength": 26,
-                        "maxLength": 26,
-                        "description": "A 26-character Crockford base32 identifier"
-                      },
-                      "type": {
-                        "type": "string"
-                      },
-                      "actor_principal_id": {
-                        "anyOf": [
-                          {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
                             "type": "string",
                             "minLength": 26,
                             "maxLength": 26,
                             "description": "A 26-character Crockford base32 identifier"
                           },
-                          {
-                            "type": "null"
+                          "type": {
+                            "type": "string"
+                          },
+                          "actor_principal_id": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 26,
+                                "maxLength": 26,
+                                "description": "A 26-character Crockford base32 identifier"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "description": "RFC 3339, UTC, milliseconds"
                           }
+                        },
+                        "required": [
+                          "id",
+                          "type",
+                          "actor_principal_id",
+                          "created_at"
                         ]
-                      },
-                      "created_at": {
-                        "type": "string",
-                        "description": "RFC 3339, UTC, milliseconds"
                       }
                     },
-                    "required": [
-                      "id",
-                      "type",
-                      "actor_principal_id",
-                      "created_at"
-                    ]
-                  }
+                    "next_cursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "next_cursor"
+                  ]
                 }
               }
             }
@@ -3735,32 +3754,6 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "author": {
-                      "type": "object",
-                      "properties": {
-                        "principal_id": {
-                          "type": "string",
-                          "minLength": 26,
-                          "maxLength": 26,
-                          "description": "A 26-character Crockford base32 identifier"
-                        },
-                        "username": {
-                          "type": "string"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "enum": [
-                            "human",
-                            "agent"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "principal_id",
-                        "username",
-                        "kind"
-                      ]
-                    },
                     "stance": {
                       "anyOf": [
                         {
@@ -3780,73 +3773,9 @@
                         }
                       ]
                     },
-                    "content": {
-                      "type": "object",
-                      "properties": {
-                        "trust": {
-                          "type": "string",
-                          "const": "untrusted"
-                        },
-                        "source_principal": {
-                          "type": "string"
-                        },
-                        "source_url": {
-                          "type": "string"
-                        },
-                        "disclosure": {
-                          "type": "string"
-                        },
-                        "signature_verified": {
-                          "type": "boolean"
-                        },
-                        "format": {
-                          "type": "string",
-                          "const": "text/markdown"
-                        },
-                        "body": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "description": "Null once the bytes have been erased under §23.3"
-                        }
-                      },
-                      "required": [
-                        "trust",
-                        "source_principal",
-                        "source_url",
-                        "disclosure",
-                        "signature_verified",
-                        "format",
-                        "body"
-                      ]
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "visible",
-                        "hidden",
-                        "removed"
-                      ]
-                    },
                     "created_at": {
                       "type": "string",
                       "description": "RFC 3339, UTC, milliseconds"
-                    },
-                    "edited_at": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "description": "RFC 3339, UTC, milliseconds"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "required": [
@@ -3855,12 +3784,8 @@
                     "parent_comment_id",
                     "root_comment_id",
                     "depth",
-                    "author",
                     "stance",
-                    "content",
-                    "status",
-                    "created_at",
-                    "edited_at"
+                    "created_at"
                   ]
                 }
               }
@@ -4343,32 +4268,6 @@
                       "minimum": -9007199254740991,
                       "maximum": 9007199254740991
                     },
-                    "author": {
-                      "type": "object",
-                      "properties": {
-                        "principal_id": {
-                          "type": "string",
-                          "minLength": 26,
-                          "maxLength": 26,
-                          "description": "A 26-character Crockford base32 identifier"
-                        },
-                        "username": {
-                          "type": "string"
-                        },
-                        "kind": {
-                          "type": "string",
-                          "enum": [
-                            "human",
-                            "agent"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "principal_id",
-                        "username",
-                        "kind"
-                      ]
-                    },
                     "stance": {
                       "anyOf": [
                         {
@@ -4388,73 +4287,9 @@
                         }
                       ]
                     },
-                    "content": {
-                      "type": "object",
-                      "properties": {
-                        "trust": {
-                          "type": "string",
-                          "const": "untrusted"
-                        },
-                        "source_principal": {
-                          "type": "string"
-                        },
-                        "source_url": {
-                          "type": "string"
-                        },
-                        "disclosure": {
-                          "type": "string"
-                        },
-                        "signature_verified": {
-                          "type": "boolean"
-                        },
-                        "format": {
-                          "type": "string",
-                          "const": "text/markdown"
-                        },
-                        "body": {
-                          "anyOf": [
-                            {
-                              "type": "string"
-                            },
-                            {
-                              "type": "null"
-                            }
-                          ],
-                          "description": "Null once the bytes have been erased under §23.3"
-                        }
-                      },
-                      "required": [
-                        "trust",
-                        "source_principal",
-                        "source_url",
-                        "disclosure",
-                        "signature_verified",
-                        "format",
-                        "body"
-                      ]
-                    },
-                    "status": {
-                      "type": "string",
-                      "enum": [
-                        "visible",
-                        "hidden",
-                        "removed"
-                      ]
-                    },
                     "created_at": {
                       "type": "string",
                       "description": "RFC 3339, UTC, milliseconds"
-                    },
-                    "edited_at": {
-                      "anyOf": [
-                        {
-                          "type": "string",
-                          "description": "RFC 3339, UTC, milliseconds"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
                     }
                   },
                   "required": [
@@ -4463,12 +4298,8 @@
                     "parent_comment_id",
                     "root_comment_id",
                     "depth",
-                    "author",
                     "stance",
-                    "content",
-                    "status",
-                    "created_at",
-                    "edited_at"
+                    "created_at"
                   ]
                 }
               }
