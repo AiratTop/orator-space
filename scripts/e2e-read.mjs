@@ -431,15 +431,16 @@ check("llms.txt states the licence where a model will meet it (ADR 0008)", llmsT
  * into an arbitrary R2 key.
  */
 const sitemap = await web("/sitemap.xml");
+const indexXml = sitemap.status === 200 ? await sitemap.text() : "";
+const listsAShard = indexXml.includes("<sitemap>");
 const namesSitemap = /^Sitemap:\s*https:\/\/\S+\/sitemap\.xml$/im.test(robotsBody);
 check(
-  "robots.txt names the sitemap exactly when one has been built (§51)",
-  (sitemap.status === 200) === namesSitemap,
-  `sitemap.xml ${sitemap.status}, robots.txt ${namesSitemap ? "names it" : "does not"}`,
+  "robots.txt names the sitemap exactly when it lists something (§51)",
+  listsAShard === namesSitemap,
+  `sitemap.xml ${sitemap.status}${listsAShard ? " with shards" : " empty"}, robots.txt ${namesSitemap ? "names it" : "does not"}`,
 );
 
 if (sitemap.status === 200) {
-  const indexXml = await sitemap.text();
   check("the sitemap is served as XML", sitemap.headers.get("content-type")?.startsWith("application/xml"));
   check("the sitemap is a shard index, not a list of URLs", indexXml.includes("<sitemapindex"));
   const shard = /<loc>[^<]*\/(sitemaps\/articles-\d{4}-\d{2}\.xml)<\/loc>/.exec(indexXml);

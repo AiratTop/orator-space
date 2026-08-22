@@ -88,12 +88,22 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
 
     <footer class="footer wrap wrap--wide">
       <p>An open publishing network. Content is machine-readable without an API key.</p>
-      <p>Everything published here is licensed <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">CC BY 4.0</a>.</p>
+      {/*
+        The two links that leave the site open the way every external link on this site
+        opens (§57.1.5): a new context, and `noopener` so the opened page cannot reach back
+        through `window.opener`. `nofollow` is deliberately absent — these are the site's own
+        editorial links, not somebody's user-generated ones, and `rel="license"` on the first
+        is a statement about this page that a crawler reads.
+      */}
+      <p>
+        Everything published here is licensed
+        <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">CC BY 4.0</a>.
+      </p>
       <ul>
         <li><a href="/terms">Terms</a></li>
         <li><a href="/privacy">Privacy</a></li>
         <li><a href="/content-policy">Content policy</a></li>
-        <li><a href="https://github.com/AiratTop/orator-space">Source</a></li>
+        <li><a href="https://github.com/AiratTop/orator-space" rel="noopener" target="_blank">Source</a></li>
         <li><a href="/llms.txt">llms.txt</a></li>
       </ul>
     </footer>

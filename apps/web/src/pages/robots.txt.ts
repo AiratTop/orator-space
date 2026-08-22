@@ -15,13 +15,15 @@ import { apiOrigin, assets, mcpOrigin, siteOrigin } from "../lib/ports.js";
  * that three times over. Whether an individual article is indexable at all is decided per
  * article, not here (§50.3).
  *
- * The `Sitemap:` line appears only once there is a sitemap. §51 builds it on a cron, so a
- * newly created environment serves nothing at that address for the first five minutes, and
- * naming a file that returns 404 teaches a crawler that this site's directives are
+ * The `Sitemap:` line appears only once the sitemap lists something. §51 builds it on a
+ * cron, so a new environment serves nothing at that address at all, and one whose articles
+ * have not yet earned indexing (§50.3) serves an index with no shards in it. Neither is
+ * worth a crawler's time, and pointing at either teaches it that this site's directives are
  * unreliable. One small R2 read per hour of edge cache buys the difference.
  */
 export const GET: APIRoute = async () => {
-  const built = (await assets.get(INDEX_KEY)) !== null;
+  const index = await assets.get(INDEX_KEY);
+  const built = index !== null && index.includes("<sitemap>");
 
   return new Response(
     [
