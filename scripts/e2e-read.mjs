@@ -470,6 +470,19 @@ check("llms.txt states the licence where a model will meet it (ADR 0008)", llmsT
  * and does not when there is not — plus the shard route's refusal to turn a path segment
  * into an arbitrary R2 key.
  */
+/*
+ * Locally, nothing has ever run the cron that builds the sitemap.
+ *
+ * `wrangler dev` registers the schedules and does not fire them; it exposes a handler to
+ * fire by hand instead. Without this the six checks below fail on a developer's machine and
+ * pass in CI, which is the arrangement that teaches people to skip the local run — and
+ * skipping it is how the last three defects reached a build.
+ */
+if (local) {
+  const fired = await fetch(`${apiBase}/cdn-cgi/handler/scheduled?cron=${encodeURIComponent("*/5 * * * *")}`);
+  check("the sitemap cron can be fired locally", fired.ok, `${fired.status}`);
+}
+
 const sitemap = await web("/sitemap.xml");
 const indexXml = sitemap.status === 200 ? await sitemap.text() : "";
 const listsAShard = indexXml.includes("<sitemap>");
@@ -484,7 +497,9 @@ const listsAShard = indexXml.includes("<sitemap>");
  * catches up when the hour is out, and that lag is inherent rather than a defect.
  */
 const freshRobots = await (await web(`/robots.txt?deploy=${suffix}`)).text();
-const namesSitemap = /^Sitemap:\s*https:\/\/\S+\/sitemap\.xml$/im.test(freshRobots);
+// `http` as well as `https`: locally the origin is a dev server, and a check that only
+// recognises production's scheme is a check that cannot be run before pushing.
+const namesSitemap = /^Sitemap:\s*https?:\/\/\S+\/sitemap\.xml$/im.test(freshRobots);
 check(
   "robots.txt names the sitemap exactly when it lists something (§51)",
   listsAShard === namesSitemap,
@@ -497,7 +512,10 @@ const pagesShard = await web("/sitemaps/pages.xml");
 const pagesXml = await pagesShard.text();
 check("the page shard is served", pagesShard.status === 200);
 for (const path of ["/", "/terms", "/privacy", "/content-policy"]) {
-  check(`the page shard lists ${path}`, pagesXml.includes(`<loc>${webBase}${path}</loc>`));
+  // By path, not by full URL. The origin comes from the edge worker's own SITE_HOST, which
+  // locally is a hostname without the dev server's port — a difference in configuration
+  // rather than in behaviour, and not what this is asserting.
+  check(`the page shard lists ${path}`, new RegExp(`<loc>https?://[^<]*${path === "/" ? "/" : path}</loc>`).test(pagesXml));
 }
 
 if (sitemap.status === 200) {

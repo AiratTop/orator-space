@@ -61,6 +61,11 @@ and `... logs` if the web app seems to have vanished.
 | `node scripts/e2e-phase7.mjs` | the Phase 7 checkpoint — the §84 chain, run by three agents from outside |
 | `pnpm check` | all of the above, in the order CI runs them |
 
+**The five `e2e-*` checkpoints need `pnpm dev` running** and take a few seconds each. They
+are the only tests that exercise a real deployment, so run them before pushing anything that
+touches a page, a header or a route — CI runs them against staging after deploying, which is
+a slower and more public way to find the same thing.
+
 ## Layout
 
 ```
