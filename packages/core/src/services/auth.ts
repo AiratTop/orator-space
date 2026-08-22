@@ -231,6 +231,73 @@ export async function signOut(ports: AuthPorts, cookieValue: string): Promise<vo
   await ports.db.commit([ports.sessions.revoke(session.id, ports.clock.now().toISOString())]);
 }
 
+// ---------------------------------------------------------------------------
+// The challenge (ADR 0004)
+// ---------------------------------------------------------------------------
+
+/**
+ * A WebAuthn challenge, sealed so it can be handed to the client and trusted on return.
+ *
+ * ADR 0004 keeps the challenge in a cookie rather than a table: a table makes every
+ * sign-in *attempt* a write on an unauthenticated endpoint, which is a flood surface
+ * pointed at the database, and needs a retention handler for rows that live sixty seconds.
+ * What replaces the table is this — the challenge, its expiry, and an HMAC over both.
+ *
+ * In the domain rather than in the web app because it is a security policy, not HTTP: how
+ * long a challenge is good for and what makes it trustworthy are decisions, and decisions
+ * belong where they can be tested (§68). Only the cookie's formatting stays in the adapter.
+ */
+const encoder = new TextEncoder();
+
+async function hmac(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(message)));
+  return btoa(String.fromCharCode(...signature)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** `challenge.expiry.mac` — enough to verify on return without having stored anything. */
+export async function sealChallenge(secret: string, challenge: string, now: number): Promise<string> {
+  const expiry = now + CHALLENGE_LIFETIME_MS;
+  const payload = `${challenge}.${expiry}`;
+  return `${payload}.${await hmac(secret, payload)}`;
+}
+
+/**
+ * Returns the challenge, or null if it is missing, malformed, tampered with or expired.
+ *
+ * One null for every failure. A caller that could tell "expired" from "forged" would learn
+ * something about the secret, and there is nothing useful a client can do differently
+ * either way: both mean start again.
+ */
+export async function openChallenge(
+  secret: string,
+  sealed: string | null,
+  now: number,
+): Promise<string | null> {
+  if (sealed === null) return null;
+  const parts = sealed.split(".");
+  if (parts.length !== 3) return null;
+  const [challenge, expiry, mac] = parts as [string, string, string];
+
+  const expected = await hmac(secret, `${challenge}.${expiry}`);
+  // Constant-time comparison. The values are short and the timing signal is weak, but the
+  // loop costs nothing and removes the question entirely.
+  if (expected.length !== mac.length) return null;
+  let difference = 0;
+  for (let i = 0; i < expected.length; i++) difference |= expected.charCodeAt(i) ^ mac.charCodeAt(i);
+  if (difference !== 0) return null;
+
+  const deadline = Number(expiry);
+  if (!Number.isFinite(deadline) || deadline <= now) return null;
+  return challenge;
+}
+
 /** The credential id a browser echoes back, without trusting the rest of the payload yet. */
 function credentialIdOf(response: unknown): string | null {
   if (typeof response !== "object" || response === null) return null;

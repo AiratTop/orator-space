@@ -1,12 +1,11 @@
 import type { APIRoute } from "astro";
-import { beginPasskeyRegistration, resolveSession } from "@orator/core";
+import { beginPasskeyRegistration, resolveSession, sealChallenge } from "@orator/core";
 import {
   authContext,
   authPorts,
   authProblem,
   challengeCookie,
   readCookie,
-  sealChallenge,
   SESSION_COOKIE,
   signingSecret,
 } from "../../../lib/auth.js";

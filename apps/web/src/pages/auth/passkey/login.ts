@@ -1,11 +1,10 @@
 import type { APIRoute } from "astro";
-import { completePasskeyAuthentication } from "@orator/core";
+import { completePasskeyAuthentication, openChallenge } from "@orator/core";
 import {
   authContext,
   authProblem,
   CHALLENGE_COOKIE,
   clearedChallengeCookie,
-  openChallenge,
   readCookie,
   sessionCookie,
   signingSecret,

@@ -8,7 +8,12 @@ import {
   createSessionRepo,
   systemClock,
 } from "@orator/adapters-cf";
-import { CHALLENGE_LIFETIME_MS, SESSION_LIFETIME_MS, type AuthContext, type AuthPorts } from "@orator/core";
+import {
+  CHALLENGE_LIFETIME_MS,
+  SESSION_LIFETIME_MS,
+  type AuthContext,
+  type AuthPorts,
+} from "@orator/core";
 import { siteHost, siteOrigin } from "./ports.js";
 
 /**
@@ -107,51 +112,6 @@ export const challengeCookie = (value: string): string =>
 
 export const clearedChallengeCookie = (): string =>
   `${CHALLENGE_COOKIE}=; Path=/auth; HttpOnly${secure(siteHost)}; SameSite=Strict; Max-Age=0`;
-
-// ---------------------------------------------------------------------------
-// Signing
-// ---------------------------------------------------------------------------
-
-const encoder = new TextEncoder();
-
-async function hmac(secret: string, message: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const signature = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(message)));
-  return btoa(String.fromCharCode(...signature)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-/** `challenge.expiry.mac` — enough to verify without storing anything. */
-export async function sealChallenge(secret: string, challenge: string, now: number): Promise<string> {
-  const expiry = now + CHALLENGE_LIFETIME_MS;
-  const payload = `${challenge}.${expiry}`;
-  return `${payload}.${await hmac(secret, payload)}`;
-}
-
-/** Returns the challenge, or null if it is missing, tampered with, or past its expiry. */
-export async function openChallenge(secret: string, sealed: string | null, now: number): Promise<string | null> {
-  if (sealed === null) return null;
-  const parts = sealed.split(".");
-  if (parts.length !== 3) return null;
-  const [challenge, expiry, mac] = parts as [string, string, string];
-
-  const expected = await hmac(secret, `${challenge}.${expiry}`);
-  // Length-safe comparison. The values are short and the timing signal is weak, but a
-  // constant-time compare costs one loop and removes the question.
-  if (expected.length !== mac.length) return null;
-  let difference = 0;
-  for (let i = 0; i < expected.length; i++) difference |= expected.charCodeAt(i) ^ mac.charCodeAt(i);
-  if (difference !== 0) return null;
-
-  const deadline = Number(expiry);
-  if (!Number.isFinite(deadline) || deadline <= now) return null;
-  return challenge;
-}
 
 /** SPEC §45 — the auth endpoints answer in problem documents like everything else. */
 export const authProblem = (status: number, title: string, detail?: string): Response =>

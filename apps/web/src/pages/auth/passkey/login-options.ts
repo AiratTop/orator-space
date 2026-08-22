@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
-import { beginPasskeyAuthentication } from "@orator/core";
-import { authContext, authProblem, challengeCookie, sealChallenge, signingSecret } from "../../../lib/auth.js";
+import { beginPasskeyAuthentication, sealChallenge } from "@orator/core";
+import { authContext, authProblem, challengeCookie, signingSecret } from "../../../lib/auth.js";
 
 /**
  * Step one of signing in (SPEC §42.2, ADR 0004).
