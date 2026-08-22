@@ -82,7 +82,7 @@ const SOURCE = new Set([
   "principals", "human_accounts", "agents", "agent_keys", "api_tokens",
   "webauthn_credentials", "sessions", "articles", "revisions", "comments",
   "edges", "follows", "topics", "article_topics", "media", "events",
-  "audit_log", "reports", "moderation_actions",
+  "audit_log", "reports", "moderation_actions", "sitemap_shards",
   // Cloudflare's record of which migrations have run. Restoring without it makes the new
   // database re-apply every migration over a schema that already has them.
   "d1_migrations",

@@ -8,7 +8,7 @@
   "workers_dev": false,
 
   // Placeholder bindings for `wrangler dev`; every environment overrides them below.
-  "vars": { "ENVIRONMENT": "local" },
+  "vars": { "ENVIRONMENT": "local", "SITE_HOST": "localhost" },
   "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9", "migrations_dir": "../../packages/db/migrations" }],
   "r2_buckets": [
     { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
@@ -65,20 +65,21 @@
 
   "triggers": {
     /*
-     * Two schedules, and `event.cron` says which fired.
+     * Three schedules, and `event.cron` says which fired.
      *
      * Every minute is the outbox safety net (§35.2) — a direct send that was dropped costs
-     * a minute of delay rather than sitting there. Retention (§23.4) is daily and at an
-     * odd time: nothing about it is urgent, and a cleanup that runs on the hour competes
-     * with every other cron on the platform for the same D1.
+     * a minute of delay rather than sitting there. Every five minutes rebuilds whichever
+     * sitemap shards were marked dirty, which is §51's batch. Retention (§23.4) is daily
+     * and at an odd time: nothing about it is urgent, and a cleanup that runs on the hour
+     * competes with every other cron on the platform for the same D1.
      */
-    "crons": ["* * * * *", "17 4 * * *"]
+    "crons": ["* * * * *", "*/5 * * * *", "17 4 * * *"]
   },
 
   "env": {
     "staging": {
       "name": "orator-edge-staging",
-      "vars": { "ENVIRONMENT": "staging" },
+      "vars": { "ENVIRONMENT": "staging", "SITE_HOST": "staging.orator.space" },
       "routes": [
         { "pattern": "api-staging.orator.space", "custom_domain": true },
         { "pattern": "mcp-staging.orator.space", "custom_domain": true },
@@ -110,13 +111,13 @@
         ]
       },
       "triggers": {
-    "crons": ["* * * * *", "17 4 * * *"]
+    "crons": ["* * * * *", "*/5 * * * *", "17 4 * * *"]
   }
     },
 
     "production": {
       "name": "orator-edge",
-      "vars": { "ENVIRONMENT": "production" },
+      "vars": { "ENVIRONMENT": "production", "SITE_HOST": "orator.space" },
       "routes": [
         { "pattern": "api.orator.space", "custom_domain": true },
         { "pattern": "mcp.orator.space", "custom_domain": true },
@@ -148,7 +149,7 @@
         ]
       },
       "triggers": {
-    "crons": ["* * * * *", "17 4 * * *"]
+    "crons": ["* * * * *", "*/5 * * * *", "17 4 * * *"]
   }
     }
   }

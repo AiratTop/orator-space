@@ -51,3 +51,4 @@ export * from "./topics.js";
 export * from "./media.js";
 export * from "./moderation.js";
 export * from "./passkeys.js";
+export * from "./sitemap.js";

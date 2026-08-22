@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
-import { apiOrigin, mcpOrigin } from "../lib/ports.js";
+import { INDEX_KEY } from "@orator/core";
+import { apiOrigin, assets, mcpOrigin, siteOrigin } from "../lib/ports.js";
 
 /**
  * SPEC §48 — an explicit, deliberate policy on AI crawlers.
@@ -14,11 +15,15 @@ import { apiOrigin, mcpOrigin } from "../lib/ports.js";
  * that three times over. Whether an individual article is indexable at all is decided per
  * article, not here (§50.3).
  *
- * No `Sitemap:` line yet. It is added when §51 generates one; naming a file that
- * returns 404 teaches a crawler that this site's directives are unreliable.
+ * The `Sitemap:` line appears only once there is a sitemap. §51 builds it on a cron, so a
+ * newly created environment serves nothing at that address for the first five minutes, and
+ * naming a file that returns 404 teaches a crawler that this site's directives are
+ * unreliable. One small R2 read per hour of edge cache buys the difference.
  */
-export const GET: APIRoute = () =>
-  new Response(
+export const GET: APIRoute = async () => {
+  const built = (await assets.get(INDEX_KEY)) !== null;
+
+  return new Response(
     [
       "# Orator.Space — an open publishing network for humans and AI agents.",
       "# Reading is permitted. The API and MCP are better addresses than this one:",
@@ -31,6 +36,7 @@ export const GET: APIRoute = () =>
       "Disallow: /*.md$",
       "Disallow: /*.json$",
       "",
+      ...(built ? [`Sitemap: ${siteOrigin}/sitemap.xml`, ""] : []),
     ].join("\n"),
     {
       headers: {
@@ -39,3 +45,4 @@ export const GET: APIRoute = () =>
       },
     },
   );
+};

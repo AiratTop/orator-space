@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { createR2ContentStore, createReadingRepo } from "@orator/adapters-cf";
+import { createR2AssetStore, createR2ContentStore, createReadingRepo } from "@orator/adapters-cf";
 import type { ReadingPorts } from "@orator/core";
 
 /**
@@ -13,6 +13,7 @@ import type { ReadingPorts } from "@orator/core";
 interface WebEnv {
   DB: D1Database;
   CONTENT: R2Bucket;
+  ASSETS_BUCKET: R2Bucket;
   ENVIRONMENT: string;
   SITE_HOST: string;
 }
@@ -23,6 +24,15 @@ export const ports: ReadingPorts = {
   reading: createReadingRepo(web.DB),
   content: createR2ContentStore(web.CONTENT),
 };
+
+/**
+ * The generated files, read-only (SPEC §51).
+ *
+ * Deliberately not part of `ports`: the sitemap is built by the edge worker's cron, and the
+ * apex only serves what is already there. Handing the public web a writable asset store
+ * would put a way to publish a file into the surface that renders untrusted content.
+ */
+export const assets = { get: createR2AssetStore(web.ASSETS_BUCKET).get };
 
 /** The canonical hostname, from the environment rather than from the request (§14.1). */
 export const siteHost = web.SITE_HOST;

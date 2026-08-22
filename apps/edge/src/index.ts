@@ -24,6 +24,8 @@ import {
   applyClosureDisposition,
   drainOutbox,
   evaluateIndexability,
+  markArticleShard,
+  rebuildSitemap,
   reindexArticle,
   runRetention,
   screenArticle,
@@ -31,6 +33,8 @@ import {
 
 export interface Env {
   ENVIRONMENT: string;
+  /** The public site's hostname (ADR 0003). The sitemap is a list of its URLs (§51). */
+  SITE_HOST: string;
   DB: D1Database;
   CONTENT: R2Bucket;
   MEDIA: R2Bucket;
@@ -368,7 +372,24 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
        * writes nothing.
        */
       const indexing = await evaluateIndexability(ports, event.aggregate_id);
-      log(outcome, { moderation: screened, indexable: indexing.indexable, why: indexing.reason });
+
+      /*
+       * §51 — the event marks a shard; it does not build one.
+       *
+       * After indexability, because that verdict is what decides whether this article
+       * belongs in a sitemap at all, and §50.3 says a change to `indexable` triggers a
+       * sitemap update. Marking is unconditional rather than conditional on the verdict
+       * having moved: an article that just became unindexable has to leave the file it is
+       * currently in, which is the same shard and the same rebuild.
+       */
+      const shard = await markArticleShard(ports, event.aggregate_id);
+
+      log(outcome, {
+        moderation: screened,
+        indexable: indexing.indexable,
+        why: indexing.reason,
+        sitemap_shard: shard,
+      });
       return;
     }
     /**
@@ -468,6 +489,30 @@ export default {
      * rather than on a stored timestamp keeps the schedule in one place — the configuration
      * that declares it.
      */
+    /*
+     * SPEC §51 — the sitemap, on its own schedule.
+     *
+     * Five minutes, and a dirty check first, which together are §51's rationale
+     * implemented: rebuilding on every event means rewriting the same file continually at
+     * any real publishing rate, and rebuilding on demand means reading the whole table
+     * whenever a crawler asks. A quiet five minutes costs one indexed query against a table
+     * with one row per month.
+     */
+    if (event.cron === "*/5 * * * *") {
+      const build = await rebuildSitemap(ports, `https://${env.SITE_HOST}`);
+      if (build.shardsBuilt > 0) {
+        console.log(JSON.stringify({ level: "info", task: "sitemap.rebuild", ...build }));
+      }
+      if (build.overflowing.length > 0) {
+        // §51 caps a shard at 50,000 URLs and ADR 0009's answer is a day-level key. Until
+        // that is needed, a month at the cap is a sitemap silently missing articles.
+        console.error(
+          JSON.stringify({ level: "error", task: "sitemap.overflow", shards: build.overflowing }),
+        );
+      }
+      return;
+    }
+
     if (event.cron === "17 4 * * *") {
       const report = await runRetention(ports);
       console.log(JSON.stringify({ level: "info", task: "retention", ...report }));

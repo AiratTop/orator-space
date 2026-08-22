@@ -50,6 +50,8 @@ import {
   type MediaRecord,
   type MediaRepo,
   type MediaStore,
+  type SitemapRepo,
+  type AssetStore,
 } from "../ports/index.js";
 import { SNIFF_BYTES } from "../media/sniff.js";
 import type { Ports } from "../services/context.js";
@@ -92,6 +94,9 @@ export interface MemoryState {
   /** The bytes, keyed the same way the R2 adapter keys them. */
   mediaBytes: Map<string, Uint8Array>;
   articleTopics: Map<string, Set<string>>;
+  /** SPEC §51 — the dirty flags, and the built files keyed as R2 keys them. */
+  sitemapShards: Map<string, { dirty: boolean; urlCount: number; builtAt: string | null }>;
+  assets: Map<string, string>;
   edges: Map<string, EdgeRecord>;
   follows: Set<string>;
 }
@@ -127,6 +132,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     sessions: [],
     reports: [],
     moderationActions: [],
+    sitemapShards: new Map(),
+    assets: new Map(),
     media: new Map(),
     mediaBytes: new Map(),
     articleTopics: new Map(),
@@ -1301,6 +1308,68 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+  /**
+   * SPEC §51 — the shard table and the asset bucket, in memory.
+   *
+   * `articlesIn` repeats the adapter's eligibility conditions rather than sharing them,
+   * which is the one duplication the doubles accept: a test that passes here and fails
+   * against D1 is worth more than a test that cannot tell the two apart.
+   */
+  const sitemap: SitemapRepo = {
+    async markDirty(shard) {
+      const existing = state.sitemapShards.get(shard);
+      state.sitemapShards.set(shard, {
+        dirty: true,
+        urlCount: existing?.urlCount ?? 0,
+        builtAt: existing?.builtAt ?? null,
+      });
+    },
+    async dirtyShards(limit) {
+      return [...state.sitemapShards.entries()]
+        .filter(([, value]) => value.dirty)
+        .map(([shard]) => shard)
+        .sort((a, b) => b.localeCompare(a))
+        .slice(0, limit);
+    },
+    async articlesIn(shard, limit) {
+      return [...state.articles.values()]
+        .filter(
+          (article) =>
+            article.publishedAt !== null &&
+            article.publishedAt.slice(0, 7) === shard &&
+            article.status === "published" &&
+            article.visibility === "public" &&
+            article.indexable &&
+            article.canonicalUrl === null,
+        )
+        .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+        .slice(0, limit)
+        .map((article) => ({
+          id: article.id,
+          slug: article.slug,
+          publishedAt: article.publishedAt!,
+          updatedAt: article.updatedAt,
+        }));
+    },
+    async markBuilt(shard, urlCount, at) {
+      state.sitemapShards.set(shard, { dirty: false, urlCount, builtAt: at });
+    },
+    async shards() {
+      return [...state.sitemapShards.entries()]
+        .map(([shard, value]) => ({ shard, urlCount: value.urlCount, builtAt: value.builtAt }))
+        .sort((a, b) => b.shard.localeCompare(a.shard));
+    },
+  };
+
+  const assets: AssetStore = {
+    async put(key, body) {
+      state.assets.set(key, body);
+    },
+    async get(key) {
+      return state.assets.get(key) ?? null;
+    },
+  };
+
   return {
     db: database,
     principals,
@@ -1324,6 +1393,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     media,
     mediaStore,
     moderation,
+    sitemap,
+    assets,
     events,
     idempotency,
     content: createMemoryContentStore(),

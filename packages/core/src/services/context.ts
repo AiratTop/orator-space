@@ -1,6 +1,7 @@
 import { ErrorType, type ErrorTypeName } from "@orator/protocol";
 import type {
   ArticleRepo,
+  AssetStore,
   AuditRepo,
   Clock,
   ContentStore,
@@ -21,6 +22,7 @@ import type {
   SessionRepo,
   ReadingRepo,
   SearchIndex,
+  SitemapRepo,
   SocialRepo,
   TokenRepo,
   TopicRepo,
@@ -53,6 +55,9 @@ export interface Ports {
   mediaStore: MediaStore;
   /** SPEC §61 — report intake. */
   moderation: ModerationRepo;
+  /** SPEC §51 — which shards need rebuilding, and where the built files go. */
+  sitemap: SitemapRepo;
+  assets: AssetStore;
   /**
    * SPEC §9.2, §23.5 — browser credentials and sessions.
    *

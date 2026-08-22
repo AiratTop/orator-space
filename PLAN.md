@@ -772,7 +772,7 @@ This is where the entire `[L]` level is closed.
 [x] Terms, Content Policy and Privacy published — CC BY 4.0 for content, ADR 0008
 [x] CODE_OF_CONDUCT.md and CONTRIBUTING.md (§82) — all four documents are present
 [x] robots.txt and llms.txt, delivered in Phase 4
-[ ] the sitemap: shards built into `assets`, served from the apex
+[x] the sitemap: shards built into `assets`, served from the apex — one shard per month, ADR 0009
 ```
 
 **Public registration does not open until this list is closed in full.**

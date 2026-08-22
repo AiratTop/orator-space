@@ -14,3 +14,4 @@ export * from "./indexing.js";
 export * from "./retention.js";
 export * from "./closure.js";
 export * from "./health.js";
+export * from "./sitemap.js";
