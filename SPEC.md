@@ -1737,6 +1737,30 @@ Without this clarification the platform is not legally operable in the EU.
 **MUST.** Every table with a bounded retention has a corresponding Cron handler. A table
 with no cleanup handler is a future incident.
 
+**MUST — the pass is bounded, not "everything older than".** The first run against a table
+nobody has ever cleaned is the dangerous one: an unbounded `DELETE` inside a cron invocation
+with a wall clock either times out or holds the database while it works. Repeated small
+passes drain the same backlog, and a pass that does not finish is retried on the next
+schedule.
+
+**MUST — the audit log is pseudonymised, never deleted.** It answers "was this account
+compromised, and what did the attacker do" long after anybody remembers the incident.
+What stops being held is the material that makes a row about a person: the hashed address,
+the user agent, and the link to a principal who may since have closed their account (§23.5).
+The action, the target and the outcome stay.
+
+**MUST — an undelivered outbox row is not a backlog.** Only rows that were delivered are
+eligible. Deleting a pending one would lose the event the transaction was written to
+guarantee (§35.1).
+
+**MUST — for media, the object goes before the row.** §32.2 makes an object with no row the
+harmless failure: it is invisible and gets collected. A row with no object promises bytes
+nobody can fetch. A crash between the two steps leaves the row `pending` for the next pass.
+
+**SHOULD — retention runs on its own schedule.** The outbox drain is a safety net and wants
+to run constantly; retention touches four tables and wants to run rarely, at a time when
+nothing else does.
+
 ### 23.5. Account closure
 
 **MUST.** Closing a person's account is a distinct operation, not a matter of deleting
@@ -5110,6 +5134,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 96 | The built-in provider depends on nothing and never blocks; a flag raises a report | §61, §58.2 |
 | 97 | The near-duplicate threshold is 7 bits, set by measuring real articles, with 8 bands | §60.1 |
 | 98 | `indexable` records why, and is re-evaluated on every article event rather than once | §50.3 |
+| 99 | Retention passes are bounded per run; the first one is the dangerous one | §23.4 |
+| 100 | The audit log is pseudonymised after twelve months, never deleted | §23.4, §62 |
 
 ## 80. Open decisions
 

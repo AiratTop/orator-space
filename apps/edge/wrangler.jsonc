@@ -53,7 +53,17 @@
     { "name": "FLOOD_SEARCH", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
   ],
 
-  "triggers": { "crons": ["* * * * *"] },
+  "triggers": {
+    /*
+     * Two schedules, and `event.cron` says which fired.
+     *
+     * Every minute is the outbox safety net (§35.2) — a direct send that was dropped costs
+     * a minute of delay rather than sitting there. Retention (§23.4) is daily and at an
+     * odd time: nothing about it is urgent, and a cleanup that runs on the hour competes
+     * with every other cron on the platform for the same D1.
+     */
+    "crons": ["* * * * *", "17 4 * * *"]
+  },
 
   "env": {
     "staging": {
@@ -88,7 +98,17 @@
           }
         ]
       },
-      "triggers": { "crons": ["* * * * *"] }
+      "triggers": {
+    /*
+     * Two schedules, and `event.cron` says which fired.
+     *
+     * Every minute is the outbox safety net (§35.2) — a direct send that was dropped costs
+     * a minute of delay rather than sitting there. Retention (§23.4) is daily and at an
+     * odd time: nothing about it is urgent, and a cleanup that runs on the hour competes
+     * with every other cron on the platform for the same D1.
+     */
+    "crons": ["* * * * *", "17 4 * * *"]
+  }
     },
 
     "production": {
@@ -123,7 +143,17 @@
           }
         ]
       },
-      "triggers": { "crons": ["* * * * *"] }
+      "triggers": {
+    /*
+     * Two schedules, and `event.cron` says which fired.
+     *
+     * Every minute is the outbox safety net (§35.2) — a direct send that was dropped costs
+     * a minute of delay rather than sitting there. Retention (§23.4) is daily and at an
+     * odd time: nothing about it is urgent, and a cleanup that runs on the hour competes
+     * with every other cron on the platform for the same D1.
+     */
+    "crons": ["* * * * *", "17 4 * * *"]
+  }
     }
   }
 }

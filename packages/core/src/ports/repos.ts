@@ -147,6 +147,16 @@ export interface AuditEntry {
 
 export interface AuditRepo {
   record(entry: AuditEntry): PendingWrite;
+  /**
+   * SPEC §23.4 — twelve months, then pseudonymised. Not deleted.
+   *
+   * The audit log answers "was this account compromised, and what did the attacker do" long
+   * after anybody remembers the incident, so deleting it would remove the only record that
+   * could. What it must stop holding is the material that identifies a person: the hashed
+   * address, the user agent, and the link to a principal who may since have closed their
+   * account (§23.5). The action, the target and the outcome stay.
+   */
+  pseudonymiseBefore(cutoff: string, limit: number): Promise<number>;
 }
 
 /** SPEC §35 — written in the same commit as the change it describes. */
@@ -173,6 +183,15 @@ export interface OutboxRepo {
   markFailed(id: string, error: string, nextAttemptAt: string): PendingWrite;
   /** Depth and age of the backlog — the alert that catches a stalled pipeline (§66.4). */
   pendingStats(): Promise<{ count: number; oldestCreatedAt: string | null }>;
+  /**
+   * SPEC §23.4 — delivered rows, after seven days.
+   *
+   * Bounded per call rather than "everything older than": D1 has no statement timeout worth
+   * relying on, and a first run against a table nobody has ever cleaned would be one
+   * enormous DELETE inside a cron invocation with a wall clock. Repeated small passes drain
+   * the same backlog and each one either finishes or is retried a minute later.
+   */
+  deleteSentBefore(cutoff: string, limit: number): Promise<number>;
 }
 
 /**

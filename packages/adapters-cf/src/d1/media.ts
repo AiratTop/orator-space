@@ -40,6 +40,21 @@ const toRecord = (row: Row): MediaRecord => ({
 
 export function createMediaRepo(db: D1Database): MediaRepo {
   return {
+    async listStalePending(cutoff, limit) {
+      const { results } = await db
+        .prepare(
+          `SELECT id FROM media WHERE status = 'pending' AND created_at < ? ORDER BY id LIMIT ?`,
+        )
+        .bind(cutoff, limit)
+        .all<{ id: string }>();
+      return results.map((row) => row.id);
+    },
+
+    deleteRecords(ids) {
+      const placeholders = ids.map(() => "?").join(", ");
+      return asWrite(db.prepare(`DELETE FROM media WHERE id IN (${placeholders})`).bind(...ids));
+    },
+
     async findById(id: string): Promise<MediaRecord | null> {
       const row = await db.prepare(`SELECT * FROM media WHERE id = ?`).bind(id).first<Row>();
       return row === null ? null : toRecord(row);

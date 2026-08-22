@@ -50,6 +50,16 @@ export interface MediaRepo {
    */
   markReady(id: string, stored: StoredMedia): PendingWrite;
   markRejected(id: string, at: string): PendingWrite;
+  /**
+   * SPEC §23.4, §23.4 — `pending` rows with no bytes, after twenty-four hours.
+   *
+   * §21.1 makes the upload a second call, so a caller that creates a record and never sends
+   * anything leaves a row pointing at nothing. Returns the ids rather than a count: each one
+   * may have a partial object in R2 that has to go with it, and the caller is the only thing
+   * that can reach the bucket.
+   */
+  listStalePending(cutoff: string, limit: number): Promise<string[]>;
+  deleteRecords(ids: readonly string[]): PendingWrite;
 }
 
 /** What a stream turned out to contain, once it had all gone past. */

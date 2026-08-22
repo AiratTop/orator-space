@@ -535,6 +535,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
   };
 
   const idempotency: IdempotencyRepo = {
+    async deleteBefore(cutoff, limit) {
+      const stale = [...state.idempotency.entries()]
+        .filter(([, record]) => record.createdAt < cutoff)
+        .slice(0, limit);
+      for (const [key] of stale) state.idempotency.delete(key);
+      return stale.length;
+    },
     async find(principalId, key) {
       return state.idempotency.get(`${principalId}:${key}`) ?? null;
     },
@@ -570,11 +577,35 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
-  const audit: AuditRepo = { record: (entry) => asWrite(() => void state.audit.push(entry)) };
+  const audit: AuditRepo = {
+    async pseudonymiseBefore(cutoff, limit) {
+      const stale = state.audit
+        .filter(
+          (entry) =>
+            entry.createdAt < cutoff &&
+            (entry.ipHash !== null || entry.userAgent !== null || entry.actorPrincipalId !== null),
+        )
+        .slice(0, limit);
+      for (const entry of stale) {
+        entry.ipHash = null;
+        entry.userAgent = null;
+        entry.actorPrincipalId = null;
+      }
+      return stale.length;
+    }, record: (entry) => asWrite(() => void state.audit.push(entry)) };
   const sentOutbox = new Set<string>();
   const outboxMeta = new Map<string, { attempts: number; nextAttemptAt: string | null }>();
 
   const outbox: OutboxRepo = {
+    async deleteSentBefore(cutoff, limit) {
+      // `sentOutbox` is where this double records delivery; the D1 adapter uses a status
+      // column. Either way, only a row that was delivered is eligible (§23.4).
+      const stale = state.outbox
+        .filter((entry) => sentOutbox.has(entry.id) && entry.createdAt < cutoff)
+        .slice(0, limit);
+      for (const entry of stale) state.outbox.splice(state.outbox.indexOf(entry), 1);
+      return stale.length;
+    },
     enqueue: (entry) =>
       asWrite(() => {
         state.outbox.push(entry);
@@ -984,6 +1015,19 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
 
 
   const media: MediaRepo = {
+    async listStalePending(cutoff, limit) {
+      return [...state.media.values()]
+        .filter((record) => record.status === "pending" && record.createdAt < cutoff)
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit)
+        .map((record) => record.id);
+    },
+    deleteRecords(ids) {
+      return asWrite(() => {
+        for (const id of ids) state.media.delete(id);
+        return ids.length;
+      });
+    },
     async findById(id) {
       return state.media.get(id) ?? null;
     },

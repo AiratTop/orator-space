@@ -105,6 +105,18 @@ interface IdempotencyRow {
 
 export function createIdempotencyRepo(db: D1Database): IdempotencyRepo {
   return {
+    async deleteBefore(cutoff, limit) {
+      const { meta } = await db
+        .prepare(
+          `DELETE FROM idempotency_keys WHERE rowid IN (
+             SELECT rowid FROM idempotency_keys WHERE created_at < ? LIMIT ?
+           )`,
+        )
+        .bind(cutoff, limit)
+        .run();
+      return meta.changes ?? 0;
+    },
+
     async find(principalId, key) {
       const row = await db
         .prepare(`SELECT * FROM idempotency_keys WHERE principal_id = ? AND key = ?`)

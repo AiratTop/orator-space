@@ -19,7 +19,7 @@ import { mediaRoutes } from "./routes/media.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { moderationRoutes } from "./routes/moderation.js";
 import { portsFor } from "./context.js";
-import { drainOutbox, evaluateIndexability, reindexArticle, screenArticle } from "@orator/core";
+import { drainOutbox, evaluateIndexability, reindexArticle, runRetention, screenArticle } from "@orator/core";
 
 export interface Env {
   ENVIRONMENT: string;
@@ -370,8 +370,24 @@ export default {
    * Cron cannot run more often than once a minute (ADR 0001), so relying on it alone
    * would make every dropped direct send cost a minute of pipeline delay.
    */
-  async scheduled(_event: ScheduledController, env: Env): Promise<void> {
+  async scheduled(event: ScheduledController, env: Env): Promise<void> {
     const ports = portsFor(env);
+
+    /*
+     * SPEC §23.4 — the daily pass, on its own schedule.
+     *
+     * Separated from the minute trigger because the two have opposite requirements. The
+     * drain is a safety net and wants to run constantly; retention touches four tables and
+     * wants to run rarely, at a time when nothing else does. Branching on `event.cron`
+     * rather than on a stored timestamp keeps the schedule in one place — the configuration
+     * that declares it.
+     */
+    if (event.cron === "17 4 * * *") {
+      const report = await runRetention(ports);
+      console.log(JSON.stringify({ level: "info", task: "retention", ...report }));
+      return;
+    }
+
     const result = await drainOutbox(ports, 25);
     if (result.delivered > 0 || result.failed > 0 || result.remaining > 0) {
       console.log(JSON.stringify({ level: "info", task: "outbox.drain", ...result }));

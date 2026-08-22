@@ -218,6 +218,8 @@ export interface IdempotencyRepo {
   claim(record: Omit<IdempotencyRecord, "status" | "responseStatus" | "responseJson">): PendingWrite;
   complete(principalId: string, key: string, status: number, body: string): PendingWrite;
   release(principalId: string, key: string): PendingWrite;
+  /** SPEC §23.4 — twenty-four hours. A key older than that protects nothing. */
+  deleteBefore(cutoff: string, limit: number): Promise<number>;
 }
 
 /** SPEC §20 — notifications and public activity. */

@@ -12,6 +12,31 @@ import { asWrite } from "./database.js";
 /** SPEC §62 — restricted, security-relevant, never the public activity feed. */
 export function createAuditRepo(db: D1Database): AuditRepo {
   return {
+    /**
+     * SPEC §23.4 — the identifying columns are cleared; the record is not.
+     *
+     * `ip_hash` and `user_agent` are what make a row about a person rather than about an
+     * action, and `actor_principal_id` is a foreign key into a table an account closure may
+     * have emptied (§23.5). What stays is what an investigation needs: what happened, to
+     * what, and whether it succeeded.
+     */
+    async pseudonymiseBefore(cutoff, limit) {
+      const { meta } = await db
+        .prepare(
+          `UPDATE audit_log
+              SET ip_hash = NULL, user_agent = NULL, actor_principal_id = NULL
+            WHERE id IN (
+              SELECT id FROM audit_log
+               WHERE created_at < ? AND (ip_hash IS NOT NULL OR user_agent IS NOT NULL
+                                          OR actor_principal_id IS NOT NULL)
+               LIMIT ?
+            )`,
+        )
+        .bind(cutoff, limit)
+        .run();
+      return meta.changes ?? 0;
+    },
+
     record(entry: AuditEntry) {
       return asWrite(
         db
@@ -58,6 +83,18 @@ interface PendingRow {
  */
 export function createOutboxRepo(db: D1Database): OutboxRepo {
   return {
+    async deleteSentBefore(cutoff, limit) {
+      const { meta } = await db
+        .prepare(
+          `DELETE FROM outbox WHERE id IN (
+             SELECT id FROM outbox WHERE status = 'sent' AND created_at < ? LIMIT ?
+           )`,
+        )
+        .bind(cutoff, limit)
+        .run();
+      return meta.changes ?? 0;
+    },
+
     enqueue(entry: OutboxEntry) {
       return asWrite(
         db
