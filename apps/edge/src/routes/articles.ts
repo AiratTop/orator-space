@@ -71,6 +71,7 @@ articleRoutes.post("/v1/articles", async (c) => {
       ...(parsed.data.authorship_disclosure === undefined
         ? {}
         : { authorshipDisclosure: parsed.data.authorship_disclosure }),
+      ...(parsed.data.canonical_url === undefined ? {} : { canonicalUrl: parsed.data.canonical_url }),
       ...(parsed.data.metadata === undefined ? {} : { metadata: parsed.data.metadata }),
     }),
   );
@@ -137,6 +138,8 @@ articleRoutes.post("/v1/articles/:id/publish", async (c) => {
       ...(parsed.data.revision_id === undefined ? {} : { revisionId: parsed.data.revision_id }),
       signature: parsed.data.signature ?? null,
       signatureKeyId: parsed.data.signature_key_id ?? null,
+      // §15.1 — an imported article carries the date it was first published elsewhere.
+      publishedAt: parsed.data.published_at ?? null,
     }),
   );
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);

@@ -46,6 +46,8 @@ export interface CreateArticleInput {
   language?: string;
   visibility?: "public" | "unlisted" | "private";
   authorshipDisclosure?: Disclosure;
+  /** SPEC §15.1 — the primary publication's address, when it is not this one. */
+  canonicalUrl?: string | null;
   metadata?: Record<string, unknown>;
 }
 
@@ -101,6 +103,7 @@ export async function createArticle(
       language: input.language ?? "en",
       authorshipDisclosure: resolveDisclosure(actor.kind, input.authorshipDisclosure),
       visibility: input.visibility ?? "public",
+      canonicalUrl: input.canonicalUrl ?? null,
       createdAt,
     }),
     ctx.ports.articles.insertRevision({
@@ -234,6 +237,8 @@ export async function createRevision(
 export interface PublishInput {
   /** Defaults to the current revision. */
   revisionId?: string;
+  /** SPEC §15.1 — the original publication date, when the article was published elsewhere first. */
+  publishedAt?: string | null;
   /** SPEC §8.4 — signed after the revision exists, because the server assigns its id. */
   signature?: string | null;
   signatureKeyId?: string | null;
@@ -273,18 +278,48 @@ export async function publishArticle(
   const writes = [];
   let signed = false;
 
-  const publishedAt = ctx.ports.clock.now().toISOString();
+  const now = ctx.ports.clock.now().toISOString();
+
+  /*
+   * The date the article claims, which is not always the moment this happened (§15.1).
+   *
+   * Import is a standing mode rather than a migration, and an imported article must carry
+   * the date it was first published. Everything else here stays on `now`: the signature is
+   * being made now, so key validity is judged now, and an event dated 2019 would land in
+   * the wrong place in an ordered journal (§20).
+   */
+  const publishedAt = input.publishedAt ?? now;
+  if (input.publishedAt !== undefined && input.publishedAt !== null) {
+    if (publishedAt > now) {
+      return fail(
+        ErrorType.ValidationFailed,
+        "A publication date cannot be in the future",
+        "The feed orders on this date (§37.1); a future one would sit at the head of every feed until the clock caught up.",
+      );
+    }
+    if (article.publishedAt !== null) {
+      // Refused rather than ignored. The column is filled once by design (§16.3), so
+      // accepting the field and discarding it would be a silent no-op on the one field an
+      // importer most wants to be sure of.
+      return fail(
+        ErrorType.Conflict,
+        "This article already has a publication date",
+        "published_at is set the first time an article is published and is not restamped.",
+      );
+    }
+  }
+
   const signature = input.signature ?? null;
   const signatureKeyId = input.signatureKeyId ?? null;
   if (signature !== null && signatureKeyId !== null) {
-    const verdict = await verifyRevisionSignature(ctx, article, revision, signature, signatureKeyId, publishedAt);
+    const verdict = await verifyRevisionSignature(ctx, article, revision, signature, signatureKeyId, now);
     if (!verdict.ok) return verdict;
     writes.push(ctx.ports.articles.attachSignature(revision.id, signature, signatureKeyId));
     signed = true;
   }
 
   writes.push(
-    ctx.ports.articles.publish(article.id, revision.id, publishedAt),
+    ctx.ports.articles.publish(article.id, revision.id, now, publishedAt),
     // Same transaction. A queue send after the commit is not atomic with it, and the gap
     // is silent: the article publishes and nothing downstream ever hears (§35.1).
     ctx.ports.outbox.enqueue({
@@ -301,7 +336,7 @@ export async function publishArticle(
         signed,
       },
       requestId: ctx.requestId,
-      createdAt: publishedAt,
+      createdAt: now,
     }),
     ctx.ports.events.insert({
       id: ctx.ports.ids.next(),
@@ -312,7 +347,10 @@ export async function publishArticle(
       audiencePrincipalId: null,
       visibility: "public",
       payload: { schema_version: SCHEMA_VERSION, title: revision.title },
-      createdAt: publishedAt,
+      // `now`, not the article's date. An imported article is published today whatever
+      // date it carries, and an event stamped 2019 would sort into the wrong place in a
+      // journal that is read by cursor (§20.5).
+      createdAt: now,
     }),
   );
 

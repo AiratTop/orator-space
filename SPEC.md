@@ -1126,10 +1126,29 @@ published_at           → the original publication date, not the import date
 Idempotency-Key        → a stable key derived from the source document (§34.1)
 ```
 
+**MUST — where each is set.** `canonical_url` and `authorship_disclosure` are accepted by
+`POST /v1/articles`, not only by a later `PATCH`: a two-call sequence leaves a window in
+which the copy exists without its canonical, competing with the original. `published_at` is
+accepted by `POST /v1/articles/{id}/publish`, because that is the operation that fills the
+column.
+
+**MUST.** `published_at` is refused if it is in the future — the feed orders on it (§37.1)
+and a future date would sit at the head of every feed until the clock caught up — and
+refused, rather than ignored, if the article already has one. §16.3 fills the column once;
+accepting the field and discarding it would be a silent no-op on the one field an importer
+most needs to be sure of.
+
+**MUST.** Only `published_at` moves. The signature is made now, so the key's validity is
+judged now (§8.4), and the events emitted are dated now: an event stamped 2019 would sort
+into the wrong place in a journal that is read by cursor (§20.5).
+
 **MUST — `canonical_url` when cross-posting.** If the same text is published on another
 domain and remains primary there, `canonical_url` points at it, the Orator page emits
-`<link rel="canonical">` to the external address, and the article **does not** enter the
-sitemap.
+`<link rel="canonical">` and `og:url` to the external address, and the article **does not**
+enter the sitemap and is **not** indexable — whatever §50.3 would otherwise have granted it.
+
+**SHOULD.** The page also says so in words. The canonical tag addresses a crawler; a reader
+deserves to know that what they are reading is a copy, and where the primary one lives.
 
 **Rationale.** Without this, two copies of one text compete in search results and — given
 §50.2 — both lose. Cross-posting without a canonical is the fastest route to precisely the
@@ -4901,6 +4920,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 85 | `current_revision_id` is disclosed to the author, so a conditional edit needs no 412 | §34.3 |
 | 86 | The HTML page's validator covers the conversation; the representations keep the hash | §33.2, ADR 0007 |
 | 87 | The conversation is rendered on the server, because §49.1 makes JavaScript optional | §49.1, ADR 0007 |
+| 88 | Import sets the canonical at creation and the original date at publish, and nowhere else | §15.1 |
 
 ## 80. Open decisions
 

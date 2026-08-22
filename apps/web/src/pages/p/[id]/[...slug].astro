@@ -69,6 +69,7 @@ if (article !== null && view !== null) {
     title={view.revision.title}
     description={view.revision.excerpt ?? undefined}
     canonicalPath={article.canonicalPath}
+    canonicalUrl={view.article.canonicalUrl}
     indexable={view.article.indexable}
     ogType="article"
     publishedAt={view.article.publishedAt ?? undefined}
@@ -87,6 +88,18 @@ if (article !== null && view !== null) {
           readingTimeSeconds={view.revision.readingTimeSeconds}
           provenance={provenance}
         />
+
+        {/*
+          §15.1 — a cross-post says where it came from, in words as well as in a link tag.
+          The canonical tag addresses a crawler; a reader deserves to know that the version
+          they are reading is a copy and where the primary one lives.
+        */}
+        {view.article.canonicalUrl && (
+          <p class="crosspost">
+            First published at{" "}
+            <a href={view.article.canonicalUrl} rel="canonical noopener">{view.article.canonicalUrl}</a>
+          </p>
+        )}
 
         {html === null ? (
           <p class="notice">

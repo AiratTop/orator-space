@@ -142,6 +142,15 @@ export const createArticleRequest = z.object({
   language: z.string().max(20).optional(),
   visibility: visibility.optional(),
   authorship_disclosure: disclosure.optional(),
+  /**
+   * SPEC §15.1 — where the primary publication lives, when it is not here.
+   *
+   * Settable at creation and not only by a later PATCH, because import is a standing mode
+   * rather than a migration: an article that exists on the author's own site is created
+   * with its canonical already known, and a two-call sequence leaves a window in which the
+   * copy is indexable and competing with the original.
+   */
+  canonical_url: z.string().url().nullish(),
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
@@ -164,6 +173,16 @@ export const publishRequest = z.object({
   revision_id: oratorId.optional(),
   signature: z.string().min(80).max(100).nullish(),
   signature_key_id: oratorId.nullish(),
+  /**
+   * SPEC §15.1 — the original publication date, for an article that was published
+   * elsewhere first.
+   *
+   * Must be in the past. A future date would put an article at the head of every feed
+   * until the clock caught up, which is not an import, and the feed's keyset pagination
+   * orders on this column (§37.1). Omit it and the server uses now, which is what an
+   * article first published here wants.
+   */
+  published_at: timestamp.nullish(),
 });
 
 /** SPEC §58.2 — the body arrives labelled as data, never as instructions. */

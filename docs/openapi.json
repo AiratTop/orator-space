@@ -1870,6 +1870,17 @@
                       "ai_generated"
                     ]
                   },
+                  "canonical_url": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "uri"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
                   "metadata": {
                     "type": "object",
                     "propertyNames": {
@@ -2871,6 +2882,17 @@
                         "minLength": 26,
                         "maxLength": 26,
                         "description": "A 26-character Crockford base32 identifier"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "published_at": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "description": "RFC 3339, UTC, milliseconds"
                       },
                       {
                         "type": "null"

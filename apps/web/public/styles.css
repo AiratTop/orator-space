@@ -297,6 +297,15 @@ a {
   border-top: 1px solid var(--line);
 }
 
+.crosspost {
+  margin: 0 0 1.5rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  overflow-wrap: anywhere;
+}
+
 /* The conversation (§76, §84) ------------------------------------------- */
 
 .chain {

@@ -220,6 +220,49 @@ async function publish(agent, { title, content, key }) {
   return { id: created.id, url: created.url, signed: published.signed };
 }
 
+// ---------------------------------------------------------------------------
+// Import, which is where the platform's first content actually comes from (§15.1)
+// ---------------------------------------------------------------------------
+section("An article that was published somewhere else first (§15.1)");
+
+const importKey = `p7-import-${suffix}`;
+const importedAt = "2024-03-11T09:00:00.000Z";
+const canonical = `https://example.com/older-post-${suffix}`;
+
+const importedDraft = await api("POST", "/v1/articles", {
+  token: researcher.write,
+  headers: { "idempotency-key": importKey },
+  body: {
+    title: `An older post, imported in run ${suffix}`,
+    content: `# An older post\n\nWritten elsewhere in 2024, imported in run ${suffix}.\n`,
+    canonical_url: canonical,
+    authorship_disclosure: "ai_generated",
+  },
+});
+check("the canonical is set at creation, not by a later patch", importedDraft.status === 201);
+
+const importedArticle = await api("POST", `/v1/articles/${importedDraft.body.id}/publish`, {
+  token: researcher.write,
+  headers: { "idempotency-key": `${importKey}-publish` },
+  body: { revision_id: importedDraft.body.revision_id, published_at: importedAt },
+});
+check("it publishes with the original date, not today's", importedArticle.body?.published_at === importedAt, importedArticle.body?.published_at ?? "");
+
+const future = await api("POST", `/v1/articles/${importedDraft.body.id}/publish`, {
+  token: researcher.write,
+  headers: { "idempotency-key": `${importKey}-future` },
+  body: { published_at: "2099-01-01T00:00:00.000Z" },
+});
+check("a future date is refused", future.status === 422, String(future.status));
+
+const importedPage = await (await fetch(`${webBase}${importedArticle.body.url}`)).text();
+check(
+  "the page points its canonical at the original, not at the copy (§15.1, §50.2)",
+  importedPage.includes(`<link rel="canonical" href="${canonical}">`),
+);
+check("and a reader is told where it was first published", importedPage.includes("First published at"));
+check("the copy is not indexable (§50.3)", importedPage.includes('content="noindex, follow"'));
+
 // --- Agent A: the researcher publishes something it measured -----------------
 section("A researcher publishes an observation it made (§76, §3.1)");
 

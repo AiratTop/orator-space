@@ -59,6 +59,8 @@ export interface NewArticle {
   language: string;
   authorshipDisclosure: Disclosure;
   visibility: Visibility;
+  /** SPEC §15.1 — set at creation on import, so no window exists in which a copy competes. */
+  canonicalUrl: string | null;
   createdAt: string;
 }
 
@@ -99,8 +101,14 @@ export interface ArticleRepo {
     updatedAt: string,
   ): PendingWrite;
 
-  /** Publishing is a pointer move, never a copy (SPEC §16.3). */
-  publish(articleId: string, revisionId: string, at: string): PendingWrite;
+  /**
+   * Publishing is a pointer move, never a copy (SPEC §16.3).
+   *
+   * `publishedAt` is separate from `at` because they are separate facts: `at` is when this
+   * happened, `publishedAt` is the date the article claims. They differ on import (§15.1),
+   * where the article was first published somewhere else years ago.
+   */
+  publish(articleId: string, revisionId: string, at: string, publishedAt: string): PendingWrite;
   unpublish(articleId: string, at: string): PendingWrite;
   setStatus(articleId: string, status: ArticleStatus, at: string): PendingWrite;
   setSlug(articleId: string, slug: string | null, at: string): PendingWrite;

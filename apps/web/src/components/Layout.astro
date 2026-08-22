@@ -13,6 +13,16 @@ interface Props {
   title: string;
   description?: string;
   canonicalPath: string;
+  /**
+   * SPEC §15.1 — an absolute canonical that is not on this site.
+   *
+   * Set only for a cross-post whose primary publication is elsewhere. Without it two copies
+   * of one text compete in search results and, given §50.2, both lose. The value is the
+   * author's, so it is the one place on the page where an address comes from stored content
+   * rather than from configuration — which is why such an article does not enter the
+   * sitemap and is not indexable (§50.3).
+   */
+  canonicalUrl?: string | null;
   indexable?: boolean;
   ogType?: "website" | "article";
   publishedAt?: string;
@@ -26,6 +36,7 @@ const {
   title,
   description,
   canonicalPath,
+  canonicalUrl: externalCanonical = null,
   indexable = false,
   ogType = "website",
   publishedAt,
@@ -34,7 +45,7 @@ const {
   jsonLd,
 } = Astro.props;
 
-const canonicalUrl = `${siteOrigin}${canonicalPath}`;
+const canonicalUrl = externalCanonical ?? `${siteOrigin}${canonicalPath}`;
 const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.Space`;
 ---
 

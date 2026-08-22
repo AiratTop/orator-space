@@ -212,6 +212,7 @@ const HANDLERS: Record<string, Handler> = {
         ...optional("language", text(args, "language")),
         ...optional("visibility", text(args, "visibility") as Visibility | undefined),
         ...optional("authorshipDisclosure", text(args, "authorship_disclosure") as Disclosure | undefined),
+        ...optional("canonicalUrl", text(args, "canonical_url")),
       }),
     );
     if (result.ok) deliver(tools);
@@ -253,6 +254,7 @@ const HANDLERS: Record<string, Handler> = {
         ...optional("revisionId", text(args, "revision_id")),
         signature: text(args, "signature") ?? null,
         signatureKeyId: text(args, "signature_key_id") ?? null,
+        publishedAt: text(args, "published_at") ?? null,
       }),
     );
     if (!result.ok) return result;

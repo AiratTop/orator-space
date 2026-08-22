@@ -133,8 +133,8 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
           .prepare(
             `INSERT INTO articles
                (id, author_principal_id, slug, status, visibility, language,
-                authorship_disclosure, indexable, created_at, updated_at)
-             VALUES (?, ?, ?, 'draft', ?, ?, ?, 0, ?, ?)`,
+                authorship_disclosure, canonical_url, indexable, created_at, updated_at)
+             VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, 0, ?, ?)`,
           )
           .bind(
             article.id,
@@ -143,6 +143,7 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
             article.visibility,
             article.language,
             article.authorshipDisclosure,
+            article.canonicalUrl,
             article.createdAt,
             article.createdAt,
           ),
@@ -198,7 +199,7 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
     },
 
     /** Publishing moves a pointer; it never copies content (SPEC §16.3). */
-    publish(articleId, revisionId, at) {
+    publish(articleId, revisionId, at, publishedAt) {
       return asWrite(
         db
           .prepare(
@@ -207,7 +208,11 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
                     published_at = COALESCE(published_at, ?), updated_at = ?
               WHERE id = ? AND status IN ('draft', 'published', 'unpublished')`,
           )
-          .bind(revisionId, at, at, articleId),
+          // COALESCE, so republishing does not restamp the article: the date an article
+          // carries is when it was first published, not when it was last touched (§16.3).
+          // On import the caller supplies that date and the service refuses to overwrite
+          // one that already exists, so this only ever fills a blank.
+          .bind(revisionId, publishedAt, at, articleId),
       );
     },
 

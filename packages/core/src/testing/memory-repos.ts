@@ -334,7 +334,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           publishedRevisionId: null,
           translationGroupId: null,
           indexable: false,
-          canonicalUrl: null,
+          canonicalUrl: article.canonicalUrl,
           updatedAt: article.createdAt,
           publishedAt: null,
           removedAt: null,
@@ -358,7 +358,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return 1;
       });
     },
-    publish(articleId, revisionId, at) {
+    publish(articleId, revisionId, at, publishedAt) {
       return asWrite(() => {
         const article = state.articles.get(articleId);
         if (article === undefined || article.status === "removed") return 0;
@@ -366,7 +366,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           ...article,
           status: "published",
           publishedRevisionId: revisionId as ArticleRecord["publishedRevisionId"],
-          publishedAt: article.publishedAt ?? at,
+          // Filled once: the date an article carries is when it was first published, not
+          // when it was last touched (§16.3).
+          publishedAt: article.publishedAt ?? publishedAt,
           updatedAt: at,
         });
         return 1;

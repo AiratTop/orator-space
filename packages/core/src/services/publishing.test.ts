@@ -240,6 +240,112 @@ describe("publishing (SPEC §16.3, §35)", () => {
   });
 });
 
+/**
+ * SPEC §15.1 — import is a standing mode, not a migration.
+ *
+ * The platform's first content comes from outside, and an article may live both here and on
+ * the author's own site. Everything import needs goes through the ordinary write path, so
+ * these are the rules that keep an imported article from lying about itself.
+ */
+describe("import and cross-posting (SPEC §15.1)", () => {
+  const seed = async (input = {}) =>
+    unwrap(await createArticle(ctxFor(agentActor()), { title: "An older post", content: BODY, ...input }));
+
+  it("records the primary publication's address at creation, not by a later patch", async () => {
+    // A two-call sequence leaves a window in which the copy is indexable and competing
+    // with the original, which is the outcome §50.2 warns about.
+    const article = await seed({ canonicalUrl: "https://example.com/older-post" });
+    expect(ports.state.articles.get(article.id)?.canonicalUrl).toBe("https://example.com/older-post");
+  });
+
+  it("publishes with the original date rather than today's", async () => {
+    const article = await seed();
+    const published = unwrap(
+      await publishArticle(ctxFor(agentActor()), article.id, { publishedAt: "2024-03-11T09:00:00.000Z" }),
+    );
+
+    expect(published.publishedAt).toBe("2024-03-11T09:00:00.000Z");
+    expect(ports.state.articles.get(article.id)?.publishedAt).toBe("2024-03-11T09:00:00.000Z");
+  });
+
+  it("dates the event now, whatever date the article carries", async () => {
+    // An event stamped 2024 would sort into the wrong place in a journal read by cursor
+    // (§20.5), and the outbox would deliver a notification that appears to predate itself.
+    const article = await seed();
+    await publishArticle(ctxFor(agentActor()), article.id, { publishedAt: "2024-03-11T09:00:00.000Z" });
+
+    expect(ports.state.events[0]?.createdAt).not.toBe("2024-03-11T09:00:00.000Z");
+    expect(ports.state.outbox[0]?.createdAt).not.toBe("2024-03-11T09:00:00.000Z");
+  });
+
+  it("refuses a date in the future", async () => {
+    const article = await seed();
+    const result = await publishArticle(ctxFor(agentActor()), article.id, {
+      publishedAt: "2099-01-01T00:00:00.000Z",
+    });
+    expect(errorOf(result)).toBe(ErrorType.ValidationFailed);
+  });
+
+  it("refuses to restamp an article that already has a date", async () => {
+    // Refused rather than ignored: §16.3 fills the column once, so accepting the field and
+    // discarding it would be a silent no-op on the one field an importer cares about.
+    const article = await seed();
+    unwrap(await publishArticle(ctxFor(agentActor()), article.id));
+    const again = await publishArticle(ctxFor(agentActor()), article.id, {
+      publishedAt: "2024-03-11T09:00:00.000Z",
+    });
+    expect(errorOf(again)).toBe(ErrorType.Conflict);
+  });
+
+  it("keeps the first date when a corrected revision is published later", async () => {
+    const article = await seed();
+    unwrap(await publishArticle(ctxFor(agentActor()), article.id, { publishedAt: "2024-03-11T09:00:00.000Z" }));
+    const revision = unwrap(
+      await createRevision(ctxFor(agentActor()), article.id, { title: "An older post", content: BODY + "\nFixed.\n" }),
+    );
+    unwrap(await publishArticle(ctxFor(agentActor()), article.id, { revisionId: revision.id }));
+
+    expect(ports.state.articles.get(article.id)?.publishedAt).toBe("2024-03-11T09:00:00.000Z");
+  });
+
+  it("judges the signing key at signing time, not at the date the article claims", async () => {
+    // The import happens now. A key registered today is valid today, and checking it
+    // against 2024 would refuse every signed import (§8.4).
+    const key = await generateKeyPairForTesting();
+    ports.state.keys.set("KEY-IMPORT", {
+      id: "KEY-IMPORT" as never,
+      agentPrincipalId: AUTHOR as never,
+      publicKey: key.publicKey,
+      fingerprint: "fp-import",
+      label: null,
+      status: "active",
+      createdAt: "2026-08-01T00:00:00.000Z",
+      revokedAt: null,
+    });
+
+    const article = await seed();
+    const revision = ports.state.revisions.get(article.revisionId)!;
+    const signature = await key.sign(
+      revisionSigningInput({
+        articleId: article.id,
+        revisionId: revision.id,
+        contentHash: revision.contentHash,
+        createdAt: revision.createdAt,
+      }),
+    );
+
+    const published = unwrap(
+      await publishArticle(ctxFor(agentActor()), article.id, {
+        signature,
+        signatureKeyId: "KEY-IMPORT",
+        publishedAt: "2024-03-11T09:00:00.000Z",
+      }),
+    );
+    expect(published.signed).toBe(true);
+    expect(published.publishedAt).toBe("2024-03-11T09:00:00.000Z");
+  });
+});
+
 describe("revision signatures (SPEC §8.4)", () => {
   async function seedSignable() {
     const article = unwrap(await createArticle(ctxFor(agentActor()), { title: "Cold start", content: BODY }));
