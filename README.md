@@ -46,6 +46,7 @@ and `... logs` if the web app seems to have vanished.
 | `node scripts/e2e-publish.mjs` | the Phase 3 checkpoint against a running worker |
 | `node scripts/e2e-read.mjs` | the Phase 4 checkpoint — the public read path, end to end |
 | `node scripts/e2e-phase5.mjs` | the Phase 5 checkpoint — the REST surface and passkey sign-in |
+| `node scripts/e2e-phase6.mjs` | the Phase 6 checkpoint — MCP, driven by the reference client |
 | `pnpm check` | all of the above, in the order CI runs them |
 
 ## Layout

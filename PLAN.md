@@ -177,10 +177,17 @@ from `assets`. That bucket needs no name of its own.
 | 4 | Terms / Content Policy / Privacy | before public launch — §61.1, §82 |
 | 5 | ~~`SESSION_SECRET` on staging and production~~ ✅ done (`wrangler secret put SESSION_SECRET --env <env>` in `apps/web`), at least 32 characters | Phase 5 — ADR 0004 |
 | ~~6~~ | ~~An R2 API token for a presigned PUT~~ — not needed: ADR 0005 reversed §21.1, the upload goes through the Worker | — |
+| 7 | The checkpoint scripts run after every staging deploy | Phase 6 — see below |
 
 **On item 5.** It signs the WebAuthn challenge cookie. Local development falls back to a
 fixed development value; a deployment without it refuses to sign anyone in rather than
 signing them in with a key that is in the repository.
+
+**On item 7.** The checkpoints are the only tests that exercise a real deployment, and
+until Phase 6 nothing ran them but a person remembering to. `e2e-read.mjs` had been broken
+since Phase 5 made token issuance idempotent, and stayed broken because nobody re-ran it.
+CI now runs all four against staging after deploying, so a checkpoint that rots fails the
+build that rotted it.
 
 **On item 1a.** Both queues had been created with an HTTP Pull Consumer. A queue takes one
 consumer, push or pull, so the worker could not attach: `wrangler deploy` failed with
@@ -532,7 +539,7 @@ by media id so a variant can sit beside it without moving anything.
 
 ---
 
-## 9. Phase 6 — MCP ← current
+## 9. Phase 6 — MCP ✅ closed
 
 **Entry:** Phase 5 closed.
 
@@ -540,17 +547,51 @@ by media id so a variant can sit beside it without moving anything.
 untrusted-content labelling (§58.2); tool descriptions written to be read by a model;
 annotations on irreversible operations.
 
-**Acceptance:**
+**Acceptance** — `scripts/e2e-phase6.mjs`, 33 checks driven by `@modelcontextprotocol/sdk`:
 
 ```
-[ ] the server connects from a standard MCP host using a bearer token
-[ ] publishing and reading work through MCP
-[ ] results containing user content are labelled untrusted
-[ ] tool descriptions carry the consistency caveats from §34.4
+[x] the server connects from a standard MCP host using a bearer token
+[x] publishing and reading work through MCP
+[x] results containing user content are labelled untrusted
+[x] tool descriptions carry the consistency caveats from §34.4
 ```
 
-**Do not do:** OAuth 2.1. It is `[G]`, and needed only for one-click connection by someone
-who has no token yet.
+**The client is somebody else's code, deliberately.** The server is hand-written — MCP is
+JSON-RPC with four methods, and the SDK depends on express and a process spawner, which do
+not belong in a Worker (ADR 0006). The checkpoint then drives it with that same SDK from
+Node. This is Phase 5's virtual authenticator again: a server exercised only by requests
+its own authors composed proves that the authors agree with themselves. Here the handshake,
+the schemas, the version negotiation and the 405s are checked by an implementation that has
+no idea what was intended.
+
+**What it found.** Not in MCP — in the contract underneath it.
+
+Making a second interface read the same data exposed two duplications. How a record looks
+on the wire was written four times, once per route file; who may see a draft was written
+inside a Hono handler, so §43.4's "every adapter reaches the same verdict" could not hold.
+Both are now single-sourced.
+
+That raised the obvious question, and the answer was worse than expected: the route
+conformance test compares method and path, so nothing had ever checked that a response
+matches what the catalogue promises. A new test asked, and **six operations did not**. The
+generated OpenAPI — the document a client would build against — had been describing a
+server nobody wrote:
+
+- creating a comment advertised the full document and returned an internal summary in
+  camelCase;
+- reading an article omitted `source_principal` and `source_url`, the two fields §58.2's
+  envelope exists to carry;
+- four collections returned bare arrays where a page was promised;
+- reporting returned `createdAt` to a document promising `created_at`;
+- creating an agent was the one response on the whole wire in camelCase, and omitted the
+  accountable owner — the entire point of an agent existing (§7.2);
+- the key challenge returned a duration where the schema promised a deadline.
+
+`e2e-read.mjs` had rotted too: Phase 5 made token issuance idempotent and nothing re-ran
+the script. Which is the more general lesson — see §1.7 item 7.
+
+**Not built:** OAuth 2.1. It is `[G]`, needed for one-click connection by someone who has
+no token yet (§42.3), and until such a user exists it is work without a consumer.
 
 ---
 

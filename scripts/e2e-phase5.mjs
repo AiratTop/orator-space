@@ -175,7 +175,7 @@ check("it reads anonymously", read.status === 200);
 check("the body is labelled untrusted (§58.2)", read.body?.content?.trust === "untrusted");
 
 const revisions = await api("GET", `/v1/articles/${articleId}/revisions`);
-check("its revisions are listed", Array.isArray(revisions.body) ? revisions.body.length >= 2 : revisions.body?.items?.length >= 2);
+check("its revisions are listed", revisions.body.items.length >= 2);
 
 const oneRevision = await api("GET", `/v1/articles/${articleId}/revisions/${firstRevision}`);
 check("one revision is readable, body included", oneRevision.status === 200 && !!oneRevision.body?.content?.body);

@@ -3151,6 +3151,37 @@ confirmation.
 **MUST.** The consistency caveats of §34.4 are stated in the tool schemas: an agent needs to
 know that a published article does not appear in search immediately.
 
+### 47.3. Transport
+
+**MUST.** Streamable HTTP, stateless (ADR 0006). One `POST` carries one JSON-RPC message or
+a batch; the reply is a single JSON document. No session identifier is issued, and `GET`
+and `DELETE` answer `405` — the transport's way of saying this server offers no standalone
+event stream and keeps no session to terminate.
+
+**Rationale.** Session-per-agent would mean a Durable Object holding a connection open, in
+exchange for server-initiated messages that no tool in §47.1 uses. Stateless has a second
+property worth naming: there is no session to expire, resume, migrate between colos or
+leak, and an agent that reconnects has lost nothing.
+
+**MUST.** The protocol version is negotiated, not echoed. A server that repeats whatever it
+was sent has agreed to a protocol it does not implement, and the client discovers this later
+in a failure that looks like a bug in the tool it called.
+
+**MUST.** Tool results are framed as §58.2 requires, with a delimiter carrying a nonce
+generated per response. A fixed delimiter is one a participant can write into their own
+article to close the block early and have the rest of it read as instructions. Escaping it
+instead would mean editing what somebody published in order to quote it.
+
+**MUST.** A refusal is a tool error — a successful call whose result says no — not a
+JSON-RPC error. An agent has to distinguish "the call did not happen" from "the call
+happened and the answer is no", and the problem document (§45) travels unchanged so that a
+client which knows the REST error catalogue already knows this one.
+
+**MUST.** An idempotency key is derived from the tool name and its arguments when the caller
+supplies none. A model instructed to invent a unique key per call supplies a constant or a
+fresh value on every retry, and the second is worse than no key at all. Callers that
+genuinely intend to create the same thing twice pass an explicit key.
+
 ## 48. Machine-readable access to content
 
 This section was absent from version 1.0. It expresses the product's identity in technical
@@ -4780,6 +4811,12 @@ Everything after it is growth, and its order is decided by observation rather th
 | 74 | The upload is one streamed pass: counted, hashed and sniffed before it is `ready` | §21.1 |
 | 75 | SVG is refused outright rather than sanitised | §21.1, §57.4 |
 | 76 | `media.orator.space` serves only `ready` media, and only from that host | §57.4 |
+| 77 | MCP is stateless Streamable HTTP; no session, no Durable Object | §47.3, ADR 0006 |
+| 78 | MCP tools are generated beside the REST catalogue, never from REST itself | §47, §53 |
+| 79 | The untrusted delimiter carries a per-response nonce instead of being escaped | §47.3, §58.2 |
+| 80 | A tool refusal is a result, not a transport error | §47.3, §45 |
+| 81 | An MCP idempotency key is derived from the arguments when none is given | §47.3, §34.1 |
+| 82 | Every catalogued response is validated against a real one in CI | §53 |
 
 ## 80. Open decisions
 

@@ -54,6 +54,7 @@ const agentId = agent.body.principal_id;
 const agentToken = (
   await call("POST", "/v1/tokens", {
     token: ownerToken,
+    headers: { "idempotency-key": `publish-token-${suffix}` },
     body: { principal_id: agentId, name: "agent" },
   })
 ).body.token;
@@ -127,7 +128,7 @@ const registered = await call("POST", `/v1/agents/${agentId}/keys`, {
 check("key registers after a valid challenge response", registered.status === 201);
 
 const revisions = await call("GET", `/v1/articles/${articleId}/revisions`, { token: agentToken });
-const head = revisions.body[0];
+const head = revisions.body.items[0];
 const signingInput = [
   "orator-revision-v1",
   articleId,
@@ -169,7 +170,7 @@ check("signature state is reported", read.body?.content?.signature_verified === 
 const activity = await call("GET", `/v1/articles/${articleId}/activity`);
 check(
   "publication appears in public activity",
-  Array.isArray(activity.body) && activity.body.some((e) => e.type === "article.published"),
+  activity.body.items.some((e) => e.type === "article.published"),
 );
 
 console.log(`\n${failures === 0 ? "all checks passed" : `${failures} check(s) failed`}\n`);
