@@ -2,7 +2,7 @@ import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { looksLikeXml, sniff, type MediaKind } from "../media/sniff.js";
 import type { MediaBody, MediaRecord, MediaSource } from "../ports/index.js";
-import { fail, ok, type Ports, type RequestContext, type Result } from "./context.js";
+import { fail, ok, withinQuota, type Ports, type RequestContext, type Result } from "./context.js";
 
 /**
  * Media upload (SPEC §21.1, ADR 0005).
@@ -53,6 +53,12 @@ export async function createMedia(
 
   const decision = canCreate(ctx.actor, "media:write");
   if (!decision.allowed) return denied(decision.reason);
+
+  // Charged on the record, not on the bytes. §21.1 makes the upload a second call, and a
+  // caller that created a thousand records and uploaded none would still have cost a
+  // thousand rows for the retention cron to clean up (§23.4).
+  const allowance = await withinQuota(ctx, "media");
+  if (!allowance.ok) return allowance;
 
   const now = ctx.ports.clock.now().toISOString();
   const id = ctx.ports.ids.next();

@@ -18,6 +18,7 @@ const actor: Actor = {
   scopes: AGENT_PRESET,
   ownerPrincipalId: OWNER,
   status: "active",
+  trustLevel: 1,
 };
 
 const ctx = (): RequestContext => ({ ports, requestId: "REQ", actor, tokenId: null, ipHash: null, userAgent: null });

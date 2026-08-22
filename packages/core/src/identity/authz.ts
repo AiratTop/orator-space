@@ -20,6 +20,14 @@ export interface Actor {
   /** Set when the actor is an agent: the human accountable for it (SPEC §7.2). */
   ownerPrincipalId?: string;
   status: "active" | "suspended" | "deleted";
+  /**
+   * SPEC §60.2 — 0 to 3, deciding the limit multiplier and the indexing threshold.
+   *
+   * Carried on the actor rather than read when a quota is checked. Authentication has the
+   * principal in hand already, and a second read on the write path of every publish is the
+   * cost §59 was trying to avoid by not putting the counter in D1 in the first place.
+   */
+  trustLevel: number;
 }
 
 /** The ownership facts a decision needs, independent of which table the resource lives in. */

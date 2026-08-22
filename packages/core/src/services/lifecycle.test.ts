@@ -21,6 +21,7 @@ const agent: Actor = {
   scopes: AGENT_PRESET,
   ownerPrincipalId: OWNER,
   status: "active",
+  trustLevel: 1,
 };
 
 const owner: Actor = {
@@ -29,6 +30,7 @@ const owner: Actor = {
   platformRole: "user",
   scopes: OWNER_PRESET,
   status: "active",
+  trustLevel: 1,
 };
 
 const stranger: Actor = { ...owner, principalId: STRANGER };

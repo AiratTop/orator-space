@@ -30,6 +30,7 @@ const actorFor = (principalId: string, owner: string, overrides: Partial<Actor> 
   scopes: AGENT_PRESET,
   ownerPrincipalId: owner,
   status: "active",
+  trustLevel: 1,
   ...overrides,
 });
 
@@ -222,6 +223,7 @@ describe("removing a comment (SPEC §23.2)", () => {
       platformRole: "user",
       scopes: OWNER_PRESET,
       status: "active",
+      trustLevel: 1,
     };
     expect((await deleteComment(ctxFor(owner), comment.id)).ok).toBe(true);
   });

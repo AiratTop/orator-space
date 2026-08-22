@@ -677,7 +677,7 @@ format for a real occasion and, honestly, no records.
 This is where the entire `[L]` level is closed.
 
 ```
-[ ] quotas on Durable Objects and rate limits (§59)
+[x] quotas on Durable Objects and rate limits (§59)
 [x] report intake — POST /v1/reports, delivered in Phase 5
 [ ] the moderation queue and moderator actions (§61)
 [ ] a moderation provider that does not depend on self-hosted infrastructure

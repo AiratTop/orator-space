@@ -32,6 +32,7 @@ const actor: Actor = {
   scopes: AGENT_PRESET,
   ownerPrincipalId: OWNER,
   status: "active",
+  trustLevel: 1,
 };
 
 const ctx = (): RequestContext => ({

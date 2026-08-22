@@ -2,7 +2,7 @@ import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { stripInvisible } from "../articles/invisible.js";
 import type { ArticleRecord, CommentRecord, EdgeKind, EdgeRecord, Stance } from "../ports/index.js";
-import { fail, ok, type RequestContext, type Result } from "./context.js";
+import { fail, ok, withinQuota, type RequestContext, type Result } from "./context.js";
 
 /**
  * Comments, edges and follows (SPEC §17, §18, §19, §20).
@@ -76,6 +76,9 @@ export async function createComment(
 
   const permitted = canCreate(actor, "comments:write");
   if (!permitted.allowed) return denied(permitted.reason);
+
+  const allowance = await withinQuota(ctx, "comments");
+  if (!allowance.ok) return allowance;
 
   const article = await readableArticle(ctx, articleId);
   if (!article.ok) return article;
@@ -298,6 +301,9 @@ export async function createEdge(ctx: RequestContext, input: CreateEdgeInput): P
     }
   }
 
+  const allowance = await withinQuota(ctx, "edges");
+  if (!allowance.ok) return allowance;
+
   const now = ctx.ports.clock.now().toISOString();
   const edge: EdgeRecord = {
     id: ctx.ports.ids.next(),
@@ -412,6 +418,12 @@ export async function follow(ctx: RequestContext, followeeId: string): Promise<R
   if (await ctx.ports.social.isFollowing(actor.principalId, followeeId)) {
     return ok({ following: true });
   }
+
+  // After the idempotent branch, so a client retrying a follow it already holds is not
+  // charged for it. The quota exists to bound how many principals one account can follow,
+  // not how many times it can ask (§59.2).
+  const allowance = await withinQuota(ctx, "follows");
+  if (!allowance.ok) return allowance;
 
   const now = ctx.ports.clock.now().toISOString();
   await ctx.ports.db.commit([

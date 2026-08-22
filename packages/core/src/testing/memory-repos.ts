@@ -1,6 +1,8 @@
 import type { FeedCursor, OratorId } from "@orator/protocol";
 import { encodeId } from "@orator/protocol";
 import type { ArticleLink } from "../ports/reading.js";
+import { LIMITS, QUOTA_ACTIONS, verdict, windowStart } from "../identity/quota.js";
+import type { QuotaGate } from "../ports/quota.js";
 import {
   ConstraintViolation,
   type ArticleRecord,
@@ -638,6 +640,35 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     };
   };
 
+  /**
+   * The quota counter, in memory (SPEC §59.1).
+   *
+   * Runs the same `verdict` the Durable Object runs, over the same fixed windows. A double
+   * that approximated the rule would let the domain tests agree with something production
+   * does not do, which is worse than having no double at all.
+   */
+  const counters = new Map<string, { window: number; count: number }>();
+  const quota: QuotaGate = {
+    async consume(principalId, action, trustLevel) {
+      const now = clock.now();
+      const start = windowStart(LIMITS[action].window, now);
+      const key = `${principalId}:${action}`;
+      const held = counters.get(key);
+      const count = held !== undefined && held.window === start ? held.count + 1 : 1;
+      counters.set(key, { window: start, count });
+      return verdict(action, count, trustLevel, now);
+    },
+    async peek(principalId, trustLevel) {
+      const now = clock.now();
+      return QUOTA_ACTIONS.map((action) => {
+        const held = counters.get(`${principalId}:${action}`);
+        const start = windowStart(LIMITS[action].window, now);
+        const used = held !== undefined && held.window === start ? held.count : 0;
+        return verdict(action, used, trustLevel, now);
+      });
+    },
+  };
+
   const reading: ReadingRepo = {
     async findPublished(id) {
       const article = state.articles.get(id);
@@ -989,6 +1020,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     eventBus,
     articles,
     reading,
+    quota,
     social,
     search,
     topics,

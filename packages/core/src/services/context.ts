@@ -1,4 +1,4 @@
-import type { ErrorTypeName } from "@orator/protocol";
+import { ErrorType, type ErrorTypeName } from "@orator/protocol";
 import type {
   ArticleRepo,
   AuditRepo,
@@ -15,6 +15,7 @@ import type {
   ModerationRepo,
   OutboxRepo,
   PrincipalRepo,
+  QuotaGate,
   ReadingRepo,
   SearchIndex,
   SocialRepo,
@@ -22,6 +23,7 @@ import type {
   TopicRepo,
 } from "../ports/index.js";
 import type { Actor } from "../identity/authz.js";
+import type { QuotaAction, QuotaVerdict } from "../identity/quota.js";
 
 /** Everything a service is allowed to reach. Assembled once per request by the adapter. */
 export interface Ports {
@@ -48,6 +50,8 @@ export interface Ports {
   /** SPEC §61 — report intake. */
   moderation: ModerationRepo;
   events: EventRepo;
+  /** SPEC §59.1 — the exact, global counter. Flood protection lives at the HTTP edge. */
+  quota: QuotaGate;
   idempotency: IdempotencyRepo;
   content: ContentStore;
   clock: Clock;
@@ -77,6 +81,15 @@ export interface ServiceError {
   title: string;
   detail?: string;
   extra?: Record<string, unknown>;
+  /**
+   * How long the caller should wait, when the answer is knowable rather than a guess.
+   *
+   * §45.1 requires `Retry-After` on every 429. The HTTP layer has a default per error type,
+   * which is the right thing for "the service is unavailable" and the wrong thing for a
+   * quota: the window's real reset time is known exactly, and telling an agent to come back
+   * in an hour when the allowance returns in ninety seconds wastes an hour of its work.
+   */
+  retryAfter?: number;
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: ServiceError };
@@ -87,7 +100,47 @@ export const fail = <T = never>(
   title: string,
   detail?: string,
   extra?: Record<string, unknown>,
+  retryAfter?: number,
 ): Result<T> => ({
   ok: false,
-  error: { type, title, ...(detail === undefined ? {} : { detail }), ...(extra === undefined ? {} : { extra }) },
+  error: {
+    type,
+    title,
+    ...(detail === undefined ? {} : { detail }),
+    ...(extra === undefined ? {} : { extra }),
+    ...(retryAfter === undefined ? {} : { retryAfter }),
+  },
 });
+
+/**
+ * Charges one use against a principal's quota, or refuses (SPEC §59.2).
+ *
+ * Written once because the shape of the refusal is part of the contract: §59.2 requires a
+ * `429` carrying `Retry-After` and the quota structure, and a route that assembled its own
+ * would eventually assemble a different one. The `Retry-After` is the window's real reset
+ * rather than a per-type default — telling an agent to come back in an hour when its
+ * allowance returns in ninety seconds throws away an hour of its work.
+ *
+ * Call it after authorisation and before the write. Before, and the wrong principal is
+ * charged; after, and a refusal arrives with the row already created.
+ */
+export async function withinQuota(
+  ctx: RequestContext,
+  action: QuotaAction,
+  chargeTo?: string,
+): Promise<Result<QuotaVerdict>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  const principalId = chargeTo ?? actor.principalId;
+  const verdict = await ctx.ports.quota.consume(principalId, action, actor.trustLevel);
+  if (verdict.allowed) return ok(verdict);
+
+  return fail(
+    ErrorType.QuotaExceeded,
+    "Quota exceeded",
+    `${verdict.limit} per ${verdict.window} for ${action}. The allowance returns at ${verdict.resetAt}.`,
+    { quota: verdict },
+    verdict.retryAfterSeconds,
+  );
+}

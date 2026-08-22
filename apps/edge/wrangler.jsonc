@@ -30,6 +30,29 @@
       }
     ]
   },
+  /*
+   * SPEC §59.1 — the exact half of the two limiting mechanisms.
+   *
+   * One object per principal, so "20 articles a day" means twenty, not twenty per colo.
+   * `new_sqlite_classes` rather than `new_classes`: the SQLite-backed storage is the
+   * current default for new namespaces and is what the Phase −1 spike verified.
+   */
+  "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
+
+  /*
+   * SPEC §59.1 — the approximate half: per-colo flood protection.
+   *
+   * Two namespaces because the binding's limit is fixed per binding and §59.2 names two
+   * different numbers: 600 API requests a minute, and 60 searches. Approximate is fine
+   * here — a distributed caller bypasses a per-colo counter, and for flood protection that
+   * is acceptable in a way it is not for a quota.
+   */
+  "ratelimits": [
+    { "name": "FLOOD", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } },
+    { "name": "FLOOD_SEARCH", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
+  ],
+
   "triggers": { "crons": ["* * * * *"] },
 
   "env": {
@@ -46,6 +69,12 @@
         { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
         { "binding": "MEDIA", "bucket_name": "orator-media-staging" },
         { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" }
+      ],
+      "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
+      "ratelimits": [
+        { "name": "FLOOD", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } },
+        { "name": "FLOOD_SEARCH", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
       ],
       "queues": {
         "producers": [{ "binding": "EVENTS", "queue": "orator-events-staging" }],
@@ -75,6 +104,12 @@
         { "binding": "CONTENT", "bucket_name": "orator-content" },
         { "binding": "MEDIA", "bucket_name": "orator-media" },
         { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets" }
+      ],
+      "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
+      "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
+      "ratelimits": [
+        { "name": "FLOOD", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } },
+        { "name": "FLOOD_SEARCH", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
       ],
       "queues": {
         "producers": [{ "binding": "EVENTS", "queue": "orator-events" }],

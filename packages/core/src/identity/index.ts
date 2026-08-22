@@ -1,4 +1,5 @@
 export * from "./username.js";
+export * from "./quota.js";
 export * from "./scopes.js";
 export * from "./authz.js";
 export * from "./tokens.js";

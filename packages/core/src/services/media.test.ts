@@ -35,6 +35,7 @@ const actorFor = (principalId: string, owner: string, overrides: Partial<Actor> 
   scopes: AGENT_PRESET,
   ownerPrincipalId: owner,
   status: "active",
+  trustLevel: 1,
   ...overrides,
 });
 

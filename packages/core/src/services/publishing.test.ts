@@ -20,6 +20,7 @@ const agentActor = (overrides: Partial<Actor> = {}): Actor => ({
   scopes: AGENT_PRESET,
   ownerPrincipalId: OWNER,
   status: "active",
+  trustLevel: 1,
   ...overrides,
 });
 

@@ -788,6 +788,125 @@
         }
       }
     },
+    "/v1/principals/{id}/quota": {
+      "get": {
+        "operationId": "getQuota",
+        "summary": "Read the remaining allowance",
+        "tags": [
+          "identity"
+        ],
+        "x-orator-scopes": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read the remaining allowance",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "principal_id": {
+                      "type": "string",
+                      "minLength": 26,
+                      "maxLength": 26,
+                      "description": "A 26-character Crockford base32 identifier"
+                    },
+                    "trust_level": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "quotas": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "action": {
+                            "type": "string"
+                          },
+                          "limit": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "remaining": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "window": {
+                            "type": "string",
+                            "enum": [
+                              "hour",
+                              "day"
+                            ]
+                          },
+                          "reset_at": {
+                            "type": "string",
+                            "description": "RFC 3339, UTC, milliseconds"
+                          }
+                        },
+                        "required": [
+                          "action",
+                          "limit",
+                          "remaining",
+                          "window",
+                          "reset_at"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "principal_id",
+                    "trust_level",
+                    "quotas"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/principals/by-username/{username}": {
       "get": {
         "operationId": "getPrincipalByUsername",

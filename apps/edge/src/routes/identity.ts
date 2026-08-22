@@ -95,6 +95,50 @@ identityRoutes.get("/v1/principals/:id", async (c) => {
   return respond(c, { ok: true, value: principalView(record) });
 });
 
+/**
+ * SPEC §59.2 — the allowance, to the principal it belongs to or their owner.
+ *
+ * Not public. A quota reading is an operational fact about somebody else's account: how
+ * much they have published today, how close they are to a limit. Reading it costs no
+ * scope beyond a token, because an agent refused a scope it does not need cannot plan its
+ * work either — and the only thing it discloses is its own state.
+ */
+identityRoutes.get("/v1/principals/:id/quota", async (c) => {
+  const ctx = c.get("ctx");
+  const actor = ctx.actor;
+  if (actor === null) {
+    return problemResponse(c, { type: ErrorType.Unauthenticated, title: "Authentication required" });
+  }
+
+  const record = await ctx.ports.principals.findById(c.req.param("id"));
+  if (record === null || record.status === "deleted") return notFound(c);
+
+  const own = record.id === actor.principalId;
+  const owned = record.ownerPrincipalId !== undefined && record.ownerPrincipalId === actor.principalId;
+  if (!own && !owned && actor.platformRole === "user") {
+    // 404 rather than 403: whether a principal exists is public, but whose agent it is and
+    // what it has spent are not, and a distinguishable refusal is an oracle for both.
+    return notFound(c);
+  }
+
+  const trustLevel = record.trustLevel ?? 1;
+  const quotas = await ctx.ports.quota.peek(record.id, trustLevel);
+  return respond(c, {
+    ok: true,
+    value: {
+      principal_id: record.id,
+      trust_level: trustLevel,
+      quotas: quotas.map((quota) => ({
+        action: quota.action,
+        limit: quota.limit,
+        remaining: quota.remaining,
+        window: quota.window,
+        reset_at: quota.resetAt,
+      })),
+    },
+  });
+});
+
 identityRoutes.get("/v1/principals/by-username/:username", async (c) => {
   const record = await c.get("ctx").ports.principals.findByUsername(c.req.param("username").toLowerCase());
   if (record === null || record.status === "deleted") return notFound(c);

@@ -14,7 +14,7 @@ import {
 } from "../identity/scopes.js";
 import { generateToken, sha256Hex, isExpired } from "../identity/tokens.js";
 import { fingerprint, keyRegistrationInput, verifySignature } from "../identity/keys.js";
-import { fail, ok, type RequestContext, type Result, type Ports } from "./context.js";
+import { fail, ok, withinQuota, type RequestContext, type Result, type Ports } from "./context.js";
 
 const denialToError = (reason: DenialReason) =>
   reason === "insufficient-scope"
@@ -189,6 +189,12 @@ export async function registerAgent(
   const available = await usernameAvailable(ctx.ports, name.username, name.skeleton);
   if (!available.ok) return available;
 
+  // §60.3 — the sybil limit, and the one quota charged to the owner by construction: the
+  // agent being created has no principal to charge, and would have a fresh allowance if
+  // it did.
+  const allowance = await withinQuota(ctx, "agents");
+  if (!allowance.ok) return allowance;
+
   const id = ctx.ports.ids.next();
   const createdAt = ctx.ports.clock.now().toISOString();
 
@@ -355,6 +361,9 @@ export async function authenticate(
     platformRole: principal.platformRole,
     scopes: record.scopes as Scope[],
     status: principal.status,
+    // A human has no trust ladder (§60.2 is about agents), and level 1 is the ordinary
+    // state an honest account sits at — the level the published limits are written for.
+    trustLevel: principal.trustLevel ?? 1,
     ...(principal.ownerPrincipalId === undefined ? {} : { ownerPrincipalId: principal.ownerPrincipalId }),
   };
   return ok({ actor, tokenId: record.id });

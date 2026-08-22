@@ -25,7 +25,9 @@ export function problemResponse(c: Context, error: ServiceError, instance?: stri
     ...(error.extra ?? {}),
   });
 
-  const retryAfter = RETRY_AFTER[error.type];
+  // The service's own figure when it has one — a quota knows exactly when its window
+  // rolls over — and the per-type default only when it does not.
+  const retryAfter = error.retryAfter ?? RETRY_AFTER[error.type];
   if (retryAfter !== undefined) {
     body.retry_after_seconds = retryAfter;
     c.header("retry-after", String(retryAfter));

@@ -93,6 +93,7 @@ beforeAll(async () => {
     json({}, auth(owner.token, { "idempotency-key": `rc-p-${s}` })),
   );
 
+  await record("getQuota", `/v1/principals/${agent.principal_id}/quota`, { headers: auth(owner.token) });
   await record("getArticle", `/v1/articles/${article.id}`);
   await record("listRevisions", `/v1/articles/${article.id}/revisions`);
   await record("getArticleActivity", `/v1/articles/${article.id}/activity`);

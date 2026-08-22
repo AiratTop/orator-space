@@ -6,10 +6,11 @@
  * neither owns business logic and neither talks to storage directly (SPEC §28.1).
  */
 import { Hono, type Context, type Next } from "hono";
-import { createIdGen } from "@orator/adapters-cf";
+import { createIdGen, QuotaCounter } from "@orator/adapters-cf";
 import { problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
 import type { RequestContext } from "@orator/core";
 import { contextFor } from "./context.js";
+import { problemResponse } from "./http.js";
 import { identityRoutes } from "./routes/identity.js";
 import { articleRoutes } from "./routes/articles.js";
 import { socialRoutes } from "./routes/social.js";
@@ -26,6 +27,12 @@ export interface Env {
   MEDIA: R2Bucket;
   ASSETS_BUCKET: R2Bucket;
   EVENTS: Queue;
+  /** SPEC §59.1 — one object per principal; the exact half of the two mechanisms. */
+  QUOTA: DurableObjectNamespace<QuotaCounter>;
+  /** SPEC §59.1 — the approximate half: per-colo flood protection, per IP and per token. */
+  FLOOD: RateLimit;
+  /** §59.2 names search separately, and the binding's limit is fixed per binding. */
+  FLOOD_SEARCH: RateLimit;
 }
 
 type Surface = "api" | "mcp" | "media" | "unknown";
@@ -107,7 +114,44 @@ const resolveContext = async (c: Context<{ Bindings: Env; Variables: Vars }>, ne
   await next();
 };
 
+/**
+ * SPEC §59.1 — flood protection, in front of everything that costs storage.
+ *
+ * The approximate half of the two mechanisms, and deliberately so. This counter is per-colo,
+ * which a distributed caller bypasses trivially; that is acceptable for a short window whose
+ * job is to stop one client hammering one edge, and unacceptable for a quota that decides
+ * the right to publish — which is why that one lives in a Durable Object (§59.2).
+ *
+ * Keyed by token id when there is one and by hashed IP otherwise, so a caller cannot escape
+ * the count by dropping its credential. The key is never the raw address: §62 keeps that out
+ * of everything, including a rate limiter's memory.
+ */
+const floodGuard = async (c: Context<{ Bindings: Env; Variables: Vars }>, next: Next) => {
+  const ctx = c.get("ctx");
+  const key = ctx.tokenId ?? ctx.ipHash ?? "anonymous";
+  const path = new URL(c.req.url).pathname;
+
+  // §59.2 names search separately, at a tenth of the general allowance: it is the one read
+  // that cannot be answered from the edge cache and costs an FTS query every time.
+  const limiter = path.startsWith("/v1/search") ? c.env.FLOOD_SEARCH : c.env.FLOOD;
+  const verdict = await limiter.limit({ key: `${limiter === c.env.FLOOD_SEARCH ? "s" : "a"}:${key}` });
+
+  if (!verdict.success) {
+    return problemResponse(
+      c,
+      {
+        type: ErrorType.RateLimited,
+        title: "Too many requests",
+        detail: "Slow down. This limit is a short window and clears on its own.",
+      },
+      path,
+    );
+  }
+  await next();
+};
+
 app.use("/v1/*", resolveContext);
+app.use("/v1/*", floodGuard);
 // MCP answers on its own hostname at the root, and needs the same actor (SPEC §42.3):
 // a bearer token there resolves to one principal and one set of scopes, as it does here.
 app.use("/mcp", resolveContext);
@@ -205,6 +249,13 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
  * operation catalogue (SPEC §53). Nothing else imports it.
  */
 export { app };
+
+/**
+ * SPEC §59.1 — the counter class is exported from the entry point because that is how the
+ * runtime finds it. It is defined in `adapters-cf` with the other Cloudflare-shaped code
+ * (§73.2); this line is the binding, not the implementation.
+ */
+export { QuotaCounter };
 
 export default {
   fetch: app.fetch,

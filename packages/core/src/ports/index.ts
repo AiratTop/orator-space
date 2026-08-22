@@ -47,6 +47,7 @@ export interface Metrics {
 export * from "./database.js";
 export * from "./repos.js";
 export * from "./articles.js";
+export * from "./quota.js";
 export * from "./reading.js";
 export * from "./social.js";
 export * from "./search.js";

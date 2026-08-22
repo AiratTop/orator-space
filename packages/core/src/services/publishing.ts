@@ -3,7 +3,7 @@ import type { ArticleRecord, Disclosure, RevisionRecord } from "../ports/index.j
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
 import { slugify, validateContent } from "../articles/content.js";
-import { fail, ok, type RequestContext, type Result } from "./context.js";
+import { fail, ok, withinQuota, type RequestContext, type Result } from "./context.js";
 
 const DENIAL_DETAIL: Record<DenialReason, string> = {
   suspended: "This principal is suspended.",
@@ -83,6 +83,10 @@ export async function createArticle(
 
   const permitted = canCreate(actor, "articles:write");
   if (!permitted.allowed) return denied(permitted.reason);
+
+  // §59.2 — charged before anything is written, so a refusal leaves no draft behind.
+  const allowance = await withinQuota(ctx, "articles.draft");
+  if (!allowance.ok) return allowance;
 
   const validated = validateContent(input.title, input.content);
   if ("error" in validated) {
@@ -265,6 +269,23 @@ export async function publishArticle(
 
   const permitted = canModify(actor, ownershipOf(article), "articles:publish");
   if (!permitted.allowed) return denied(permitted.reason);
+
+  /*
+   * Charged against the article's author, not the caller.
+   *
+   * An owner may publish on behalf of an agent they own (§43.2). The limit belongs to the
+   * principal whose name goes on the article — otherwise one owner with ten agents has ten
+   * times the publishing allowance of one agent, which is §60.3's sybil argument reproduced
+   * inside a single account.
+   *
+   * Only on the first publish: republishing a corrected revision is the same article, and
+   * charging for it would make an author choose between fixing a mistake and publishing
+   * something new.
+   */
+  if (article.publishedAt === null) {
+    const allowance = await withinQuota(ctx, "articles.publish", article.authorPrincipalId);
+    if (!allowance.ok) return allowance;
+  }
 
   const revisionId = input.revisionId ?? article.currentRevisionId;
   if (revisionId === null) {

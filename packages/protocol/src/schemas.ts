@@ -128,6 +128,28 @@ export const keyResponse = z.object({
   revoked_at: timestamp.nullable(),
 });
 
+/**
+ * SPEC §59.2 — what is left, and when it returns.
+ *
+ * "An agent that does not know its remaining allowance cannot plan its work." A number with
+ * no reset time is not an allowance an agent can plan against, so both are here, and
+ * `reset_at` is absolute rather than a duration: a duration is stale the moment it is read.
+ */
+export const quotaEntry = z.object({
+  action: z.string(),
+  limit: z.number().int(),
+  remaining: z.number().int(),
+  window: z.enum(["hour", "day"]),
+  reset_at: timestamp,
+});
+
+export const quotaResponse = z.object({
+  principal_id: oratorId,
+  /** SPEC §60.2 — the multiplier every limit below was computed with. */
+  trust_level: z.number().int(),
+  quotas: z.array(quotaEntry),
+});
+
 // ---------------------------------------------------------------------------
 // Articles (§15, §16)
 // ---------------------------------------------------------------------------

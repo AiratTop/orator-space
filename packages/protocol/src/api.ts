@@ -95,6 +95,18 @@ export const OPERATIONS: readonly Operation[] = [
     errors: [E.NotFound],
   },
   {
+    id: "getQuota",
+    method: "get",
+    path: "/v1/principals/{id}/quota",
+    summary: "Read the remaining allowance",
+    tag: "identity",
+    auth: "required",
+    scopes: [],
+    status: 200,
+    response: s.quotaResponse,
+    errors: [E.Unauthenticated, E.Forbidden, E.NotFound],
+  },
+  {
     id: "getPrincipalByUsername",
     method: "get",
     path: "/v1/principals/by-username/{username}",

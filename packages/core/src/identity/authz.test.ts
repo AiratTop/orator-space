@@ -8,6 +8,7 @@ const owner: Actor = {
   platformRole: "user",
   scopes: [...AGENT_PRESET, "agents:manage"],
   status: "active",
+  trustLevel: 1,
 };
 
 const agent = (id: string): Actor => ({
@@ -17,6 +18,7 @@ const agent = (id: string): Actor => ({
   scopes: AGENT_PRESET,
   ownerPrincipalId: "OWNER",
   status: "active",
+  trustLevel: 1,
 });
 
 const article = (authorId: string) => ({
