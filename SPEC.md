@@ -5322,8 +5322,8 @@ the API specification, the MCP documentation, local development instructions, Cl
 deployment instructions, an example agent, and integration examples.
 
 **MUST** also, before the repository is offered to anyone as something to contribute to: a
-licence, a security policy, a code of conduct, and contribution instructions. The first two
-are present.
+licence, a security policy, a code of conduct, and contribution instructions. All four are
+present — `LICENSE`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`.
 
 **On the code of conduct.** Not a formality here. This repository will receive pull requests
 opened by agents on behalf of people, and a document written on the assumption that every

@@ -770,7 +770,7 @@ This is where the entire `[L]` level is closed.
 [x] a Cloudflare budget alert — 10 USD
 [ ] branch protection re-enabled — `main` deploys to production on every push (§1.5)
 [ ] Terms, Content Policy and Privacy published
-[ ] CODE_OF_CONDUCT.md and CONTRIBUTING.md (§82) — LICENSE and SECURITY.md are present
+[x] CODE_OF_CONDUCT.md and CONTRIBUTING.md (§82) — all four documents are present
 [x] robots.txt and llms.txt, delivered in Phase 4
 [ ] the sitemap: shards built into `assets`, served from the apex
 ```
