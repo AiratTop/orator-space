@@ -74,6 +74,28 @@ function absoluteLinks(slug: PolicySlug, body: string): string {
   });
 }
 
+/**
+ * Lifts every heading one level, because the renderer will put it back.
+ *
+ * `renderMarkdown` demotes headings by one (§57.1): an article body's `#` becomes an `h2`
+ * under the page's own `h1`, which is right for a document whose title is rendered by the
+ * page. A policy's `##` sections would land at `h3` under an `h1` with no `h2` between them
+ * — a level skipped, and §50.1 asks for a correct hierarchy on a page that is indexable.
+ *
+ * Fence-aware, so a `#` at the start of a line inside a code block stays a comment.
+ */
+function promoteHeadings(body: string): string {
+  let inFence = false;
+  return body
+    .split("\n")
+    .map((line) => {
+      if (/^\s*(```|~~~)/.test(line)) inFence = !inFence;
+      if (inFence) return line;
+      return line.replace(/^#(#+\s)/, "$1");
+    })
+    .join("\n");
+}
+
 function parse(slug: PolicySlug, source: string): Policy {
   const lines = source.split("\n");
   const heading = lines.findIndex((line) => line.startsWith("# "));
@@ -86,7 +108,7 @@ function parse(slug: PolicySlug, source: string): Policy {
     slug,
     title: lines[heading]!.slice(2).trim(),
     description: SUMMARY[slug],
-    body: absoluteLinks(slug, lines.slice(heading + 1).join("\n")),
+    body: promoteHeadings(absoluteLinks(slug, lines.slice(heading + 1).join("\n"))),
     updated: updated[1]!,
   };
 }
