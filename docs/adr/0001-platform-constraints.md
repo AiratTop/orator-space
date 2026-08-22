@@ -177,11 +177,13 @@ MUST be closed before the phase named.
 |---|---|---|
 | 1 | Queues delivery in practice: at-least-once, ordering, DLQ hand-off | Phase 3 — needs a deployed consumer |
 | 2 | Analytics Engine write + SQL API read | Phase 5 — needs a deployed producer |
-| 3 | R2 presigned PUT | Phase 9 — needs R2 S3 credentials, separate from the OAuth token |
+| ~~3~~ | ~~R2 presigned PUT~~ — **withdrawn**: ADR 0005 removed it from the design, so there is nothing left to verify | — |
 | 4 | Durable Object idle cost in practice | Phase 8 — needs sustained traffic to measure |
 | 5 | Sessions API bookmarks once replication is enabled | post-launch |
 
-Each is verified inside the phase that first depends on it, rather than in advance: all four now require a real deployment to say anything true, and a deployment is what the next phases produce.
+Each is verified inside the phase that first depends on it, rather than in advance: each now requires a real deployment to say anything true, and a deployment is what the next phases produce.
+
+Item 3 left this list without being verified. Phase 5 reached the point of depending on it, looked at what the dependency actually bought, and removed it (ADR 0005). An unverified assumption can be closed by measuring it or by no longer resting on it; the second is the better outcome when it is available.
 
 ## Decision
 

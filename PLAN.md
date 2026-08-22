@@ -176,7 +176,7 @@ from `assets`. That bucket needs no name of its own.
 | 3 | Gatus checks on `/health` and `/health/deep` | Phase 8 — §66.7 |
 | 4 | Terms / Content Policy / Privacy | before public launch — §61.1, §82 |
 | 5 | ~~`SESSION_SECRET` on staging and production~~ ✅ done (`wrangler secret put SESSION_SECRET --env <env>` in `apps/web`), at least 32 characters | Phase 5 — ADR 0004 |
-| 6 | An R2 API token, if media upload is to use a presigned PUT (§21.1) | before media |
+| ~~6~~ | ~~An R2 API token for a presigned PUT~~ — not needed: ADR 0005 reversed §21.1, the upload goes through the Worker | — |
 
 **On item 5.** It signs the WebAuthn challenge cookie. Local development falls back to a
 fixed development value; a deployment without it refuses to sign anyone in rather than
@@ -498,13 +498,35 @@ it and needs no fallback.
 - **A publish returned 500 with no ExecutionContext** to extend, although the outbox row
   was committed and the cron drain would have collected it.
 
-**Media is deferred, and this is why.** §21.1 chose a presigned R2 PUT over proxying
-through the Worker. A presigned URL needs S3-compatible credentials — an R2 API token the
-repository cannot provision — and ADR 0001 lists the mechanism as unverified. The
-alternative, streaming the upload through the Worker, contradicts §21.1 outright. Writing
-untested signing code against credentials nobody can supply would be worse than either. It
-needs an operator step or a decision (§1.7 item 6), not more code. `POST /v1/media` and
-`POST /v1/media/{id}/finalize` are the only part of §44.1 not implemented.
+**Media closed the phase, by reversing a decision rather than waiting on one.** It had
+been deferred because §21.1 chose a presigned R2 PUT, which needs S3 credentials the
+repository cannot provision — so the first step of the design was an operator action, and
+the platform mechanism behind it was still on ADR 0001's unverified list.
+
+Looking again at what the presigned flow bought showed that it bought nothing: its own
+`finalize` step has to check the size, the sniffed type and the checksum, so the Worker
+reads the object back out of R2 regardless. The choice was never "the Worker handles the
+bytes" against "the Worker handles none of them" — it was one pass on the way in against a
+write plus a full read back, with a bucket-wide access key, SigV4, a round trip the client
+may never make, and two unverified assumptions stacked on each other. ADR 0005 reverses it:
+`POST /v1/media` reserves the record, `PUT /v1/media/{id}/content` carries the bytes, and
+the pass that stores them counts, hashes and sniffs them. §44.1 is now complete.
+
+**What that cost, and what it found.** Two runtime facts had to be true, and the probe that
+tested them corrected the design before it was written: `crypto.DigestStream` exists, and
+R2's `put()` refuses a stream of unknown length — so the first draft's `tee()`, one branch
+to the digest and one to the bucket, does not work at all. `FixedLengthStream` replaced it
+and became the enforcement as well as the plumbing.
+
+Then the integration test found the isolation check disabled in the only place anything
+tests it. `media.orator.space` must not serve from the API host (§57.4), and the guard was
+written as "require the media surface, unless `ENVIRONMENT === 'local'`" — which is exactly
+the environment the tests and `wrangler dev` both run in. Rewritten as "refuse the api and
+mcp surfaces", it holds everywhere and still serves files on localhost.
+
+**Not built:** variants. §21.2 puts transformation behind a `MediaTransform` port
+implemented by the platform; only `original` is stored and served, and the key is prefixed
+by media id so a variant can sit beside it without moving anything.
 
 **Do not do:** MCP. That is Phase 6.
 

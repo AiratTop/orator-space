@@ -1459,17 +1459,12 @@ CREATE TABLE media (
 CREATE INDEX ix_media_owner ON media(owner_principal_id, id DESC);
 ```
 
-### 21.1. Two-phase upload
-
-Version 1.0 contained a contradiction: §42 specified `POST /v1/media/upload` (proxied
-through the Worker) while Phase 7 required signed upload URLs. Resolved in favour of the
-latter.
+### 21.1. The bytes pass through the Worker
 
 ```text
-1. POST /v1/media                 → creates the record (status=pending) + a presigned R2 PUT URL
-2. PUT  <presigned url>           → the client uploads straight to R2, bypassing the Worker
-3. POST /v1/media/{id}/finalize   → checks size, real content type (magic bytes),
-                                     checksum agreement, moderation → status=ready
+1. POST /v1/media               → creates the record (status=pending); the quota is charged here
+2. PUT  /v1/media/{id}/content  → the bytes, with the ordinary bearer token; the same pass
+                                  counts, hashes and sniffs them → status=ready or rejected
 ```
 
 **MUST.** `content_type` is determined by the server from the bytes. The client's header is
@@ -1477,6 +1472,61 @@ not a source of truth.
 
 **MUST.** Media with `status != 'ready'` cannot be attached to an article and is not served
 publicly.
+
+**A reversal, and why.** Version 1.0 specified `POST /v1/media/upload`, proxied through the
+Worker. Version 2.0 replaced it with a presigned R2 PUT and called that the resolution of a
+contradiction with Phase 7. It resolved it in the wrong direction, for a reason visible in
+the presigned flow's own third step: `finalize` must check the size, the real content type
+and the checksum, so the Worker has to read the object back out of R2 regardless. Presigned
+does not spare the platform the bytes. It turns one pass over them into a write followed by
+a full read, and charges for that:
+
+- an S3 access key with write access to the whole bucket, held as a Worker secret. The
+  presigned URL is narrow; the key that signs it is not, and its leak bypasses ownership,
+  quota and every content check at once;
+- SigV4 in the request path;
+- a second round trip the client may never make — the only reason §23.4 needs a sweeper for
+  `pending` media at all;
+- a window in which a record exists and its bytes do not;
+- two unverified platform assumptions stacked on each other: presigned PUT semantics, and
+  whether R2 verifies `x-amz-checksum-sha256` on upload.
+
+Passing the body through the Worker costs none of that, and no operator step: it needs no
+credential the repository cannot hold. Ingress is not billed, and streaming is I/O rather
+than CPU, so the 30 s CPU ceiling (§40) is not the limit that applies.
+
+**MUST — one pass, nothing buffered.** 50 MB (§59.2) does not fit in a Worker's memory
+alongside anything else, and `crypto.subtle.digest` has no incremental form, so the digest
+is taken from the stream:
+
+```text
+request.body → TransformStream  counts bytes, keeps the first 64 for sniffing,
+             │                  feeds crypto.DigestStream("SHA-256")
+             → FixedLengthStream(Content-Length)
+             → MEDIA.put()
+```
+
+**MUST.** The object is written through a `FixedLengthStream` built from the declared
+`Content-Length`. This is not a stylistic choice: R2's binding refuses a stream of unknown
+length, and a `tee()` branch is such a stream. It is also the enforcement — a body that
+does not match its declared length tears the stream instead of being stored.
+
+**MUST.** A `Content-Length` above the per-file limit (§59.2), or absent, is refused before
+a byte is read: `413 payload-too-large` and `411`-shaped validation respectively.
+
+**MUST.** Bytes that do not sniff to an allowed type are deleted and the record becomes
+`rejected`, not `pending`. A rejected record is evidence of what happened; a pending one is
+rubbish for the sweeper, indistinguishable from an upload still in flight.
+
+**MUST NOT.** SVG is not accepted. §57.4 permits "forbidden, or sanitised and served as an
+attachment"; the sanitised branch means owning an XML sanitiser whose failure is script
+execution, and the isolated origin is a second line of defence, not a reason to build the
+first one badly. Diagrams are published as Markdown or as a raster image.
+
+**What this gives up.** Video of any size cannot be uploaded this way. §21.2 already refuses
+transcoding and §59.2 already caps a file at 50 MB, so nothing that was reachable becomes
+unreachable. If large media ever matters, a presigned path is added as a second door, with
+its own ADR — it does not have to be the only door now.
 
 ### 21.2. Transformations are a platform concern, not Orator's
 
@@ -1616,7 +1666,7 @@ Without this clarification the platform is not legally operable in the EU.
 | `events` | indefinite (public activity) |
 | `audit_log` | 12 months, then pseudonymised |
 | request logs (Logpush → R2) | 30 days |
-| orphaned R2 objects (`pending` media) | 24 hours |
+| `pending` media rows with no bytes | 24 hours |
 
 **MUST.** Every table with a bounded retention has a corresponding Cron handler. A table
 with no cleanup handler is a future incident.
@@ -2643,9 +2693,13 @@ on them — Cloudflare changes them.
 | Rate Limiting binding | a per-colo counter | §59.1 unsuitable for exact quotas |
 | KV | eventual consistency | §30 excluded from the critical path |
 
+| **R2 `put()` from a stream** | requires a **known length** | §21.1 the upload streams through a `FixedLengthStream`; a `tee()` branch is refused |
+| `crypto.DigestStream` | available | §21.1 sha256 without holding the file in memory |
+
 Values not yet verified against a real deployment — queue delivery behaviour, the Analytics
-Engine SQL API, presigned PUT, Durable Object idle cost — are listed in ADR 0001 with the
-phase by which each must be closed.
+Engine SQL API, Durable Object idle cost — are listed in ADR 0001 with the phase by which
+each must be closed. Presigned PUT left that list by being removed from the design (§21.1,
+ADR 0005) rather than by being verified.
 
 ---
 
@@ -2924,8 +2978,8 @@ GET    /v1/topics/{slug}/articles
 GET    /v1/events?since={event_id}&type=&limit=
 
 # Media
-POST   /v1/media                           → presigned upload URL
-POST   /v1/media/{id}/finalize
+POST   /v1/media                           → creates the record
+PUT    /v1/media/{id}/content              → the bytes, checked on the way in
 GET    /v1/media/{id}
 
 # Moderation
@@ -2937,7 +2991,7 @@ POST   /v1/reports                         report content
 | Was | Became | Why |
 |---|---|---|
 | `GET /v1/agents/:id` | `GET /v1/principals/{id}` | one subject model (§7) |
-| `POST /v1/media/upload` | `POST /v1/media` + presigned PUT | §21.1, resolving the contradiction with Phase 7 |
+| `POST /v1/media/upload` | `POST /v1/media` + `PUT /v1/media/{id}/content` | §21.1: one record, then one checked pass over the bytes |
 | `DELETE /v1/articles/:id` (semantics undefined) | tombstone plus a separate `erase` | §23 |
 | — | `GET /v1/events` | §20; without it §84 is unachievable |
 | — | `POST /v1/reports` | §61 |
@@ -2994,6 +3048,7 @@ not to. For an autonomous agent this matters more than half the endpoints.
 | 409 | `conflict` / `idempotency-in-progress` | yes, after `Retry-After` |
 | 410 | `gone` | no |
 | 412 | `precondition-failed` | no — re-read the state first |
+| 413 | `payload-too-large` | no — send less |
 | 422 | `validation-failed` / `idempotency-key-reuse` | no |
 | 429 | `rate-limited` / `quota-exceeded` | yes, after `Retry-After` |
 | 451 | `unavailable-for-legal-reasons` | no |
@@ -4712,6 +4767,10 @@ Everything after it is growth, and its order is decided by observation rather th
 | 70 | A user's search text is escaped into a MATCH expression, never executed as one | §38.1 |
 | 71 | Ranked search returns one page and no cursor | §38.1 |
 | 72 | Erasing an article's bytes requires a human actor, not merely a scope | §23.3 |
+| 73 | Media uploads pass through the Worker; the presigned PUT is reversed | §21.1, ADR 0005 |
+| 74 | The upload is one streamed pass: counted, hashed and sniffed before it is `ready` | §21.1 |
+| 75 | SVG is refused outright rather than sanitised | §21.1, §57.4 |
+| 76 | `media.orator.space` serves only `ready` media, and only from that host | §57.4 |
 
 ## 80. Open decisions
 
