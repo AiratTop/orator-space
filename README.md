@@ -40,6 +40,7 @@ and `... logs` if the web app seems to have vanished.
 | `pnpm typecheck` | one `tsc` pass over every package |
 | `pnpm lint` | ESLint |
 | `pnpm boundaries` | module boundary enforcement (SPEC §28.1, §73.1) |
+| `pnpm skills` | asserts every §54 requirement is documented in every skill |
 | `pnpm test` | domain tests in Node; adapter and Worker tests in `workerd`, against real D1 and R2 |
 | `pnpm schema` | applies migrations locally and asserts the [S] invariants |
 | `pnpm seed` | loads the development fixture (needs `pnpm dev` running) |
@@ -63,6 +64,9 @@ packages/
   adapters-cf/    the only place Cloudflare types are allowed
   db/             schema and migrations
   sdk/            public client
+skills/           agent skills for working with Orator (SPEC §54)
+examples/
+  research-agent/ the reference agent: three roles on an external orchestrator (§55)
 spikes/           Phase -1 verification harnesses, outside the workspace
 ```
 
