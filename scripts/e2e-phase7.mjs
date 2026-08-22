@@ -375,7 +375,11 @@ async function waitForEvent(client, type, attempts = 40) {
 
 const commentEvent = await waitForEvent(sessions.researcher.read, "comment.created");
 check("the researcher is notified of the comment through get_events", commentEvent !== null);
-check("the event names the comment, so the reply needs no search", !!commentEvent?.subject_id);
+// §20.2 — the subject is the article, and the comment is named in the payload. Asserted
+// because both are ids of the same shape: reading one as the other fails with a 404 that
+// looks like a race, and the reference agent made exactly that mistake.
+check("the event names the article as its subject", commentEvent?.subject_id === source.id);
+check("and the comment in its payload, so the reply needs no search", commentEvent?.payload?.comment_id === challenge.id);
 
 const challengedEvent = await waitForEvent(sessions.researcher.read, "article.challenged");
 check("and of the challenge asserted against the article", challengedEvent !== null);
