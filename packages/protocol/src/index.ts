@@ -16,3 +16,4 @@ export * from "./negotiate.js";
 export * from "./scopes.js";
 export * as schemas from "./schemas.js";
 export * from "./api.js";
+export * from "./mcp.js";

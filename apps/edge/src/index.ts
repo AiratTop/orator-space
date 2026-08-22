@@ -5,7 +5,7 @@
  * REST and MCP are adapters over the same application services (SPEC §29, §41);
  * neither owns business logic and neither talks to storage directly (SPEC §28.1).
  */
-import { Hono } from "hono";
+import { Hono, type Context, type Next } from "hono";
 import { createIdGen } from "@orator/adapters-cf";
 import { problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
 import type { RequestContext } from "@orator/core";
@@ -15,6 +15,7 @@ import { articleRoutes } from "./routes/articles.js";
 import { socialRoutes } from "./routes/social.js";
 import { discoveryRoutes } from "./routes/discovery.js";
 import { mediaRoutes } from "./routes/media.js";
+import { mcpRoutes } from "./routes/mcp.js";
 import { portsFor } from "./context.js";
 import { drainOutbox, reindexArticle } from "@orator/core";
 
@@ -44,7 +45,9 @@ export function surfaceFor(hostname: string): Surface {
 
 const idGen = createIdGen();
 
-const app = new Hono<{ Bindings: Env; Variables: { requestId: string; ctx: RequestContext } }>();
+type Vars = { requestId: string; ctx: RequestContext };
+
+const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 /** SPEC §66.1 — a request id exists from the first middleware and travels to the consumer. */
 app.use("*", async (c, next) => {
@@ -99,15 +102,22 @@ app.post("/dev/seed", async (c) => {
  * working — a health endpoint that fails when the token table is unreachable reports the
  * wrong thing (SPEC §66.4).
  */
-app.use("/v1/*", async (c, next) => {
+const resolveContext = async (c: Context<{ Bindings: Env; Variables: Vars }>, next: Next) => {
   c.set("ctx", await contextFor(c.req.raw, c.env, c.get("requestId")));
   await next();
-});
+};
+
+app.use("/v1/*", resolveContext);
+// MCP answers on its own hostname at the root, and needs the same actor (SPEC §42.3):
+// a bearer token there resolves to one principal and one set of scopes, as it does here.
+app.use("/mcp", resolveContext);
+app.use("/", resolveContext);
 
 app.route("/", identityRoutes);
 app.route("/", articleRoutes);
 app.route("/", socialRoutes);
 app.route("/", discoveryRoutes);
+app.route("/", mcpRoutes);
 app.route("/", mediaRoutes);
 
 app.notFound((c) =>
