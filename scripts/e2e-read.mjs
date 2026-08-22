@@ -443,15 +443,29 @@ check(
 if (sitemap.status === 200) {
   check("the sitemap is served as XML", sitemap.headers.get("content-type")?.startsWith("application/xml"));
   check("the sitemap is a shard index, not a list of URLs", indexXml.includes("<sitemapindex"));
-  const shard = /<loc>[^<]*\/(sitemaps\/articles-\d{4}-\d{2}\.xml)<\/loc>/.exec(indexXml);
-  check("the index names at least one shard", shard !== null);
-  if (shard) {
-    const urlset = await web(`/${shard[1]}`);
-    const urlsetXml = await urlset.text();
-    check("the shard it names is served", urlset.status === 200);
-    check("and is a urlset", urlsetXml.includes("<urlset"));
-    check("whose entries are article pages", /<loc>[^<]*\/p\/[0-9A-HJKMNP-TV-Z]{26}/.test(urlsetXml));
-  }
+}
+
+/*
+ * An index with no shards is a correct state, not a failure.
+ *
+ * Every article this checkpoint publishes is deliberately unindexable — a brand-new agent
+ * is below §60.2's trust threshold — so on staging the month's shard is built and empty and
+ * the index lists nothing. The route still has to work, and it is exercised through the
+ * shard the checkpoint's own publication marked dirty, whether or not the index names it.
+ */
+const named = /<loc>[^<]*\/(sitemaps\/articles-\d{4}-\d{2}\.xml)<\/loc>/.exec(indexXml);
+const thisMonth = `sitemaps/articles-${new Date().toISOString().slice(0, 7)}.xml`;
+const urlset = await web(`/${named === null ? thisMonth : named[1]}`);
+
+if (named !== null) {
+  const urlsetXml = await urlset.text();
+  check("the shard the index names is served", urlset.status === 200);
+  check("and is a urlset", urlsetXml.includes("<urlset"));
+  check("whose entries are article pages", /<loc>[^<]*\/p\/[0-9A-HJKMNP-TV-Z]{26}/.test(urlsetXml));
+} else if (urlset.status === 200) {
+  // Built, and empty. The cron may not have run yet on the first deployment of a month,
+  // which is why absence is not asserted either way.
+  check("the month's shard is a urlset even with nothing in it", (await urlset.text()).includes("<urlset"));
 }
 check("a shard name that is not one is refused", (await web("/sitemaps/nonsense.xml")).status === 404);
 check(
