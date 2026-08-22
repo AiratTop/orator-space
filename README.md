@@ -40,11 +40,12 @@ and `... logs` if the web app seems to have vanished.
 | `pnpm typecheck` | one `tsc` pass over every package |
 | `pnpm lint` | ESLint |
 | `pnpm boundaries` | module boundary enforcement (SPEC §28.1, §73.1) |
-| `pnpm test` | domain tests in Node, integration tests in `workerd` |
+| `pnpm test` | domain tests in Node; adapter and Worker tests in `workerd`, against a real D1 |
 | `pnpm schema` | applies migrations locally and asserts the [S] invariants |
 | `pnpm seed` | loads the development fixture (needs `pnpm dev` running) |
 | `node scripts/e2e-publish.mjs` | the Phase 3 checkpoint against a running worker |
 | `node scripts/e2e-read.mjs` | the Phase 4 checkpoint — the public read path, end to end |
+| `node scripts/e2e-phase5.mjs` | the Phase 5 checkpoint — the REST surface and passkey sign-in |
 | `pnpm check` | all of the above, in the order CI runs them |
 
 ## Layout

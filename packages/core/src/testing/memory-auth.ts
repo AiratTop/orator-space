@@ -162,6 +162,7 @@ export function createMemoryAuthPorts(options: { now?: Date } = {}): MemoryAuth 
       credentials,
       sessions,
       passkeys: verifier,
+      tokens: base.tokens,
       clock: base.clock,
       ids: base.ids,
     },

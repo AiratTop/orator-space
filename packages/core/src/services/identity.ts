@@ -325,8 +325,15 @@ export async function revokeToken(ctx: RequestContext, tokenId: string): Promise
  * `last_used_at` is deliberately not written here: doing so would turn every authenticated
  * read into a database write, on the hottest path in the system (§42.2).
  */
+/**
+ * Resolves a bearer token to an actor.
+ *
+ * Takes the three ports it reads rather than the whole set, so that a surface holding only
+ * a slice of `Ports` — the web app, which must not be able to publish (§28) — can still
+ * authenticate a caller.
+ */
 export async function authenticate(
-  ports: Ports,
+  ports: Pick<Ports, "tokens" | "principals" | "clock">,
   token: string,
 ): Promise<Result<{ actor: Actor; tokenId: OratorId }>> {
   const record = await ports.tokens.findByHash(await sha256Hex(token));

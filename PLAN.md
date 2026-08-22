@@ -175,7 +175,7 @@ from `assets`. That bucket needs no name of its own.
 | 2 | Budget alert on the Cloudflare account | before Phase 3 — §67.2 |
 | 3 | Gatus checks on `/health` and `/health/deep` | Phase 8 — §66.7 |
 | 4 | Terms / Content Policy / Privacy | before public launch — §61.1, §82 |
-| 5 | `SESSION_SECRET` on staging and production (`wrangler secret put SESSION_SECRET --env <env>` in `apps/web`), at least 32 characters | Phase 5 — ADR 0004 |
+| 5 | ~~`SESSION_SECRET` on staging and production~~ ✅ done (`wrangler secret put SESSION_SECRET --env <env>` in `apps/web`), at least 32 characters | Phase 5 — ADR 0004 |
 | 6 | An R2 API token, if media upload is to use a presigned PUT (§21.1) | before media |
 
 **On item 5.** It signs the WebAuthn challenge cookie. Local development falls back to a
@@ -450,7 +450,7 @@ the launch gate (§11) is not closed, and the first article should be a delibera
 
 ---
 
-## 8. Phase 5 — The complete REST API ← in progress
+## 8. Phase 5 — The complete REST API ✅ closed
 
 **Entry:** Phase 4 closed.
 
@@ -471,41 +471,46 @@ follows; `GET /v1/events`; passkeys and browser sessions; search; OpenAPI genera
 **Settled before this phase:** FTS5 is available in D1 (Phase −1, check 3), so search uses
 it and needs no fallback.
 
-### 8.1. State at the end of the first session
-
-**Done, with tests:** the operation catalogue and generated OpenAPI (§53); comments, edges
-and follows with their notification events (§17-19); the feed, FTS5 search and topics
-(§37, §38, §22); article metadata, tombstone and erasure (§23); report intake (§61); the
-events feed with a type filter; `PATCH /v1/principals/{id}`; the conformance test that
-holds the route table and the catalogue to each other; passkey registration and sign-in
-with browser sessions (§42.2, ADR 0004).
-
-**Half-finished, and the first thing to pick up:** the passkey flow has services, ports,
-adapters, routes and a sign-in page, but no tests of its own yet — `createMemoryAuthPorts`
-exists for exactly that and is unused. Nothing exercises the ceremony end to end.
-
-**Still to do in this phase:**
+**Acceptance** — `scripts/e2e-phase5.mjs`, 77 checks against a running pair of Workers:
 
 ```
-[ ] tests for the passkey services, using createMemoryAuthPorts
-[ ] scripts/e2e-phase5.mjs — the whole surface against running Workers,
-    including a virtual authenticator for the sign-in ceremony
-[ ] X-Request-Id asserted end to end: request -> outbox -> consumer
-[ ] media upload — see below
-[ ] operator: SESSION_SECRET on both environments (§1.7)
-[ ] deploy and verify against staging
+[x] OpenAPI is generated, not hand-written
+[x] every error matches the §45.1 catalogue, with Retry-After where required
+[x] X-Request-Id runs end to end: request → outbox → consumer
+[x] GET /v1/events returns notifications by cursor
+[x] passkey sign-in works; a session is not accepted on api.orator.space
 ```
+
+**What it found.** Four defects, none of which any unit test could have reached:
+
+- **The search query had never been executed.** `WHERE f MATCH ?` against an aliased FTS5
+  table fails with `no such column: f` — `MATCH` takes the table's own hidden column and an
+  alias does not carry it. The escaping had a unit test and the behaviour had a domain
+  test against an in-memory double; the SQL itself had run nowhere. `packages/adapters-cf`
+  now has a D1 binding and its own migrations, so an adapter's queries are executed by
+  something before a request is.
+- **The passkey flow had no beginning.** Registering a passkey required a session, and a
+  session required a passkey. A person who has just registered holds exactly one
+  credential — the token `POST /v1/humans` returns — so the web's registration endpoints
+  now accept it. The same dead end §42.2 was written to close, one step further along.
+- **The pool had no schema.** Every integration test that touched storage failed on a
+  missing table; nothing had tried to read a row before.
+- **A publish returned 500 with no ExecutionContext** to extend, although the outbox row
+  was committed and the cron drain would have collected it.
 
 **Media is deferred, and this is why.** §21.1 chose a presigned R2 PUT over proxying
 through the Worker. A presigned URL needs S3-compatible credentials — an R2 API token the
 repository cannot provision — and ADR 0001 lists the mechanism as unverified. The
 alternative, streaming the upload through the Worker, contradicts §21.1 outright. Writing
-untested signing code against credentials nobody can supply would be worse than either.
-It needs an operator step or a decision, not more code.
+untested signing code against credentials nobody can supply would be worse than either. It
+needs an operator step or a decision (§1.7 item 6), not more code. `POST /v1/media` and
+`POST /v1/media/{id}/finalize` are the only part of §44.1 not implemented.
+
+**Do not do:** MCP. That is Phase 6.
 
 ---
 
-## 9. Phase 6 — MCP
+## 9. Phase 6 — MCP ← current
 
 **Entry:** Phase 5 closed.
 

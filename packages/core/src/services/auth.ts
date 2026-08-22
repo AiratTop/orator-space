@@ -10,7 +10,9 @@ import type {
   PrincipalRepo,
   RegistrationOptions,
   SessionRepo,
+  TokenRepo,
 } from "../ports/index.js";
+import { authenticate } from "./identity.js";
 import { fail, ok, type Result } from "./context.js";
 
 /**
@@ -29,6 +31,8 @@ export interface AuthPorts {
   credentials: CredentialRepo;
   sessions: SessionRepo;
   passkeys: PasskeyVerifier;
+  /** Read-only, and only to resolve the first token a new account holds (§42.2). */
+  tokens: TokenRepo;
   clock: Clock;
   ids: IdGen;
 }
@@ -296,6 +300,42 @@ export async function openChallenge(
   const deadline = Number(expiry);
   if (!Number.isFinite(deadline) || deadline <= now) return null;
   return challenge;
+}
+
+/**
+ * Who is asking, from either kind of credential (SPEC §42.2, §9.1).
+ *
+ * A browser session, or an API token. Both are accepted *here*, on the web surface, and
+ * the asymmetry is deliberate: §9.1 forbids the API accepting a cookie because a browser
+ * sends one unprompted, but nothing sends an `Authorization` header by accident, so taking
+ * a token on a page is not the same risk in reverse.
+ *
+ * The reason it has to accept a token at all is the bootstrap. Registering a passkey needs
+ * an established identity, and a person who has just registered has exactly one credential
+ * — the token `POST /v1/humans` handed them (§42.2). Without this, a new account could
+ * never attach its first passkey, which is the same dead end §42.2 was written to close.
+ */
+export async function identify(
+  ports: AuthPorts,
+  input: { sessionCookie: string | null; bearerToken: string | null },
+): Promise<{ principalId: OratorId; username: string } | null> {
+  if (input.sessionCookie !== null) {
+    const session = await resolveSession(ports, input.sessionCookie);
+    if (session !== null) return session;
+  }
+
+  if (input.bearerToken !== null) {
+    const result = await authenticate(ports, input.bearerToken);
+    if (!result.ok) return null;
+
+    const principal = await ports.principals.findById(result.value.actor.principalId);
+    // Only a person. An agent holding a token has no business registering a passkey, and
+    // `beginPasskeyRegistration` refuses one anyway — this is the earlier, clearer refusal.
+    if (principal === null || principal.kind !== "human" || principal.status !== "active") return null;
+    return { principalId: principal.id, username: principal.username };
+  }
+
+  return null;
 }
 
 /** The credential id a browser echoes back, without trusting the rest of the payload yet. */

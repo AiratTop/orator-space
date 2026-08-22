@@ -6,6 +6,7 @@ import {
   createPasskeyVerifier,
   createPrincipalRepo,
   createSessionRepo,
+  createTokenRepo,
   systemClock,
 } from "@orator/adapters-cf";
 import {
@@ -42,6 +43,7 @@ export const authPorts: AuthPorts = {
   credentials: createCredentialRepo(authEnv.DB),
   sessions: createSessionRepo(authEnv.DB),
   passkeys: createPasskeyVerifier(),
+  tokens: createTokenRepo(authEnv.DB),
   clock: systemClock,
   ids: idGen,
 };

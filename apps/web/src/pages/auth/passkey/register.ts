@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { completePasskeyRegistration, openChallenge, resolveSession } from "@orator/core";
+import { bearerFrom, completePasskeyRegistration, identify, openChallenge } from "@orator/core";
 import {
   authContext,
   authPorts,
@@ -15,9 +15,17 @@ export const POST: APIRoute = async ({ request }) => {
   const secret = signingSecret();
   if (secret === null) return authProblem(503, "Sign-in is not configured", "SESSION_SECRET is not set.");
 
-  const cookie = readCookie(request, SESSION_COOKIE);
-  const session = cookie === null ? null : await resolveSession(authPorts, cookie);
-  if (session === null) return authProblem(401, "Sign in first");
+  const session = await identify(authPorts, {
+    sessionCookie: readCookie(request, SESSION_COOKIE),
+    bearerToken: bearerFrom(request.headers.get("authorization")),
+  });
+  if (session === null) {
+    return authProblem(
+      401,
+      "Sign in first",
+      "Send a session cookie, or the API token registration returned — a new account has no session yet (§42.2).",
+    );
+  }
 
   const challenge = await openChallenge(secret, readCookie(request, CHALLENGE_COOKIE), Date.now());
   if (challenge === null) return authProblem(400, "The challenge is missing or expired. Start again.");

@@ -97,13 +97,16 @@ export function createSearchIndex(db: D1Database): SearchIndex {
       // and may lag a withdrawal by one event, so the live status decides what is returned.
       const { results } = await db
         .prepare(
+          // The FTS table is not aliased. `MATCH` takes the table's own hidden column, and
+          // an alias does not carry it — `WHERE f MATCH ?` fails with "no such column: f",
+          // which is what the first real run of this query produced.
           `SELECT d.article_id AS id
-             FROM article_fts f
-             JOIN search_docs d ON d.doc_id = f.rowid
+             FROM article_fts
+             JOIN search_docs d ON d.doc_id = article_fts.rowid
              JOIN articles a    ON a.id = d.article_id
-            WHERE f MATCH ?
+            WHERE article_fts MATCH ?
               AND a.status = 'published' AND a.visibility = 'public'
-            ORDER BY f.rank
+            ORDER BY article_fts.rank
             LIMIT ?`,
         )
         .bind(expression, limit)

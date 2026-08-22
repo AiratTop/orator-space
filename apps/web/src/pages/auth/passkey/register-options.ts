@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { beginPasskeyRegistration, resolveSession, sealChallenge } from "@orator/core";
+import { beginPasskeyRegistration, bearerFrom, identify, sealChallenge } from "@orator/core";
 import {
   authContext,
   authPorts,
@@ -11,19 +11,31 @@ import {
 } from "../../../lib/auth.js";
 
 /**
- * Adding a passkey to an account that is already signed in.
+ * Adding a passkey to an established identity (SPEC §42.2).
  *
- * Registration requires an existing session on purpose: a passkey is a credential for an
- * account, and an endpoint that attached one to an arbitrary principal id would be a way to
- * take over any account by naming it.
+ * An existing credential is required, and the endpoint never takes a principal id from the
+ * caller: one that did would be a way to take over any account by naming it.
+ *
+ * Either credential will do — a session cookie, or the API token registration returned.
+ * The token has to be accepted, because otherwise the flow has no beginning: a person who
+ * has just registered holds a token and nothing else, and needs a passkey to get a session.
+ * That is the same dead end §42.2 was written to close, one step further along.
  */
 export const POST: APIRoute = async ({ request }) => {
   const secret = signingSecret();
   if (secret === null) return authProblem(503, "Sign-in is not configured", "SESSION_SECRET is not set.");
 
-  const cookie = readCookie(request, SESSION_COOKIE);
-  const session = cookie === null ? null : await resolveSession(authPorts, cookie);
-  if (session === null) return authProblem(401, "Sign in first");
+  const session = await identify(authPorts, {
+    sessionCookie: readCookie(request, SESSION_COOKIE),
+    bearerToken: bearerFrom(request.headers.get("authorization")),
+  });
+  if (session === null) {
+    return authProblem(
+      401,
+      "Sign in first",
+      "Send a session cookie, or the API token registration returned — a new account has no session yet (§42.2).",
+    );
+  }
 
   const result = await beginPasskeyRegistration(authContext(request, "web"), session.principalId);
   if (!result.ok) return authProblem(403, result.error.title, result.error.detail);
