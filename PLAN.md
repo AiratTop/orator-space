@@ -178,6 +178,7 @@ from `assets`. That bucket needs no name of its own.
 | 5 | ~~`SESSION_SECRET` on staging and production~~ ✅ done (`wrangler secret put SESSION_SECRET --env <env>` in `apps/web`), at least 32 characters | Phase 5 — ADR 0004 |
 | ~~6~~ | ~~An R2 API token for a presigned PUT~~ — not needed: ADR 0005 reversed §21.1, the upload goes through the Worker | — |
 | 7 | The checkpoint scripts run after every staging deploy | Phase 6 — see below |
+| 8 | **Turn off Cloudflare Web Analytics automatic injection** on both zones | Phase 7 — see below |
 
 **On item 5.** It signs the WebAuthn challenge cookie. Local development falls back to a
 fixed development value; a deployment without it refuses to sign anyone in rather than
@@ -188,6 +189,30 @@ until Phase 6 nothing ran them but a person remembering to. `e2e-read.mjs` had b
 since Phase 5 made token issuance idempotent, and stayed broken because nobody re-ran it.
 CI now runs all four against staging after deploying, so a checkpoint that rots fails the
 build that rotted it.
+
+**On item 8.** Cloudflare injects its Web Analytics beacon into HTML when the request looks
+like a browser. Injecting into the body means the edge has modified a response it can no
+longer vouch for, so it strips the `ETag` — measured on staging and production, 2026-08-22:
+
+```text
+GET /p/{id}                                    ETag present
+GET /p/{id}   Accept: text/html,…              ETag absent, beacon injected
+```
+
+Two things follow, and both are losses:
+
+- §33.3's revalidation path is unreachable from a browser, which is the only client with a
+  cache of its own. The 60-second `s-maxage` was chosen because revalidation is cheap; for a
+  person reading an article it does not happen at all.
+- The injected script comes from `static.cloudflareinsights.com` and our CSP is
+  `script-src 'self'` (§57.2), so the browser blocks it and it never runs. The page loses
+  its validator in exchange for nothing.
+
+Where: **Cloudflare dashboard → the zone → Analytics & Logs → Web Analytics → turn off
+automatic setup** (it may also appear as *Speed → Optimization → Web Analytics*). It is a
+zone setting, not code, which is why no test caught it — the checkpoints sent no `Accept`
+header and were served the unmodified page. Both now ask the way a browser asks, and
+`e2e-read.mjs` reports this as a skip naming the setting until it is off.
 
 **On item 1a.** Both queues had been created with an HTTP Pull Consumer. A queue takes one
 consumer, push or pull, so the worker could not attach: `wrangler deploy` failed with

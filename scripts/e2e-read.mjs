@@ -242,6 +242,38 @@ check("the 304 carries no body", (await revalidated.text()).length === 0);
 const strong = await web(canonical, { headers: { "if-none-match": (etag ?? "").replace(/^W\//, "") } });
 check("the strong form of the same tag still revalidates", strong.status === 304);
 
+/**
+ * The same page, asked for the way a browser asks for it (§33.3, §57.2).
+ *
+ * Every check above sent no `Accept` header, which is how this went unnoticed: Cloudflare
+ * Web Analytics injects its beacon into HTML when the request looks like a browser, and
+ * injecting into the body means the edge has modified a response it can no longer vouch
+ * for — so it strips the `ETag`. Every reader who is actually a person therefore gets a
+ * page with no validator, and §33.3's revalidation path is unreachable for the audience it
+ * was designed for.
+ *
+ * The injected script is blocked by our own `script-src 'self'` (§57.2) and never runs, so
+ * the whole exchange is cost without a beneficiary. It is a zone setting, not code — see
+ * PLAN.md §1.7.
+ */
+const browserView = await web(canonical, {
+  headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
+});
+const browserBody = await browserView.text();
+const injected = browserBody.includes("cloudflareinsights.com");
+
+check("a machine client is served a page it can revalidate", !!etag);
+if (injected) {
+  skip(
+    "a browser is served a page it can revalidate",
+    "Cloudflare injects its analytics beacon into HTML for browser-shaped requests, and " +
+      "strips the ETag when it does — a zone setting (PLAN §1.7), and the script our CSP " +
+      "blocks anyway",
+  );
+} else {
+  check("a browser is served a page it can revalidate too", !!browserView.headers.get("etag"));
+}
+
 const credentialed = await web(canonical, { headers: { authorization: "Bearer whatever" } });
 check(
   "a response to a credentialed request is never publicly cacheable",

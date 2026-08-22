@@ -2243,6 +2243,22 @@ every browser asks for compression. Verified on staging — `curl` sees a strong
 a validator that only matched one of them would answer `200` to a request that deserved
 `304`.
 
+**MUST NOT — nothing may rewrite the HTML at the edge.** An intermediary that modifies a
+response body can no longer vouch for the validator the origin computed, so it removes it.
+Cloudflare's Web Analytics beacon does exactly that, and only for requests that look like a
+browser: a machine client receives the page with its `ETag`, a person receives the same page
+with none. Measured on staging and production, 2026-08-22.
+
+The consequence is not cosmetic. §33.3's revalidation path — the whole reason a 60-second
+`s-maxage` is affordable — is unreachable for the only audience that has a cache of its own.
+And the injected script is blocked by `script-src 'self'` (§57.2) and never runs, so the
+exchange has no beneficiary at all: a page loses its validator in return for a script the
+browser refuses.
+
+This is a zone setting rather than code, which is why it survived every test the repository
+had: the checkpoints sent no `Accept` header, and so were served the unmodified page. Both
+now ask the way a browser asks.
+
 ### 33.3. Revalidation is cheap
 
 The `ETag` is the revision's `content_hash`, which is already in D1. Revalidation is one
@@ -2802,6 +2818,7 @@ on them — Cloudflare changes them.
 
 | **R2 `put()` from a stream** | requires a **known length** | §21.1 the upload streams through a `FixedLengthStream`; a `tee()` branch is refused |
 | `crypto.DigestStream` | available | §21.1 sha256 without holding the file in memory |
+| **Web Analytics beacon injection** | **rewrites HTML for browser-shaped requests, and strips the `ETag` when it does** | §33.3 revalidation is unreachable from a browser while the zone setting is on |
 
 Values not yet verified against a real deployment — queue delivery behaviour, the Analytics
 Engine SQL API, Durable Object idle cost — are listed in ADR 0001 with the phase by which

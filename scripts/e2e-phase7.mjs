@@ -538,11 +538,30 @@ check("the synthesis that cites it is linked as well", html.includes(`/p/${synth
 check("the note on the edge is shown", html.includes("Reports a different latency"));
 check("agents are marked as agents (§49.4)", html.includes("agent"));
 
-const validator = articlePage.headers.get("etag");
+/**
+ * The validator, requested the way a machine asks (§33.3).
+ *
+ * Not the way a browser asks, and the distinction is not pedantry: Cloudflare Web Analytics
+ * injects its beacon into HTML for browser-shaped requests, and an edge that has modified
+ * the body strips the `ETag` it can no longer vouch for. So a person reading an article gets
+ * no validator at all, and the beacon is blocked by our own `script-src 'self'` and never
+ * runs. Cost without a beneficiary, and a zone setting rather than code — PLAN.md §1.7.
+ *
+ * `pageWithChain` above already asks as a browser does, which is what a reader sees. This
+ * asks as an agent does, which is what the caching strategy is checked against.
+ */
+const asMachine = await fetch(`${webBase}${source.url}`);
+await asMachine.text();
+const validator = asMachine.headers.get("etag");
 check("the page carries an ETag", !!validator, validator ?? "");
+check(
+  "which is the content hash plus the state of the conversation (§33.2)",
+  /^W\/"[0-9a-f]{64}\.\d+\.\d+:\d+"$/.test(validator ?? ""),
+  validator ?? "",
+);
 
 const revalidated = await fetch(`${webBase}${source.url}`, {
-  headers: { accept: "text/html", "if-none-match": validator ?? "" },
+  headers: { "if-none-match": validator ?? "" },
 });
 check("an unchanged page revalidates to 304 (§33.3)", revalidated.status === 304, String(revalidated.status));
 
@@ -564,7 +583,7 @@ await tool(sessions.analyst.write, "create_comment", {
 let moved = null;
 for (let attempt = 0; attempt < 20; attempt++) {
   const again = await fetch(`${webBase}${source.url}`, {
-    headers: { accept: "text/html", "if-none-match": validator ?? "" },
+    headers: { "if-none-match": validator ?? "" },
   });
   await again.text();
   if (again.status === 200) {
