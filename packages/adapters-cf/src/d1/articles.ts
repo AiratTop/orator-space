@@ -236,6 +236,66 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
     },
 
     /**
+     * Merge semantics in SQL (SPEC §44.2).
+     *
+     * The column list is built from the fields present, so an absent field is untouched
+     * and an explicit `null` clears. A single UPDATE with `COALESCE(?, column)` would be
+     * shorter and would make the two indistinguishable, which is the whole distinction.
+     */
+    updateMetadata(articleId, fields, at) {
+      const assignments: string[] = [];
+      const binds: unknown[] = [];
+
+      if (fields.visibility !== undefined) {
+        assignments.push("visibility = ?");
+        binds.push(fields.visibility);
+      }
+      if (fields.authorshipDisclosure !== undefined) {
+        assignments.push("authorship_disclosure = ?");
+        binds.push(fields.authorshipDisclosure);
+      }
+      if (fields.canonicalUrl !== undefined) {
+        assignments.push("canonical_url = ?");
+        binds.push(fields.canonicalUrl);
+      }
+      if (fields.language !== undefined) {
+        assignments.push("language = ?");
+        binds.push(fields.language);
+      }
+      if (fields.indexable !== undefined) {
+        assignments.push("indexable = ?");
+        binds.push(fields.indexable ? 1 : 0);
+      }
+
+      assignments.push("updated_at = ?");
+      binds.push(at, articleId);
+
+      return asWrite(
+        db.prepare(`UPDATE articles SET ${assignments.join(", ")} WHERE id = ?`).bind(...binds),
+      );
+    },
+
+    /**
+     * SPEC §23.3 — the row survives, the content does not.
+     *
+     * `content_hash` is kept on purpose: it is the verifiable trace that something specific
+     * was erased, without being the thing itself. `content_ref` is blanked because it names
+     * an object that no longer exists.
+     */
+    eraseRevision(revisionId, at) {
+      return asWrite(
+        db
+          .prepare(
+            `UPDATE revisions
+                SET content_ref = '', title = '[erased]', excerpt = NULL,
+                    metadata_json = json_object('schema_version', 1, 'erased_at', ?)
+              WHERE id = ?`,
+          )
+          .bind(at, revisionId),
+      );
+    },
+
+    /**
      * The one write that touches an existing revision. Immutability protects the content
      * and its hash; a signature is an assertion *about* that content, made after the
      * server assigned the id it covers (SPEC §8.4).

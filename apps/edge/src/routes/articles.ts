@@ -1,10 +1,14 @@
 import { Hono } from "hono";
 import {
   createArticle,
+  createReport,
   createRevision,
   drainOutbox,
+  eraseArticle,
   publishArticle,
+  removeArticle,
   unpublishArticle,
+  updateArticle,
   urlFor,
   withIdempotency,
   type RequestContext,
@@ -258,4 +262,123 @@ articleRoutes.get("/v1/articles/:id/activity", async (c) => {
       created_at: event.createdAt,
     })),
   });
+});
+
+articleRoutes.patch("/v1/articles/:id", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  const parsed = parse(c, schemas.patchArticleRequest, body);
+  if ("response" in parsed) return parsed.response;
+
+  const ctx = c.get("ctx");
+  const result = await updateArticle(ctx, c.req.param("id"), {
+    ...(parsed.data.slug === undefined ? {} : { slug: parsed.data.slug }),
+    ...(parsed.data.visibility === undefined ? {} : { visibility: parsed.data.visibility }),
+    ...(parsed.data.authorship_disclosure === undefined
+      ? {}
+      : { authorshipDisclosure: parsed.data.authorship_disclosure }),
+    ...(parsed.data.canonical_url === undefined ? {} : { canonicalUrl: parsed.data.canonical_url }),
+    ...(parsed.data.language === undefined ? {} : { language: parsed.data.language }),
+  });
+  if (result.ok) deliverInBackground(c, ctx);
+  return respond(c, result);
+});
+
+/**
+ * SPEC §23.2 — a tombstone, not a deletion.
+ *
+ * The identifier survives forever, incoming citations keep resolving, and the article
+ * answers 410 rather than 404 from then on. `DELETE` is the right HTTP verb for what the
+ * caller intends; what it does is what §23 says it does.
+ */
+articleRoutes.delete("/v1/articles/:id", async (c) => {
+  const ctx = c.get("ctx");
+  const result = await removeArticle(ctx, c.req.param("id"));
+  if (result.ok) deliverInBackground(c, ctx);
+  return respond(c, result);
+});
+
+articleRoutes.post("/v1/articles/:id/erase", async (c) => {
+  const parsed = parse(c, schemas.eraseRequest, await c.req.json().catch(() => null));
+  if ("response" in parsed) return parsed.response;
+
+  const ctx = c.get("ctx");
+  const result = await eraseArticle(ctx, c.req.param("id"), {
+    confirm: parsed.data.confirm,
+    reason: parsed.data.reason ?? null,
+  });
+  if (result.ok) deliverInBackground(c, ctx);
+  return respond(c, result);
+});
+
+/**
+ * One revision, body included. Reachable only by someone who may see the article at all,
+ * which for an unpublished draft is its author and their owner (§43.2).
+ */
+articleRoutes.get("/v1/articles/:id/revisions/:revisionId", async (c) => {
+  const ctx = c.get("ctx");
+  const article = await ctx.ports.articles.findById(c.req.param("id"));
+  if (article === null) {
+    return problemResponse(c, { type: ErrorType.NotFound, title: "Article not found" });
+  }
+
+  const viewer = ctx.actor?.principalId;
+  const canSeeDrafts = viewer === article.authorPrincipalId || viewer === article.authorOwnerPrincipalId;
+  if (article.status !== "published" && !canSeeDrafts) {
+    return problemResponse(c, { type: ErrorType.NotFound, title: "Article not found" });
+  }
+  if (article.status === "removed") {
+    return problemResponse(c, { type: ErrorType.Gone, title: "Article was removed" });
+  }
+
+  const revision = await ctx.ports.articles.findRevision(c.req.param("revisionId"));
+  if (revision === null || revision.articleId !== article.id) {
+    return problemResponse(c, { type: ErrorType.NotFound, title: "Revision not found" });
+  }
+
+  // Blank after erasure (§23.3): the row is evidence that something was published and
+  // removed, and the hash proves what it was without being it.
+  const body = revision.contentRef === "" ? null : await ctx.ports.content.get(revision.contentHash);
+
+  return respond(c, {
+    ok: true,
+    value: {
+      id: revision.id,
+      article_id: revision.articleId,
+      title: revision.title,
+      excerpt: revision.excerpt,
+      content_hash: revision.contentHash,
+      content_bytes: revision.contentBytes,
+      parent_revision_id: revision.parentRevisionId,
+      created_by: revision.createdByPrincipalId,
+      signed: revision.signature !== null,
+      created_at: revision.createdAt,
+      erased: revision.contentRef === "",
+      content: {
+        trust: "untrusted" as const,
+        source_principal_id: article.authorPrincipalId,
+        disclosure: article.authorshipDisclosure,
+        signature_verified: revision.signature !== null,
+        format: "text/markdown" as const,
+        body,
+      },
+    },
+  });
+});
+
+/** SPEC §61.2 — anonymous on purpose: an account must not be the price of reporting. */
+articleRoutes.post("/v1/reports", async (c) => {
+  const parsed = parse(c, schemas.createReportRequest, await c.req.json().catch(() => null));
+  if ("response" in parsed) return parsed.response;
+
+  return respond(
+    c,
+    await createReport(c.get("ctx"), {
+      targetType: parsed.data.target_type,
+      targetId: parsed.data.target_id,
+      category: parsed.data.category,
+      details: parsed.data.details ?? null,
+      reporterContact: parsed.data.reporter_contact ?? null,
+    }),
+    201,
+  );
 });

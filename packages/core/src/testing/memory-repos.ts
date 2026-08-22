@@ -32,6 +32,8 @@ import {
   type SearchDocument,
   type SearchIndex,
   type SocialRepo,
+  type ModerationRepo,
+  type NewReport,
   type TopicRecord,
   type TopicRepo,
   type TokenRecord,
@@ -68,6 +70,7 @@ export interface MemoryState {
   comments: Map<string, CommentRecord>;
   searchDocs: Map<string, SearchDocument>;
   topics: Map<string, TopicRecord>;
+  reports: NewReport[];
   articleTopics: Map<string, Set<string>>;
   edges: Map<string, EdgeRecord>;
   follows: Set<string>;
@@ -99,6 +102,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     comments: new Map(),
     searchDocs: new Map(),
     topics: new Map(),
+    reports: [],
     articleTopics: new Map(),
     edges: new Map(),
     follows: new Set(),
@@ -142,6 +146,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         comments: new Map(state.comments),
         searchDocs: new Map(state.searchDocs),
         topics: new Map(state.topics),
+        reports: [...state.reports],
         articleTopics: new Map(state.articleTopics),
         edges: new Map(state.edges),
         follows: new Set(state.follows),
@@ -355,6 +360,39 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         const article = state.articles.get(articleId);
         if (article === undefined) return 0;
         state.articles.set(articleId, { ...article, status, updatedAt: at });
+        return 1;
+      });
+    },
+    updateMetadata(articleId, fields, at) {
+      return asWrite(() => {
+        const article = state.articles.get(articleId);
+        if (article === undefined) return 0;
+        state.articles.set(articleId, {
+          ...article,
+          ...(fields.visibility === undefined ? {} : { visibility: fields.visibility }),
+          ...(fields.authorshipDisclosure === undefined
+            ? {}
+            : { authorshipDisclosure: fields.authorshipDisclosure }),
+          ...(fields.canonicalUrl === undefined ? {} : { canonicalUrl: fields.canonicalUrl }),
+          ...(fields.language === undefined ? {} : { language: fields.language }),
+          ...(fields.indexable === undefined ? {} : { indexable: fields.indexable }),
+          updatedAt: at,
+        });
+        return 1;
+      });
+    },
+    eraseRevision(revisionId, at) {
+      return asWrite(() => {
+        const revision = state.revisions.get(revisionId);
+        if (revision === undefined) return 0;
+        // The hash stays: it is the trace §23.3 keeps, and it is not the content.
+        state.revisions.set(revisionId, {
+          ...revision,
+          contentRef: "",
+          title: "[erased]",
+          excerpt: null,
+          metadata: { schema_version: 1, erased_at: at },
+        });
         return 1;
       });
     },
@@ -746,6 +784,17 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+
+  const moderation: ModerationRepo = {
+    insertReport: (report) => asWrite(() => void state.reports.push(report)),
+    async countRecentReports(targetType, targetId, since) {
+      return state.reports.filter(
+        (report) =>
+          report.targetType === targetType && report.targetId === targetId && report.createdAt >= since,
+      ).length;
+    },
+  };
+
   return {
     db: database,
     principals,
@@ -759,6 +808,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     social,
     search,
     topics,
+    moderation,
     events,
     idempotency,
     content: createMemoryContentStore(),

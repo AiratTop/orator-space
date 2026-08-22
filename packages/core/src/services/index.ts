@@ -5,4 +5,6 @@ export * from "./publishing.js";
 export * from "./reading.js";
 export * from "./social.js";
 export * from "./discovery.js";
+export * from "./lifecycle.js";
+export * from "./moderation.js";
 export * from "./outbox.js";

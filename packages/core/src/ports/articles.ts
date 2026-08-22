@@ -97,6 +97,26 @@ export interface ArticleRepo {
   unpublish(articleId: string, at: string): PendingWrite;
   setStatus(articleId: string, status: ArticleStatus, at: string): PendingWrite;
   setSlug(articleId: string, slug: string | null, at: string): PendingWrite;
+  /** SPEC §44.2 — merge semantics. Only the fields present are touched. */
+  updateMetadata(
+    articleId: string,
+    fields: {
+      visibility?: Visibility;
+      authorshipDisclosure?: Disclosure;
+      canonicalUrl?: string | null;
+      language?: string;
+      indexable?: boolean;
+    },
+    at: string,
+  ): PendingWrite;
+  /**
+   * SPEC §23.3 — the one write that destroys something.
+   *
+   * Blanks `content_ref`, `title` and `excerpt` while keeping the row, the id and the
+   * hash. Immutability means history is not rewritten unnoticed; it does not mean data
+   * cannot be erased on a lawful demand, and what remains is the verifiable trace.
+   */
+  eraseRevision(revisionId: string, at: string): PendingWrite;
   attachSignature(revisionId: string, signature: string, keyId: string): PendingWrite;
 }
 

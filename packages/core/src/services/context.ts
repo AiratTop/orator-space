@@ -10,6 +10,7 @@ import type {
   IdempotencyRepo,
   IdGen,
   KeyRepo,
+  ModerationRepo,
   OutboxRepo,
   PrincipalRepo,
   ReadingRepo,
@@ -38,6 +39,8 @@ export interface Ports {
   search: SearchIndex;
   /** SPEC §22 — a curated vocabulary, read-only in the MVP. */
   topics: TopicRepo;
+  /** SPEC §61 — report intake. */
+  moderation: ModerationRepo;
   events: EventRepo;
   idempotency: IdempotencyRepo;
   content: ContentStore;
