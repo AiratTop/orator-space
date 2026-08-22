@@ -101,7 +101,10 @@ Token permissions: `Workers Scripts: Edit`, `D1: Edit`, `Workers R2 Storage: Edi
 `Queues: Edit`, `Zone → Workers Routes: Edit`, `User → User Details: Read`. Scope to the
 environment's own resources where possible.
 
-### 1.5. Branch protection
+### 1.5. Branch protection ✅ done
+
+Applied 2026-08-22: the ruleset targets the default branch and `ci` is a required status
+check, so nothing reaches `main` without the pipeline having passed on it.
 
 Use **Rulesets**, not classic branch protection — classic is legacy.
 

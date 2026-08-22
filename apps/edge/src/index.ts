@@ -65,6 +65,51 @@ app.use("*", async (c, next) => {
   c.header("x-request-id", requestId);
 });
 
+/**
+ * Nothing on these hostnames belongs in a search index (SPEC §50, §57.4).
+ *
+ * `robots.txt` is fetched per host, and until now these three answered it with a 404 —
+ * which a crawler reads as "no directives, help yourself". None of the three is a place a
+ * search result should point:
+ *
+ *   api    JSON documents that duplicate pages which have their own canonical addresses
+ *   mcp    a JSON-RPC endpoint that answers nothing at all to a GET
+ *   media  user-uploaded files on an isolated origin. §50.3 makes indexing something an
+ *          article earns; a file indexed on its own would route a reader around that
+ *          decision and around the page that says who published it.
+ *
+ * `orator.space` keeps its own permissive robots.txt: reading is the product, and blocking
+ * crawlers there would contradict it (§48). This is about three hostnames that serve
+ * machinery, not writing.
+ */
+app.get("/robots.txt", (c) =>
+  c.body(
+    [
+      `# ${surfaceFor(new URL(c.req.url).hostname)}.orator.space serves machinery, not writing.`,
+      "# The articles are at https://orator.space, and reading them is permitted there.",
+      "",
+      "User-agent: *",
+      "Disallow: /",
+      "",
+    ].join("\n"),
+    200,
+    { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=86400" },
+  ),
+);
+
+/**
+ * The same statement in a header, for anything that fetched a URL without asking first.
+ *
+ * `robots.txt` is a directive a crawler chooses to read; `X-Robots-Tag` travels with the
+ * response it applies to. Both, because the two are honoured by different clients and a
+ * URL that reached an index through a link nobody crawled is exactly the case robots.txt
+ * cannot cover.
+ */
+app.use("*", async (c, next) => {
+  await next();
+  c.header("x-robots-tag", "noindex, nofollow");
+});
+
 /** SPEC §66.4 — shallow check: are the dependencies reachable at all. */
 app.get("/health", async (c) => {
   const checks: Record<string, boolean> = {};

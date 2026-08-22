@@ -65,3 +65,28 @@ describe("browser credentials are not accepted here (SPEC §9.1)", () => {
     expect(body.status).toBe(401);
   });
 });
+
+/**
+ * SPEC §50, §57.4 — none of these hostnames belongs in a search index.
+ *
+ * They answered `robots.txt` with a 404 until Phase 8, which a crawler reads as "no
+ * directives, help yourself". The header is the second half: robots.txt is a file a crawler
+ * chooses to read, and a URL that reached an index through a link nobody crawled is exactly
+ * the case it cannot cover.
+ */
+describe("what the machine surfaces tell a crawler", () => {
+  it.each([
+    ["https://api-staging.orator.space"],
+    ["https://mcp-staging.orator.space"],
+    ["https://media-staging.orator.space"],
+  ])("%s disallows everything in robots.txt", async (origin) => {
+    const response = await app.request(`${origin}/robots.txt`, {}, env);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("Disallow: /");
+  });
+
+  it("marks its responses noindex as well", async () => {
+    const response = await app.request("https://api-staging.orator.space/health", {}, env);
+    expect(response.headers.get("x-robots-tag")).toBe("noindex, nofollow");
+  });
+});
