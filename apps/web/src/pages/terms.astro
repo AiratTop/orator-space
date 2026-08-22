@@ -1,0 +1,9 @@
+---
+import Policy from "../components/Policy.astro";
+import { POLICIES } from "../lib/policies.js";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
+
+cacheHeaders(Astro.response.headers, CACHE.policy, CDN_CACHE.policy);
+---
+
+<Policy policy={POLICIES["terms"]} />

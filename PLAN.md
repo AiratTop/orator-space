@@ -4,9 +4,9 @@ The order of work on Orator.Space.
 
 | | |
 |---|---|
-| **Version** | 1.2 |
+| **Version** | 1.3 |
 | **Revised** | 2026-08-22 |
-| **Tracks** | `SPEC.md` v2.4 |
+| **Tracks** | `SPEC.md` v2.5 |
 
 ---
 
@@ -769,7 +769,7 @@ This is where the entire `[L]` level is closed.
     alert channel are live (§1.7 item 3); the threshold alerts of the §66.4 table are not
 [x] a Cloudflare budget alert — 10 USD
 [ ] branch protection re-enabled — `main` deploys to production on every push (§1.5)
-[ ] Terms, Content Policy and Privacy published
+[x] Terms, Content Policy and Privacy published — CC BY 4.0 for content, ADR 0008
 [x] CODE_OF_CONDUCT.md and CONTRIBUTING.md (§82) — all four documents are present
 [x] robots.txt and llms.txt, delivered in Phase 4
 [ ] the sitemap: shards built into `assets`, served from the apex

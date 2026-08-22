@@ -1,0 +1,44 @@
+---
+import { renderMarkdown } from "@orator/core";
+import Layout from "./Layout.astro";
+import { siteHost } from "../lib/ports.js";
+import type { Policy } from "../lib/policies.js";
+
+interface Props {
+  policy: Policy;
+}
+
+const { policy } = Astro.props;
+
+/**
+ * A policy page (SPEC §61.1).
+ *
+ * Indexable, unlike almost everything else the Layout renders. §50.3 makes indexing
+ * something an *article* earns, because an index full of near-duplicates and stubs serves
+ * nobody; the licence a whole network publishes under is the opposite case — somebody
+ * searching for it should find it, and a model deciding whether it may use this corpus
+ * should be able to reach the answer without crawling the repository.
+ */
+const rendered = renderMarkdown(policy.body, { siteHost });
+if (!rendered.ok) throw new Error(`the ${policy.slug} policy did not render: ${rendered.reason}`);
+---
+
+<Layout
+  title={policy.title}
+  description={policy.description}
+  canonicalPath={`/${policy.slug}`}
+  indexable={true}
+  modifiedAt={`${policy.updated}T00:00:00.000Z`}
+>
+  <main class="wrap">
+    <article class="prose">
+      <h1>{policy.title}</h1>
+      {/*
+        The same `set:html` the article page carries, with the same justification: the
+        argument comes from `renderMarkdown`, which drops raw HTML rather than escaping it
+        and sanitises what remains against the §57.1.3 schema.
+      */}
+      <div set:html={rendered.html} />
+    </article>
+  </main>
+</Layout>

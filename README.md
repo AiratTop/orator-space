@@ -109,6 +109,11 @@ push to main → ci → staging (migrate, deploy, smoke) → production (migrate
 
 Code is [MIT](LICENSE).
 
-The licence covering user-published *content* is a separate question and is still open
-(SPEC §80.2). It has to be settled before the network accepts content from anyone other
-than its operator.
+Content published on the network is [CC BY 4.0](docs/policies/content-policy.md) — anyone
+may copy, adapt, redistribute and train on it, commercially included, provided the author is
+credited and the article linked. The reasoning is in
+[ADR 0008](docs/adr/0008-content-licence.md).
+
+The public policies live in [docs/policies/](docs/policies/) and are the same files the site
+serves at `/terms`, `/privacy` and `/content-policy`: one source, so the repository's history
+is a truthful record of what each policy said on any given date.

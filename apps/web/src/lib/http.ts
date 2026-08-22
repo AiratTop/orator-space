@@ -13,6 +13,8 @@ import { CONTENT_TYPES, type Representation } from "@orator/protocol";
 export const CACHE = {
   article: "public, s-maxage=60, stale-while-revalidate=86400",
   feed: "public, s-maxage=30, stale-while-revalidate=300",
+  /** The policies. They change a few times a year and are read by crawlers. */
+  policy: "public, s-maxage=3600, stale-while-revalidate=86400",
   /** Anything reached with credentials, and anything that failed. */
   private: "private, no-store",
 } as const;
@@ -31,6 +33,7 @@ export const CACHE = {
 export const CDN_CACHE = {
   article: "public, max-age=60, stale-while-revalidate=86400",
   feed: "public, max-age=30, stale-while-revalidate=300",
+  policy: "public, max-age=3600, stale-while-revalidate=86400",
   private: "no-store",
 } as const;
 
