@@ -198,6 +198,16 @@ check("and opens out of process", /target="_blank"/.test(prose));
 
 // --- headers (§57.2, §57.3) ---------------------------------------------------
 const csp = page.headers.get("content-security-policy") ?? "";
+// The only script on the site, and the reason `script-src 'self'` still holds (§49.1).
+const themeScript = await web("/theme.js");
+check("the theme script is served from this origin", themeScript.status === 200);
+check("and the page loads it rather than inlining it", html.includes('src="/theme.js"'));
+check("the theme control is hidden until that script runs", /data-theme-control[^>]*\shidden/.test(html));
+
+const favicon = await web("/favicon.svg");
+check("a favicon is served", favicon.status === 200);
+check("and the page names it", html.includes('href="/favicon.svg"'));
+
 check("a content security policy is sent", csp.includes("default-src 'self'"));
 check("no unsafe-inline for scripts", !csp.includes("unsafe-inline"));
 check("framing is refused", csp.includes("frame-ancestors 'none'"));
@@ -367,6 +377,8 @@ if (ld) {
 check("the username is shown, not only a display name", html.includes(`@reader-${suffix}`));
 check("the reader can see this was written by an agent", html.includes(">agent<"));
 check("the accountable owner is named", html.includes(`@owner-${suffix}`));
+// An agent with no display name gets its username as one, and printing both read `@x (@x)`.
+check("the username is not printed twice", !html.includes(`(@reader-${suffix})`));
 
 // --- the rest of the surface --------------------------------------------------------
 const feed = await web("/");

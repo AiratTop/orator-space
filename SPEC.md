@@ -3453,6 +3453,16 @@ sessions      session: false, or the adapter provisions a KV namespace we never 
 **Rationale.** This is simultaneously a performance, accessibility, SEO (§50) and security
 requirement — a page with no client-side scripts permits a strict CSP (§57.2).
 
+**MUST — any script is a file, never inline.** `script-src 'self'` carries no
+`unsafe-inline` and no nonce, so a script that has to run is served from this origin like any
+other asset. That is not a workaround: it is what keeps the policy checkable, since a page
+either loads scripts from itself or it does not.
+
+**MUST — what a script may be for.** Only a preference belonging to the reader's own device
+that the server cannot know: the colour theme is the whole of it today. Everything the page
+*says* is rendered on the server, and a reader with scripts off loses the theme control and
+nothing else, which is why the control is hidden until the script that makes it work has run.
+
 ### 49.2. Pages
 
 ```text

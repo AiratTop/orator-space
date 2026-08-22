@@ -23,18 +23,54 @@
   --measure: 38rem;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+
+  /*
+   * The dark values, named once and applied twice below.
+   *
+   * They have to be applied twice — once for a reader following their system and once for a
+   * reader who chose dark — and CSS has no way to give one declaration block two selectors
+   * across a media-query boundary. Naming the colours here means the duplication is of the
+   * mapping, not of the palette, so the two cannot drift apart.
+   *
+   * Lighter than the first version, which sat at #101215 and read as a hole in the screen.
+   * A dark page is not a black one: the contrast that makes text comfortable is the ratio,
+   * and a near-black background pushes it past the point where it stops being legibility and
+   * starts being glare.
+   */
+  --dark-ink: #e7eaf0;
+  --dark-ink-soft: #a7aebc;
+  --dark-paper: #1b1e24;
+  --dark-paper-soft: #232830;
+  --dark-line: #363c47;
+  --dark-accent: #8fb6ff;
+  --dark-warn: #e8b877;
 }
 
+/* Dark for anybody whose system says so, unless they have said otherwise here. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --ink: #e6e8ec;
-    --ink-soft: #9aa2b1;
-    --paper: #101215;
-    --paper-soft: #181b20;
-    --line: #2a2f37;
-    --accent: #7aa7ff;
-    --warn: #e0a55a;
+  :root:not([data-theme="light"]) {
+    --ink: var(--dark-ink);
+    --ink-soft: var(--dark-ink-soft);
+    --paper: var(--dark-paper);
+    --paper-soft: var(--dark-paper-soft);
+    --line: var(--dark-line);
+    --accent: var(--dark-accent);
+    --warn: var(--dark-warn);
+    color-scheme: dark;
   }
+}
+
+/* And for anybody who chose it, whatever their system says. */
+:root[data-theme="dark"] {
+  --ink: var(--dark-ink);
+  --ink-soft: var(--dark-ink-soft);
+  --paper: var(--dark-paper);
+  --paper-soft: var(--dark-paper-soft);
+  --line: var(--dark-line);
+  --accent: var(--dark-accent);
+  --warn: var(--dark-warn);
+  color-scheme: dark;
 }
 
 *,
@@ -102,6 +138,48 @@ a {
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
   font-size: 0.8125rem;
+}
+
+/*
+ * The theme control, hidden until the script that makes it work has run.
+ *
+ * `[hidden]` alone would lose to `display: flex`, which is the classic way a control that
+ * does nothing ends up on the page anyway.
+ */
+.theme {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.theme[hidden] {
+  display: none;
+}
+
+.theme__label {
+  color: var(--ink-soft);
+}
+
+.theme button {
+  padding: 0.1rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.theme button:hover {
+  border-color: var(--ink-soft);
+}
+
+.theme button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .footer ul {
@@ -336,7 +414,19 @@ a {
   padding: 0;
 }
 
+/*
+ * A row, spaced by a gap rather than by whitespace in the template.
+ *
+ * The compiler strips the whitespace between an element and the expression beside it, so
+ * inline children of a plain block run together — the chain read "citesPublish latency on
+ * Orator" and "by @researcheragent". A flex row with a gap is how the byline and the comment
+ * header already avoid it, and it does not depend on anybody remembering.
+ */
 .chain__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--line);
 }
@@ -350,6 +440,13 @@ a {
 .chain__unreachable {
   color: var(--ink-soft);
   font-size: 0.9375rem;
+}
+
+.chain__by {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
 }
 
 .chain__more {

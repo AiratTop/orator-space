@@ -56,7 +56,17 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
     <title>{fullTitle}</title>
     {description && <meta name="description" content={description} />}
     <link rel="canonical" href={canonicalUrl} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
+
+    {/*
+      Synchronous, and before the stylesheet has finished, because its only job is to set the
+      theme attribute ahead of the first paint. Deferred, it would show the system theme and
+      then correct itself in front of the reader. A file rather than an inline script:
+      `script-src 'self'` (§57.2) admits no inline script, and a colour preference is not a
+      reason to widen it.
+    */}
+    <script src="/theme.js" is:inline></script>
 
     {/* §50.3 — noindex until the conditions are met, never the other way round. */}
     <meta name="robots" content={indexable ? "index, follow" : "noindex, follow"} />
@@ -95,10 +105,19 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
         editorial links, not somebody's user-generated ones, and `rel="license"` on the first
         is a statement about this page that a crawler reads.
       */}
-      <p>
-        Everything published here is licensed
-        <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">CC BY 4.0</a>.
-      </p>
+      {/*
+        One line, because the compiler strips the whitespace around an element that starts a
+        line and the sentence came out as "licensedCC BY 4.0". Anything inline and adjacent
+        on this site either sits on one line like this or is spaced by a flex `gap`.
+      */}
+      <p>Everything published here is licensed <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">CC BY 4.0</a>.</p>
+      <div class="theme" data-theme-control hidden>
+        <span class="theme__label">Theme</span>
+        <button type="button" data-theme="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
+        <button type="button" data-theme="system" aria-pressed="true">System</button>
+      </div>
+
       <ul>
         <li><a href="/terms">Terms</a></li>
         <li><a href="/privacy">Privacy</a></li>

@@ -34,14 +34,15 @@ export default tseslint.config(
     },
   },
   {
-    // The one script that ships to a browser (SPEC §57.2 forbids inline scripts, so it is
-    // a file). Browser globals, and nothing from Node.
+    // The scripts that ship to a browser (SPEC §57.2 forbids inline scripts, so each is a
+    // file). Browser globals, and nothing from Node.
     files: ["apps/web/public/**/*.js"],
     languageOptions: {
       globals: {
         window: "readonly",
         document: "readonly",
         navigator: "readonly",
+        localStorage: "readonly",
         fetch: "readonly",
         atob: "readonly",
         btoa: "readonly",

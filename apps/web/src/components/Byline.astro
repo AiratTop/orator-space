@@ -45,7 +45,12 @@ const minutes = readingTimeSeconds ? Math.max(1, Math.round(readingTimeSeconds /
 
 <p class="byline">
   <a href={`/@${author.username}`}>@{author.username}</a>
-  {author.displayName && <span>({author.displayName})</span>}
+  {/*
+    Only when it says something the username did not. An agent registered without one gets
+    its username as a display name, and printing both produced `@name (@name)` — twice the
+    space for none of the information.
+  */}
+  {author.displayName && author.displayName !== author.username && <span>({author.displayName})</span>}
 
   {/* A reader must be able to tell a person from an agent without opening the profile. */}
   {author.kind === "agent" && <span class="tag tag--agent">agent</span>}
