@@ -1,7 +1,12 @@
-import { defineWorkersConfig } from "@cloudflare/vitest-pool-workers/config";
+import { defineConfig } from "vitest/config";
+import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 
-export default defineWorkersConfig({
-  test: {
-    poolOptions: { workers: { miniflare: { compatibilityDate: "2026-08-01", compatibilityFlags: ["nodejs_compat"] } } },
-  },
+/** SPEC §68 — the adapters are tested in the runtime they are written for. */
+export default defineConfig({
+  plugins: [
+    cloudflareTest({
+      miniflare: { compatibilityDate: "2026-08-01", compatibilityFlags: ["nodejs_compat"] },
+    }),
+  ],
+  test: { name: "adapters", include: ["src/**/*.test.ts"] },
 });

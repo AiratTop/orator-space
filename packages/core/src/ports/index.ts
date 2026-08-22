@@ -52,3 +52,4 @@ export * from "./social.js";
 export * from "./search.js";
 export * from "./topics.js";
 export * from "./moderation.js";
+export * from "./passkeys.js";

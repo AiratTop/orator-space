@@ -7,4 +7,5 @@ export * from "./social.js";
 export * from "./discovery.js";
 export * from "./lifecycle.js";
 export * from "./moderation.js";
+export * from "./auth.js";
 export * from "./outbox.js";

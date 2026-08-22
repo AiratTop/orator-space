@@ -42,6 +42,20 @@ export async function generateToken(environment: "live" | "test" = "live"): Prom
   return { token, tokenHash: await sha256Hex(token), prefix: token.slice(0, 20) };
 }
 
+/**
+ * A browser session value (SPEC §9.1, §42.2).
+ *
+ * Deliberately not an API token, and deliberately not shaped like one. `bearerFrom` below
+ * refuses anything without the `orat_` prefix, so a session cookie cannot be presented as
+ * a bearer token even by a caller who tries — the separation §9.1 requires is structural
+ * rather than a rule someone has to remember.
+ */
+export function generateSessionToken(): string {
+  const secret = new Uint8Array(SECRET_BYTES);
+  crypto.getRandomValues(secret);
+  return `sess.${base62(secret)}`;
+}
+
 /** Extracts a bearer token, returning null for anything malformed. */
 export function bearerFrom(authorization: string | null | undefined): string | null {
   if (!authorization) return null;

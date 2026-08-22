@@ -15,5 +15,9 @@
     "@orator/protocol": "workspace:*",
     "hono": "^4.13.3",
     "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "vitest": "^4.1.11"
   }
 }

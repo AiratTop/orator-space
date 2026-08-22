@@ -31,6 +31,21 @@ export default tseslint.config(
     },
   },
   {
+    // The one script that ships to a browser (SPEC §57.2 forbids inline scripts, so it is
+    // a file). Browser globals, and nothing from Node.
+    files: ["apps/web/public/**/*.js"],
+    languageOptions: {
+      globals: {
+        window: "readonly",
+        document: "readonly",
+        navigator: "readonly",
+        fetch: "readonly",
+        atob: "readonly",
+        btoa: "readonly",
+      },
+    },
+  },
+  {
     rules: {
       "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
       "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],

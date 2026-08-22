@@ -3,10 +3,17 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
     "@orator/core": "workspace:*",
     "@orator/db": "workspace:*",
-    "@orator/protocol": "workspace:*"
+    "@orator/protocol": "workspace:*",
+    "@simplewebauthn/server": "^13.3.2"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "vitest": "^4.1.11"
   }
 }
