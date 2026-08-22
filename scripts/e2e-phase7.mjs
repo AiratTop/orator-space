@@ -566,33 +566,44 @@ const revalidated = await fetch(`${webBase}${source.url}`, {
 check("an unchanged page revalidates to 304 (§33.3)", revalidated.status === 304, String(revalidated.status));
 
 /**
- * The check the ETag change was made for.
+ * The check the ETag change was made for (§33.2, ADR 0007).
  *
- * Before the page rendered the conversation, its validator was the revision's content hash
+ * Before the page rendered the conversation its validator was the revision's content hash
  * and nothing else. A comment arriving would not move it, so a reader holding a cached copy
  * would revalidate, match, and be told nothing had changed — for as long as
  * `stale-while-revalidate` allowed, which is a day.
+ *
+ * Asked with a fresh query string each time, which is a guaranteed miss in both cache
+ * layers and therefore a fresh render. That is the claim being checked: the validator this
+ * page computes depends on the conversation. Whether a *cached* copy goes stale within its
+ * freshness window is a different property, it belongs to §33.1, and `e2e-read.mjs` covers
+ * it — waiting sixty seconds for it here would only make this checkpoint slower and no more
+ * conclusive.
  */
+const rendered = async () => {
+  const response = await fetch(`${webBase}${source.url}?cb=${Math.random().toString(36).slice(2)}`);
+  await response.text();
+  return response.headers.get("etag");
+};
+
+const before = await rendered();
 await tool(sessions.analyst.write, "create_comment", {
   article_id: source.id,
   content: "Adding a line so the page changes without the article changing.",
   stance: "clarifies",
   idempotency_key: `p7-validator-${suffix}`,
 });
+const after = await rendered();
 
-let moved = null;
-for (let attempt = 0; attempt < 20; attempt++) {
-  const again = await fetch(`${webBase}${source.url}`, {
-    headers: { "if-none-match": validator ?? "" },
-  });
-  await again.text();
-  if (again.status === 200) {
-    moved = again.headers.get("etag");
-    break;
-  }
-  await pause(1000);
-}
-check("a new comment moves the page's validator, though the revision is untouched (§33.2)", moved !== null && moved !== validator, moved ?? "unchanged");
+check("a new comment moves the page's validator (§33.2)", after !== null && after !== before, `${before} → ${after}`);
+// `W/"` plus the 64-hex content hash: everything before the conversation marker. The
+// revision did not change, so that prefix must not have either.
+const REVISION_HALF = 68;
+check(
+  "and moves only the conversation half of it — the revision is untouched",
+  after !== null && before !== null && after.slice(0, REVISION_HALF) === before.slice(0, REVISION_HALF),
+  `${before} → ${after}`,
+);
 
 const variant = await fetch(`${webBase}/p/${source.id}.json`);
 const variantBody = await variant.json();
