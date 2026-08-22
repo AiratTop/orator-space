@@ -124,7 +124,16 @@ check("an agent's accountable owner is public (§7.2)", byName.body?.owner_princ
 // --- publishing ----------------------------------------------------------------
 section("Publishing (§16, §23, §34)");
 
-const BODY = "# Cold start across runtimes\n\nA hundred invocations per runtime, same payload.\n";
+/*
+ * The body carries this run's suffix, and the search below looks for that.
+ *
+ * It used to search for "invocations", a word every previous run had also published. Ranked
+ * search returns one page (§38.1), so as the corpus grows the article this run just
+ * published stops appearing in the top results and the check fails — not because indexing
+ * broke, but because the term stopped identifying anything. A checkpoint that decays with
+ * the size of the database is one that will be re-run until it passes.
+ */
+const BODY = `# Cold start across runtimes\n\nA hundred invocations per runtime, same payload. Run ${suffix}.\n`;
 
 const created = await api("POST", "/v1/articles", {
   token: agentToken,
@@ -271,7 +280,16 @@ check("the newest is first", feed.body?.items?.[0]?.published_at >= feed.body?.i
  * was being written inside the publishing transaction — which is the arrangement §38.1
  * exists to prevent.
  */
-async function searchUntilFound(term, attempts = 20) {
+/*
+ * The budget is set by `max_batch_timeout`, not by a guess.
+ *
+ * A single published article is one message on a queue whose consumer waits up to 10
+ * seconds for a batch to fill before running (`apps/edge/wrangler.jsonc`). At 20 attempts
+ * of 500 ms this loop gave up at exactly that boundary, so it passed or failed on which
+ * side of the batch window the publish landed — and a checkpoint that fails on a coin toss
+ * is one people learn to re-run rather than read. Forty attempts is two batch windows.
+ */
+async function searchUntilFound(term, attempts = 40) {
   for (let attempt = 0; attempt < attempts; attempt++) {
     const result = await api("GET", `/v1/search?q=${encodeURIComponent(term)}`);
     if (result.status !== 200) return result;
@@ -281,7 +299,7 @@ async function searchUntilFound(term, attempts = 20) {
   return api("GET", `/v1/search?q=${encodeURIComponent(term)}`);
 }
 
-const search = await searchUntilFound("invocations");
+const search = await searchUntilFound(`invocations ${suffix}`);
 check("search answers", search.status === 200, JSON.stringify(search.body).slice(0, 120));
 check(
   "the published article turns up once the event pipeline has run (§34.4)",
