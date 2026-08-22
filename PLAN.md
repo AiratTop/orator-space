@@ -5,7 +5,7 @@ The order of work on Orator.Space.
 | | |
 |---|---|
 | **Version** | 1.3 |
-| **Revised** | 2026-08-22 |
+| **Revised** | 2026-08-23 |
 | **Tracks** | `SPEC.md` v2.5 |
 
 ---
@@ -183,7 +183,8 @@ from `assets`. That bucket needs no name of its own.
 | 1a | ~~Remove the HTTP Pull Consumer from `orator-events`~~ ✅ done | — |
 | ~~2~~ | ~~Budget alert on the Cloudflare account~~ ✅ done — 10 USD | — |
 | ~~3~~ | ~~Gatus checks on `/health` and `/health/deep`~~ ✅ done — see below | — |
-| 4 | Terms / Content Policy / Privacy | before public launch — §61.1, §82 |
+| ~~4~~ | ~~Terms / Content Policy / Privacy~~ ✅ done — `docs/policies/`, served at `/terms`, `/privacy`, `/content-policy` | — |
+| 10 | **`mail@orator.space` must receive mail.** Cloudflare Email Routing on the zone, forwarding to a real mailbox | before public launch — every policy names it |
 | 5 | ~~`SESSION_SECRET` on staging and production~~ ✅ done (`wrangler secret put SESSION_SECRET --env <env>` in `apps/web`), at least 32 characters | Phase 5 — ADR 0004 |
 | ~~6~~ | ~~An R2 API token for a presigned PUT~~ — not needed: ADR 0005 reversed §21.1, the upload goes through the Worker | — |
 | 7 | The checkpoint scripts run after every staging deploy | Phase 6 — see below |
@@ -776,6 +777,33 @@ This is where the entire `[L]` level is closed.
 ```
 
 **Public registration does not open until this list is closed in full.**
+
+**What is actually left.** Two items, and neither is code.
+
+1. **Branch protection**, which is a switch (§1.5) and should be flipped last, because until
+   it is, every push to `main` deploys straight to production and that is what makes the
+   remaining work fast.
+2. **The §66.4 alert thresholds.** Seven indicators — publish p95, the 5xx rate, outbox
+   depth, published-to-indexed p95, anything reaching the dead-letter queue, D1 size, purge
+   failures — and none of them is visible to an external prober, so Gatus cannot close this
+   row. They are queries over Analytics Engine, which means a metrics backend (§66.6, open
+   decision §80.15) or a scheduled worker that reads its own numbers and reports.
+
+   `/health/deep` covers the one §66.7 calls this architecture's principal failure — the
+   pipeline stopping while every endpoint answers — and the DLQ has no consumer, so a
+   message arriving there is discovered by looking. That is the honest state of it.
+
+**The contact address.** Every public document names **mail@orator.space** — the security
+policy, the code of conduct, all three policies. It has to receive mail before registration
+opens, which is Cloudflare Email Routing on the zone, forwarding to a real mailbox.
+
+**On sending.** Workers Paid does include a `send_email` binding, and it is worth being
+precise about what it can do: it delivers **only to addresses verified as destinations in
+the account's Email Routing**. That covers operational mail to the operator, and it does not
+cover a magic link to somebody who signed up ten seconds ago, which is the case open
+decision §80.13 is about. Sign-in is by passkey (§9.2) and needs no email at all, so the
+decision stays open rather than blocking anything — and when it is taken, it will be about
+a delivery provider, not about a binding that is already there.
 
 ---
 

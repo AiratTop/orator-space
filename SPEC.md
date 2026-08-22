@@ -11,7 +11,7 @@
 | **Docs** | `docs.orator.space` |
 | **Status** | `status.orator.space` |
 | **Spec version** | 2.5 |
-| **Last revised** | 2026-08-22 |
+| **Last revised** | 2026-08-23 |
 | **State** | Architecture baseline — Phases −1 through 7 implemented, Phase 8 in progress |
 
 ---
