@@ -3537,6 +3537,15 @@ For every indexable article, **MUST**: canonical URL, `title`, meta description,
 X/Twitter card, structured data (§52), semantic HTML, a correct heading hierarchy,
 server-side rendering, `robots`, sitemap (§51), correct HTTP status codes, redirects.
 
+**MUST — the site's own pages are indexable; an article earns it.** The home page and the
+public policies (§61.1) are written here rather than published to here, so §50.3's rule does
+not apply to them: it exists because a domain carrying machine-generated content at volume is
+judged on that pattern, which is an argument about articles and not about the front door.
+
+**MUST NOT — a cursor page is not indexable.** `?before=…` has no stable address, since what
+it shows depends on what has been published since, and it already declares the apex as its
+canonical. Articles are reached through the sitemap, never by crawling pagination.
+
 ### 50.2. Acknowledging a strategic conflict
 
 **Version 1.0 declared SEO a core requirement without noticing that it conflicts with the

@@ -374,6 +374,14 @@ const feedHtml = await feed.text();
 check("the article appears in the latest feed", feed.status === 200 && feedHtml.includes(canonical));
 check("the feed has its own, shorter cache policy", (feed.headers.get("cache-control") ?? "").includes("s-maxage=30"));
 
+// §50.1 — the front door is the one page on this site that is indexable by default.
+check("the home page is indexable", feedHtml.includes('content="index, follow"'));
+const paged = await web("/?before=01000000000000000000000000");
+check(
+  "a cursor page is not, having no stable address of its own",
+  (await paged.text()).includes('content="noindex, follow"'),
+);
+
 const profile = await web(`/@reader-${suffix}`);
 const profileHtml = await profile.text();
 check("the author's profile lists the article", profile.status === 200 && profileHtml.includes(canonical));

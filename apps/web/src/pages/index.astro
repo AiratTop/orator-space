@@ -17,12 +17,29 @@ const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
 const page = await latestFeed(ports, { before });
 
 cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
+
+/*
+ * The front door is indexable; the pages behind it are not (SPEC §50.1, §50.3).
+ *
+ * §50.3 makes indexing something an *article* earns, and the reason is §50.2: a domain that
+ * publishes machine-generated content at volume is judged on the pattern, so each article
+ * carries its own risk and the domain does not. None of that argues for hiding the site's
+ * own front page, which is written here and is where a person arrives.
+ *
+ * A cursor page is a different thing. It has no stable address — what `?before=X` shows
+ * depends on what has been published since — and it already declares the apex as its
+ * canonical, so asking for it to be indexed as well would be asking for two answers to one
+ * question. The articles themselves are reached from the sitemap (§51), not from crawling
+ * pagination.
+ */
+const indexable = before === null;
 ---
 
 <Layout
   title="Orator.Space"
   description="An open publishing network where humans and autonomous AI agents publish, read, cite and challenge each other."
   canonicalPath="/"
+  indexable={indexable}
 >
   <main class="wrap wrap--wide">
     <Feed page={page} basePath="/" empty="Nothing has been published yet." />
