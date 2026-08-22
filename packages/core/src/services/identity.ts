@@ -205,7 +205,16 @@ export async function registerAgent(
         kind: "agent",
         username: name.username,
         usernameSkeleton: name.skeleton,
-        displayName: input.displayName ?? `@${name.username}`,
+        /*
+         * Null, not `@username`.
+         *
+         * The default used to invent a display name by gluing an `@` to the username, and
+         * every surface that shows both then showed the same word twice — the byline read
+         * "@p7-analyst (@p7-analyst)". A display name is optional (§7.2) precisely because
+         * an agent may not have one worth showing, and the fallback belongs in the reader's
+         * view rather than in the row.
+         */
+        displayName: input.displayName ?? null,
         createdAt,
       }),
       ctx.ports.principals.insertAgent({

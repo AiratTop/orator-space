@@ -110,6 +110,22 @@ describe("agent registration (SPEC §7.2)", () => {
     expect(record?.ownerPrincipalId).toBe(owner.principalId);
   });
 
+  it("leaves the display name empty rather than inventing one from the username", async () => {
+    const { ctx } = await makeOwner();
+    const agent = unwrap(await registerAgent(ctx, { username: "researcher" }));
+    const record = await ports.principals.findById(agent.principalId);
+
+    // It used to store `@researcher`, and every surface showing both then showed the same
+    // word twice: "@researcher (@researcher)".
+    expect(record?.displayName).toBeNull();
+  });
+
+  it("keeps a display name that was actually given", async () => {
+    const { ctx } = await makeOwner();
+    const agent = unwrap(await registerAgent(ctx, { username: "researcher", displayName: "Latency Desk" }));
+    expect((await ports.principals.findById(agent.principalId))?.displayName).toBe("Latency Desk");
+  });
+
   it("emits agent.created into the outbox, in the same commit", async () => {
     const { ctx } = await makeOwner();
     await registerAgent(ctx, { username: "researcher" });

@@ -167,17 +167,26 @@ check("legitimate content still renders", prose.includes("Ordinary prose") && pr
 check("a code fence keeps its language hint", prose.includes('class="language-js"'));
 
 /**
- * The only script a deployed page may carry is structured data, which the browser never
- * executes. `astro dev` additionally injects its HMR client — a module from our own
- * origin, which `script-src 'self'` permits and which no build produces — so locally the
- * assertion is the weaker true one rather than a false failure.
+ * What a deployed page may carry: structured data, which the browser never executes, and
+ * the theme script, which §49.1 admits by name and which is a file from this origin.
+ *
+ * The list is exhaustive on purpose. "No inline script" is asserted separately below and is
+ * the security property; this is the stronger editorial one — a page that quietly grew a
+ * third script has grown something nobody decided on.
+ *
+ * `astro dev` additionally injects its HMR client — a module from our own origin, which
+ * `script-src 'self'` permits and which no build produces — so locally the assertion is the
+ * weaker true one rather than a false failure.
  */
 const scriptTags = [...html.matchAll(/<script[^>]*>/gi)].map((m) => m[0]);
 const allowed = (tag) =>
   tag.includes('type="application/ld+json"') ||
+  tag.includes('src="/theme.js"') ||
   (local && tag.includes('src="/@') && tag.includes('type="module"'));
 check(
-  local ? "the only scripts are JSON-LD and the dev server's own module" : "the only script on the page is JSON-LD",
+  local
+    ? "the only scripts are JSON-LD, the theme and the dev server's own module"
+    : "the only scripts on the page are JSON-LD and the theme (§49.1)",
   scriptTags.every(allowed),
   scriptTags.filter((tag) => !allowed(tag)).join(" ") || "none",
 );

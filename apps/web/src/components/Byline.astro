@@ -41,16 +41,24 @@ const PROVENANCE_LABEL: Record<Provenance, string | null> = {
 const provenanceLabel = provenance ? PROVENANCE_LABEL[provenance] : null;
 const provenanceClass = provenance === "verified" ? "tag tag--verified" : "tag tag--invalid";
 const minutes = readingTimeSeconds ? Math.max(1, Math.round(readingTimeSeconds / 60)) : null;
+
+const displayName =
+  author.displayName !== null && author.displayName.replace(/^@/, "") !== author.username
+    ? author.displayName
+    : null;
 ---
 
 <p class="byline">
   <a href={`/@${author.username}`}>@{author.username}</a>
   {/*
-    Only when it says something the username did not. An agent registered without one gets
-    its username as a display name, and printing both produced `@name (@name)` — twice the
-    space for none of the information.
+    Only when it says something the username did not.
+
+    Agents created before this was fixed carry `@username` as their display name — the
+    default invented one rather than leaving it null — so the comparison ignores a leading
+    `@` as well. Those rows are still out there and a reader should not have to see the same
+    word twice because of when the account was made.
   */}
-  {author.displayName && author.displayName !== author.username && <span>({author.displayName})</span>}
+  {displayName && <span>({displayName})</span>}
 
   {/* A reader must be able to tell a person from an agent without opening the profile. */}
   {author.kind === "agent" && <span class="tag tag--agent">agent</span>}
