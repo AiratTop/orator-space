@@ -1,5 +1,13 @@
 import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
-import type { ReportCategory } from "../ports/index.js";
+import type {
+  ModerationActionKind,
+  ModerationActionRecord,
+  PendingWrite,
+  ReportCategory,
+  ReportRecord,
+  ReportStatus,
+} from "../ports/index.js";
+import { canModerate } from "../identity/authz.js";
 import { fail, ok, type RequestContext, type Result } from "./context.js";
 
 /**
@@ -120,4 +128,386 @@ async function targetExists(
     case "media":
       return (await ctx.ports.media.findById(targetId)) !== null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// The queue, and what is done from it (SPEC §61.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Why an action was taken, as a short stable code.
+ *
+ * Codes rather than prose because the value reaches the author through an event (§61.2) and
+ * has to be interpretable by an agent as well as readable by a person. The free-text
+ * `reason_text` carries the explanation; this carries the category, and a client can act on
+ * it without parsing English.
+ */
+export const REASON_CODES = [
+  "spam",
+  "illegal_content",
+  "copyright",
+  "abuse",
+  "prompt_injection",
+  "impersonation",
+  "misleading_provenance",
+  "duplicate",
+  "legal_order",
+  "other",
+] as const;
+
+export type ReasonCode = (typeof REASON_CODES)[number];
+
+export interface ReviewInput {
+  reportId: string;
+  /** `rejected` closes the report with no action; `reviewing` claims it. */
+  status: "reviewing" | "rejected";
+  resolution?: string | null;
+}
+
+export interface ActionInput {
+  targetType: "article" | "comment" | "principal" | "media";
+  targetId: string;
+  action: ModerationActionKind;
+  reasonCode: ReasonCode;
+  reasonText?: string | null;
+  source?: "report" | "legal" | "proactive";
+  /** When the action closes a report, it is named and the report is closed with it. */
+  reportId?: string | null;
+}
+
+/** SPEC §61.1 — the queue, to a moderator and to nobody else. */
+export async function listReports(
+  ctx: RequestContext,
+  options: { status?: ReportStatus | null; limit?: number; after?: string | null } = {},
+): Promise<Result<{ items: ReportRecord[]; nextCursor: string | null }>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+  const items = await ctx.ports.moderation.listReports(
+    options.status ?? null,
+    limit + 1,
+    options.after ?? null,
+  );
+  const page = items.slice(0, limit);
+  return ok({
+    items: page,
+    nextCursor: items.length > limit ? (page[page.length - 1]?.id ?? null) : null,
+  });
+}
+
+/** Claims a report for review, or closes it without acting (SPEC §61.1). */
+export async function reviewReport(
+  ctx: RequestContext,
+  input: ReviewInput,
+): Promise<Result<{ id: string; status: ReportStatus }>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+  const actor = ctx.actor!;
+
+  const report = await ctx.ports.moderation.findReport(input.reportId);
+  if (report === null) return fail(ErrorType.NotFound, "Report not found");
+
+  const now = ctx.ports.clock.now().toISOString();
+  // Claiming moves open → reviewing; rejecting closes from either. Neither may reopen a
+  // report that has already been actioned: the action is the record, and reversing it is
+  // `restore`, not a status edit.
+  const expected: ReportStatus[] = input.status === "reviewing" ? ["open"] : ["open", "reviewing"];
+
+  const [moved] = await ctx.ports.db.commit([
+    ctx.ports.moderation.setReportStatus(
+      report.id,
+      input.status,
+      expected,
+      actor.principalId as OratorId,
+      input.resolution ?? null,
+      now,
+    ),
+    journalAction(ctx, `report.${input.status}`, report.targetType, report.targetId, input.resolution ?? null, now),
+  ]);
+
+  if ((moved?.changes ?? 0) === 0) {
+    return fail(
+      ErrorType.Conflict,
+      "That report has already been handled",
+      `It is now ${report.status}. Re-read the queue before acting.`,
+    );
+  }
+  return ok({ id: report.id, status: input.status });
+}
+
+/**
+ * Applies a moderator's decision (SPEC §61.1, §61.2).
+ *
+ * One function for every action, because everything except the state change is identical
+ * and must be: a record in `moderation_actions`, a record in `audit_log`, and a notification
+ * to the author carrying the reason code. §61.2 makes all three mandatory, and three call
+ * sites that each remembered two of them is how one gets forgotten.
+ */
+export async function applyModerationAction(
+  ctx: RequestContext,
+  input: ActionInput,
+): Promise<Result<{ id: OratorId; action: ModerationActionKind; targetId: string }>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+  const actor = ctx.actor!;
+
+  const subject = await resolveTarget(ctx, input.targetType, input.targetId);
+  if (subject === null) return fail(ErrorType.NotFound, "Nothing to act on at that identifier");
+
+  const now = ctx.ports.clock.now().toISOString();
+  const id = ctx.ports.ids.next();
+  const source = input.source ?? (input.reportId ? "report" : "proactive");
+
+  const effect = await stateChange(ctx, input, now);
+  if (!effect.ok) return effect;
+
+  const writes = [
+    ...effect.value,
+    ctx.ports.moderation.insertAction({
+      id,
+      targetType: input.targetType,
+      targetId: input.targetId,
+      action: input.action,
+      reasonCode: input.reasonCode,
+      reasonText: input.reasonText ?? null,
+      source,
+      reportId: (input.reportId ?? null) as OratorId | null,
+      actorPrincipalId: actor.principalId as OratorId,
+      createdAt: now,
+    }),
+    // §61.2 — both journals, always. `moderation_actions` is the object's operational
+    // history; `audit_log` is the security record of who did it, from where, with which
+    // token. They answer different questions and neither substitutes for the other (§62).
+    journalAction(ctx, `moderation.${input.action}`, input.targetType, input.targetId, input.reasonCode, now),
+  ];
+
+  /**
+   * §61.2 — the author is told, with the reason code.
+   *
+   * A platform that removes somebody's work and does not say so is one they cannot appeal
+   * to, and §61.1 requires an appeal process. The event is private to the author: what was
+   * done to their article is not public activity.
+   */
+  if (subject.authorPrincipalId !== null) {
+    writes.push(
+      ctx.ports.events.insert({
+        id: ctx.ports.ids.next(),
+        type: "moderation.actioned",
+        actorPrincipalId: actor.principalId as OratorId,
+        subjectType: input.targetType,
+        subjectId: input.targetId as OratorId,
+        audiencePrincipalId: subject.authorPrincipalId as OratorId,
+        visibility: "private",
+        payload: {
+          schema_version: SCHEMA_VERSION,
+          action: input.action,
+          reason_code: input.reasonCode,
+          ...(input.reasonText ? { reason_text: input.reasonText } : {}),
+        },
+        createdAt: now,
+      }),
+    );
+  }
+
+  // Search, sitemap and cache all key off this. Removing an article and leaving it in the
+  // index is the failure mode that makes a takedown look like it did not happen (§38.1).
+  if (input.targetType === "article") {
+    writes.push(
+      ctx.ports.outbox.enqueue({
+        id: ctx.ports.ids.next(),
+        eventType: input.action === "restore" ? "article.updated" : "article.removed",
+        aggregateType: "article",
+        aggregateId: input.targetId,
+        payload: { schema_version: SCHEMA_VERSION, moderation: input.action, reason_code: input.reasonCode },
+        requestId: ctx.requestId,
+        createdAt: now,
+      }),
+    );
+  }
+
+  if (input.reportId) {
+    writes.push(
+      ctx.ports.moderation.setReportStatus(
+        input.reportId,
+        "actioned",
+        ["open", "reviewing"],
+        actor.principalId as OratorId,
+        `${input.action}: ${input.reasonCode}`,
+        now,
+      ),
+    );
+  }
+
+  await ctx.ports.db.commit(writes);
+  return ok({ id, action: input.action, targetId: input.targetId });
+}
+
+/** The moderation history of one object, to a moderator (SPEC §61.2). */
+export async function listModerationActions(
+  ctx: RequestContext,
+  targetType: string,
+  targetId: string,
+): Promise<Result<ModerationActionRecord[]>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+  return ok(await ctx.ports.moderation.listActions(targetType, targetId, 50));
+}
+
+// --- the parts the three above share ----------------------------------------
+
+function moderatorOnly(ctx: RequestContext): Result<true> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+  const decision = canModerate(actor);
+  if (!decision.allowed) {
+    return fail(
+      decision.reason === "insufficient-scope" ? ErrorType.InsufficientScope : ErrorType.Forbidden,
+      "Not permitted",
+      decision.reason === "requires-moderator"
+        ? "This action requires a moderator or administrator."
+        : "The token does not carry admin:moderate.",
+    );
+  }
+  return ok(true);
+}
+
+const journalAction = (
+  ctx: RequestContext,
+  action: string,
+  targetType: string,
+  targetId: string,
+  reason: string | null,
+  at: string,
+) =>
+  ctx.ports.audit.record({
+    id: ctx.ports.ids.next(),
+    actorPrincipalId: (ctx.actor?.principalId ?? null) as OratorId | null,
+    actorTokenId: ctx.tokenId,
+    action,
+    targetType,
+    targetId,
+    outcome: "success",
+    reason,
+    ipHash: ctx.ipHash,
+    userAgent: ctx.userAgent,
+    requestId: ctx.requestId,
+    createdAt: at,
+  });
+
+/** Who is notified, and enough state to decide what an action means for this target. */
+interface Subject {
+  authorPrincipalId: string | null;
+  status: string;
+}
+
+async function resolveTarget(
+  ctx: RequestContext,
+  targetType: ActionInput["targetType"],
+  targetId: string,
+): Promise<Subject | null> {
+  switch (targetType) {
+    case "article": {
+      const article = await ctx.ports.articles.findById(targetId);
+      return article === null ? null : { authorPrincipalId: article.authorPrincipalId, status: article.status };
+    }
+    case "comment": {
+      const comment = await ctx.ports.social.findComment(targetId);
+      return comment === null ? null : { authorPrincipalId: comment.authorPrincipalId, status: comment.status };
+    }
+    case "principal": {
+      const principal = await ctx.ports.principals.findById(targetId);
+      return principal === null ? null : { authorPrincipalId: principal.id, status: principal.status };
+    }
+    case "media": {
+      const media = await ctx.ports.media.findById(targetId);
+      return media === null ? null : { authorPrincipalId: media.ownerPrincipalId, status: media.status };
+    }
+  }
+}
+
+/**
+ * What each action actually changes (SPEC §61.1).
+ *
+ * The mapping is deliberately narrow. `hide` takes something out of public view and is
+ * reversible; `remove` is the tombstone of §23.2, which keeps the id resolving so citations
+ * to it still answer; `unindex` leaves the article public and takes it out of search and the
+ * sitemap (§50.3); `suspend` stops a principal acting; `warn` changes nothing and exists so
+ * that a warning is on the record before an escalation is.
+ */
+async function stateChange(
+  ctx: RequestContext,
+  input: ActionInput,
+  now: string,
+): Promise<Result<PendingWrite[]>> {
+  const { targetType, targetId, action } = input;
+
+  if (action === "warn") return ok([]);
+
+  if (action === "restore") {
+    const last = await ctx.ports.moderation.findLastAction(targetType, targetId);
+    if (last === null || last.action === "warn" || last.action === "restore") {
+      return fail(ErrorType.Conflict, "There is nothing to restore", "No unreversed action on that target.");
+    }
+    return ok([...(await undo(ctx, last, targetType, targetId, now)), ctx.ports.moderation.reverseAction(last.id, now)]);
+  }
+
+  switch (targetType) {
+    case "article": {
+      if (action === "unindex") return ok([ctx.ports.articles.updateMetadata(targetId, { indexable: false }, now)]);
+      if (action === "hide") return ok([ctx.ports.articles.unpublish(targetId, now)]);
+      if (action === "remove") {
+        // §61.1 — a legal order answers 451 and an ordinary tombstone answers 410, and the
+        // difference is stated to a reader rather than inferred from the reason text.
+        const why = input.source === "legal" ? "legal" : "moderation";
+        return ok([ctx.ports.articles.setStatus(targetId, "removed", now, why)]);
+      }
+      break;
+    }
+    case "comment": {
+      if (action === "hide") return ok([ctx.ports.social.setCommentStatus(targetId, "hidden", now)]);
+      if (action === "remove") return ok([ctx.ports.social.setCommentStatus(targetId, "removed", now)]);
+      break;
+    }
+    case "principal": {
+      if (action === "suspend") return ok([ctx.ports.principals.setStatus(targetId, "suspended", now)]);
+      break;
+    }
+    case "media": {
+      // `rejected` is the media record's only removal state (§21.1): the bytes stop being
+      // served and the row survives so that a reference to them still resolves to a reason.
+      if (action === "hide" || action === "remove") {
+        return ok([ctx.ports.media.markRejected(targetId, now)]);
+      }
+      break;
+    }
+  }
+
+  return fail(
+    ErrorType.ValidationFailed,
+    `${action} does not apply to a ${targetType}`,
+    "Suspension applies to a principal; unindexing to an article; hide and remove to content.",
+    { field: "action" },
+  );
+}
+
+/** The inverse of an action, for `restore`. */
+async function undo(
+  ctx: RequestContext,
+  last: ModerationActionRecord,
+  targetType: string,
+  targetId: string,
+  now: string,
+): Promise<PendingWrite[]> {
+  if (targetType === "article") {
+    if (last.action === "unindex") return [ctx.ports.articles.updateMetadata(targetId, { indexable: true }, now)];
+    // Back to `unpublished`, not to `published`. Restoring an article to public view is the
+    // author's decision to make; a moderator's job here is to lift the sanction, and
+    // republishing on their behalf would put words back under somebody's name without
+    // asking them (§23.1).
+    return [ctx.ports.articles.setStatus(targetId, "unpublished", now)];
+  }
+  if (targetType === "comment") return [ctx.ports.social.setCommentStatus(targetId, "visible", now)];
+  if (targetType === "principal") return [ctx.ports.principals.setStatus(targetId, "active", now)];
+  return [];
 }

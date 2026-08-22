@@ -643,6 +643,55 @@ export const OPERATIONS: readonly Operation[] = [
     response: s.reportResponse,
     errors: [E.ValidationFailed, E.RateLimited],
   },
+  {
+    id: "listReports",
+    method: "get",
+    path: "/v1/moderation/reports",
+    summary: "The moderation queue",
+    description:
+      "Open reports, oldest first — the order a moderator works in. Moderators only; the " +
+      "reporter is named here and nowhere else (§61.2).",
+    tag: "moderation",
+    auth: "required",
+    scopes: ["admin:moderate"],
+    status: 200,
+    response: s.reportPage,
+    errors: [...AUTHED],
+  },
+  {
+    id: "reviewReport",
+    method: "post",
+    path: "/v1/moderation/reports/{id}/review",
+    summary: "Claim or dismiss a report",
+    description:
+      "Moves a report from open to reviewing, or closes it without action. Refused with " +
+      "409 if somebody else got there first (§34.3).",
+    tag: "moderation",
+    auth: "required",
+    scopes: ["admin:moderate"],
+    request: s.reviewReportRequest,
+    status: 200,
+    response: s.reviewReportResponse,
+    errors: [...AUTHED, E.NotFound, E.Conflict],
+  },
+  {
+    id: "applyModerationAction",
+    method: "post",
+    path: "/v1/moderation/actions",
+    summary: "Hide, remove, de-index, suspend, restore or warn",
+    description:
+      "Every action records itself in the object's history and in the audit log, and the " +
+      "author is notified with the reason code (§61.2). `source: legal` makes the article " +
+      "answer 451 rather than 410.",
+    tag: "moderation",
+    auth: "required",
+    scopes: ["admin:moderate"],
+    idempotent: true,
+    request: s.moderationActionRequest,
+    status: 201,
+    response: s.moderationActionResponse,
+    errors: [...AUTHED, E.NotFound, E.Conflict, E.ValidationFailed],
+  },
 ];
 
 export const operationById = (id: string): Operation | undefined =>

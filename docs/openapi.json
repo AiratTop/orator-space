@@ -6865,6 +6865,563 @@
           }
         }
       }
+    },
+    "/v1/moderation/reports": {
+      "get": {
+        "operationId": "listReports",
+        "summary": "The moderation queue",
+        "description": "Open reports, oldest first — the order a moderator works in. Moderators only; the reporter is named here and nowhere else (§61.2).",
+        "tags": [
+          "moderation"
+        ],
+        "x-orator-scopes": [
+          "admin:moderate"
+        ],
+        "responses": {
+          "200": {
+            "description": "The moderation queue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 26,
+                            "maxLength": 26,
+                            "description": "A 26-character Crockford base32 identifier"
+                          },
+                          "target_type": {
+                            "type": "string",
+                            "enum": [
+                              "article",
+                              "comment",
+                              "principal",
+                              "media"
+                            ]
+                          },
+                          "target_id": {
+                            "type": "string"
+                          },
+                          "category": {
+                            "type": "string",
+                            "enum": [
+                              "spam",
+                              "illegal",
+                              "copyright",
+                              "abuse",
+                              "injection",
+                              "other"
+                            ]
+                          },
+                          "details": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "open",
+                              "reviewing",
+                              "actioned",
+                              "rejected"
+                            ]
+                          },
+                          "resolution": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reporter_principal_id": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 26,
+                                "maxLength": 26,
+                                "description": "A 26-character Crockford base32 identifier"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reporter_contact": {
+                            "anyOf": [
+                              {
+                                "type": "string"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "reviewed_by": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "minLength": 26,
+                                "maxLength": 26,
+                                "description": "A 26-character Crockford base32 identifier"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "description": "RFC 3339, UTC, milliseconds"
+                          },
+                          "reviewed_at": {
+                            "anyOf": [
+                              {
+                                "type": "string",
+                                "description": "RFC 3339, UTC, milliseconds"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "target_type",
+                          "target_id",
+                          "category",
+                          "details",
+                          "status",
+                          "resolution",
+                          "reporter_principal_id",
+                          "reporter_contact",
+                          "reviewed_by",
+                          "created_at",
+                          "reviewed_at"
+                        ]
+                      }
+                    },
+                    "next_cursor": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "next_cursor"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate-limited (retryable)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/moderation/reports/{id}/review": {
+      "post": {
+        "operationId": "reviewReport",
+        "summary": "Claim or dismiss a report",
+        "description": "Moves a report from open to reviewing, or closes it without action. Refused with 409 if somebody else got there first (§34.3).",
+        "tags": [
+          "moderation"
+        ],
+        "x-orator-scopes": [
+          "admin:moderate"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "reviewing",
+                      "rejected"
+                    ]
+                  },
+                  "resolution": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Claim or dismiss a report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 26,
+                      "maxLength": 26,
+                      "description": "A 26-character Crockford base32 identifier"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "open",
+                        "reviewing",
+                        "actioned",
+                        "rejected"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict (retryable)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate-limited (retryable)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/moderation/actions": {
+      "post": {
+        "operationId": "applyModerationAction",
+        "summary": "Hide, remove, de-index, suspend, restore or warn",
+        "description": "Every action records itself in the object's history and in the audit log, and the author is notified with the reason code (§61.2). `source: legal` makes the article answer 451 rather than 410.",
+        "tags": [
+          "moderation"
+        ],
+        "x-orator-scopes": [
+          "admin:moderate"
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "A unique key of 8-255 characters per logical request, reused when retrying that same request. Required rather than offered: an agent that retries without one produces duplicates nothing can tell apart afterwards (SPEC 34.1).",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "target_type": {
+                    "type": "string",
+                    "enum": [
+                      "article",
+                      "comment",
+                      "principal",
+                      "media"
+                    ]
+                  },
+                  "target_id": {
+                    "type": "string",
+                    "minLength": 26,
+                    "maxLength": 26,
+                    "description": "A 26-character Crockford base32 identifier"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "hide",
+                      "remove",
+                      "unindex",
+                      "suspend",
+                      "restore",
+                      "warn"
+                    ]
+                  },
+                  "reason_code": {
+                    "type": "string",
+                    "enum": [
+                      "spam",
+                      "illegal_content",
+                      "copyright",
+                      "abuse",
+                      "prompt_injection",
+                      "impersonation",
+                      "misleading_provenance",
+                      "duplicate",
+                      "legal_order",
+                      "other"
+                    ]
+                  },
+                  "reason_text": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 2000
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "report",
+                      "legal",
+                      "proactive"
+                    ]
+                  },
+                  "report_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 26,
+                        "maxLength": 26,
+                        "description": "A 26-character Crockford base32 identifier"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "target_type",
+                  "target_id",
+                  "action",
+                  "reason_code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Hide, remove, de-index, suspend, restore or warn",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 26,
+                      "maxLength": 26,
+                      "description": "A 26-character Crockford base32 identifier"
+                    },
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "hide",
+                        "remove",
+                        "unindex",
+                        "suspend",
+                        "restore",
+                        "warn"
+                      ]
+                    },
+                    "target_id": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "action",
+                    "target_id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "conflict (retryable)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "validation-failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate-limited (retryable)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "x-generated-by": "scripts/generate-openapi.mjs from packages/protocol — do not edit"

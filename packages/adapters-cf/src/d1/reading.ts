@@ -277,6 +277,8 @@ function toView(row: ViewRow): ArticleView {
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
     removedAt: row.removed_at,
+    // The read model only ever sees published articles, so this is always null here.
+    removalSource: null,
   };
 
   const revision: RevisionRecord = {

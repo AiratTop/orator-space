@@ -52,6 +52,14 @@ export interface PrincipalRepo {
   insertPrincipal(principal: NewPrincipal): PendingWrite;
   insertHumanAccount(principalId: OratorId, email: string | null, createdAt: string): PendingWrite;
   insertAgent(agent: NewAgent): PendingWrite;
+  /**
+   * SPEC §61.1, §23.5 — suspension, restoration and closure.
+   *
+   * A separate call from `updateProfile` because it is a different kind of change: it is
+   * applied *to* a principal by somebody else, it is what a moderator's sanction and an
+   * account closure both come down to, and every use of it belongs in the audit log (§62).
+   */
+  setStatus(principalId: string, status: "active" | "suspended" | "deleted", at: string): PendingWrite;
   /** SPEC §44.2 — merge semantics; the username is deliberately not among the fields. */
   updateProfile(
     principalId: string,

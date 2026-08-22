@@ -150,6 +150,72 @@ export const quotaResponse = z.object({
   quotas: z.array(quotaEntry),
 });
 
+/**
+ * SPEC §61.1 — the moderation queue and the actions taken from it.
+ *
+ * The reporter is named to a moderator and to nobody else, and the field is absent rather
+ * than nulled for an anonymous report: §61.2 accepts reports without an account, and a
+ * `null` that could also mean "withheld" is a distinction a client cannot make.
+ */
+export const queuedReport = z.object({
+  id: oratorId,
+  target_type: z.enum(["article", "comment", "principal", "media"]),
+  target_id: z.string(),
+  category: z.enum(["spam", "illegal", "copyright", "abuse", "injection", "other"]),
+  details: z.string().nullable(),
+  status: z.enum(["open", "reviewing", "actioned", "rejected"]),
+  resolution: z.string().nullable(),
+  reporter_principal_id: oratorId.nullable(),
+  reporter_contact: z.string().nullable(),
+  reviewed_by: oratorId.nullable(),
+  created_at: timestamp,
+  reviewed_at: timestamp.nullable(),
+});
+
+export const reportPage = z.object({
+  items: z.array(queuedReport),
+  next_cursor: z.string().nullable(),
+});
+
+export const reviewReportResponse = z.object({
+  id: oratorId,
+  status: z.enum(["open", "reviewing", "actioned", "rejected"]),
+});
+
+export const reviewReportRequest = z.object({
+  status: z.enum(["reviewing", "rejected"]),
+  resolution: z.string().max(2000).nullish(),
+});
+
+export const moderationActionRequest = z.object({
+  target_type: z.enum(["article", "comment", "principal", "media"]),
+  target_id: oratorId,
+  action: z.enum(["hide", "remove", "unindex", "suspend", "restore", "warn"]),
+  /** A stable code, because it reaches the author through an event and an agent reads it. */
+  reason_code: z.enum([
+    "spam",
+    "illegal_content",
+    "copyright",
+    "abuse",
+    "prompt_injection",
+    "impersonation",
+    "misleading_provenance",
+    "duplicate",
+    "legal_order",
+    "other",
+  ]),
+  reason_text: z.string().max(2000).nullish(),
+  /** `legal` makes the article answer 451 rather than 410 (§61.1). */
+  source: z.enum(["report", "legal", "proactive"]).optional(),
+  report_id: oratorId.nullish(),
+});
+
+export const moderationActionResponse = z.object({
+  id: oratorId,
+  action: z.enum(["hide", "remove", "unindex", "suspend", "restore", "warn"]),
+  target_id: z.string(),
+});
+
 // ---------------------------------------------------------------------------
 // Articles (§15, §16)
 // ---------------------------------------------------------------------------

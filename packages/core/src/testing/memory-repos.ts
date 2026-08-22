@@ -36,7 +36,8 @@ import {
   type SearchIndex,
   type SocialRepo,
   type ModerationRepo,
-  type NewReport,
+  type ModerationActionRecord,
+  type ReportRecord,
   type TopicRecord,
   type TopicRepo,
   type TokenRecord,
@@ -77,7 +78,8 @@ export interface MemoryState {
   comments: Map<string, CommentRecord>;
   searchDocs: Map<string, SearchDocument>;
   topics: Map<string, TopicRecord>;
-  reports: NewReport[];
+  reports: ReportRecord[];
+  moderationActions: ModerationActionRecord[];
   media: Map<string, MediaRecord>;
   /** The bytes, keyed the same way the R2 adapter keys them. */
   mediaBytes: Map<string, Uint8Array>;
@@ -113,6 +115,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     searchDocs: new Map(),
     topics: new Map(),
     reports: [],
+    moderationActions: [],
     media: new Map(),
     mediaBytes: new Map(),
     articleTopics: new Map(),
@@ -159,6 +162,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         searchDocs: new Map(state.searchDocs),
         topics: new Map(state.topics),
         reports: [...state.reports],
+        moderationActions: [...state.moderationActions],
         media: new Map(state.media),
         mediaBytes: new Map(state.mediaBytes),
         articleTopics: new Map(state.articleTopics),
@@ -209,6 +213,15 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         state.humanEmails.set(principalId, email);
       });
     },
+    setStatus(principalId, status, _at) {
+      return asWrite(() => {
+        const principal = state.principals.get(principalId);
+        if (principal === undefined) return 0;
+        state.principals.set(principalId, { ...principal, status });
+        return 1;
+      });
+    },
+
     updateProfile(principalId, fields) {
       return asWrite(() => {
         const principal = state.principals.get(principalId);
@@ -340,6 +353,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           updatedAt: article.createdAt,
           publishedAt: null,
           removedAt: null,
+          removalSource: null,
         });
       });
     },
@@ -384,11 +398,19 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return 1;
       });
     },
-    setStatus(articleId, status, at) {
+    setStatus(articleId, status, at, removalSource) {
       return asWrite(() => {
         const article = state.articles.get(articleId);
         if (article === undefined) return 0;
-        state.articles.set(articleId, { ...article, status, updatedAt: at });
+        state.articles.set(articleId, {
+          ...article,
+          status,
+          updatedAt: at,
+          // Together with the status, so a tombstone is never unable to say why (§23.2).
+          ...(status === "removed"
+            ? { removedAt: article.removedAt ?? at, removalSource: removalSource ?? "author" }
+            : {}),
+        });
         return 1;
       });
     },
@@ -1001,12 +1023,67 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
   };
 
   const moderation: ModerationRepo = {
-    insertReport: (report) => asWrite(() => void state.reports.push(report)),
+    insertReport: (report) =>
+      asWrite(() =>
+        void state.reports.push({
+          ...report,
+          status: "open",
+          resolution: null,
+          reviewedBy: null,
+          reviewedAt: null,
+        }),
+      ),
     async countRecentReports(targetType, targetId, since) {
       return state.reports.filter(
         (report) =>
           report.targetType === targetType && report.targetId === targetId && report.createdAt >= since,
       ).length;
+    },
+
+    async listReports(status, limit, after) {
+      return state.reports
+        .filter((report) => (status === null || report.status === status) && (after === null || report.id > after))
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit);
+    },
+    async findReport(id) {
+      return state.reports.find((report) => report.id === id) ?? null;
+    },
+    setReportStatus(id, status, expected, reviewedBy, resolution, at) {
+      return asWrite(() => {
+        const report = state.reports.find((entry) => entry.id === id);
+        // The guard is the whole point: two moderators working one queue is ordinary, and
+        // the second write must be a no-op the service can notice (§34.3).
+        if (report === undefined || !expected.includes(report.status)) return 0;
+        Object.assign(report, { status, reviewedBy, resolution, reviewedAt: at });
+        return 1;
+      });
+    },
+
+    insertAction: (action) => asWrite(() => void state.moderationActions.push({ ...action, reversedAt: null })),
+    async listActions(targetType, targetId, limit) {
+      return state.moderationActions
+        .filter((action) => action.targetType === targetType && action.targetId === targetId)
+        .sort((a, b) => b.id.localeCompare(a.id))
+        .slice(0, limit);
+    },
+    reverseAction(id, at) {
+      return asWrite(() => {
+        const action = state.moderationActions.find((entry) => entry.id === id && entry.reversedAt === null);
+        if (action === undefined) return 0;
+        action.reversedAt = at;
+        return 1;
+      });
+    },
+    async findLastAction(targetType, targetId) {
+      return (
+        state.moderationActions
+          .filter(
+            (action) =>
+              action.targetType === targetType && action.targetId === targetId && action.reversedAt === null,
+          )
+          .sort((a, b) => b.id.localeCompare(a.id))[0] ?? null
+      );
     },
   };
 

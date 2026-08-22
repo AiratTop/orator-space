@@ -4088,6 +4088,16 @@ CREATE TABLE moderation_actions (
 CREATE INDEX ix_modact_target ON moderation_actions(target_type, target_id, id DESC);
 ```
 
+**MUST — the first moderator is created with SQL, and that is written down.** §43.3 appoints
+a platform role out of band and §43.1 refuses to issue an administrative scope to anybody who
+does not already hold one. Both rules are right, and together they mean no API can create the
+first moderator. `scripts/grant-moderator.mjs` is the procedure: it promotes a human
+principal and mints one token, printing it once.
+
+**MUST.** `restore` on a removed article returns it to `unpublished`, never to `published`.
+Lifting a sanction is a moderator's decision; putting words back under somebody's name is not
+(§23.1).
+
 **MUST.** A report is accepted **without authentication**. Requiring registration to report
 illegal content is not acceptable — anonymous reports are subject to the same per-IP rate
 limit as other anonymous operations.
@@ -5034,6 +5044,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 90 | The quota counter holds integers; the rule lives in the domain and is shared with the double | §59.1 |
 | 91 | `Retry-After` on a quota is the window's real reset, not a per-type default | §59.2, §45.1 |
 | 92 | An unreachable quota counter allows the write and marks it unmetered, loudly | §59.1, §61 |
+| 93 | A legal takedown answers 451 and an ordinary tombstone 410; the reason is stored, not inferred | §61.1, §23.2 |
+| 94 | `restore` returns an article to `unpublished`; republishing stays the author's decision | §61.1, §23.1 |
 
 ## 80. Open decisions
 

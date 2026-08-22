@@ -500,9 +500,23 @@ export async function readArticle(
   const article = await ctx.ports.articles.findById(id);
   if (article === null) return fail(ErrorType.NotFound, "Article not found");
   if (article.status === "removed") {
-    // 410, not 404: the article existed, the identifier is permanent, and a citation to it
-    // must keep resolving to something that says so (§23.2).
-    return fail(ErrorType.Gone, "Article was removed");
+    /*
+     * 410, not 404: the article existed, the identifier is permanent, and a citation to it
+     * must keep resolving to something that says so (§23.2).
+     *
+     * 451 when a legal order took it down (§61.1). The distinction is not decoration: a
+     * crawler, a citing author and a court all read those two codes differently, and a
+     * platform that answered 410 for both would be concealing which of its removals were
+     * compelled. The reason is stated; who compelled it is not, because that is frequently
+     * not ours to publish.
+     */
+    return article.removalSource === "legal"
+      ? fail(
+          ErrorType.UnavailableForLegalReasons,
+          "Removed in response to a legal demand",
+          "The identifier still resolves and citations to it still answer.",
+        )
+      : fail(ErrorType.Gone, "Article was removed");
   }
 
   const viewer = ctx.actor?.principalId;

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { OPERATIONS } from "@orator/protocol";
+import { generateToken } from "@orator/core";
 import { app } from "./index.js";
 
 /**
@@ -18,6 +19,34 @@ import { app } from "./index.js";
 
 const API = "https://api-staging.orator.space";
 const suffix = () => Math.random().toString(36).slice(2, 8);
+
+/**
+ * Promotes a principal and issues it an admin token, the way the operator script does.
+ *
+ * Two statements, because there is no third way: a platform role is appointed out of band
+ * (§43.3) and an admin scope cannot be issued by anybody who does not already hold one
+ * (§43.1). Both rules are right and together they mean the first moderator is created with
+ * SQL. `scripts/grant-moderator.mjs` is that procedure for a deployment.
+ */
+async function mintModerator(principalId: string): Promise<string> {
+  const generated = await generateToken();
+  const at = new Date().toISOString();
+  await env.DB.batch([
+    env.DB.prepare(`UPDATE principals SET platform_role = 'moderator' WHERE id = ?`).bind(principalId),
+    env.DB.prepare(
+      `INSERT INTO api_tokens (id, principal_id, name, token_hash, prefix, scopes, created_at)
+       VALUES (?, ?, 'moderator', ?, ?, ?, ?)`,
+    ).bind(
+      `MOD${Math.random().toString(36).slice(2, 12).toUpperCase().padEnd(23, "0")}`,
+      principalId,
+      generated.tokenHash,
+      generated.prefix,
+      JSON.stringify(["admin:moderate", "articles:read", "comments:read"]),
+      at,
+    ),
+  ]);
+  return generated.token;
+}
 
 /** What each operation actually answered, keyed by operation id. */
 const captured = new Map<string, unknown>();
@@ -94,6 +123,16 @@ beforeAll(async () => {
   );
 
   await record("getQuota", `/v1/principals/${agent.principal_id}/quota`, { headers: auth(owner.token) });
+
+  /*
+   * §61.1's endpoints need a role and a scope that no API grants.
+   *
+   * §43.3 appoints platform roles out of band and §43.1 refuses to issue an admin scope to
+   * anyone who does not already hold one, so the first moderator cannot exist without a
+   * write to the database — which is what `scripts/grant-moderator.mjs` does for a real
+   * deployment. This is the same two statements, run against the test database.
+   */
+  const moderatorToken = await mintModerator(owner.id);
   await record("getArticle", `/v1/articles/${article.id}`);
   await record("listRevisions", `/v1/articles/${article.id}/revisions`);
   await record("getArticleActivity", `/v1/articles/${article.id}/activity`);
@@ -146,11 +185,27 @@ beforeAll(async () => {
   )) as { id: string };
   await record("getMedia", `/v1/media/${media.id}`, { headers: auth(owner.token) });
 
-  await record(
+  const report = (await record(
     "createReport",
     "/v1/reports",
     json({ target_type: "article", target_id: article.id, category: "spam" }),
+  )) as { id: string };
+
+  await record("listReports", "/v1/moderation/reports?status=open", { headers: auth(moderatorToken) });
+  await record(
+    "reviewReport",
+    `/v1/moderation/reports/${report.id}/review`,
+    json({ status: "reviewing" }, auth(moderatorToken)),
   );
+  await record(
+    "applyModerationAction",
+    "/v1/moderation/actions",
+    json(
+      { target_type: "comment", target_id: comment.id, action: "hide", reason_code: "spam", report_id: report.id },
+      auth(moderatorToken, { "idempotency-key": `rc-act-${s}` }),
+    ),
+  );
+
   await record("unpublishArticle", `/v1/articles/${article.id}/unpublish`, {
     method: "POST",
     headers: auth(owner.token),

@@ -17,6 +17,7 @@ import { socialRoutes } from "./routes/social.js";
 import { discoveryRoutes } from "./routes/discovery.js";
 import { mediaRoutes } from "./routes/media.js";
 import { mcpRoutes } from "./routes/mcp.js";
+import { moderationRoutes } from "./routes/moderation.js";
 import { portsFor } from "./context.js";
 import { drainOutbox, reindexArticle } from "@orator/core";
 
@@ -161,6 +162,7 @@ app.route("/", identityRoutes);
 app.route("/", articleRoutes);
 app.route("/", socialRoutes);
 app.route("/", discoveryRoutes);
+app.route("/", moderationRoutes);
 app.route("/", mcpRoutes);
 app.route("/", mediaRoutes);
 

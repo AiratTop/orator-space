@@ -26,6 +26,7 @@ interface ArticleRow {
   updated_at: string;
   published_at: string | null;
   removed_at: string | null;
+  removal_source: string | null;
   author_owner_principal_id: string | null;
   author_username: string;
 }
@@ -76,6 +77,7 @@ function toArticle(row: ArticleRow | null): ArticleRecord | null {
     updatedAt: row.updated_at,
     publishedAt: row.published_at,
     removedAt: row.removed_at,
+    removalSource: row.removal_source as ArticleRecord["removalSource"],
     authorUsername: row.author_username,
     ...(row.author_owner_principal_id === null
       ? {}
@@ -229,11 +231,20 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
       );
     },
 
-    setStatus(articleId, status: ArticleStatus, at) {
+    setStatus(articleId, status: ArticleStatus, at, removalSource) {
+      // `removed_at` and `removal_source` move together with the status, so a tombstone is
+      // never in a state where it is gone and cannot say why (§23.2, §61.1).
       return asWrite(
-        db
-          .prepare(`UPDATE articles SET status = ?, updated_at = ? WHERE id = ?`)
-          .bind(status, at, articleId),
+        status === "removed"
+          ? db
+              .prepare(
+                `UPDATE articles SET status = 'removed', removed_at = ?, removal_source = ?, updated_at = ?
+                  WHERE id = ?`,
+              )
+              .bind(at, removalSource ?? "author", at, articleId)
+          : db
+              .prepare(`UPDATE articles SET status = ?, updated_at = ? WHERE id = ?`)
+              .bind(status, at, articleId),
       );
     },
 

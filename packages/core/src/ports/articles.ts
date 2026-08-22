@@ -24,6 +24,14 @@ export interface ArticleRecord {
   updatedAt: string;
   publishedAt: string | null;
   removedAt: string | null;
+  /**
+   * SPEC §23.2, §61.1 — why the article is gone, when it is.
+   *
+   * A tombstone answers 410 and a legal takedown answers 451, and those are different
+   * statements to a crawler, to a citing author and to a court. Null while the article is
+   * present.
+   */
+  removalSource: "author" | "moderation" | "legal" | null;
   /** Joined from the authoring agent, for authorisation (SPEC §43.2). */
   authorOwnerPrincipalId?: OratorId;
   /**
@@ -110,7 +118,13 @@ export interface ArticleRepo {
    */
   publish(articleId: string, revisionId: string, at: string, publishedAt: string): PendingWrite;
   unpublish(articleId: string, at: string): PendingWrite;
-  setStatus(articleId: string, status: ArticleStatus, at: string): PendingWrite;
+  /** `removalSource` is required when the status is `removed`, and ignored otherwise. */
+  setStatus(
+    articleId: string,
+    status: ArticleStatus,
+    at: string,
+    removalSource?: ArticleRecord["removalSource"],
+  ): PendingWrite;
   setSlug(articleId: string, slug: string | null, at: string): PendingWrite;
   /** SPEC §44.2 — merge semantics. Only the fields present are touched. */
   updateMetadata(

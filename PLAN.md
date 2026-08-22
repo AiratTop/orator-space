@@ -679,7 +679,7 @@ This is where the entire `[L]` level is closed.
 ```
 [x] quotas on Durable Objects and rate limits (§59)
 [x] report intake — POST /v1/reports, delivered in Phase 5
-[ ] the moderation queue and moderator actions (§61)
+[x] the moderation queue and moderator actions (§61)
 [ ] a moderation provider that does not depend on self-hosted infrastructure
 [ ] deduplication, and indexability as an earned state (§50.3)
 [ ] backups plus a verified restore (§31.5)

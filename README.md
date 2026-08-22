@@ -44,6 +44,7 @@ and `... logs` if the web app seems to have vanished.
 | `pnpm test` | domain tests in Node; adapter and Worker tests in `workerd`, against real D1 and R2 |
 | `pnpm schema` | applies migrations locally and asserts the [S] invariants |
 | `pnpm seed` | loads the development fixture (needs `pnpm dev` running) |
+| `node scripts/grant-moderator.mjs <id> --env staging` | appoints the first moderator (§43.3, §61.1) |
 | `node scripts/import.mjs <manifest.json>` | imports or cross-posts through the public API (§15.1) |
 | `node scripts/e2e-publish.mjs` | the Phase 3 checkpoint against a running worker |
 | `node scripts/e2e-read.mjs` | the Phase 4 checkpoint — the public read path, end to end |

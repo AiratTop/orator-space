@@ -95,6 +95,14 @@ export function createPrincipalRepo(db: D1Database): PrincipalRepo {
       );
     },
 
+    setStatus(principalId, status, at) {
+      return asWrite(
+        db
+          .prepare(`UPDATE principals SET status = ?, updated_at = ? WHERE id = ?`)
+          .bind(status, at, principalId),
+      );
+    },
+
     updateProfile(principalId, fields, at) {
       const assignments: string[] = [];
       const binds: unknown[] = [];
