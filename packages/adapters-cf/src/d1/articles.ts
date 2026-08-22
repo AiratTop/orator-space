@@ -30,6 +30,16 @@ interface ArticleRow {
   moderation_state: string;
   moderation_verdict: string | null;
   moderated_at: string | null;
+  simhash: string | null;
+  simhash_b0: number | null;
+  simhash_b1: number | null;
+  simhash_b2: number | null;
+  simhash_b3: number | null;
+  simhash_b4: number | null;
+  simhash_b5: number | null;
+  simhash_b6: number | null;
+  simhash_b7: number | null;
+  indexable_reason: string | null;
   author_owner_principal_id: string | null;
   author_username: string;
 }
@@ -84,6 +94,8 @@ function toArticle(row: ArticleRow | null): ArticleRecord | null {
     moderationState: (row.moderation_state ?? "unchecked") as ArticleRecord["moderationState"],
     moderationVerdict: row.moderation_verdict,
     moderatedAt: row.moderated_at,
+    simhash: row.simhash,
+    indexableReason: row.indexable_reason,
     authorUsername: row.author_username,
     ...(row.author_owner_principal_id === null
       ? {}
@@ -252,6 +264,47 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
               .prepare(`UPDATE articles SET status = ?, updated_at = ? WHERE id = ?`)
               .bind(status, at, articleId),
       );
+    },
+
+    /**
+     * The fingerprint and the verdict, in one statement (SPEC §50.3, §60.1).
+     *
+     * The bands are derived here rather than passed in: they are an encoding of the
+     * fingerprint for the index to seek on, and a caller that could set them independently
+     * could set them wrong — which would make a duplicate invisible rather than noisy.
+     */
+    setIndexability(articleId, fields, at) {
+      const value = fields.simhash === null ? null : BigInt(`0x${fields.simhash}`);
+      const bands = Array.from({ length: 8 }, (_, i) =>
+        value === null ? null : Number((value >> BigInt(i * 8)) & 0xffn),
+      );
+      return asWrite(
+        db
+          .prepare(
+            `UPDATE articles
+                SET indexable = ?, indexable_reason = ?, simhash = ?,
+                    simhash_b0 = ?, simhash_b1 = ?, simhash_b2 = ?, simhash_b3 = ?,
+                    simhash_b4 = ?, simhash_b5 = ?, simhash_b6 = ?, simhash_b7 = ?,
+                    updated_at = ?
+              WHERE id = ?`,
+          )
+          .bind(fields.indexable ? 1 : 0, fields.reason, fields.simhash, ...bands, at, articleId),
+      );
+    },
+
+    async findBySimhashBands(bands, excludeArticleId, limit) {
+      const { results } = await db
+        .prepare(
+          `SELECT id, simhash FROM articles
+            WHERE status = 'published' AND visibility = 'public' AND simhash IS NOT NULL
+              AND id != ?
+              AND (simhash_b0 = ? OR simhash_b1 = ? OR simhash_b2 = ? OR simhash_b3 = ?
+                OR simhash_b4 = ? OR simhash_b5 = ? OR simhash_b6 = ? OR simhash_b7 = ?)
+            ORDER BY id DESC LIMIT ?`,
+        )
+        .bind(excludeArticleId, ...bands, limit)
+        .all<{ id: string; simhash: string }>();
+      return results as { id: OratorId; simhash: string }[];
     },
 
     setModerationState(articleId, state, verdict, at) {

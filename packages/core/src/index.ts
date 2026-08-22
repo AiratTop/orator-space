@@ -8,6 +8,7 @@ export * from "./ports/index.js";
 export * from "./identity/index.js";
 export * from "./services/index.js";
 export * from "./text/invisible.js";
+export * from "./text/simhash.js";
 export * from "./articles/index.js";
 export * from "./media/index.js";
 export * from "./moderation/index.js";

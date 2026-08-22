@@ -357,6 +357,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           moderationState: "unchecked",
           moderationVerdict: null,
           moderatedAt: null,
+          simhash: null,
+          indexableReason: null,
         });
       });
     },
@@ -449,6 +451,38 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         });
         return 1;
       });
+    },
+    setIndexability(articleId, fields, at) {
+      return asWrite(() => {
+        const article = state.articles.get(articleId);
+        if (article === undefined) return 0;
+        state.articles.set(articleId, {
+          ...article,
+          indexable: fields.indexable,
+          indexableReason: fields.reason,
+          simhash: fields.simhash,
+          updatedAt: at,
+        });
+        return 1;
+      });
+    },
+    async findBySimhashBands(bands, excludeArticleId, limit) {
+      const share = (hex: string) => {
+        const value = BigInt(`0x${hex}`);
+        return bands.some((band, i) => Number((value >> BigInt(i * 8)) & 0xffn) === band);
+      };
+      return [...state.articles.values()]
+        .filter(
+          (article) =>
+            article.status === "published" &&
+            article.visibility === "public" &&
+            article.simhash !== null &&
+            article.id !== excludeArticleId &&
+            share(article.simhash),
+        )
+        .sort((a, b) => b.id.localeCompare(a.id))
+        .slice(0, limit)
+        .map((article) => ({ id: article.id, simhash: article.simhash! }));
     },
     setModerationState(articleId, verdictState, verdict, at) {
       return asWrite(() => {

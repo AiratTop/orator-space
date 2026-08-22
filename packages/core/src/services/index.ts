@@ -10,3 +10,4 @@ export * from "./media.js";
 export * from "./moderation.js";
 export * from "./auth.js";
 export * from "./outbox.js";
+export * from "./indexing.js";

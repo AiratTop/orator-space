@@ -284,6 +284,8 @@ function toView(row: ViewRow): ArticleView {
     moderationState: "unchecked",
     moderationVerdict: null,
     moderatedAt: null,
+    simhash: null,
+    indexableReason: null,
   };
 
   const revision: RevisionRecord = {

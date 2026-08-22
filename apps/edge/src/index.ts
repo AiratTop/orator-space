@@ -19,7 +19,7 @@ import { mediaRoutes } from "./routes/media.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { moderationRoutes } from "./routes/moderation.js";
 import { portsFor } from "./context.js";
-import { drainOutbox, reindexArticle, screenArticle } from "@orator/core";
+import { drainOutbox, evaluateIndexability, reindexArticle, screenArticle } from "@orator/core";
 
 export interface Env {
   ENVIRONMENT: string;
@@ -290,7 +290,18 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
        * message is done either way, and retrying it would re-index for no reason.
        */
       const screened = await screenArticle(ports, event.aggregate_id);
-      log(outcome, { moderation: screened });
+
+      /*
+       * §50.3 — after screening, because the verdict is one of its four conditions.
+       *
+       * Re-evaluated on every article event and not only on the first publish: a trust
+       * level rises on a schedule (§60.2), a moderation verdict arrives asynchronously
+       * (§61), and an article that was the only one of its kind yesterday may be a
+       * duplicate today because somebody else published. A verdict that has not moved
+       * writes nothing.
+       */
+      const indexing = await evaluateIndexability(ports, event.aggregate_id);
+      log(outcome, { moderation: screened, indexable: indexing.indexable, why: indexing.reason });
       return;
     }
     case "comment.created":

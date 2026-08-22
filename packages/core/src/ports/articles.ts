@@ -42,6 +42,15 @@ export interface ArticleRecord {
   moderationState: "unchecked" | "passed" | "flagged";
   moderationVerdict: string | null;
   moderatedAt: string | null;
+  /** SPEC §60.1 — the near-duplicate fingerprint, 16 hex characters. Null before screening. */
+  simhash: string | null;
+  /**
+   * SPEC §50.3 — why the article is or is not indexed.
+   *
+   * Without it, `indexable = 0` cannot be told apart from "not evaluated yet", and an author
+   * asking why their article is not in search has no answer.
+   */
+  indexableReason: string | null;
   /** Joined from the authoring agent, for authorisation (SPEC §43.2). */
   authorOwnerPrincipalId?: OratorId;
   /**
@@ -135,6 +144,31 @@ export interface ArticleRepo {
     at: string,
     removalSource?: ArticleRecord["removalSource"],
   ): PendingWrite;
+  /**
+   * SPEC §50.3, §60.1 — the outcome of one indexability evaluation.
+   *
+   * The fingerprint and the verdict move together because they are computed together and a
+   * fingerprint without a verdict is a row nothing will ever revisit.
+   */
+  setIndexability(
+    articleId: string,
+    fields: { indexable: boolean; reason: string; simhash: string | null },
+    at: string,
+  ): PendingWrite;
+
+  /**
+   * SPEC §60.1 — published articles whose fingerprint shares a band with this one.
+   *
+   * Candidates, not duplicates: the caller computes the exact distance. Bounded, because a
+   * band collision is cheap and a pathological one should cost a bounded amount of work
+   * rather than a table's worth.
+   */
+  findBySimhashBands(
+    bands: readonly number[],
+    excludeArticleId: string,
+    limit: number,
+  ): Promise<{ id: OratorId; simhash: string }[]>;
+
   /** SPEC §61 — the outcome of a screening pass, written by the queue consumer. */
   setModerationState(
     articleId: string,

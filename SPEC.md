@@ -3498,6 +3498,24 @@ content volume and structure exceed a minimum threshold
 **MUST.** A change to `indexable` triggers a sitemap update and a change to the `robots`
 meta tag.
 
+**MUST — a cross-post is never indexable**, whatever else is true of it. `canonical_url`
+points at somebody else's copy, and two copies of one text competing in search results is
+the outcome §50.2 warns about with both of them losing (§15.1).
+
+**MUST — the reason is recorded, not only the verdict.** Without it, `indexable = 0` cannot
+be told apart from "not evaluated yet", and an author asking why their article is not in
+search has no answer. A near-duplicate verdict names the article it duplicates.
+
+**MUST — the verdict is revisited, not decided once.** Every input can change after the
+fact: a trust level rises on a schedule (§60.2), a moderation verdict arrives asynchronously
+(§61), and an article that was the only one of its kind yesterday may be a duplicate today
+because somebody else published. A verdict that has not moved writes nothing, because a
+write rebuilds the sitemap.
+
+**MUST NOT.** None of these conditions blocks publishing. An article that fails every one of
+them is still published, still readable, still citable, still in the API — it is simply not
+offered to a search engine as something this domain vouches for.
+
 **Rationale.** This moves the risk from the domain to the individual article. A bad article
 is not indexed; the domain does not suffer.
 
@@ -3979,6 +3997,20 @@ account age as a multiplier on limits
 **MUST.** Near-duplicate detection affects `indexable` (§50.3) and is a moderation signal,
 but does not automatically block publishing — false positives on short news items are
 inevitable.
+
+**MUST — the threshold is set by measurement, not by the number the literature quotes.**
+Three bits out of sixty-four is the figure derived from web-scale corpora of long documents.
+Measured against articles of the length this platform holds, two changed words move six bits
+and reordered paragraphs move four, so three catches almost nothing worth catching. Seven
+catches all of those and still leaves a fivefold margin to the nearest genuinely different
+article — which is the margin that matters, because a false positive here de-indexes
+somebody's work.
+
+**MUST.** The band count and the threshold are one decision. Fingerprints differing in at
+most seven bits cannot differ in all eight bands, so a seek on eight 8-bit bands finds every
+candidate within the threshold and the exact distance is computed on what comes back.
+Raising the threshold again without adding bands would not loosen the check — it would start
+missing duplicates silently.
 
 **Later:** reputation weights, staking or payment requirements to raise limits, behavioural
 analysis.
@@ -5076,6 +5108,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 94 | `restore` returns an article to `unpublished`; republishing stays the author's decision | §61.1, §23.1 |
 | 95 | Moderation state is `unchecked`/`passed`/`flagged`; an outage must not read as a pass | §61, §50.3 |
 | 96 | The built-in provider depends on nothing and never blocks; a flag raises a report | §61, §58.2 |
+| 97 | The near-duplicate threshold is 7 bits, set by measuring real articles, with 8 bands | §60.1 |
+| 98 | `indexable` records why, and is re-evaluated on every article event rather than once | §50.3 |
 
 ## 80. Open decisions
 
