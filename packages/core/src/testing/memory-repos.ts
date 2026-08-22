@@ -29,7 +29,11 @@ import {
   type ReadingRepo,
   type CommentRecord,
   type EdgeRecord,
+  type SearchDocument,
+  type SearchIndex,
   type SocialRepo,
+  type TopicRecord,
+  type TopicRepo,
   type TokenRecord,
   type TokenRepo,
 } from "../ports/index.js";
@@ -62,6 +66,9 @@ export interface MemoryState {
   audit: AuditEntry[];
   outbox: OutboxEntry[];
   comments: Map<string, CommentRecord>;
+  searchDocs: Map<string, SearchDocument>;
+  topics: Map<string, TopicRecord>;
+  articleTopics: Map<string, Set<string>>;
   edges: Map<string, EdgeRecord>;
   follows: Set<string>;
 }
@@ -90,6 +97,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     audit: [],
     outbox: [],
     comments: new Map(),
+    searchDocs: new Map(),
+    topics: new Map(),
+    articleTopics: new Map(),
     edges: new Map(),
     follows: new Set(),
   };
@@ -130,6 +140,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         audit: [...state.audit],
         outbox: [...state.outbox],
         comments: new Map(state.comments),
+        searchDocs: new Map(state.searchDocs),
+        topics: new Map(state.topics),
+        articleTopics: new Map(state.articleTopics),
         edges: new Map(state.edges),
         follows: new Set(state.follows),
       };
@@ -679,6 +692,60 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+
+  /**
+   * The search index in memory (SPEC §38).
+   *
+   * Substring matching over the indexed fields — not BM25, and not trying to be. What the
+   * domain tests need to know is that the right documents enter and leave the index at the
+   * right moments; how well FTS5 ranks them is FTS5's business, and testing it here would
+   * only assert that this double behaves like this double.
+   */
+  const search: SearchIndex = {
+    async index(document, _at) {
+      state.searchDocs.set(document.articleId, document);
+    },
+    async remove(articleId) {
+      state.searchDocs.delete(articleId);
+    },
+    async indexedHash(articleId) {
+      return state.searchDocs.get(articleId)?.contentHash ?? null;
+    },
+    async query(text, limit) {
+      const terms = text.toLowerCase().split(/\s+/).filter(Boolean);
+      return [...state.searchDocs.values()]
+        .filter((doc) => {
+          const haystack = `${doc.title} ${doc.excerpt} ${doc.body} ${doc.author} ${doc.topics}`.toLowerCase();
+          return terms.every((term) => haystack.includes(term));
+        })
+        .slice(0, limit)
+        .map((doc) => doc.articleId);
+    },
+  };
+
+
+  /** SPEC §22 — curated, and empty until a moderator puts something in it. */
+  const topics: TopicRepo = {
+    async list() {
+      return [...state.topics.values()].sort((a, b) => a.label.localeCompare(b.label));
+    },
+    async findBySlug(slug) {
+      return [...state.topics.values()].find((topic) => topic.slug === slug) ?? null;
+    },
+    async listArticles(topicId, limit, after) {
+      const ids = state.articleTopics.get(topicId) ?? new Set<string>();
+      const views = [...ids]
+        .filter((id) => after === null || id > after)
+        .sort()
+        .slice(0, limit)
+        .map((id) => state.articles.get(id))
+        .filter((article) => article !== undefined)
+        .map((article) => viewOf(article))
+        .filter((view): view is ArticleView => view !== null);
+      return views.map(cardOf);
+    },
+  };
+
   return {
     db: database,
     principals,
@@ -690,6 +757,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     articles,
     reading,
     social,
+    search,
+    topics,
     events,
     idempotency,
     content: createMemoryContentStore(),

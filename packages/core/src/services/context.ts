@@ -13,8 +13,10 @@ import type {
   OutboxRepo,
   PrincipalRepo,
   ReadingRepo,
+  SearchIndex,
   SocialRepo,
   TokenRepo,
+  TopicRepo,
 } from "../ports/index.js";
 import type { Actor } from "../identity/authz.js";
 
@@ -32,6 +34,10 @@ export interface Ports {
   reading: ReadingRepo;
   /** SPEC §17, §18, §19 — comments, edges and follows. */
   social: SocialRepo;
+  /** SPEC §38 — derived, rebuildable, and updated outside the write transaction. */
+  search: SearchIndex;
+  /** SPEC §22 — a curated vocabulary, read-only in the MVP. */
+  topics: TopicRepo;
   events: EventRepo;
   idempotency: IdempotencyRepo;
   content: ContentStore;

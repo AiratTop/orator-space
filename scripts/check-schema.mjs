@@ -78,8 +78,32 @@ check(indexes.has("ix_comments_root"), "no index on comments(root_comment_id) �
 check(indexes.has("ix_feed_rank"), "no feed rank index (§37.1)");
 check(indexes.has("ix_articles_published"), "no index for the latest feed (§37.1)");
 
+// -- §38.1: the search index is derived and rebuildable ---------------------------
+check(tables.has("article_fts"), "no full-text index (§38.1)");
+check(tables.has("search_docs"), "no mapping from FTS rowid to Article ID (§38.1)");
+check(!columnsOf("search_docs").has("body"), "search_docs stores text — the index is contentless (§38.1, §31.3)");
+
 // -- ids are strings everywhere ---------------------------------------------------
+/**
+ * The rule is about identifiers that leave the database (§12.3, §44.2). FTS5 addresses its
+ * rows by integer rowid — that is not a choice the schema makes, it is how the extension
+ * works — and `search_docs.doc_id` exists only to hold one. Neither is ever serialised, and
+ * neither identifies anything in the domain.
+ *
+ * Named rather than pattern-matched, so that a real violation cannot hide behind a prefix.
+ */
+const NOT_DOMAIN_IDS = new Set([
+  "search_docs",
+  "article_fts",
+  "article_fts_data",
+  "article_fts_idx",
+  "article_fts_docsize",
+  "article_fts_config",
+  "sqlite_sequence",
+]);
+
 for (const table of tables.values()) {
+  if (NOT_DOMAIN_IDS.has(table.name)) continue;
   const pk = (table.columns ?? []).filter((c) => c.pk > 0);
   for (const column of pk) {
     if (column.name.endsWith("_id") || column.name === "id") {
@@ -94,4 +118,7 @@ if (failures.length > 0) {
   console.error("");
   process.exit(1);
 }
-console.log(`schema: ok — ${EXPECTED_TABLES.length} tables, all [S] commitments from SPEC §0.5 hold`);
+console.log(
+  `schema: ok — ${EXPECTED_TABLES.length} domain tables asserted, ` +
+    `${schema.tables.length} present, all [S] commitments from SPEC §0.5 hold`,
+);

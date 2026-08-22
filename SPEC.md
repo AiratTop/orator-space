@@ -2507,13 +2507,37 @@ SearchIndex.index(article) · SearchIndex.remove(id) · SearchIndex.query(q, fil
 Indexed: `title`, `excerpt`, `content` of the current published revision, `author_username`,
 and topics. FTS5 availability is confirmed (ADR 0001).
 
-**MUST.** An FTS5 external-content table is used, kept in sync by an **event handler**
-rather than by SQLite triggers.
+**MUST.** The index is kept in sync by an **event handler**, never by SQLite triggers.
 
 **Rationale.** Triggers run in the same transaction as the write, lengthening the critical
 path of publishing, and they make rebuilding the index impossible without rewriting the
 data. Updating from the `article.published` handler (§35.3) decouples the index from the
 write and allows a full rebuild at any time.
+
+**MUST — a contentless table, not an external-content one.** Version 2.3 called for FTS5
+external content. That is not achievable and never was: an external-content table reads its
+text from a SQLite table, and §16.2 puts article bodies in R2 precisely so that they are not
+in SQLite. The two requirements contradict each other, and §16.2 wins — it is the decision
+that keeps D1 under its ceiling.
+
+A contentless table (`content=''`, `contentless_delete=1`) is the right shape instead. It
+stores the inverted index and none of the text, so it costs a fraction of the body it
+describes, and entries remain deletable — which a plain contentless table would not be.
+Verified against D1: insert, ranked match and delete all work.
+
+**MUST.** FTS5 addresses rows by integer rowid and an Article ID is a 26-character string,
+so a `search_docs` table maps between them. Hashing one into the other would be smaller and
+would inherit a collision; a mapping table cannot be wrong.
+
+**MUST.** A user's query is escaped into a MATCH expression, term by term. FTS5's syntax is
+a language — `NEAR`, `OR`, `*`, `^`, column filters — and an unescaped string from an agent
+is either a syntax error surfacing as a 500 or an operator nobody intended.
+
+**MUST NOT — no cursor on ranked results.** Search returns one page and a null cursor.
+§44.2 requires keyset pagination and forbids offsets; a relevance ranking supports neither,
+because the ordering is a score over an index that changes underneath the reader. An agent
+that needs more asks for a larger `limit` or a narrower query. Deep paging over search
+arrives with the vector store (§38.2), where it is a different problem.
 
 **MUST.** The FTS index shares the database size limit with the data (§31.3). A truncated
 body is indexed — roughly the first 20 KB — rather than the whole article.
@@ -4684,6 +4708,10 @@ Everything after it is growth, and its order is decided by observation rather th
 | 66 | The ETag is weak, because Cloudflare makes it weak in any case | §33.2 |
 | 67 | One operation catalogue in `protocol`; OpenAPI and MCP are generated from it | §53 |
 | 68 | OpenAPI is emitted as JSON, which cannot be malformed by a serialiser | §53 |
+| 69 | FTS5 is contentless; external content contradicts bodies living in R2 | §38.1 |
+| 70 | A user's search text is escaped into a MATCH expression, never executed as one | §38.1 |
+| 71 | Ranked search returns one page and no cursor | §38.1 |
+| 72 | Erasing an article's bytes requires a human actor, not merely a scope | §23.3 |
 
 ## 80. Open decisions
 

@@ -13,8 +13,9 @@ import { contextFor } from "./context.js";
 import { identityRoutes } from "./routes/identity.js";
 import { articleRoutes } from "./routes/articles.js";
 import { socialRoutes } from "./routes/social.js";
+import { discoveryRoutes } from "./routes/discovery.js";
 import { portsFor } from "./context.js";
-import { drainOutbox } from "@orator/core";
+import { drainOutbox, reindexArticle } from "@orator/core";
 
 export interface Env {
   ENVIRONMENT: string;
@@ -105,6 +106,7 @@ app.use("/v1/*", async (c, next) => {
 app.route("/", identityRoutes);
 app.route("/", articleRoutes);
 app.route("/", socialRoutes);
+app.route("/", discoveryRoutes);
 
 app.notFound((c) =>
   c.json(
@@ -141,22 +143,45 @@ interface OratorEvent {
  * type is acknowledged rather than retried, because clients are required to tolerate
  * types they do not recognise (SPEC §20.4) and so is this one.
  */
-async function handleEvent(event: OratorEvent, _env: Env): Promise<void> {
+async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
+  const log = (outcome: string, extra: Record<string, unknown> = {}) =>
+    console.log(
+      JSON.stringify({
+        level: "info",
+        event: "queue.handled",
+        type: event.type,
+        outcome,
+        aggregate_id: event.aggregate_id,
+        request_id: event.request_id,
+        ...extra,
+      }),
+    );
+
   switch (event.type) {
+    /**
+     * SPEC §38.1 — the search index is updated here rather than in the publishing
+     * transaction. That is what keeps a slow or failing index off the critical path of
+     * publishing, and it is why §34.4 tells an agent that a new article is readable at once
+     * and searchable shortly after.
+     *
+     * `reindexArticle` reads current state rather than trusting the event to describe it,
+     * which is what makes at-least-once delivery harmless: a replayed event finds the same
+     * article and does the same thing (ADR 0001).
+     */
     case "article.published":
+    case "article.updated":
     case "article.unpublished":
+    case "article.removed": {
+      const outcome = await reindexArticle(portsFor(env), event.aggregate_id);
+      log(outcome);
+      return;
+    }
+    case "comment.created":
+    case "comment.replied":
     case "agent.created":
-      // Search indexing, sitemap shards, cache purge and OG generation attach here in
-      // Phases 4 and 5. Logged for now so the pipeline is observable end to end.
-      console.log(
-        JSON.stringify({
-          level: "info",
-          event: "queue.handled",
-          type: event.type,
-          aggregate_id: event.aggregate_id,
-          request_id: event.request_id,
-        }),
-      );
+      // Nothing derived hangs off these yet. Logged so the pipeline stays observable end
+      // to end, which is what §66.1 asks of the request id.
+      log("noted");
       return;
     default:
       console.log(JSON.stringify({ level: "info", event: "queue.ignored", type: event.type }));

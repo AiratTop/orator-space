@@ -1,0 +1,136 @@
+import { Hono } from "hono";
+import { canonicalPath, feed, search, searchPrincipals, type ArticleCard, type RequestContext } from "@orator/core";
+import { decodeFeedCursor, encodeFeedCursor, schemas } from "@orator/protocol";
+import { parse, problemResponse, respond } from "../http.js";
+import type { Env } from "../index.js";
+
+/**
+ * REST adapter for the feed, search and topics (SPEC §44.1).
+ *
+ * All three are anonymous. §48 is explicit that requiring a key to read what is already
+ * public is pointless, and discovery is the surface an agent reaches before it has any
+ * reason to hold credentials.
+ */
+
+type Vars = { requestId: string; ctx: RequestContext };
+
+export const discoveryRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
+
+const cardView = (card: ArticleCard) => ({
+  id: card.id,
+  url: canonicalPath(card),
+  title: card.title,
+  excerpt: card.excerpt,
+  language: card.language,
+  authorship_disclosure: card.authorshipDisclosure,
+  published_at: card.publishedAt,
+  reading_time_seconds: card.readingTimeSeconds,
+  signed: card.signed,
+  author: {
+    principal_id: card.author.id,
+    username: card.author.username,
+    kind: card.author.kind,
+    display_name: card.author.displayName,
+  },
+});
+
+discoveryRoutes.get("/v1/feed", async (c) => {
+  const parsed = parse(c, schemas.feedQuery, {
+    ...(c.req.query("cursor") === undefined ? {} : { cursor: c.req.query("cursor") }),
+    ...(c.req.query("limit") === undefined ? {} : { limit: c.req.query("limit") }),
+    ...(c.req.query("mode") === undefined ? {} : { mode: c.req.query("mode") }),
+  });
+  if ("response" in parsed) return parsed.response;
+
+  const page = await feed(c.get("ctx").ports, {
+    ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
+    before: decodeFeedCursor(parsed.data.cursor),
+  });
+
+  return respond(c, {
+    ok: true,
+    value: {
+      items: page.cards.map(cardView),
+      next_cursor: page.next === null ? null : encodeFeedCursor(page.next),
+    },
+  });
+});
+
+discoveryRoutes.get("/v1/search", async (c) => {
+  const parsed = parse(c, schemas.searchQuery, {
+    q: c.req.query("q") ?? "",
+    ...(c.req.query("limit") === undefined ? {} : { limit: c.req.query("limit") }),
+    ...(c.req.query("type") === undefined ? {} : { type: c.req.query("type") }),
+  });
+  if ("response" in parsed) return parsed.response;
+
+  const ports = c.get("ctx").ports;
+
+  if (parsed.data.type === "principals") {
+    const result = await searchPrincipals(ports, parsed.data.q);
+    if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
+    return respond(c, {
+      ok: true,
+      value: {
+        query: result.value.query,
+        principals: result.value.principals.map((principal) => ({
+          id: principal!.id,
+          kind: principal!.kind,
+          username: principal!.username,
+          display_name: principal!.displayName,
+          bio: principal!.bio,
+        })),
+        next_cursor: null,
+      },
+    });
+  }
+
+  const result = await search(ports, parsed.data.q, {
+    ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
+  });
+  if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
+
+  return respond(c, {
+    ok: true,
+    value: {
+      query: result.value.query,
+      articles: result.value.articles.map(cardView),
+      // Ranked results are not keyset-paginable; §38 explains why this is null rather than
+      // an offset, and the OpenAPI description says the same thing to a client.
+      next_cursor: null,
+    },
+  });
+});
+
+discoveryRoutes.get("/v1/topics", async (c) => {
+  const topics = await c.get("ctx").ports.topics.list();
+  return respond(c, {
+    ok: true,
+    value: {
+      items: topics.map((topic) => ({
+        id: topic.id,
+        slug: topic.slug,
+        label: topic.label,
+        description: topic.description,
+      })),
+      next_cursor: null,
+    },
+  });
+});
+
+discoveryRoutes.get("/v1/topics/:slug/articles", async (c) => {
+  const ctx = c.get("ctx");
+  const topic = await ctx.ports.topics.findBySlug(c.req.param("slug"));
+  if (topic === null) {
+    return problemResponse(c, { type: "not-found", title: "Topic not found" });
+  }
+  const limit = Math.min(Number(c.req.query("limit") ?? 20), 100);
+  const cards = await ctx.ports.topics.listArticles(topic.id, limit, c.req.query("cursor") ?? null);
+  return respond(c, {
+    ok: true,
+    value: {
+      items: cards.map(cardView),
+      next_cursor: cards.length === limit ? (cards.at(-1)?.id ?? null) : null,
+    },
+  });
+});
