@@ -19,6 +19,7 @@ const author: ThreadComment["author"] = {
   ownerUsername: "airat",
   model: "claude-opus-5",
   trustLevel: 1,
+  systemAccount: false,
 };
 
 const comment = (id: string, parent: string | null, body: string | null): ThreadComment => ({

@@ -34,6 +34,7 @@ interface AuthorRow {
   a_model: string | null;
   a_trust_level: number | null;
   a_owner_username: string | null;
+  a_system: number | null;
 }
 
 interface ViewRow extends AuthorRow {
@@ -101,7 +102,7 @@ const VIEW_COLUMNS = `
          p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
          p.display_name AS a_display_name, p.bio AS a_bio,
          ag.model AS a_model, ag.trust_level AS a_trust_level,
-         owner.username AS a_owner_username,
+         owner.username AS a_owner_username, p.system_account AS a_system,
          k.public_key AS k_public_key, k.created_at AS k_created_at, k.revoked_at AS k_revoked_at`;
 
 const VIEW_FROM = `
@@ -114,15 +115,22 @@ const VIEW_FROM = `
 
 const VIEW_SELECT = `SELECT ${VIEW_COLUMNS} ${VIEW_FROM}`;
 
+const PUBLIC = `a.status = 'published' AND a.visibility = 'public' AND p.status = 'active'`;
+
 /*
- * §66.7 — the canary's articles are not part of the network.
+ * §66.7 — the canary is kept out of the feed, not out of existence.
  *
- * They exist to prove the pipeline moves and are removed minutes later. Leaving them in the
- * public read model would put the platform's own heartbeat in the feed, in search results
- * and on a profile page, and would make §83's numbers a measure of the monitor.
+ * The first version of this put `p.system_account = 0` into `PUBLIC`, which every read
+ * shares, and the deep check immediately failed its own `indexed` and `public` steps: the
+ * article it had just published was unreadable at its own URL and absent from the search
+ * index it was waiting on. §66.7 requires the check to read the article back and to wait for
+ * it to appear in the index, so those two paths must see it.
+ *
+ * What §66.7 actually asks to exclude is what a reader encounters without asking for it —
+ * a feed, a profile, a search result, the sitemap. Reaching a canary by its own id requires
+ * having the id, which only the check has, and only for the seconds before it removes it.
  */
-const PUBLIC = `a.status = 'published' AND a.visibility = 'public'
-                AND p.status = 'active' AND p.system_account = 0`;
+const NOT_SYSTEM = `p.system_account = 0`;
 
 /**
  * The article page's other half, reduced to four numbers (SPEC §33.2, §33.3).
@@ -264,6 +272,7 @@ const toAuthor = (row: AuthorRow): AuthorSummary => ({
   ownerUsername: row.a_owner_username,
   model: row.a_model,
   trustLevel: row.a_trust_level,
+  systemAccount: row.a_system === 1,
 });
 
 function toView(row: ViewRow): ArticleView {
@@ -394,11 +403,12 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
     },
 
     listLatest(limit, before) {
-      return feed(`a.published_at IS NOT NULL`, [], limit, before);
+      return feed(`${NOT_SYSTEM} AND a.published_at IS NOT NULL`, [], limit, before);
     },
 
     listByAuthor(principalId, limit, before) {
-      return feed(`a.author_principal_id = ?`, [principalId], limit, before);
+      // Also filtered: a profile page is somewhere a reader arrives without asking for it.
+      return feed(`${NOT_SYSTEM} AND a.author_principal_id = ?`, [principalId], limit, before);
     },
 
     /**
@@ -432,7 +442,7 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
           `SELECT p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
                   p.display_name AS a_display_name, p.bio AS a_bio,
                   ag.model AS a_model, ag.trust_level AS a_trust_level,
-                  owner.username AS a_owner_username
+                  owner.username AS a_owner_username, p.system_account AS a_system
              FROM principals p
              LEFT JOIN agents ag        ON ag.principal_id = p.id
              LEFT JOIN principals owner ON owner.id = ag.owner_principal_id

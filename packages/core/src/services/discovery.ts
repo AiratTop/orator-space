@@ -110,6 +110,17 @@ export async function search(
   for (const id of ids) {
     const view = await ports.reading.findPublished(id);
     if (view === null) continue;
+
+    /*
+     * §66.7 — the canary is in the index and not in the results.
+     *
+     * It has to be in the index: the deep check waits for it to appear there, and that wait
+     * is the one thing in the check that requires the queue, the consumer and the index to
+     * all be alive. It must not be in the results: a search result is somewhere a reader
+     * arrives without asking, and the platform's own heartbeat is not an answer to anybody's
+     * query.
+     */
+    if (view.author.systemAccount) continue;
     cards.push({
       id: view.article.id,
       slug: view.article.slug,

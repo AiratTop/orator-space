@@ -67,6 +67,60 @@ const username = `canary-${environment}`;
  */
 const SCOPES = ["articles:read", "articles:write", "articles:publish", "articles:delete"];
 
+/**
+ * The owner is found before anything is written (SPEC §7.2).
+ *
+ * The first version of this selected one inline:
+ *
+ *     INSERT INTO agents (...) SELECT '<canary>', id FROM principals
+ *      WHERE platform_role = 'admin' AND kind = 'human' LIMIT 1;
+ *
+ * With no administrator that statement inserts zero rows and reports success, leaving a
+ * principal marked `agent` with no `agents` row — an agent with no accountable human, which
+ * is the one thing §7.2 exists to prevent. The comment beside it claimed the mistake would
+ * "fail loudly on the first authenticated call". It would not: it would fail an hour later
+ * as an authentication error in a monitor, with nothing pointing back here.
+ *
+ * Both environments turned out to have no administrator, so this was not a hypothetical.
+ */
+function query(sql) {
+  const raw = spawnSync(
+    "pnpm",
+    ["--filter", "@orator/edge", "exec", "wrangler", "d1", "execute", "DB", "--env", environment, "--remote", "--json", "--command", sql],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  if (raw.status !== 0) throw new Error(`query failed: ${(raw.stderr ?? "").slice(0, 400)}`);
+  const out = raw.stdout ?? "";
+  return JSON.parse(out.slice(out.indexOf("[")))[0].results;
+}
+
+if (!dryRun) {
+  const existing = query(`SELECT id FROM principals WHERE username = '${username}'`);
+  if (existing.length > 0) {
+    console.error(`\n  @${username} already exists (${existing[0].id}).`);
+    console.error("  Remove it first if you mean to issue a new token, or issue one against it.\n");
+    process.exit(1);
+  }
+}
+
+const admins = dryRun
+  ? [{ id: "<an admin principal id>" }]
+  : query(`SELECT id, username FROM principals WHERE platform_role = 'admin' AND kind = 'human' LIMIT 1`);
+
+if (admins.length === 0) {
+  console.error(`\n  No administrator exists in ${environment}, so the canary would have no owner.\n`);
+  console.error("  §7.2 makes a human accountable for every agent, and that is not a formality here:");
+  console.error("  the owner is who answers for what the agent publishes, and an agent without one is");
+  console.error("  a principal nothing in the system can hold responsible.\n");
+  console.error("  Register yourself and take the role first:\n");
+  console.error(`    curl -X POST https://api${environment === "production" ? "" : "-staging"}.orator.space/v1/humans \\`);
+  console.error(`      -H 'content-type: application/json' -d '{"username":"..."}'`);
+  console.error(`    node scripts/grant-moderator.mjs <principal-id> --env ${environment} --role admin\n`);
+  process.exit(1);
+}
+
+const ownerId = admins[0].id;
+
 const sql = [
   `INSERT INTO principals (id, kind, username, username_skeleton, display_name, status,`,
   `                        platform_role, system_account, created_at, updated_at)`,
@@ -74,8 +128,7 @@ const sql = [
   `        'active', 'user', 1, '${now.toISOString()}', '${now.toISOString()}');`,
   ``,
   `INSERT INTO agents (principal_id, owner_principal_id, model, provider, trust_level, created_at)`,
-  `SELECT '${principalId}', id, 'none', 'orator', 0, '${now.toISOString()}'`,
-  `  FROM principals WHERE platform_role = 'admin' AND kind = 'human' LIMIT 1;`,
+  `VALUES ('${principalId}', '${ownerId}', 'none', 'orator', 0, '${now.toISOString()}');`,
   ``,
   `INSERT INTO api_tokens (id, principal_id, name, token_hash, prefix, scopes, created_at)`,
   `VALUES ('${tokenId}', '${principalId}', 'deep-health', '${tokenHash}', '${prefix}',`,
@@ -90,14 +143,6 @@ if (dryRun) {
   process.exit(0);
 }
 
-/*
- * §7.2 — even the canary has an accountable owner.
- *
- * The agents row selects an administrator rather than inventing an ownerless principal. If
- * no administrator exists the insert affects no rows and the principal has no agent record,
- * which fails loudly on the first authenticated call rather than creating an agent nobody
- * is answerable for.
- */
 const result = spawnSync(
   "pnpm",
   ["--filter", "@orator/edge", "exec", "wrangler", "d1", "execute", "DB", "--env", environment, "--remote", "--command", sql],
@@ -109,6 +154,25 @@ if (result.status !== 0) {
   process.exit(1);
 }
 
+/*
+ * Verified, not assumed.
+ *
+ * Three inserts and a transient API failure between any two of them would leave a principal
+ * that authenticates as an agent with no owner. Reading the rows back costs one query and
+ * turns a silent half-creation into a message that says which half.
+ */
+const check = query(
+  `SELECT (SELECT COUNT(*) FROM principals WHERE id = '${principalId}') AS principal,
+          (SELECT COUNT(*) FROM agents WHERE principal_id = '${principalId}') AS agent,
+          (SELECT COUNT(*) FROM api_tokens WHERE id = '${tokenId}') AS token`,
+)[0];
+
+if (check.principal !== 1 || check.agent !== 1 || check.token !== 1) {
+  console.error(`\n  Partly created: ${JSON.stringify(check)}. Remove @${username} and run again.\n`);
+  process.exit(1);
+}
+
 console.log(`\n  ${token}\n`);
 console.log("Shown once. Put it in Gatus as `Authorization: Bearer …` on /health/deep (§66.7).");
-console.log(`Principal: ${principalId} — system account, so its articles never reach a feed.\n`);
+console.log(`Principal: ${principalId} — a system account owned by ${admins[0].username ?? ownerId},`);
+console.log("so its articles never reach a feed, a metric or a quota (§66.7).\n");

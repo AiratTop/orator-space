@@ -740,6 +740,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         : (state.principals.get(principal.ownerPrincipalId)?.username ?? null),
     model: principal.model ?? null,
     trustLevel: principal.trustLevel ?? null,
+    systemAccount: principal.systemAccount,
   });
 
   const viewOf = (article: ArticleRecord): ArticleView | null => {

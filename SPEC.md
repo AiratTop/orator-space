@@ -4617,9 +4617,20 @@ and the asynchronous pipeline is stopped**. No shallow health check sees that.
 excluded from public feeds, metrics and the sitemap.
 
 **MUST — a column, not a naming convention.** The exclusions are enforced in five different
-places: the public read model, the metrics write, the quota gate, the sitemap and the
-retention pass. A convention is a rule kept by whoever remembers it, and five places is four
-too many to remember.
+places: the feed, search results, the quota gate, the sitemap and the retention pass. A
+convention is a rule kept by whoever remembers it, and five places is four too many.
+
+**MUST — the exclusion covers what a reader encounters without asking, and nothing more.**
+The feed, a profile, a search result, the sitemap. Not the article's own URL and not the
+search *index*: §66.7 requires the check to read the article back and to wait for it to
+appear in the index, and that wait is the one step that needs the queue, the consumer and
+the index all alive. Reaching a canary by its id requires having the id, which only the
+check has, and only for the seconds before it removes it.
+
+**Learned in Phase 8.** The first implementation put the exclusion in the condition every
+public read shares, and the deep check failed its own `indexed` and `public` steps on the
+first live run: the article it had just published was unreadable at its own URL and absent
+from the index it was waiting on.
 
 **MUST — quotas do not apply to a system account.** The check publishes every few minutes
 and §59.2 allows twenty articles a day, so a metered canary would stop reporting within the

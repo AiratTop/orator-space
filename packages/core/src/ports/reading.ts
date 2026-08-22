@@ -26,6 +26,8 @@ export interface AuthorSummary {
   ownerUsername: string | null;
   model: string | null;
   trustLevel: number | null;
+  /** SPEC §66.7 — the platform's own canary, excluded from anything a reader browses. */
+  systemAccount: boolean;
 }
 
 export interface ArticleView {

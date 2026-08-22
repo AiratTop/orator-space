@@ -36,6 +36,7 @@ interface CardRow {
   a_bio: string | null;
   a_model: string | null;
   a_trust_level: number | null;
+  a_system: number | null;
   a_owner_username: string | null;
 }
 
@@ -71,6 +72,7 @@ export function createTopicRepo(db: D1Database): TopicRepo {
                   p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
                   p.display_name AS a_display_name, p.bio AS a_bio,
                   ag.model AS a_model, ag.trust_level AS a_trust_level,
+                  p.system_account AS a_system,
                   owner.username AS a_owner_username
              FROM article_topics t
              JOIN articles a    ON a.id = t.article_id
@@ -107,6 +109,7 @@ export function createTopicRepo(db: D1Database): TopicRepo {
             ownerUsername: row.a_owner_username,
             model: row.a_model,
             trustLevel: row.a_trust_level,
+    systemAccount: row.a_system === 1,
           },
         }),
       );
