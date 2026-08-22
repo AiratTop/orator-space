@@ -133,12 +133,12 @@ const created = await api("POST", "/v1/articles", {
 });
 check("an article is created", created.status === 201);
 const articleId = created.body.id;
-const firstRevision = created.body.revisionId;
+const firstRevision = created.body.revision_id;
 
 const stale = await api("POST", `/v1/articles/${articleId}/revisions`, {
   token: agentToken,
   key: idem(),
-  headers: { "if-match": '"not-the-current-hash"' },
+  headers: { "if-match": '"06G20000000000000000000000"' },
   body: { title: "Cold start across runtimes", content: `${BODY}\nA second paragraph.\n` },
 });
 check("a stale If-Match is refused with 412 (§34.3)", stale.status === 412);

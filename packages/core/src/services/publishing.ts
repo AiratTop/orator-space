@@ -55,6 +55,14 @@ export interface ArticleSummary {
   slug: string | null;
   status: string;
   contentHash: string;
+  /**
+   * When the revision was created, which is a server-assigned field the agent must have.
+   *
+   * §8.3 signs `article_id`, `revision_id`, `content_hash` and `created_at`. Three of those
+   * were already here; without the fourth an agent cannot sign what it just wrote, and the
+   * publish call refuses it.
+   */
+  createdAt: string;
   url: string;
 }
 
@@ -120,6 +128,7 @@ export async function createArticle(
     slug: slug === "" ? null : slug,
     status: "draft",
     contentHash,
+    createdAt,
     url: urlFor(articleId, slug),
   });
 }
@@ -132,11 +141,21 @@ export interface CreateRevisionInput {
   ifMatch?: string | null;
 }
 
+export interface RevisionSummary {
+  id: OratorId;
+  articleId: OratorId;
+  contentHash: string;
+  /** §8.4 — assigned here, and required to build the string the agent signs. */
+  createdAt: string;
+  /** §16.4 — identical content creates no revision, and says so rather than lying. */
+  unchanged: boolean;
+}
+
 export async function createRevision(
   ctx: RequestContext,
   articleId: string,
   input: CreateRevisionInput,
-): Promise<Result<{ id: OratorId; contentHash: string; unchanged: boolean }>> {
+): Promise<Result<RevisionSummary>> {
   const actor = ctx.actor;
   if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
 
@@ -168,7 +187,13 @@ export async function createRevision(
   // A retrying agent that resends identical content should not accumulate empty
   // revisions; over a week of retries that is thousands of rows saying nothing (§16.4).
   if (current !== null && current.contentHash === contentHash && current.title === validated.title) {
-    return ok({ id: current.id, contentHash, unchanged: true });
+    return ok({
+      id: current.id,
+      articleId: article.id,
+      contentHash,
+      createdAt: current.createdAt,
+      unchanged: true,
+    });
   }
 
   const revisionId = ctx.ports.ids.next();
@@ -203,7 +228,7 @@ export async function createRevision(
     );
   }
 
-  return ok({ id: revisionId, contentHash, unchanged: false });
+  return ok({ id: revisionId, articleId: article.id, contentHash, createdAt, unchanged: false });
 }
 
 export interface PublishInput {
@@ -387,6 +412,14 @@ export interface ArticleForActor {
   revision: RevisionRecord;
   /** Null when the bytes were erased under §23.3: the record survives, the body does not. */
   body: string | null;
+  /**
+   * Whether this caller is the author or their owner.
+   *
+   * Carried out of the service rather than recomputed by each adapter, because it decides
+   * what may be said about an unpublished draft — and a rule about draft visibility that is
+   * evaluated twice is a rule that will eventually be evaluated two ways (§43.2).
+   */
+  canSeeDraft: boolean;
 }
 
 /**
@@ -425,5 +458,10 @@ export async function readArticle(
   const revision = await ctx.ports.articles.findRevision(revisionId);
   if (revision === null) return fail(ErrorType.NotFound, "Revision not found");
 
-  return ok({ article, revision, body: await ctx.ports.content.get(revision.contentHash) });
+  return ok({
+    article,
+    revision,
+    body: await ctx.ports.content.get(revision.contentHash),
+    canSeeDraft,
+  });
 }

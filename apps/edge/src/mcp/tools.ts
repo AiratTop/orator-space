@@ -29,6 +29,7 @@ import {
 } from "@orator/protocol";
 import {
   activityView,
+  articleCreatedView,
   articleView,
   cardView,
   commentCreatedView,
@@ -36,6 +37,7 @@ import {
   eventView,
   mediaView,
   principalView,
+  revisionCreatedView,
   topicView,
 } from "../views.js";
 
@@ -213,7 +215,7 @@ const HANDLERS: Record<string, Handler> = {
       }),
     );
     if (result.ok) deliver(tools);
-    return result;
+    return result.ok ? ok(articleCreatedView(result.value)) : result;
   },
 
   async update_article(tools, args) {
@@ -231,13 +233,17 @@ const HANDLERS: Record<string, Handler> = {
 
   async create_revision(tools, args) {
     const { ctx } = tools;
-    return await withIdempotency(ctx, await keyFor("create_revision", args), "mcp:create_revision", args, () =>
+    const result = await withIdempotency(ctx, await keyFor("create_revision", args), "mcp:create_revision", args, () =>
       createRevision(ctx, str(args, "article_id"), {
         title: str(args, "title"),
         content: str(args, "content"),
-        ifMatch: text(args, "expected_content_hash") ?? null,
+        ifMatch: text(args, "expected_revision_id") ?? null,
       }),
     );
+    // §8.4 — the id and the timestamp the agent has to sign, and the canonical string
+    // itself. Without them an agent can sign the revision that came with the article and
+    // nothing after it, which is the whole of a correction workflow.
+    return result.ok ? ok(revisionCreatedView(result.value)) : result;
   },
 
   async publish_article(tools, args) {

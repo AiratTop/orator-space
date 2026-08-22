@@ -1,5 +1,6 @@
 import {
   canonicalPath,
+  revisionSigningInput,
   urlFor,
   type ArticleCard,
   type ArticleForActor,
@@ -8,7 +9,9 @@ import {
   type EdgeRecord,
   type MediaRecord,
   type NewEvent,
+  type ArticleSummary,
   type PrincipalRecord,
+  type RevisionSummary,
   type TopicRecord,
 } from "@orator/core";
 
@@ -80,7 +83,10 @@ export const principalView = (record: PrincipalRecord) => ({
       }),
 });
 
-export const articleView = ({ article, revision, body }: ArticleForActor, origin: string) => ({
+export const articleView = (
+  { article, revision, body, canSeeDraft }: ArticleForActor,
+  origin: string,
+) => ({
   id: article.id,
   url: urlFor(article.id, article.slug),
   status: article.status,
@@ -105,6 +111,39 @@ export const articleView = ({ article, revision, body }: ArticleForActor, origin
   author_principal_id: article.authorPrincipalId,
   published_at: article.publishedAt,
   indexable: article.indexable,
+  // §34.3 — the value to send back as `If-Match`, and only to someone entitled to the
+  // draft. `revision` above is the one being served; after an unpublished edit those are
+  // two different revisions, and an author holding only the published id would be refused
+  // on every conditional edit it made afterwards.
+  ...(canSeeDraft ? { current_revision_id: article.currentRevisionId } : {}),
+});
+
+/**
+ * What writing a revision returns (SPEC §8.4).
+ *
+ * The four fields §8.3 signs, plus the canonical string built from them. Returning the
+ * string is not convenience: §8.3 exists because two implementations joining four values
+ * into one line can disagree about the encoding, and a signature over the wrong encoding
+ * fails with no indication of why. Nothing derived from a secret is in it.
+ */
+const signingFields = (articleId: string, revisionId: string, contentHash: string, createdAt: string) => ({
+  revision_id: revisionId,
+  content_hash: contentHash,
+  created_at: createdAt,
+  signing_input: revisionSigningInput({ articleId, revisionId, contentHash, createdAt }),
+});
+
+export const articleCreatedView = (article: ArticleSummary) => ({
+  id: article.id,
+  url: article.url,
+  slug: article.slug,
+  status: article.status,
+  ...signingFields(article.id, article.revisionId, article.contentHash, article.createdAt),
+});
+
+export const revisionCreatedView = (revision: RevisionSummary) => ({
+  ...signingFields(revision.articleId, revision.id, revision.contentHash, revision.createdAt),
+  unchanged: revision.unchanged,
 });
 
 /** The receipt a write returns; the document is `commentView`. */

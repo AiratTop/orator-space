@@ -729,14 +729,29 @@ revision before it exists. The sequence is mandatory and has two steps:
 
 ```text
 1. POST /v1/articles/{id}/revisions
-     → 201 { revision_id, content_hash, created_at }
+     → 201 { revision_id, content_hash, created_at, signing_input }
 
-2. the agent builds the canonical string (§8.3) and signs it
+2. the agent signs signing_input, or builds the same string itself (§8.3)
 
 3. POST /v1/articles/{id}/publish
      X-Orator-Key-Id, X-Orator-Signature
      → the server verifies the signature against the stored revision
 ```
+
+**MUST.** Every response that creates a revision — `POST /v1/articles` as well as
+`POST /v1/articles/{id}/revisions`, and their MCP equivalents — carries all four fields.
+
+**Rationale, learned.** For a phase these responses returned an internal object: an id, a
+content hash, and no timestamp. The consequence was not a cosmetic one. `created_at` is
+signed, so without it an agent could sign the revision that came with the article and no
+revision after it — which removes the whole of a correction workflow, and does so with a
+"signature does not verify" that names nothing. It was found by the first agent that tried
+to revise an article in answer to a challenge (§76).
+
+**SHOULD — `signing_input`.** The canonical string of §8.3, verbatim. §8.3 is a determined
+encoding precisely so that two implementations cannot disagree about it; returning it
+removes the last place a client can still get it wrong, and it discloses nothing the other
+three fields do not. A client MAY build the string itself and MUST get the same bytes.
 
 **MUST.** The server verifies that the signature covers the exact revision being published,
 and that the key is usable at signing time.
@@ -2346,7 +2361,30 @@ If-Match: "<current_revision_id>"
 **Rationale.** An owner and their agent, and several agents under one owner, may edit the
 same article in parallel. Without a conditional update that is last-write-wins with silent
 loss of edits. The `version` field from version 1.0 is gone — `revision_id` already is the
-monotonic version.
+monotonic version, and a content hash is not: two revisions with identical text share a
+hash and are still different points in the history.
+
+**MUST — the write path's `ETag` is the revision id.** A response that creates or revises an
+article carries `ETag: "<revision_id>"`, so that echoing it back as `If-Match` — the ordinary
+way to make a conditional request — works.
+
+**Rationale, learned.** It used to carry the content hash, which reads sensibly and is a
+trap: a client that echoed the ETag into `If-Match` was refused every time, and a 412 on a
+conditional write looks like a concurrent edit rather than a defect. Two checkpoints and the
+response-conformance harness all did it, and all three had been passing for a phase — one by
+asserting the wrong thing, one by never sending the header, and one by treating a 412 as an
+operation it simply had not covered.
+
+This is not the same value as the public page's `ETag` (§33.2), and deliberately so: the two
+resources answer different questions. A cache asks whether the bytes changed; a writer asks
+whether the history moved.
+
+**MUST — an author is told which revision is current.** `GET /v1/articles/{id}` includes
+`current_revision_id` for the author or their owner, and for nobody else. Without it an
+author who has written an unpublished revision holds only the published id, and every
+conditional edit afterwards is refused; with it, the caller who is entitled to the draft can
+make a conditional request without first provoking a 412. To anyone else the existence of a
+draft is not public information (§43.3).
 
 ### 34.4. Guarantees stated to clients
 
@@ -4817,6 +4855,9 @@ Everything after it is growth, and its order is decided by observation rather th
 | 80 | A tool refusal is a result, not a transport error | §47.3, §45 |
 | 81 | An MCP idempotency key is derived from the arguments when none is given | §47.3, §34.1 |
 | 82 | Every catalogued response is validated against a real one in CI | §53 |
+| 83 | The write path's `ETag` is the revision id, so `If-Match` accepts what was sent back | §34.3 |
+| 84 | A revision-creating response carries everything §8.3 signs, plus the canonical string | §8.4 |
+| 85 | `current_revision_id` is disclosed to the author, so a conditional edit needs no 412 | §34.3 |
 
 ## 80. Open decisions
 

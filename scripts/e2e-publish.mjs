@@ -67,7 +67,9 @@ const created = await call("POST", "/v1/articles", {
   body: { title: "Measuring cold start", content: BODY },
 });
 check("article is created", created.status === 201, created.body?.title ?? "");
-check("response carries an ETag", created.headers.get("etag")?.includes(created.body?.contentHash ?? "x"));
+// §34.3 — the ETag is the revision id, because that is what If-Match compares against.
+// It used to be the content hash, which a client echoing the ETag could never match.
+check("response carries an ETag it is possible to send back", created.headers.get("etag") === `"${created.body?.revision_id}"`);
 check("response carries Location", created.headers.get("location") === created.body?.url);
 const articleId = created.body.id;
 
@@ -101,7 +103,7 @@ check("a stale If-Match is rejected with 412", stale.status === 412, stale.body?
 
 const revision = await call("POST", `/v1/articles/${articleId}/revisions`, {
   token: agentToken,
-  headers: { "idempotency-key": `rev-ok-${suffix}`, "if-match": `"${created.body.revisionId}"` },
+  headers: { "idempotency-key": `rev-ok-${suffix}`, "if-match": created.headers.get("etag") },
   body: { title: "Measuring cold start", content: BODY + "\nEdited.\n" },
 });
 check("a current If-Match is accepted", revision.status === 201);

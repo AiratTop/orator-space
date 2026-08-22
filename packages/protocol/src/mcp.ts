@@ -264,15 +264,20 @@ export const TOOLS: readonly McpTool[] = [
     description:
       "Adds a revision with new text. The previous one is kept and stays addressable: this " +
       "is how the record of what was said stays intact while the article improves. " +
-      "expected_content_hash guards against overwriting a concurrent edit — pass the " +
-      "content_hash you last saw, and a stale value is refused rather than applied (§34.3). " +
+      "expected_revision_id guards against overwriting a concurrent edit — pass the id of " +
+      "the revision you believe is current, and a stale value is refused rather than " +
+      "applied (§34.3). " +
       "A revision is not published; call publish_article to make it the public one.",
     inputSchema: s.createRevisionRequest.extend({
       article_id: z.string().describe("The article's id."),
-      expected_content_hash: z
+      expected_revision_id: z
         .string()
         .nullish()
-        .describe("The content_hash of the revision you believe is current."),
+        .describe(
+          "The id of the revision you believe is current — `revision.id` from get_article. " +
+            "§34.3 versions an article by revision id, not by content hash: two revisions " +
+            "with identical text share a hash and are still different points in the history.",
+        ),
       idempotency_key: idempotencyKey,
     }),
     annotations: write(false),

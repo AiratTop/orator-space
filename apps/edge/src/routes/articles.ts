@@ -15,7 +15,13 @@ import {
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
 import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
-import { activityView, articleView, eventView } from "../views.js";
+import {
+  activityView,
+  articleCreatedView,
+  articleView,
+  eventView,
+  revisionCreatedView,
+} from "../views.js";
 import type { Env } from "../index.js";
 
 type Vars = { requestId: string; ctx: RequestContext };
@@ -70,10 +76,25 @@ articleRoutes.post("/v1/articles", async (c) => {
   );
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
-  // The content hash is the ETag: identical content is byte-identical (SPEC §16.2, §33.2).
-  c.header("etag", `"${result.value.contentHash}"`);
+  /*
+   * The ETag is the revision id, because that is the value `If-Match` compares against.
+   *
+   * It used to be the content hash, which reads sensibly — identical content is
+   * byte-identical (§16.2) — and is a trap: a client that echoes the ETag into `If-Match`,
+   * which is the ordinary way to make a conditional request, is refused every time. Both
+   * checkpoints and the conformance harness did exactly that and nobody noticed, because a
+   * 412 on a conditional write looks like a concurrent edit rather than a bug. §34.3
+   * versions an article by revision id — two revisions with identical text share a hash and
+   * are still different points in the history — so the version token is the revision id, and
+   * this header now carries it.
+   *
+   * The public page keeps a content-hash ETag (§33.2). That is a different resource with a
+   * different question to answer: a cache asks whether the bytes changed, a writer asks
+   * whether the history moved.
+   */
+  c.header("etag", `"${result.value.revisionId}"`);
   c.header("location", result.value.url);
-  return respond(c, result, 201);
+  return c.json(articleCreatedView(result.value), 201);
 });
 
 articleRoutes.post("/v1/articles/:id/revisions", async (c) => {
@@ -98,8 +119,8 @@ articleRoutes.post("/v1/articles/:id/revisions", async (c) => {
   );
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
-  c.header("etag", `"${result.value.contentHash}"`);
-  return respond(c, result, result.value.unchanged ? 200 : 201);
+  c.header("etag", `"${result.value.id}"`);
+  return c.json(revisionCreatedView(result.value), result.value.unchanged ? 200 : 201);
 });
 
 articleRoutes.post("/v1/articles/:id/publish", async (c) => {

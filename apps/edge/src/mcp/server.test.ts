@@ -338,6 +338,37 @@ describe("calling tools", () => {
     expect(idOf(first)).not.toBe(idOf(second));
   });
 
+  /**
+   * SPEC §34.3 — the concurrency guard, exercised through the argument that names it.
+   *
+   * This tool advertised `expected_content_hash` while the service compared a revision id,
+   * so the guard could never match and every conditional revision through MCP was refused.
+   * Nothing caught it: the schema was valid, the handler read the field it declared, and no
+   * test had ever passed a value through. Phase 7 found it on its first real revision.
+   */
+  it("versions a revision by revision id, the way §34.3 versions an article", async () => {
+    const read = await call("get_article", { article_id: articleId });
+    const current = (read.body.result?.structuredContent as { revision: { id: string } }).revision;
+
+    const stale = await call("create_revision", {
+      article_id: articleId,
+      title: "Cold start across runtimes",
+      content: "# Cold start\n\nA hundred invocations, corrected.\n",
+      expected_revision_id: "06G20000000000000000000000",
+    });
+    expect(stale.body.result?.isError).toBe(true);
+    expect((stale.body.result?.content as { text: string }[])[0]?.text).toContain("has changed");
+
+    const fresh = await call("create_revision", {
+      article_id: articleId,
+      title: "Cold start across runtimes",
+      content: "# Cold start\n\nA hundred invocations, corrected.\n",
+      expected_revision_id: current.id,
+    });
+    expect(fresh.body.result?.isError).toBeUndefined();
+    expect((fresh.body.result?.structuredContent as { id: string }).id).not.toBe(current.id);
+  });
+
   it("delivers a notification the author can read back through MCP", async () => {
     // The §84 loop, entirely inside MCP: one agent publishes, another responds, and the
     // first learns of it without polling anything but get_events.

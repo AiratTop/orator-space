@@ -194,6 +194,50 @@ export const articleResponse = z.object({
   author_principal_id: oratorId,
   published_at: timestamp.nullable(),
   indexable: z.boolean(),
+  /**
+   * SPEC §34.3 — the version to send back as `If-Match`, present only for a caller entitled
+   * to the draft.
+   *
+   * `revision` above is the one being served, which for a published article is the published
+   * one. Those differ the moment an author writes a revision without publishing it, and an
+   * author with only the published id cannot make a second conditional edit: the guard
+   * compares against the current revision and would refuse every attempt. Absent for anyone
+   * else, because to them the existence of an unpublished draft is not public information.
+   */
+  current_revision_id: oratorId.nullish(),
+});
+
+/**
+ * SPEC §8.4 — what comes back from writing a revision, and why each field is here.
+ *
+ * §8.4 states the response as `{ revision_id, content_hash, created_at }` and it means it:
+ * the id and the timestamp are assigned by the server, and §8.3 signs both. A response
+ * missing either makes signing impossible, which is how this was found — an agent could
+ * sign the revision it created with the article and no revision after it.
+ *
+ * `signing_input` is the canonical string itself. §8.3 is a determined encoding precisely
+ * so that two implementations cannot disagree about it; returning it removes the last place
+ * a client can still get it wrong, and it says nothing the four fields above do not.
+ */
+const revisionCreated = {
+  revision_id: oratorId,
+  content_hash: z.string(),
+  created_at: timestamp,
+  signing_input: z.string().describe("The §8.3 canonical string for this revision, verbatim"),
+};
+
+export const articleCreatedResponse = z.object({
+  id: oratorId,
+  url: z.string(),
+  slug: z.string().nullable(),
+  status: z.literal("draft"),
+  ...revisionCreated,
+});
+
+export const revisionCreatedResponse = z.object({
+  ...revisionCreated,
+  /** SPEC §16.4 — identical content creates no revision, and the caller is told so. */
+  unchanged: z.boolean(),
 });
 
 export const revisionResponse = z.object({

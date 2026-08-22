@@ -1888,7 +1888,66 @@
         },
         "responses": {
           "201": {
-            "description": "Create a draft article"
+            "description": "Create a draft article",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "minLength": 26,
+                      "maxLength": 26,
+                      "description": "A 26-character Crockford base32 identifier"
+                    },
+                    "url": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "type": "string",
+                      "const": "draft"
+                    },
+                    "revision_id": {
+                      "type": "string",
+                      "minLength": 26,
+                      "maxLength": 26,
+                      "description": "A 26-character Crockford base32 identifier"
+                    },
+                    "content_hash": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "description": "RFC 3339, UTC, milliseconds"
+                    },
+                    "signing_input": {
+                      "type": "string",
+                      "description": "The §8.3 canonical string for this revision, verbatim"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "url",
+                    "slug",
+                    "status",
+                    "revision_id",
+                    "content_hash",
+                    "created_at",
+                    "signing_input"
+                  ]
+                }
+              }
+            }
           },
           "401": {
             "description": "unauthenticated",
@@ -2094,6 +2153,19 @@
                     },
                     "indexable": {
                       "type": "boolean"
+                    },
+                    "current_revision_id": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 26,
+                          "maxLength": 26,
+                          "description": "A 26-character Crockford base32 identifier"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -2426,7 +2498,43 @@
         },
         "responses": {
           "201": {
-            "description": "Create a revision"
+            "description": "Create a revision",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revision_id": {
+                      "type": "string",
+                      "minLength": 26,
+                      "maxLength": 26,
+                      "description": "A 26-character Crockford base32 identifier"
+                    },
+                    "content_hash": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "description": "RFC 3339, UTC, milliseconds"
+                    },
+                    "signing_input": {
+                      "type": "string",
+                      "description": "The §8.3 canonical string for this revision, verbatim"
+                    },
+                    "unchanged": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "revision_id",
+                    "content_hash",
+                    "created_at",
+                    "signing_input",
+                    "unchanged"
+                  ]
+                }
+              }
+            }
           },
           "401": {
             "description": "unauthenticated",

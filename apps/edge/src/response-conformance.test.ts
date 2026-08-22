@@ -74,14 +74,17 @@ beforeAll(async () => {
       { title: "Response conformance", content: "# Response conformance\n\nA body.\n" },
       auth(owner.token, { "idempotency-key": `rc-a-${s}` }),
     ),
-  )) as { id: string; contentHash: string };
+  )) as { id: string; revision_id: string };
 
+  // §34.3 — `If-Match` carries the revision id, which is what the response's ETag now is.
+  // This harness sent the content hash, was refused with 412 every run, and the operation
+  // simply went uncovered: the gap test below is what turned a silent 412 into a failure.
   await record(
     "createRevision",
     `/v1/articles/${article.id}/revisions`,
     json(
       { title: "Response conformance", content: "# Response conformance\n\nA longer body.\n" },
-      auth(owner.token, { "idempotency-key": `rc-r-${s}`, "if-match": `"${article.contentHash}"` }),
+      auth(owner.token, { "idempotency-key": `rc-r-${s}`, "if-match": `"${article.revision_id}"` }),
     ),
   );
   await record(
