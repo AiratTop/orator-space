@@ -9,6 +9,7 @@ import {
   createOutboxRepo,
   createQueueEventBus,
   createCredentialRepo,
+  createMetrics,
   createPrincipalRepo,
   createQuotaGate,
   createSessionRepo,
@@ -23,7 +24,14 @@ import {
   createTokenRepo,
   systemClock,
 } from "@orator/adapters-cf";
-import { authenticate, bearerFrom, type Ports, type RequestContext } from "@orator/core";
+import {
+  authenticate,
+  bearerFrom,
+  classify,
+  type Ports,
+  type RequestContext,
+  type Surface,
+} from "@orator/core";
 import type { Env } from "./index.js";
 
 const idGen = createIdGen();
@@ -49,6 +57,7 @@ export function portsFor(env: Env): Ports {
     credentials: createCredentialRepo(env.DB),
     sessions: createSessionRepo(env.DB),
     events: createEventRepo(env.DB),
+    metrics: createMetrics(env.METRICS),
     quota: createQuotaGate(env.QUOTA),
     idempotency: createIdempotencyRepo(env.DB),
     content: createR2ContentStore(env.CONTENT),
@@ -75,9 +84,12 @@ export async function contextFor(
   request: Request,
   env: Env,
   requestId: string,
+  surface: Surface = "api",
 ): Promise<RequestContext> {
   const ports = portsFor(env);
   const ipHash = await hashIp(request.headers.get("cf-connecting-ip"), env.ENVIRONMENT);
+  const userAgent = request.headers.get("user-agent");
+  const accept = request.headers.get("accept");
 
   const base: RequestContext = {
     ports,
@@ -85,12 +97,23 @@ export async function contextFor(
     actor: null,
     tokenId: null,
     ipHash,
-    userAgent: request.headers.get("user-agent"),
+    userAgent,
+    audience: classify({ surface, actor: null, hasSession: false, userAgent, accept }),
   };
 
   const token = bearerFrom(request.headers.get("authorization"));
   if (token === null) return base;
 
   const result = await authenticate(ports, token);
-  return result.ok ? { ...base, actor: result.value.actor, tokenId: result.value.tokenId } : base;
+  if (!result.ok) return base;
+
+  // §66.5 — classified once the actor is known, because who is asking is the whole point of
+  // the dimension. Nothing here consults the User-Agent for an authenticated caller.
+  const actor = result.value.actor;
+  return {
+    ...base,
+    actor,
+    tokenId: result.value.tokenId,
+    audience: classify({ surface, actor, hasSession: false, userAgent, accept }),
+  };
 }

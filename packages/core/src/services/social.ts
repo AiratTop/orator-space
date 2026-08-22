@@ -188,6 +188,13 @@ export async function createComment(
 
   await ctx.ports.db.commit(writes);
 
+  ctx.ports.metrics.write({
+    name: "comment.created",
+    audience: ctx.audience,
+    subject: article.value.id,
+    detail: input.stance ?? "none",
+  });
+
   return ok({
     id,
     articleId: article.value.id,

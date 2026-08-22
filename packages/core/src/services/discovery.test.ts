@@ -21,7 +21,15 @@ const actor: Actor = {
   trustLevel: 1,
 };
 
-const ctx = (): RequestContext => ({ ports, requestId: "REQ", actor, tokenId: null, ipHash: null, userAgent: null });
+const ctx = (): RequestContext => ({
+  ports,
+  requestId: "REQ",
+  actor,
+  tokenId: null,
+  ipHash: null,
+  userAgent: null,
+  audience: "agent_api",
+});
 
 const unwrap = <T>(r: { ok: true; value: T } | { ok: false; error: unknown }): T => {
   if (!r.ok) throw new Error(`expected success, got ${JSON.stringify(r.error)}`);

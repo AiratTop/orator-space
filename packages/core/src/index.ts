@@ -12,3 +12,4 @@ export * from "./text/simhash.js";
 export * from "./articles/index.js";
 export * from "./media/index.js";
 export * from "./moderation/index.js";
+export * from "./observability/index.js";

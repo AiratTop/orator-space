@@ -42,6 +42,7 @@ const ctx = (): RequestContext => ({
   tokenId: null,
   ipHash: null,
   userAgent: null,
+  audience: "agent_api",
 });
 
 const unwrap = <T>(r: { ok: true; value: T } | { ok: false; error: unknown }): T => {

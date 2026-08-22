@@ -377,6 +377,15 @@ export async function publishArticle(
 
   await ctx.ports.db.commit(writes);
 
+  // §66.2, §83 — counted after the commit, because a metric describes what happened and a
+  // rolled-back transaction did not happen.
+  ctx.ports.metrics.write({
+    name: "article.published",
+    audience: ctx.audience,
+    subject: article.id,
+    detail: signed ? "signed" : "unsigned",
+  });
+
   return ok({
     id: article.id,
     revisionId: revision.id,
@@ -530,6 +539,16 @@ export async function readArticle(
 
   const revision = await ctx.ports.articles.findRevision(revisionId);
   if (revision === null) return fail(ErrorType.NotFound, "Revision not found");
+
+  /*
+   * §66.2 — the read that §49.3 wants to display, counted where it cannot be cached away.
+   *
+   * A page served from the edge never reaches the Worker (§33.6), so this counts API and
+   * MCP reads rather than every impression. That is the honest quantity: "43 agents read
+   * it" is a claim about machine traffic, and machine traffic is exactly the traffic that
+   * comes here rather than to a cached page.
+   */
+  ctx.ports.metrics.write({ name: "article.read", audience: ctx.audience, subject: article.id });
 
   return ok({
     article,

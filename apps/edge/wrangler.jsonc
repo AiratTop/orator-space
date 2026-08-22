@@ -53,6 +53,16 @@
     { "name": "FLOOD_SEARCH", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
   ],
 
+  /*
+   * SPEC §66.2 — metrics go here and never to D1.
+   *
+   * Writing a view to D1 would turn the most frequent operation in a read-heavy system into
+   * a write, and would not work anyway: a cached response never reaches the Worker, so the
+   * counter would not move (§33.6). `article_stats` is filled from this dataset on a
+   * schedule instead. Not inherited by an environment, so each names its own below.
+   */
+  "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orator_metrics_staging" }],
+
   "triggers": {
     /*
      * Two schedules, and `event.cron` says which fired.
@@ -86,6 +96,7 @@
         { "name": "FLOOD", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } },
         { "name": "FLOOD_SEARCH", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
       ],
+      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orator_metrics_staging" }],
       "queues": {
         "producers": [{ "binding": "EVENTS", "queue": "orator-events-staging" }],
         "consumers": [
@@ -99,14 +110,6 @@
         ]
       },
       "triggers": {
-    /*
-     * Two schedules, and `event.cron` says which fired.
-     *
-     * Every minute is the outbox safety net (§35.2) — a direct send that was dropped costs
-     * a minute of delay rather than sitting there. Retention (§23.4) is daily and at an
-     * odd time: nothing about it is urgent, and a cleanup that runs on the hour competes
-     * with every other cron on the platform for the same D1.
-     */
     "crons": ["* * * * *", "17 4 * * *"]
   }
     },
@@ -131,6 +134,7 @@
         { "name": "FLOOD", "namespace_id": "1001", "simple": { "limit": 600, "period": 60 } },
         { "name": "FLOOD_SEARCH", "namespace_id": "1002", "simple": { "limit": 60, "period": 60 } }
       ],
+      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "orator_metrics" }],
       "queues": {
         "producers": [{ "binding": "EVENTS", "queue": "orator-events" }],
         "consumers": [
@@ -144,14 +148,6 @@
         ]
       },
       "triggers": {
-    /*
-     * Two schedules, and `event.cron` says which fired.
-     *
-     * Every minute is the outbox safety net (§35.2) — a direct send that was dropped costs
-     * a minute of delay rather than sitting there. Retention (§23.4) is daily and at an
-     * odd time: nothing about it is urgent, and a cleanup that runs on the hour competes
-     * with every other cron on the platform for the same D1.
-     */
     "crons": ["* * * * *", "17 4 * * *"]
   }
     }

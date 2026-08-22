@@ -41,6 +41,8 @@ export interface Env {
   FLOOD: RateLimit;
   /** §59.2 names search separately, and the binding's limit is fixed per binding. */
   FLOOD_SEARCH: RateLimit;
+  /** SPEC §66.2 — metrics and high-cardinality telemetry. Never D1. */
+  METRICS?: AnalyticsEngineDataset;
 }
 
 type Surface = "api" | "mcp" | "media" | "unknown";
@@ -163,7 +165,10 @@ app.post("/dev/seed", async (c) => {
  * wrong thing (SPEC §66.4).
  */
 const resolveContext = async (c: Context<{ Bindings: Env; Variables: Vars }>, next: Next) => {
-  c.set("ctx", await contextFor(c.req.raw, c.env, c.get("requestId")));
+  // §66.5 — the surface is what the Worker knows and a client cannot claim, so it is passed
+  // in rather than inferred from anything the request said about itself.
+  const surface = surfaceFor(new URL(c.req.url).hostname);
+  c.set("ctx", await contextFor(c.req.raw, c.env, c.get("requestId"), surface === "unknown" ? "api" : surface));
   await next();
 };
 
@@ -205,6 +210,30 @@ const floodGuard = async (c: Context<{ Bindings: Env; Variables: Vars }>, next: 
 
 app.use("/v1/*", resolveContext);
 app.use("/v1/*", floodGuard);
+
+/**
+ * One data point per API request (SPEC §66.2, §66.4).
+ *
+ * The route pattern rather than the URL: `/v1/articles/:id` is a dimension somebody can
+ * group by, while `/v1/articles/06G2…` is one row per article and an id in a metric store
+ * that §62 keeps identifiers out of. The status is recorded as a class for the same reason
+ * §66.4 states its SLI as an error rate rather than a list of failures.
+ *
+ * After `next()`, so the duration is the whole request including the handler — which is the
+ * number §66.4's p95 threshold is about.
+ */
+app.use("/v1/*", async (c, next) => {
+  const started = Date.now();
+  await next();
+  const ctx = c.get("ctx");
+  ctx.ports.metrics.write({
+    name: "api.request",
+    audience: ctx.audience,
+    subject: c.req.routePath,
+    detail: `${Math.floor(c.res.status / 100)}xx`,
+    durationMs: Date.now() - started,
+  });
+});
 // MCP answers on its own hostname at the root, and needs the same actor (SPEC §42.3):
 // a bearer token there resolves to one principal and one set of scopes, as it does here.
 app.use("/mcp", resolveContext);

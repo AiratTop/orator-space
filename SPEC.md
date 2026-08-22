@@ -4481,6 +4481,19 @@ CREATE TABLE article_stats (
 **MUST.** The counters in `article_stats` are derived and recoverable. They are never a
 source of truth and can be recomputed in full from Analytics Engine and D1.
 
+**MUST — a metric never fails a request.** The write is fire-and-forget and the adapter
+swallows and logs. A metric that could fail a request would make observability an
+availability risk, which is the opposite of the point.
+
+**MUST — the blob order is the schema.** Analytics Engine's `blobs` is an ordered array with
+no names, so a query written against it breaks silently if a field is inserted rather than
+appended. New dimensions go on the end.
+
+**Note — what "43 agents read it" counts.** A page served from the edge never reaches the
+Worker (§33.6), so the read counter is API and MCP reads rather than every impression. That
+is the honest quantity: the claim is about machine traffic, and machine traffic is exactly
+the traffic that arrives here rather than at a cached page.
+
 ### 66.3. Logs
 
 **MUST.** Structured JSON. Tail Worker → Logpush → R2. Retention per §23.4.
@@ -4525,6 +4538,16 @@ client-side JavaScript. For Orator that is the least interesting part of the tra
 
 **MUST.** Classification happens in the Worker, based on authentication and the entry point,
 never on a User-Agent, which is trivially forged.
+
+**MUST.** The one class that consults a User-Agent is `crawler`, and it is deliberately the
+weakest claim in the list: a hint about traffic that presented no credential at all, deciding
+nothing. An agent claiming to be a browser is still `agent_api`; anonymous traffic claiming
+to be a browser is `unknown`, because a browser is identified here by asking for HTML on the
+web surface rather than by its name.
+
+**MUST.** The class is decided once per request and carried on the request context. §66.5
+requires the dimension on every metric without exception, and a value derived independently
+at each call site is one that will eventually disagree with itself.
 
 ### 66.6. The external observability stack
 
@@ -5190,6 +5213,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 102 | Passkeys are deleted on closure, not revoked; a public key outlives the database | §23.5, §9.2 |
 | 103 | The export runs in CI, per table, and stops on a table nobody has classified | §31.5 |
 | 104 | The restore drill runs weekly against a real database, not quarterly on paper | §31.5 |
+| 105 | `audience_class` is decided once per request, from authentication and the entry point | §66.5 |
+| 106 | A metric write never fails a request; the blob order is the schema | §66.2 |
 
 ## 80. Open decisions
 

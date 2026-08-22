@@ -12,6 +12,7 @@ import type {
   KeyRepo,
   MediaRepo,
   MediaStore,
+  Metrics,
   ModerationRepo,
   OutboxRepo,
   CredentialRepo,
@@ -26,6 +27,7 @@ import type {
 } from "../ports/index.js";
 import type { Actor } from "../identity/authz.js";
 import type { QuotaAction, QuotaVerdict } from "../identity/quota.js";
+import type { AudienceClass } from "../observability/audience.js";
 
 /** Everything a service is allowed to reach. Assembled once per request by the adapter. */
 export interface Ports {
@@ -61,6 +63,8 @@ export interface Ports {
   credentials: CredentialRepo;
   sessions: SessionRepo;
   events: EventRepo;
+  /** SPEC §66.2 — fire and forget, and never to D1. */
+  metrics: Metrics;
   /** SPEC §59.1 — the exact, global counter. Flood protection lives at the HTTP edge. */
   quota: QuotaGate;
   idempotency: IdempotencyRepo;
@@ -71,6 +75,14 @@ export interface Ports {
 
 export interface RequestContext {
   ports: Ports;
+  /**
+   * SPEC §66.5 — who is asking, decided once per request.
+   *
+   * On the context rather than recomputed where a metric is written: §66.5 requires the
+   * dimension on every metric without exception, and a value derived independently at each
+   * call site is a value that will eventually disagree with itself.
+   */
+  audience: AudienceClass;
   /** Travels from the HTTP edge through the outbox to the queue consumer (SPEC §66.1). */
   requestId: string;
   /** Null when the caller is not authenticated. */

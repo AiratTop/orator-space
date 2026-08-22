@@ -37,6 +37,7 @@ import {
   type SocialRepo,
   type ModerationRepo,
   type CredentialRecord,
+  type MetricEvent,
   type CredentialRepo,
   type ModerationActionRecord,
   type SessionRecord,
@@ -82,6 +83,7 @@ export interface MemoryState {
   comments: Map<string, CommentRecord>;
   searchDocs: Map<string, SearchDocument>;
   topics: Map<string, TopicRecord>;
+  metrics: MetricEvent[];
   credentials: CredentialRecord[];
   sessions: (SessionRecord & { tokenHash: string })[];
   reports: ReportRecord[];
@@ -120,6 +122,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     comments: new Map(),
     searchDocs: new Map(),
     topics: new Map(),
+    metrics: [],
     credentials: [],
     sessions: [],
     reports: [],
@@ -169,6 +172,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         comments: new Map(state.comments),
         searchDocs: new Map(state.searchDocs),
         topics: new Map(state.topics),
+        metrics: [...state.metrics],
         credentials: [...state.credentials],
         sessions: [...state.sessions],
         reports: [...state.reports],
@@ -1282,6 +1286,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     articles,
     reading,
     quota,
+    // §66.2 — a metric never fails a request, so the double counts and returns.
+    metrics: { write: (event) => void state.metrics.push(event) },
     // §23.5 — a closure has to revoke every way in. The doubles are the same shape as the
     // real repos, so a test that forgets one fails here rather than in production.
     credentials,

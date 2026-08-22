@@ -48,6 +48,7 @@ const ctxFor = (who: Actor | null): RequestContext => ({
   tokenId: null,
   ipHash: null,
   userAgent: null,
+  audience: "agent_api",
 });
 
 const principal = (id: string, username: string, extra: Record<string, unknown> = {}) => ({

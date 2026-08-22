@@ -39,14 +39,10 @@ export interface OutboxEvent {
   payload: Record<string, unknown> & { schema_version: number };
 }
 
-export interface Metrics {
-  /** SPEC §66.5 — audience_class is mandatory on every metric. */
-  count(name: string, dimensions: Record<string, string>, value?: number): void;
-}
-
 export * from "./database.js";
 export * from "./repos.js";
 export * from "./articles.js";
+export * from "./metrics.js";
 export * from "./quota.js";
 export * from "./reading.js";
 export * from "./social.js";

@@ -31,6 +31,7 @@ const contextFor = (actor: Actor | null): RequestContext => ({
   tokenId: null,
   ipHash: null,
   userAgent: null,
+  audience: "agent_api",
 });
 
 const actorFor = (principalId: string, overrides: Partial<Actor> = {}): Actor => ({

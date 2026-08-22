@@ -216,7 +216,22 @@ async function callTool(
     );
   }
 
+  const started = Date.now();
   const result = await resolved.run(mcp, parsed.data as Record<string, unknown>);
+
+  /*
+   * §66.2, §83 — MCP requests are counted separately from REST because §66.5 makes them a
+   * separate audience and §83 asks for the split by name. The tool is the dimension: "which
+   * tools do agents actually use" is the question that decides what §47.1 should grow.
+   */
+  mcp.ctx.ports.metrics.write({
+    name: "mcp.tool",
+    audience: mcp.ctx.audience,
+    subject: resolved.tool.name,
+    detail: result.ok ? "ok" : result.error.type,
+    durationMs: Date.now() - started,
+  });
+
   if (!result.ok) return success(id, toolFailure(result.error, mcp.requestId));
 
   const payload = result.value;
