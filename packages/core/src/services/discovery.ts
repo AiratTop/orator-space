@@ -21,7 +21,10 @@ export async function feed(
   ports: ReadingPorts,
   options: { limit?: number; before?: FeedCursor | null } = {},
 ): Promise<FeedPage> {
-  return ports.reading.listLatest(pageSize(options.limit), options.before ?? null);
+  return ports.reading.listLatest(pageSize(options.limit), {
+    before: options.before ?? null,
+    after: null,
+  });
 }
 
 /**

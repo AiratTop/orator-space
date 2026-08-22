@@ -62,18 +62,50 @@ export interface ArticleCard {
   author: AuthorSummary;
 }
 
+/**
+ * Which way through the feed, and from where (SPEC §44.2).
+ *
+ * Two cursors rather than one, because a reader who has followed "older" three times has no
+ * way back that does not involve the browser's history — and a list with a forward link, no
+ * back link, no position and no total reads as an infinite corridor. Keyset pagination
+ * supports both directions perfectly well; it was only ever asked one question.
+ *
+ * Both null is the first page. Both set is a caller error, and the repository takes `before`.
+ */
+export interface FeedWindow {
+  /** Older than this. */
+  before: FeedCursor | null;
+  /** Newer than this. */
+  after: FeedCursor | null;
+}
+
 export interface FeedPage {
   cards: ArticleCard[];
   /** Null when the feed ends here — the caller never guesses from the page size. */
   next: FeedCursor | null;
+  /**
+   * Null on the newest page. Not symmetrical with `next` by accident: arriving through a
+   * cursor is itself proof that something newer exists, so this is set whenever the reader
+   * did not start at the top.
+   */
+  previous: FeedCursor | null;
 }
 
 export interface ReadingRepo {
   /** Published, public articles only. A draft or a removed article reads as absent. */
   findPublished(id: string): Promise<ArticleView | null>;
   /** SPEC §37.1 — the one feed that needs no materialisation; it is an index scan. */
-  listLatest(limit: number, before: FeedCursor | null): Promise<FeedPage>;
-  listByAuthor(principalId: string, limit: number, before: FeedCursor | null): Promise<FeedPage>;
+  listLatest(limit: number, window: FeedWindow): Promise<FeedPage>;
+  listByAuthor(principalId: string, limit: number, window: FeedWindow): Promise<FeedPage>;
+  /**
+   * How many articles the feed can reach in total (SPEC §49.2).
+   *
+   * A count, which §44.2 keeps out of pagination for good reasons — it cannot be kept
+   * consistent with a keyset page and it costs an index scan. It is here for orientation
+   * rather than for paging: a reader needs to know whether "older" leads to twelve articles
+   * or twelve thousand. Read once per feed page, behind a 30-second edge cache.
+   */
+  countPublished(): Promise<number>;
   findPrincipalByUsername(username: string): Promise<AuthorSummary | null>;
   /** SPEC §76 — the chain a reader came to see, bounded to one hop and `limit` comments. */
   loadConversation(articleId: string, limit: number): Promise<Conversation>;

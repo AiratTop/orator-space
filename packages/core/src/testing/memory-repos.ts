@@ -29,6 +29,7 @@ import {
   type ArticleView,
   type AuthorSummary,
   type FeedPage,
+  type FeedWindow,
   type ReadingRepo,
   type CommentRecord,
   type EdgeRecord,
@@ -796,7 +797,11 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     author: view.author,
   });
 
-  const paginate = (views: ArticleView[], limit: number, before: FeedCursor | null): FeedPage => {
+  const cursorOf = (card: ArticleCard): FeedCursor => ({ publishedAt: card.publishedAt, id: card.id });
+  const isOlder = (card: ArticleCard, than: FeedCursor) =>
+    card.publishedAt < than.publishedAt || (card.publishedAt === than.publishedAt && card.id < than.id);
+
+  const paginate = (views: ArticleView[], limit: number, window: FeedWindow): FeedPage => {
     const sorted = views
       .map(cardOf)
       .sort((a, b) =>
@@ -804,19 +809,29 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           ? b.id.localeCompare(a.id)
           : b.publishedAt.localeCompare(a.publishedAt),
       );
-    const after =
-      before === null
-        ? sorted
-        : sorted.filter(
-            (card) =>
-              card.publishedAt < before.publishedAt ||
-              (card.publishedAt === before.publishedAt && card.id < before.id),
-          );
-    const cards = after.slice(0, limit);
+
+    if (window.after !== null && window.before === null) {
+      // Newest-first still, but the window is taken from the other end of what is newer.
+      const newer = sorted.filter((card) => !isOlder(card, window.after!) && card.id !== window.after!.id);
+      const cards = newer.slice(Math.max(0, newer.length - limit));
+      const first = cards[0];
+      const last = cards[cards.length - 1];
+      return {
+        cards,
+        next: last === undefined ? null : cursorOf(last),
+        previous: newer.length > limit && first !== undefined ? cursorOf(first) : null,
+      };
+    }
+
+    const before = window.before;
+    const older = before === null ? sorted : sorted.filter((card) => isOlder(card, before));
+    const cards = older.slice(0, limit);
+    const first = cards[0];
     const last = cards[cards.length - 1];
     return {
       cards,
-      next: after.length > limit && last !== undefined ? { publishedAt: last.publishedAt, id: last.id } : null,
+      next: older.length > limit && last !== undefined ? cursorOf(last) : null,
+      previous: before !== null && first !== undefined ? cursorOf(first) : null,
     };
   };
 
@@ -854,16 +869,19 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       const article = state.articles.get(id);
       return article === undefined ? null : viewOf(article);
     },
-    async listLatest(limit, before) {
+    async listLatest(limit, window) {
       const views = [...state.articles.values()].map(viewOf).filter((v): v is ArticleView => v !== null);
-      return paginate(views, limit, before);
+      return paginate(views, limit, window);
     },
-    async listByAuthor(principalId, limit, before) {
+    async listByAuthor(principalId, limit, window) {
       const views = [...state.articles.values()]
         .filter((article) => article.authorPrincipalId === principalId)
         .map(viewOf)
         .filter((v): v is ArticleView => v !== null);
-      return paginate(views, limit, before);
+      return paginate(views, limit, window);
+    },
+    async countPublished() {
+      return [...state.articles.values()].map(viewOf).filter((v) => v !== null).length;
     },
     async loadConversation(articleId, limit) {
       const linkOf = (edge: EdgeRecord, farEnd: OratorId | null): ArticleLink => {

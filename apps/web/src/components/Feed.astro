@@ -5,20 +5,33 @@ import { encodeFeedCursor } from "@orator/protocol";
 import Byline from "./Byline.astro";
 
 /**
- * A list of articles (SPEC §49.2, §37.1).
+ * A list of articles (SPEC §49.2, §37.1, §44.2).
  *
- * The "more" link carries a cursor rather than a page number, and it is a plain link: the
- * feed has to work with JavaScript switched off (§49.1), and a cursor in the URL is also
- * what makes the next page independently cacheable (§33.2).
+ * The links carry cursors rather than page numbers, and they are plain links: the feed has
+ * to work with JavaScript switched off (§49.1), and a cursor in the URL is also what makes
+ * each page independently cacheable (§33.2).
+ *
+ * Both directions, and a total. A forward link on its own, with no way back, no position
+ * and no sense of how much there is, reads as an infinite corridor — a reader following
+ * "older" three times cannot tell whether they are near the end or going in circles. Page
+ * numbers are not the answer here (§44.2 rules out offset paging, and for a feed that
+ * changes under the reader they would be lying anyway), but a way back and a count are.
  */
 interface Props {
-  page: FeedPage;
+  page: FeedPage & { total?: number };
   basePath: string;
   empty: string;
 }
 
 const { page, basePath, empty } = Astro.props;
-const nextHref = page.next === null ? null : `${basePath}?before=${encodeFeedCursor(page.next)}`;
+const href = (param: "before" | "after", cursor: NonNullable<FeedPage["next"]>) =>
+  `${basePath}?${param}=${encodeFeedCursor(cursor)}`;
+
+const nextHref = page.next === null ? null : href("before", page.next);
+const previousHref = page.previous === null ? null : href("after", page.previous);
+
+/* The end of the feed, which is worth saying rather than leaving as an absent link. */
+const atTheEnd = page.next === null && page.cards.length > 0;
 ---
 
 {page.cards.length === 0 ? (
@@ -40,6 +53,31 @@ const nextHref = page.next === null ? null : `${basePath}?before=${encodeFeedCur
   </ul>
 )}
 
-{nextHref && (
-  <p class="pager"><a href={nextHref} rel="next">Older articles</a></p>
+{page.cards.length > 0 && (
+  <nav class="pager" aria-label="Feed pages">
+    <span class="pager__side">
+      {previousHref !== null ? (
+        <a href={previousHref} rel="prev">← Newer</a>
+      ) : (
+        <span class="pager__at-end">Newest first</span>
+      )}
+    </span>
+
+    {page.total !== undefined && (
+      <span class="pager__count">{page.total} {page.total === 1 ? "article" : "articles"} in total</span>
+    )}
+
+    <span class="pager__side pager__side--right">
+      {nextHref !== null ? (
+        <a href={nextHref} rel="next">Older →</a>
+      ) : (
+        <span class="pager__at-end">{atTheEnd ? "That is the oldest" : ""}</span>
+      )}
+    </span>
+  </nav>
+)}
+
+{previousHref !== null && (
+  /* Somewhere to land other than one step back, for a reader several pages down. */
+  <p class="pager__home"><a href={basePath}>Back to the latest</a></p>
 )}

@@ -2,7 +2,7 @@ import { SCHEMA_VERSION, type FeedCursor, type OratorId } from "@orator/protocol
 import { canonicalPath } from "../articles/urls.js";
 import { stripInvisible } from "../text/invisible.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
-import type { ArticleView, Conversation, FeedPage } from "../ports/reading.js";
+import type { ArticleView, Conversation, FeedPage, FeedWindow } from "../ports/reading.js";
 import { fail, ok, type Ports, type Result } from "./context.js";
 
 /**
@@ -167,11 +167,26 @@ export const pageSize = (requested: number | null | undefined): number =>
     ? DEFAULT_PAGE_SIZE
     : Math.min(Math.floor(requested), MAX_PAGE_SIZE);
 
+/** The window a page asked for, normalised. Both null is the newest page. */
+export const feedWindow = (options: { before?: FeedCursor | null; after?: FeedCursor | null }): FeedWindow => ({
+  before: options.before ?? null,
+  after: options.after ?? null,
+});
+
+export interface FeedView extends FeedPage {
+  /** SPEC §49.2 — how much there is, so "older" is a distance rather than a corridor. */
+  total: number;
+}
+
 export async function latestFeed(
   ports: ReadingPorts,
-  options: { limit?: number; before?: FeedCursor | null } = {},
-): Promise<FeedPage> {
-  return ports.reading.listLatest(pageSize(options.limit), options.before ?? null);
+  options: { limit?: number; before?: FeedCursor | null; after?: FeedCursor | null } = {},
+): Promise<FeedView> {
+  const [page, total] = await Promise.all([
+    ports.reading.listLatest(pageSize(options.limit), feedWindow(options)),
+    ports.reading.countPublished(),
+  ]);
+  return { ...page, total };
 }
 
 export interface Profile {
@@ -182,7 +197,7 @@ export interface Profile {
 export async function loadProfile(
   ports: ReadingPorts,
   username: string,
-  options: { limit?: number; before?: FeedCursor | null } = {},
+  options: { limit?: number; before?: FeedCursor | null; after?: FeedCursor | null } = {},
 ): Promise<Result<Profile>> {
   const principal = await ports.reading.findPrincipalByUsername(username);
   if (principal === null) return fail("not-found", "Principal not found");
@@ -190,7 +205,7 @@ export async function loadProfile(
   const page = await ports.reading.listByAuthor(
     principal.id as OratorId,
     pageSize(options.limit),
-    options.before ?? null,
+    feedWindow(options),
   );
   return ok({ principal, page });
 }

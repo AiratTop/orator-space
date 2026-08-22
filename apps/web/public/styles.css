@@ -292,8 +292,57 @@ a {
   padding: 3rem 0;
 }
 
+/*
+ * Both directions and a total (SPEC §44.2, §49.2).
+ *
+ * Three cells rather than two links, so the count sits between them and the row keeps its
+ * shape when one side is a label instead of a link. The sides hold their width so that
+ * following "older" does not move the link out from under the cursor.
+ */
 .pager {
-  margin-top: 2rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.9375rem;
+}
+
+.pager__side {
+  flex: 1 1 0;
+}
+
+.pager__side--right {
+  text-align: right;
+}
+
+.pager__count,
+.pager__at-end {
+  color: var(--ink-soft);
+}
+
+.pager__count {
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.pager__home {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 30rem) {
+  .pager {
+    flex-wrap: wrap;
+  }
+
+  .pager__count {
+    order: 3;
+    flex-basis: 100%;
+    text-align: center;
+  }
 }
 
 /* Article ---------------------------------------------------------------- */

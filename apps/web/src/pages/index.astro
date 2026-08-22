@@ -14,7 +14,8 @@ import { ports } from "../lib/ports.js";
  * needs ranking or aggregation is materialised instead (§37.1) — and none of it is here.
  */
 const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
-const page = await latestFeed(ports, { before });
+const after = decodeFeedCursor(Astro.url.searchParams.get("after"));
+const page = await latestFeed(ports, { before, after });
 
 cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
 
@@ -32,7 +33,7 @@ cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
  * question. The articles themselves are reached from the sitemap (§51), not from crawling
  * pagination.
  */
-const indexable = before === null;
+const indexable = before === null && after === null;
 ---
 
 <Layout

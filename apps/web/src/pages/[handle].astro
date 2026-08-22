@@ -17,7 +17,8 @@ const handle = Astro.params.handle ?? "";
 const username = handle.startsWith("@") ? handle.slice(1) : null;
 
 const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
-const result = username === null ? null : await loadProfile(ports, username, { before });
+const after = decodeFeedCursor(Astro.url.searchParams.get("after"));
+const result = username === null ? null : await loadProfile(ports, username, { before, after });
 const profile = result !== null && result.ok ? result.value : null;
 
 if (profile === null) {

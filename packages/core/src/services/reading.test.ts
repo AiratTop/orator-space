@@ -353,6 +353,53 @@ describe("the latest feed (§37.1)", () => {
     expect(third.next).toBeNull();
   });
 
+  it("offers no way back from the newest page, and one from every other", async () => {
+    for (let i = 0; i < 5; i++) {
+      ports.setNow(new Date(Date.UTC(2026, 7, 10 + i)));
+      await publish(`Article ${i}`);
+    }
+
+    const first = await latestFeed(ports, { limit: 2 });
+    expect(first.previous).toBeNull();
+
+    const second = await latestFeed(ports, { limit: 2, before: first.next });
+    expect(second.previous).not.toBeNull();
+  });
+
+  it("walks back the way it came, page for page", async () => {
+    for (let i = 0; i < 5; i++) {
+      ports.setNow(new Date(Date.UTC(2026, 7, 10 + i)));
+      await publish(`Article ${i}`);
+    }
+
+    const first = await latestFeed(ports, { limit: 2 });
+    const second = await latestFeed(ports, { limit: 2, before: first.next });
+    const third = await latestFeed(ports, { limit: 2, before: second.next });
+
+    // The whole complaint this exists for: three steps down, and no way up.
+    const backToSecond = await latestFeed(ports, { limit: 2, after: third.previous });
+    expect(backToSecond.cards.map((card) => card.title)).toEqual(second.cards.map((card) => card.title));
+
+    const backToFirst = await latestFeed(ports, { limit: 2, after: backToSecond.previous });
+    expect(backToFirst.cards.map((card) => card.title)).toEqual(first.cards.map((card) => card.title));
+
+    // And the top of the feed knows it is the top, however it was reached.
+    expect(backToFirst.previous).toBeNull();
+    expect(backToFirst.next).not.toBeNull();
+  });
+
+  it("reports how many articles there are, so `older` is a distance", async () => {
+    for (let i = 0; i < 3; i++) {
+      ports.setNow(new Date(Date.UTC(2026, 7, 10 + i)));
+      await publish(`Article ${i}`);
+    }
+    unwrap(await createArticle(ctx(), { title: "Draft", content: BODY }));
+
+    const page = await latestFeed(ports, { limit: 2 });
+    expect(page.cards).toHaveLength(2);
+    expect(page.total).toBe(3);
+  });
+
   it("caps the page size so a client cannot ask for the whole table", () => {
     expect(pageSize(1000)).toBe(50);
     expect(pageSize(null)).toBe(20);

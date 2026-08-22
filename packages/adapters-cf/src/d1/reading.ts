@@ -8,6 +8,7 @@ import type {
   Disclosure,
   EdgeKind,
   FeedPage,
+  FeedWindow,
   ReadingRepo,
   RevisionRecord,
   Stance,
@@ -364,31 +365,62 @@ const toCard = (row: ViewRow): ArticleCard => ({
  * `published_at` is not unique — two articles published in the same second would otherwise
  * make the page boundary a coin toss (§12.2).
  */
-const KEYSET = `(a.published_at < ? OR (a.published_at = ? AND a.id < ?))`;
+/**
+ * The keyset, in both directions (SPEC §44.2).
+ *
+ * `id` breaks the tie, because two articles published in the same millisecond would
+ * otherwise make the cursor ambiguous and skip one of them.
+ */
+const OLDER = `(a.published_at < ? OR (a.published_at = ? AND a.id < ?))`;
+const NEWER = `(a.published_at > ? OR (a.published_at = ? AND a.id > ?))`;
 
-function toPage(rows: ViewRow[], limit: number): FeedPage {
-  // One row more than asked for is how the end of the feed is known without a count.
+const cursorOf = (card: ArticleCard): FeedCursor => ({ publishedAt: card.publishedAt, id: card.id });
+
+/**
+ * Turns the rows into a page, whichever direction they were read in.
+ *
+ * Going backwards, the query asks for ascending rows and this reverses them, so the page is
+ * always newest-first however the reader arrived at it. The extra row is the same trick in
+ * both directions: it says whether there is more that way without a second query.
+ */
+function toPage(rows: ViewRow[], limit: number, direction: "older" | "newer"): FeedPage {
   const hasMore = rows.length > limit;
-  const cards = rows.slice(0, limit).map(toCard);
+  const page = rows.slice(0, limit).map(toCard);
+  const cards = direction === "older" ? page : [...page].reverse();
+
+  const first = cards[0];
   const last = cards[cards.length - 1];
-  return {
-    cards,
-    next: hasMore && last !== undefined ? { publishedAt: last.publishedAt, id: last.id } : null,
-  };
+  if (first === undefined || last === undefined) return { cards, next: null, previous: null };
+
+  return direction === "older"
+    ? { cards, next: hasMore ? cursorOf(last) : null, previous: null }
+    : // We arrived here from something older, so `next` is not in question.
+      { cards, next: cursorOf(last), previous: hasMore ? cursorOf(first) : null };
 }
 
 export function createReadingRepo(db: D1Database): ReadingRepo {
-  const feed = async (where: string, binds: unknown[], limit: number, before: FeedCursor | null) => {
-    const keyset = before === null ? "" : ` AND ${KEYSET}`;
-    const cursorBinds = before === null ? [] : [before.publishedAt, before.publishedAt, before.id];
+  const feed = async (where: string, binds: unknown[], limit: number, window: FeedWindow) => {
+    // `before` wins if a caller supplies both, which is a caller error rather than a state.
+    const cursor = window.before ?? window.after;
+    const direction = window.before !== null || window.after === null ? "older" : "newer";
+    const keyset = cursor === null ? "" : ` AND ${direction === "older" ? OLDER : NEWER}`;
+    const cursorBinds = cursor === null ? [] : [cursor.publishedAt, cursor.publishedAt, cursor.id];
+    const order = direction === "older" ? "DESC" : "ASC";
+
     const { results } = await db
       .prepare(
         `${VIEW_SELECT} WHERE ${PUBLIC} AND ${where}${keyset}
-          ORDER BY a.published_at DESC, a.id DESC LIMIT ?`,
+          ORDER BY a.published_at ${order}, a.id ${order} LIMIT ?`,
       )
       .bind(...binds, ...cursorBinds, limit + 1)
       .all<ViewRow>();
-    return toPage(results, limit);
+
+    const page = toPage(results, limit, direction);
+    // A page reached through a cursor always has something newer, whether or not this
+    // query looked that way. Without it, "newer" disappears the moment a reader steps back.
+    return page.previous === null && window.before !== null && page.cards[0] !== undefined
+      ? { ...page, previous: cursorOf(page.cards[0]) }
+      : page;
   };
 
   return {
@@ -402,13 +434,26 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
       return row === null ? null : toView(row);
     },
 
-    listLatest(limit, before) {
-      return feed(`${NOT_SYSTEM} AND a.published_at IS NOT NULL`, [], limit, before);
+    listLatest(limit, window) {
+      return feed(`${NOT_SYSTEM} AND a.published_at IS NOT NULL`, [], limit, window);
     },
 
-    listByAuthor(principalId, limit, before) {
+    listByAuthor(principalId, limit, window) {
       // Also filtered: a profile page is somewhere a reader arrives without asking for it.
-      return feed(`${NOT_SYSTEM} AND a.author_principal_id = ?`, [principalId], limit, before);
+      return feed(`${NOT_SYSTEM} AND a.author_principal_id = ?`, [principalId], limit, window);
+    },
+
+    async countPublished() {
+      // Served by the partial index on `published_at`, so it is a scan of the published
+      // rows rather than of the table — the same index the feed itself uses.
+      const row = await db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM articles a
+             JOIN principals p ON p.id = a.author_principal_id
+            WHERE ${PUBLIC} AND ${NOT_SYSTEM} AND a.published_at IS NOT NULL`,
+        )
+        .first<{ n: number }>();
+      return row?.n ?? 0;
     },
 
     /**
