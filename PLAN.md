@@ -101,10 +101,16 @@ Token permissions: `Workers Scripts: Edit`, `D1: Edit`, `Workers R2 Storage: Edi
 `Queues: Edit`, `Zone → Workers Routes: Edit`, `User → User Details: Read`. Scope to the
 environment's own resources where possible.
 
-### 1.5. Branch protection ✅ done
+### 1.5. Branch protection — configured, and off during active development
 
-Applied 2026-08-22: the ruleset targets the default branch and `ci` is a required status
-check, so nothing reaches `main` without the pipeline having passed on it.
+The ruleset exists and is correct; it was disabled on 2026-08-22 while the work is still
+one person and an agent moving fast. With `Require a pull request` active, every change
+costs a branch, a pull request and two CI runs — one on the pull request and one on the
+merge — for a review nobody performs, because approvals are zero by necessity (see below).
+
+**MUST be re-enabled before public registration opens.** `main` deploys to production on
+every push, and the moment anybody else can open a pull request, an unreviewed merge is a
+deployment. It belongs on the Phase 8 gate for that reason and is listed there.
 
 Use **Rulesets**, not classic branch protection — classic is legacy.
 
@@ -182,7 +188,7 @@ from `assets`. That bucket needs no name of its own.
 | ~~6~~ | ~~An R2 API token for a presigned PUT~~ — not needed: ADR 0005 reversed §21.1, the upload goes through the Worker | — |
 | 7 | The checkpoint scripts run after every staging deploy | Phase 6 — see below |
 | ~~8~~ | ~~Turn off Cloudflare Web Analytics automatic injection~~ ✅ done — RUM off for `orator.space` and its subdomains | — |
-| 9 | **Stop Cloudflare AI Crawl Control managing `robots.txt`** on both zones | Phase 8 — see below |
+| ~~9~~ | ~~Stop Cloudflare AI Crawl Control managing `robots.txt`~~ ✅ done — both zones serve ours alone | — |
 
 **On item 5.** It signs the WebAuthn challenge cookie. Local development falls back to a
 fixed development value; a deployment without it refuses to sign anyone in rather than
@@ -256,10 +262,10 @@ Where: **Cloudflare dashboard → the zone → AI Crawl Control** (it has also a
 bot block. The repository's own `robots.txt` already states the policy §48 wants, and it is
 the one that should be the whole file.
 
-`e2e-read.mjs` reports this as a skip naming the setting, on the same reasoning as item 8: a
-zone setting is not a build's doing, and a pipeline that refuses to deploy until somebody
-clicks a toggle is one people learn to override. It becomes a hard check once the setting is
-off.
+**Turned off 2026-08-22.** Both zones now serve the repository's `robots.txt` and nothing
+else. `e2e-read.mjs` asserts it: no blocked agent, one `User-agent: *` group, and no
+`Content-Signal` line — so a setting that comes back fails the build rather than quietly
+negating the product's premise.
 
 **On item 1a.** Both queues had been created with an HTTP Pull Consumer. A queue takes one
 consumer, push or pull, so the worker could not attach: `wrangler deploy` failed with
@@ -730,6 +736,7 @@ This is where the entire `[L]` level is closed.
 [ ] account closure (§23.5)
 [ ] the §66.4 alerts; Gatus on /health and /health/deep
 [x] a Cloudflare budget alert — 10 USD
+[ ] branch protection re-enabled — `main` deploys to production on every push (§1.5)
 [ ] Terms, Content Policy and Privacy published
 [ ] CODE_OF_CONDUCT.md and CONTRIBUTING.md (§82) — LICENSE and SECURITY.md are present
 [x] robots.txt and llms.txt, delivered in Phase 4
