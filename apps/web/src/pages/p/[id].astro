@@ -1,22 +1,22 @@
 ---
 import { loadBody, loadConversation, renderMarkdown, verifyProvenance } from "@orator/core";
-import Layout from "../../../components/Layout.astro";
-import Byline from "../../../components/Byline.astro";
-import Conversation from "../../../components/Conversation.astro";
-import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../../lib/article.js";
-import { CACHE, CDN_CACHE, cacheHeaders } from "../../../lib/http.js";
-import { ports, siteHost } from "../../../lib/ports.js";
+import Layout from "../../components/Layout.astro";
+import Byline from "../../components/Byline.astro";
+import Conversation from "../../components/Conversation.astro";
+import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
+import { ports, siteHost } from "../../lib/ports.js";
 
 /**
  * The article page (SPEC §49.2, §13, §33, §48).
  *
- * One file serves `/p/{id}` and `/p/{id}/{slug}` alike, because §13 makes them the same
- * resource: the id identifies, the slug decorates, and any slug resolves to the current one.
+ * One address, and this is it. Anything after the id is handled by `[...rest].astro`, which
+ * redirects here — links made before ADR 0010 removed the slug are out in citations and chat
+ * logs, and they keep resolving.
  */
-const { id = "", slug } = Astro.params;
-const requestedSlug = typeof slug === "string" && slug.length > 0 ? slug : null;
+const { id = "" } = Astro.params;
 
-const gate = await gateArticle(Astro.request, id, { requestedSlug, negotiate: true, entity: "page" });
+const gate = await gateArticle(Astro.request, id, { negotiate: true, entity: "page" });
 
 // Redirects and 304s leave before a single byte is rendered.
 if (gate.kind === "response") return gate.response;

@@ -12,7 +12,6 @@ import { asWrite } from "./database.js";
 interface ArticleRow {
   id: string;
   author_principal_id: string;
-  slug: string | null;
   status: string;
   visibility: string;
   current_revision_id: string | null;
@@ -76,7 +75,6 @@ function toArticle(row: ArticleRow | null): ArticleRecord | null {
   return {
     id: row.id as OratorId,
     authorPrincipalId: row.author_principal_id as OratorId,
-    slug: row.slug,
     status: row.status as ArticleStatus,
     visibility: row.visibility as ArticleRecord["visibility"],
     currentRevisionId: row.current_revision_id as OratorId | null,
@@ -152,14 +150,13 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
         db
           .prepare(
             `INSERT INTO articles
-               (id, author_principal_id, slug, status, visibility, language,
+               (id, author_principal_id, status, visibility, language,
                 authorship_disclosure, canonical_url, indexable, created_at, updated_at)
-             VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, 0, ?, ?)`,
+             VALUES (?, ?, 'draft', ?, ?, ?, ?, 0, ?, ?)`,
           )
           .bind(
             article.id,
             article.authorPrincipalId,
-            article.slug,
             article.visibility,
             article.language,
             article.authorshipDisclosure,
@@ -347,12 +344,6 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
               WHERE id = ?`,
           )
           .bind(state, verdict, at, at, articleId),
-      );
-    },
-
-    setSlug(articleId, slug, at) {
-      return asWrite(
-        db.prepare(`UPDATE articles SET slug = ?, updated_at = ? WHERE id = ?`).bind(slug, at, articleId),
       );
     },
 

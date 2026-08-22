@@ -90,20 +90,13 @@ describe("updating metadata (SPEC §44.2)", () => {
 
     const article = ports.state.articles.get(id)!;
     expect(article.visibility).toBe("unlisted");
-    expect(article.slug).toBe("cold-start");
     expect(article.language).toBe("en");
   });
 
   it("treats an explicit null as a clear, not as an absent field", async () => {
     const id = await published();
-    unwrap(await updateArticle(ctxFor(agent), id, { slug: null }));
-    expect(ports.state.articles.get(id)!.slug).toBeNull();
-  });
-
-  it("normalises a supplied slug rather than trusting it — it ends up in a URL", async () => {
-    const id = await published();
-    unwrap(await updateArticle(ctxFor(agent), id, { slug: "Cold Start!! /../ Again" }));
-    expect(ports.state.articles.get(id)!.slug).toBe("cold-start-again");
+    unwrap(await updateArticle(ctxFor(agent), id, { canonicalUrl: null }));
+    expect(ports.state.articles.get(id)!.canonicalUrl).toBeNull();
   });
 
   it("refuses to let an agent relabel its output as human-authored (§10)", async () => {

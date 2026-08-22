@@ -2130,17 +2130,6 @@
                     "minLength": 1,
                     "description": "Markdown, at most 1 MB (§44.2)"
                   },
-                  "slug": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 120
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
                   "language": {
                     "type": "string",
                     "maxLength": 20
@@ -2205,16 +2194,6 @@
                     "url": {
                       "type": "string"
                     },
-                    "slug": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ]
-                    },
                     "status": {
                       "type": "string",
                       "const": "draft"
@@ -2240,7 +2219,6 @@
                   "required": [
                     "id",
                     "url",
-                    "slug",
                     "status",
                     "revision_id",
                     "content_hash",
@@ -2536,17 +2514,6 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "slug": {
-                    "anyOf": [
-                      {
-                        "type": "string",
-                        "maxLength": 120
-                      },
-                      {
-                        "type": "null"
-                      }
-                    ]
-                  },
                   "visibility": {
                     "type": "string",
                     "enum": [

@@ -7,7 +7,7 @@ import {
   type RenderFailure,
 } from "@orator/core";
 import { isOratorId, negotiateRepresentation, representationPath } from "@orator/protocol";
-import { negotiatedRedirect, notModified, permanentRedirect, type Validators } from "./http.js";
+import { negotiatedRedirect, notModified, type Validators } from "./http.js";
 import { ports, siteOrigin } from "./ports.js";
 
 /**
@@ -16,7 +16,7 @@ import { ports, siteOrigin } from "./ports.js";
  * The page, the `.md` variant and the `.json` variant answer the same questions in the same
  * order — does this exist, is the address right, has the reader already got it — and only a
  * route that gets past all three pays for the body. Written once because the order *is* the
- * contract: checking `If-None-Match` before the slug redirect would return 304 for a URL
+ * contract: checking `If-None-Match` before the representation redirect would return 304 for a URL
  * about to move, and reading R2 before the 304 would make §33.3 a lie.
  */
 
@@ -26,12 +26,6 @@ export type ArticleGate =
   | { kind: "ok"; article: PublicArticle };
 
 export interface GateOptions {
-  /**
-   * The slug the reader arrived with, or null for none. Absent entirely on the `.md` and
-   * `.json` routes, which are addressed by id alone and therefore have no slug to be
-   * wrong about (§33.5).
-   */
-  requestedSlug?: string | null;
   /** Whether `Accept` may redirect to another representation. False on the variants. */
   negotiate: boolean;
   /**
@@ -65,25 +59,13 @@ export async function gateArticle(
   const article = loaded.value;
 
   if (options.negotiate) {
-    // §33.5 — `Accept` redirects to the variant's own URL. Before the slug check, so a
-    // machine asking for markdown at a stale slug takes one hop rather than two.
+    // §33.5 — `Accept` redirects to the variant's own URL.
     const wanted = negotiateRepresentation(request.headers.get("accept"));
     if (wanted !== "html") {
       return {
         kind: "response",
         response: negotiatedRedirect(representationPath(article.canonicalPath, wanted)),
       };
-    }
-  }
-
-  // §13 — any slug resolves, and the wrong one moves to the right one.
-  if (options.requestedSlug !== undefined) {
-    const arrived =
-      options.requestedSlug === null || options.requestedSlug === ""
-        ? `/p/${id}`
-        : `/p/${id}/${options.requestedSlug}`;
-    if (arrived !== article.canonicalPath) {
-      return { kind: "response", response: permanentRedirect(article.canonicalPath) };
     }
   }
 

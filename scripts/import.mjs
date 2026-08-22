@@ -28,7 +28,6 @@
  *         "canonical_url": "https://example.com/cold-start",   or null, deliberately
  *         "authorship_disclosure": "human_authored",
  *         "published_at": "2024-03-11T09:00:00.000Z",
- *         "slug": "measuring-cold-start",        optional
  *         "language": "en"                       optional
  *       }
  *     ]
@@ -147,7 +146,6 @@ for (const entry of entries) {
       content: body,
       canonical_url: entry.canonical_url,
       authorship_disclosure: entry.authorship_disclosure,
-      ...(entry.slug === undefined ? {} : { slug: entry.slug }),
       ...(entry.language === undefined ? {} : { language: entry.language }),
     },
   });

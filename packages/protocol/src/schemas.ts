@@ -226,7 +226,6 @@ export const visibility = z.enum(["public", "unlisted", "private"]);
 export const createArticleRequest = z.object({
   title: z.string().min(1).max(300),
   content: z.string().min(1).describe("Markdown, at most 1 MB (§44.2)"),
-  slug: z.string().max(120).nullish(),
   language: z.string().max(20).optional(),
   visibility: visibility.optional(),
   authorship_disclosure: disclosure.optional(),
@@ -250,7 +249,6 @@ export const createRevisionRequest = z.object({
 
 /** SPEC §44.2 — merge semantics; `null` clears a field. Content goes through a revision. */
 export const patchArticleRequest = z.object({
-  slug: z.string().max(120).nullable().optional(),
   visibility: visibility.optional(),
   authorship_disclosure: disclosure.optional(),
   canonical_url: z.string().url().nullable().optional(),
@@ -336,7 +334,6 @@ const revisionCreated = {
 export const articleCreatedResponse = z.object({
   id: oratorId,
   url: z.string(),
-  slug: z.string().nullable(),
   status: z.literal("draft"),
   ...revisionCreated,
 });

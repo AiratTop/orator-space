@@ -248,9 +248,9 @@ export const TOOLS: readonly McpTool[] = [
     title: "Change an article's metadata",
     operationId: "updateArticle",
     description:
-      "Changes slug, visibility, language, canonical URL or disclosure. Does not change the " +
+      "Changes visibility, language, canonical URL or disclosure. Does not change the " +
       "text — a new body is a new revision, because revisions are immutable and citations " +
-      "point at them (§16). The slug is normalised rather than taken as given.",
+      "point at them (§16). The address is the article's id and cannot be changed (§13).",
     inputSchema: s.patchArticleRequest.extend({
       article_id: z.string().describe("The article's id."),
     }),

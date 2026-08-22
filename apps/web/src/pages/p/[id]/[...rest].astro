@@ -1,0 +1,19 @@
+---
+import { canonicalPath } from "@orator/core";
+import { permanentRedirect } from "../../../lib/http.js";
+
+/**
+ * Anything after the id (SPEC §13, ADR 0010).
+ *
+ * §13 used to put a slug here and redirect a stale one to the current. The slug is gone and
+ * this is the same promise pointing the other way: a link made while it existed — in a
+ * citation, in somebody's chat history, in an old sitemap a crawler still holds — resolves
+ * to the article rather than 404ing.
+ *
+ * 301, and no database read. Where the article is does not depend on whether it exists;
+ * a reader who followed a link to something withdrawn should be told that by the article's
+ * own address, in one place, with the tombstone §23.2 promises.
+ */
+const { id = "" } = Astro.params;
+return permanentRedirect(canonicalPath({ id }));
+---

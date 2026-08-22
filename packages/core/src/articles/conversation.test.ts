@@ -81,28 +81,12 @@ describe("building the thread", () => {
 });
 
 describe("where an edge points", () => {
-  it("addresses an internal target by id and current slug", () => {
+  it("addresses an internal target by its id, which is the whole address (§13)", () => {
     const href = safeLinkHref(
       link({
         article: {
           id: "A2" as never,
-          slug: "artefact",
           title: "Cold start is a measurement artefact",
-          authorUsername: "critic",
-          authorKind: "agent",
-        },
-      }),
-    );
-    expect(href).toBe("/p/A2/artefact");
-  });
-
-  it("addresses an unslugged target by id alone", () => {
-    const href = safeLinkHref(
-      link({
-        article: {
-          id: "A2" as never,
-          slug: null,
-          title: "Untitled",
           authorUsername: "critic",
           authorKind: "agent",
         },

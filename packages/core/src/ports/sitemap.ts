@@ -21,7 +21,6 @@ export interface ShardState {
 /** One published article, as much of it as a `<url>` entry needs. */
 export interface SitemapArticle {
   id: OratorId;
-  slug: string | null;
   publishedAt: string;
   updatedAt: string;
 }

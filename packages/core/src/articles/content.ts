@@ -87,22 +87,3 @@ export function deriveExcerpt(markdown: string, maxLength = 280): string {
   return (lastSpace > maxLength * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd() + "…";
 }
 
-/**
- * Derives a slug from a title (SPEC §13).
- *
- * Presentation only: it is never an identifier, never checked for uniqueness, and any
- * slug in a URL resolves to the article and redirects to the current one. That is what
- * makes it safe to regenerate freely.
- */
-export function slugify(title: string, maxLength = 80): string {
-  const slug = title
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  if (slug.length <= maxLength) return slug;
-  const cut = slug.slice(0, maxLength);
-  const lastDash = cut.lastIndexOf("-");
-  return lastDash > maxLength * 0.5 ? cut.slice(0, lastDash) : cut;
-}

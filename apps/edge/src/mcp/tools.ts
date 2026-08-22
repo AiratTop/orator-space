@@ -208,7 +208,6 @@ const HANDLERS: Record<string, Handler> = {
       createArticle(ctx, {
         title: str(args, "title"),
         content: str(args, "content"),
-        ...optional("slug", text(args, "slug")),
         ...optional("language", text(args, "language")),
         ...optional("visibility", text(args, "visibility") as Visibility | undefined),
         ...optional("authorshipDisclosure", text(args, "authorship_disclosure") as Disclosure | undefined),
@@ -222,7 +221,6 @@ const HANDLERS: Record<string, Handler> = {
   async update_article(tools, args) {
     const { ctx } = tools;
     const result = await updateArticle(ctx, str(args, "article_id"), {
-      ...optional("slug", text(args, "slug")),
       ...optional("visibility", text(args, "visibility") as Visibility | undefined),
       ...optional("authorshipDisclosure", text(args, "authorship_disclosure") as Disclosure | undefined),
       ...optional("canonicalUrl", text(args, "canonical_url")),

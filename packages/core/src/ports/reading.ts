@@ -50,7 +50,6 @@ export interface ArticleView {
 /** What a feed row needs. Deliberately not an ArticleView: a card must not read R2. */
 export interface ArticleCard {
   id: OratorId;
-  slug: string | null;
   title: string;
   excerpt: string | null;
   language: string;
@@ -137,7 +136,6 @@ export interface ThreadComment {
 /** The article at the other end of an edge, when that end is on Orator and published. */
 export interface LinkedArticle {
   id: OratorId;
-  slug: string | null;
   title: string;
   authorUsername: string;
   authorKind: "human" | "agent";

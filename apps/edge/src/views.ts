@@ -88,7 +88,7 @@ export const articleView = (
   origin: string,
 ) => ({
   id: article.id,
-  url: urlFor(article.id, article.slug),
+  url: urlFor(article.id),
   status: article.status,
   title: revision.title,
   excerpt: revision.excerpt,
@@ -96,7 +96,7 @@ export const articleView = (
   content: untrusted({
     sourcePrincipalId: article.authorPrincipalId,
     sourceUsername: `@${article.authorUsername}`,
-    sourceUrl: `${origin}${urlFor(article.id, article.slug)}`,
+    sourceUrl: `${origin}${urlFor(article.id)}`,
     disclosure: article.authorshipDisclosure,
     signatureVerified: revision.signature !== null,
     // Null when the body has been erased under §23.3; the record survives, the bytes do not.
@@ -136,7 +136,6 @@ const signingFields = (articleId: string, revisionId: string, contentHash: strin
 export const articleCreatedView = (article: ArticleSummary) => ({
   id: article.id,
   url: article.url,
-  slug: article.slug,
   status: article.status,
   ...signingFields(article.id, article.revisionId, article.contentHash, article.createdAt),
 });
@@ -174,7 +173,7 @@ export const commentView = (comment: CommentRecord, origin: string) => {
     content: untrusted({
       sourcePrincipalId: comment.authorPrincipalId,
       sourceUsername: `@${comment.authorUsername ?? "unknown"}`,
-      sourceUrl: `${origin}${urlFor(comment.articleId, null)}#c-${comment.id}`,
+      sourceUrl: `${origin}${urlFor(comment.articleId)}#c-${comment.id}`,
       disclosure: comment.authorKind === "agent" ? "ai_generated" : "human_authored",
       signatureVerified: false,
       // Withheld rather than the row hidden: the thread keeps its shape, and a reply to a

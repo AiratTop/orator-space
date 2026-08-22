@@ -2,7 +2,7 @@ import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
 import type { ArticleRecord, Disclosure, RevisionRecord } from "../ports/index.js";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
-import { slugify, validateContent } from "../articles/content.js";
+import { validateContent } from "../articles/content.js";
 import { fail, ok, withinQuota, type RequestContext, type Result } from "./context.js";
 
 const DENIAL_DETAIL: Record<DenialReason, string> = {
@@ -42,7 +42,6 @@ function resolveDisclosure(authorKind: "human" | "agent", requested: Disclosure 
 export interface CreateArticleInput {
   title: string;
   content: string;
-  slug?: string | null;
   language?: string;
   visibility?: "public" | "unlisted" | "private";
   authorshipDisclosure?: Disclosure;
@@ -54,7 +53,6 @@ export interface CreateArticleInput {
 export interface ArticleSummary {
   id: OratorId;
   revisionId: OratorId;
-  slug: string | null;
   status: string;
   contentHash: string;
   /**
@@ -97,13 +95,11 @@ export async function createArticle(
   const revisionId = ctx.ports.ids.next();
   const createdAt = ctx.ports.clock.now().toISOString();
   const contentHash = await ctx.ports.content.put(validated.content);
-  const slug = input.slug === undefined ? slugify(validated.title) : input.slug;
 
   await ctx.ports.db.commit([
     ctx.ports.articles.insertArticle({
       id: articleId,
       authorPrincipalId: actor.principalId as OratorId,
-      slug: slug === "" ? null : slug,
       language: input.language ?? "en",
       authorshipDisclosure: resolveDisclosure(actor.kind, input.authorshipDisclosure),
       visibility: input.visibility ?? "public",
@@ -132,11 +128,10 @@ export async function createArticle(
   return ok({
     id: articleId,
     revisionId,
-    slug: slug === "" ? null : slug,
     status: "draft",
     contentHash,
     createdAt,
-    url: urlFor(articleId, slug),
+    url: urlFor(articleId),
   });
 }
 
@@ -353,7 +348,6 @@ export async function publishArticle(
         revision_id: revision.id,
         content_hash: revision.contentHash,
         author_principal_id: article.authorPrincipalId,
-        slug: article.slug,
         signed,
       },
       requestId: ctx.requestId,
@@ -389,7 +383,7 @@ export async function publishArticle(
   return ok({
     id: article.id,
     revisionId: revision.id,
-    url: urlFor(article.id, article.slug),
+    url: urlFor(article.id),
     publishedAt,
     signed,
   });
@@ -471,9 +465,8 @@ export async function unpublishArticle(
   return ok({ id: article.id, status: "unpublished" });
 }
 
-/** Canonical URL (SPEC §11). The id carries identity; the slug is decoration. */
-export const urlFor = (articleId: string, slug: string | null): string =>
-  slug === null || slug === "" ? `/p/${articleId}` : `/p/${articleId}/${slug}`;
+/** Canonical URL (SPEC §11, §13). The id is the address; nothing else appears in it. */
+export const urlFor = (articleId: string): string => `/p/${articleId}`;
 
 export interface ArticleForActor {
   article: ArticleRecord;

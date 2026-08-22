@@ -90,12 +90,13 @@ describe("creating an article (SPEC §16)", () => {
     expect(ports.state.outbox).toHaveLength(0);
   });
 
-  it("derives a slug but keeps identity in the id", async () => {
+  it("addresses the article by its id and nothing else (§13, ADR 0010)", async () => {
     const article = unwrap(
       await createArticle(ctxFor(agentActor()), { title: "Measuring Cold Start", content: BODY }),
     );
-    expect(article.slug).toBe("measuring-cold-start");
-    expect(article.url).toBe(`/p/${article.id}/measuring-cold-start`);
+    // Nothing derived from a title reaches the URL. The title is on the page, in the
+    // <title>, in the Open Graph tags and in the JSON-LD, which is where a preview reads it.
+    expect(article.url).toBe(`/p/${article.id}`);
   });
 
   it("forces ai_generated when the author is an agent, whatever was requested", async () => {

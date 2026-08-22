@@ -1,6 +1,5 @@
 import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
 import { canModify, type DenialReason } from "../identity/authz.js";
-import { slugify } from "../articles/content.js";
 import type { ArticleRecord, Disclosure, Visibility } from "../ports/index.js";
 import { fail, ok, type RequestContext, type Result } from "./context.js";
 
@@ -44,7 +43,6 @@ const ownershipOf = (article: ArticleRecord) => ({
 // ---------------------------------------------------------------------------
 
 export interface PatchArticleInput {
-  slug?: string | null;
   visibility?: Visibility;
   authorshipDisclosure?: Disclosure;
   canonicalUrl?: string | null;
@@ -63,7 +61,7 @@ export async function updateArticle(
   ctx: RequestContext,
   articleId: string,
   input: PatchArticleInput,
-): Promise<Result<{ id: OratorId; slug: string | null; visibility: Visibility }>> {
+): Promise<Result<{ id: OratorId; visibility: Visibility }>> {
   const actor = ctx.actor;
   if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
 
@@ -86,14 +84,6 @@ export async function updateArticle(
 
   const now = ctx.ports.clock.now().toISOString();
   const writes = [];
-  let slug = article.slug;
-
-  if (input.slug !== undefined) {
-    // Null clears it, which is meaningful: the article then lives at `/p/{id}` alone.
-    // A supplied slug is normalised rather than trusted — it ends up in a URL.
-    slug = input.slug === null ? null : (slugify(input.slug) || null);
-    writes.push(ctx.ports.articles.setSlug(article.id, slug, now));
-  }
 
   const metadata = {
     ...(input.visibility === undefined ? {} : { visibility: input.visibility }),
@@ -106,7 +96,7 @@ export async function updateArticle(
   }
 
   if (writes.length === 0) {
-    return ok({ id: article.id, slug: article.slug, visibility: article.visibility });
+    return ok({ id: article.id, visibility: article.visibility });
   }
 
   // A visibility change makes an article appear or disappear from the public surface, so
@@ -117,14 +107,14 @@ export async function updateArticle(
       eventType: "article.updated",
       aggregateType: "article",
       aggregateId: article.id,
-      payload: { schema_version: SCHEMA_VERSION, ...metadata, ...(input.slug === undefined ? {} : { slug }) },
+      payload: { schema_version: SCHEMA_VERSION, ...metadata },
       requestId: ctx.requestId,
       createdAt: now,
     }),
   );
 
   await ctx.ports.db.commit(writes);
-  return ok({ id: article.id, slug, visibility: input.visibility ?? article.visibility });
+  return ok({ id: article.id, visibility: input.visibility ?? article.visibility });
 }
 
 // ---------------------------------------------------------------------------

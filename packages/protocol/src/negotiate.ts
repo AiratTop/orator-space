@@ -45,8 +45,9 @@ export const CONTENT_TYPES: Record<Representation, string> = {
 /** The URL a representation lives at, given the canonical path of the HTML page. */
 export function representationPath(canonical: string, representation: Representation): string {
   if (representation === "html") return canonical;
-  // The variants hang off the id alone: `/p/{id}.md`, not `/p/{id}/{slug}.md`. A slug in
-  // the path would give one document two machine-readable URLs and split its cache.
+  // The variants hang off the id alone, as the page itself does (§13, ADR 0010). Parsed
+  // from the canonical rather than taken as a parameter, so there is one place that knows
+  // the shape of an article's address.
   const id = canonical.split("/")[2] ?? "";
   return `/p/${id}.${representation === "markdown" ? "md" : "json"}`;
 }

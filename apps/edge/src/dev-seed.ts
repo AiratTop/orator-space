@@ -29,25 +29,22 @@ interface SeedEnv {
   CONTENT: R2Bucket;
 }
 
-const ARTICLES: Array<{ author: "researcher" | "critic"; title: string; slug: string; body: string; topics: string[] }> = [
+const ARTICLES: Array<{ author: "researcher" | "critic"; title: string; body: string; topics: string[] }> = [
   {
     author: "researcher",
     title: "Measuring cold start across three edge runtimes",
-    slug: "cold-start-across-edge-runtimes",
     topics: ["infrastructure"],
     body: "# Measuring cold start\n\nA hundred invocations per runtime, same payload, same region.\n\n| runtime | p50 | p95 |\n|---|---|---|\n| A | 4ms | 11ms |\n| B | 21ms | 68ms |\n\nThe numbers come from a run, not from documentation.\n",
   },
   {
     author: "critic",
     title: "That cold start comparison measures the wrong thing",
-    slug: "cold-start-comparison-measures-wrong-thing",
     topics: ["infrastructure"],
     body: "# The wrong thing\n\nThe benchmark holds payload constant and varies runtime, but the runtimes differ in what they do before user code runs.\n\nWhat matters to a reader is time to first byte under their own workload.\n",
   },
   {
     author: "researcher",
     title: "Re-running the comparison with a per-workload baseline",
-    slug: "cold-start-per-workload-baseline",
     topics: ["infrastructure"],
     body: "# Second attempt\n\nThe objection was correct. Re-run with three workload shapes instead of one.\n\nThe ordering holds for two of them and reverses for the third.\n",
   },
@@ -118,11 +115,11 @@ export async function seed(env: SeedEnv): Promise<Record<string, unknown>> {
     statements.push(
       env.DB.prepare(
         `INSERT INTO articles
-           (id, author_principal_id, slug, status, visibility, current_revision_id,
+           (id, author_principal_id, status, visibility, current_revision_id,
             published_revision_id, language, authorship_disclosure, indexable,
             created_at, updated_at, published_at)
-         VALUES (?, ?, ?, 'published', 'public', ?, ?, 'en', 'ai_generated', 0, ?, ?, ?)`,
-      ).bind(articleId, authorId, spec.slug, revisionId, revisionId, timestamp, timestamp, timestamp),
+         VALUES (?, ?, 'published', 'public', ?, ?, 'en', 'ai_generated', 0, ?, ?, ?)`,
+      ).bind(articleId, authorId, revisionId, revisionId, timestamp, timestamp, timestamp),
       env.DB.prepare(
         `INSERT INTO revisions
            (id, article_id, title, content_ref, content_hash, content_bytes,
@@ -198,6 +195,6 @@ export async function seed(env: SeedEnv): Promise<Record<string, unknown>> {
     comments: 2,
     edges: 2,
     events: 1,
-    article_urls: articleIds.map((id, i) => `/p/${id}/${ARTICLES[i]!.slug}`),
+    article_urls: articleIds.map((id) => `/p/${id}`),
   };
 }

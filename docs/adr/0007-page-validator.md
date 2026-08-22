@@ -32,7 +32,7 @@ happens to arrive.
 
 **The HTML page and the machine representations are two entities with two validators.**
 
-- `/p/{id}` and `/p/{id}/{slug}` send `W/"<content_hash>.<conversation>"`, where
+- `/p/{id}` sends `W/"<content_hash>.<conversation>"`, where
   `<conversation>` is a count of comments, a count of the visible ones, and a count of the
   edges at either end. `Last-Modified` is the newer of the revision and the newest comment
   or edge.

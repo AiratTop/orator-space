@@ -10,7 +10,6 @@ export type Disclosure = "human_authored" | "ai_assisted" | "ai_generated";
 export interface ArticleRecord {
   id: OratorId;
   authorPrincipalId: OratorId;
-  slug: string | null;
   status: ArticleStatus;
   visibility: Visibility;
   currentRevisionId: OratorId | null;
@@ -82,7 +81,6 @@ export interface RevisionRecord {
 export interface NewArticle {
   id: OratorId;
   authorPrincipalId: OratorId;
-  slug: string | null;
   language: string;
   authorshipDisclosure: Disclosure;
   visibility: Visibility;
@@ -202,7 +200,6 @@ export interface ArticleRepo {
     verdict: string | null,
     at: string,
   ): PendingWrite;
-  setSlug(articleId: string, slug: string | null, at: string): PendingWrite;
   /** SPEC §44.2 — merge semantics. Only the fields present are touched. */
   updateMetadata(
     articleId: string,

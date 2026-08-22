@@ -204,28 +204,30 @@ describe("rebuilding (SPEC §51)", () => {
 });
 
 describe("the XML", () => {
-  it("escapes what an untrusted title put in a slug", () => {
+  it("escapes what XML requires escaping", () => {
     expect(escapeXml(`a&b<c>"d"'e'`)).toBe("a&amp;b&lt;c&gt;&quot;d&quot;&apos;e&apos;");
   });
 
   it("produces a urlset with a lastmod per entry", () => {
     const xml = renderUrlset(
-      [{ id: "ID" as never, slug: "title", publishedAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-02T00:00:00.000Z" }],
+      [{ id: "ID" as never, publishedAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-02T00:00:00.000Z" }],
       SITE,
     );
     expect(xml).toContain('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">');
-    expect(xml).toContain(`<loc>${SITE}/p/ID/title</loc>`);
+    expect(xml).toContain(`<loc>${SITE}/p/ID</loc>`);
     // `lastmod` is when it last changed, not when it was published.
     expect(xml).toContain("<lastmod>2026-08-02T00:00:00.000Z</lastmod>");
   });
 
-  it("survives a slug carrying an ampersand", () => {
+  it("puts nothing in a <loc> that anybody wrote (ADR 0010)", () => {
     const xml = renderUrlset(
-      [{ id: "ID" as never, slug: "this&that", publishedAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z" }],
+      [{ id: "ID" as never, publishedAt: "2026-08-01T00:00:00.000Z", updatedAt: "2026-08-01T00:00:00.000Z" }],
       SITE,
     );
-    // One unescaped `&` invalidates the document, and every article in the month goes with it.
-    expect(xml).toContain("this&amp;that");
+    // A `<loc>` used to end in a slug derived from an author's title, and one unescaped `&`
+    // invalidates the document — every article in the month with it. Now the whole address
+    // is an origin and an id, and the escaping below is a guard rather than a load-bearing
+    // step.
     expect(xml).not.toMatch(/&(?!amp;|lt;|gt;|quot;|apos;)/);
   });
 

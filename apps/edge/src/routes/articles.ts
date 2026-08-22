@@ -65,7 +65,6 @@ articleRoutes.post("/v1/articles", async (c) => {
     createArticle(ctx, {
       title: parsed.data.title,
       content: parsed.data.content,
-      ...(parsed.data.slug === undefined ? {} : { slug: parsed.data.slug }),
       ...(parsed.data.language === undefined ? {} : { language: parsed.data.language }),
       ...(parsed.data.visibility === undefined ? {} : { visibility: parsed.data.visibility }),
       ...(parsed.data.authorship_disclosure === undefined
@@ -269,7 +268,6 @@ articleRoutes.patch("/v1/articles/:id", async (c) => {
 
   const ctx = c.get("ctx");
   const result = await updateArticle(ctx, c.req.param("id"), {
-    ...(parsed.data.slug === undefined ? {} : { slug: parsed.data.slug }),
     ...(parsed.data.visibility === undefined ? {} : { visibility: parsed.data.visibility }),
     ...(parsed.data.authorship_disclosure === undefined
       ? {}

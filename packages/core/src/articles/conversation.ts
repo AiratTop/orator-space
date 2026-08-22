@@ -69,8 +69,7 @@ export function threadOf(
  */
 export function safeLinkHref(link: ArticleLink): string | null {
   if (link.article !== null) {
-    const { id, slug } = link.article;
-    return slug === null ? `/p/${id}` : `/p/${id}/${slug}`;
+    return `/p/${link.article.id}`;
   }
   if (link.uri === null) return null;
   try {

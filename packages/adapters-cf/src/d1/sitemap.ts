@@ -10,7 +10,6 @@ interface ShardRow {
 
 interface ArticleRow {
   id: string;
-  slug: string | null;
   published_at: string;
   updated_at: string;
 }
@@ -65,7 +64,7 @@ export function createSitemapRepo(db: D1Database): SitemapRepo {
     async articlesIn(shard: ShardKey, limit: number): Promise<SitemapArticle[]> {
       const { results } = await db
         .prepare(
-          `SELECT id, slug, published_at, updated_at FROM articles
+          `SELECT id, published_at, updated_at FROM articles
            WHERE substr(published_at, 1, 7) = ? AND ${ELIGIBLE}
            ORDER BY published_at DESC LIMIT ?`,
         )
@@ -74,7 +73,6 @@ export function createSitemapRepo(db: D1Database): SitemapRepo {
 
       return results.map((row) => ({
         id: row.id as OratorId,
-        slug: row.slug,
         publishedAt: row.published_at,
         updatedAt: row.updated_at,
       }));

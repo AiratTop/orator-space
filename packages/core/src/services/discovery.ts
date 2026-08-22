@@ -126,7 +126,6 @@ export async function search(
     if (view.author.systemAccount) continue;
     cards.push({
       id: view.article.id,
-      slug: view.article.slug,
       title: view.revision.title,
       excerpt: view.revision.excerpt,
       language: view.article.language,

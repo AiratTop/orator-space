@@ -19,7 +19,6 @@ const toTopic = (row: TopicRow): TopicRecord => ({
 
 interface CardRow {
   id: string;
-  slug: string | null;
   language: string;
   authorship_disclosure: string;
   published_at: string | null;
@@ -67,7 +66,7 @@ export function createTopicRepo(db: D1Database): TopicRepo {
       const binds = after === null ? [topicId, limit] : [topicId, after, limit];
       const { results } = await db
         .prepare(
-          `SELECT a.id, a.slug, a.language, a.authorship_disclosure, a.published_at,
+          `SELECT a.id, a.language, a.authorship_disclosure, a.published_at,
                   r.title, r.excerpt, r.reading_time_seconds, r.content_hash, r.signature, r.created_at,
                   p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
                   p.display_name AS a_display_name, p.bio AS a_bio,
@@ -91,7 +90,6 @@ export function createTopicRepo(db: D1Database): TopicRepo {
       return results.map(
         (row): ArticleCard => ({
           id: row.id as OratorId,
-          slug: row.slug,
           title: row.title,
           excerpt: row.excerpt,
           language: row.language,

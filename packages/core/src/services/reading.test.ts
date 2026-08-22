@@ -306,7 +306,7 @@ describe("the untrusted envelope (§58.2)", () => {
 
     expect(envelope.trust).toBe("untrusted");
     expect(envelope.source_principal).toBe("@researcher");
-    expect(envelope.source_url).toBe(`https://orator.space/p/${id}/cold-start`);
+    expect(envelope.source_url).toBe(`https://orator.space/p/${id}`);
     expect(envelope.signature_verified).toBe(false);
     expect(envelope.schema_version).toBe(1);
   });
@@ -421,25 +421,16 @@ describe("profiles (§49.2)", () => {
   });
 });
 
-describe("slugs (§13)", () => {
-  it("serves the canonical path unchanged", () => {
-    expect(resolveSlug({ id: "A", slug: "cold-start" }, "cold-start")).toEqual({ kind: "serve" });
+describe("the article's address (§13, ADR 0010)", () => {
+  it("is the id, and the id alone", () => {
+    expect(canonicalPath({ id: "A" })).toBe("/p/A");
+    expect(resolveSlug({ id: "A" }, null)).toEqual({ kind: "serve" });
   });
 
-  it("redirects a stale slug to the current one instead of 404ing", () => {
-    expect(resolveSlug({ id: "A", slug: "cold-start" }, "whatever-it-used-to-be")).toEqual({
-      kind: "redirect",
-      to: "/p/A/cold-start",
-    });
-  });
-
-  it("redirects the bare id to the slugged path", () => {
-    expect(resolveSlug({ id: "A", slug: "cold-start" }, null)).toEqual({ kind: "redirect", to: "/p/A/cold-start" });
-  });
-
-  it("serves the bare id when the article has no slug", () => {
-    expect(resolveSlug({ id: "A", slug: null }, null)).toEqual({ kind: "serve" });
-    expect(canonicalPath({ id: "A", slug: null })).toBe("/p/A");
+  it("redirects anything trailing to it, so no link ever made stops working", () => {
+    // Links from before the slug was removed are out in citations and chat logs.
+    expect(resolveSlug({ id: "A" }, "cold-start")).toEqual({ kind: "redirect", to: "/p/A" });
+    expect(resolveSlug({ id: "A" }, "whatever-it-used-to-be")).toEqual({ kind: "redirect", to: "/p/A" });
   });
 });
 

@@ -42,7 +42,6 @@ interface ViewRow extends AuthorRow {
   // article
   id: string;
   author_principal_id: string;
-  slug: string | null;
   status: string;
   visibility: string;
   current_revision_id: string | null;
@@ -90,7 +89,7 @@ interface ViewRow extends AuthorRow {
  * needs the public key, and fetching it separately would double the cost of provenance.
  */
 const VIEW_COLUMNS = `
-         a.id, a.author_principal_id, a.slug, a.status, a.visibility,
+         a.id, a.author_principal_id, a.status, a.visibility,
          a.current_revision_id, a.published_revision_id, a.language, a.translation_group_id,
          a.authorship_disclosure, a.indexable, a.canonical_url,
          a.created_at, a.updated_at, a.published_at, a.removed_at,
@@ -207,7 +206,7 @@ const linkSelect = (direction: "inbound" | "outbound") => {
       : ["e.src_article_id", "e.dst_article_id"];
   return `
   SELECT e.id, e.kind, e.note, e.created_at, e.dst_uri,
-         t.id AS t_id, t.slug AS t_slug, tr.title AS t_title,
+         t.id AS t_id, tr.title AS t_title,
          tp.username AS t_username, tp.kind AS t_kind
     FROM edges e
     LEFT JOIN articles t    ON t.id = ${theirs}
@@ -226,7 +225,6 @@ interface LinkRow {
   created_at: string;
   dst_uri: string | null;
   t_id: string | null;
-  t_slug: string | null;
   t_title: string | null;
   t_username: string | null;
   t_kind: string | null;
@@ -242,7 +240,6 @@ const toLink = (row: LinkRow): ArticleLink => ({
       ? null
       : {
           id: row.t_id as OratorId,
-          slug: row.t_slug,
           title: row.t_title,
           authorUsername: row.t_username,
           authorKind: (row.t_kind ?? "human") as "human" | "agent",
@@ -281,7 +278,6 @@ function toView(row: ViewRow): ArticleView {
     id: row.id as OratorId,
     authorPrincipalId: row.author_principal_id as OratorId,
     authorUsername: row.a_username,
-    slug: row.slug,
     status: row.status as ArticleRecord["status"],
     visibility: row.visibility as ArticleRecord["visibility"],
     currentRevisionId: row.current_revision_id as OratorId | null,
@@ -345,7 +341,6 @@ function toView(row: ViewRow): ArticleView {
 
 const toCard = (row: ViewRow): ArticleCard => ({
   id: row.id as OratorId,
-  slug: row.slug,
   title: row.r_title,
   excerpt: row.r_excerpt,
   language: row.language,

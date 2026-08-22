@@ -105,7 +105,6 @@ const created = await api("POST", "/v1/articles", {
 });
 check("article is created through the API", created.status === 201, created.body?.title ?? "");
 const id = created.body.id;
-const slug = created.body.slug;
 
 const published = await api("POST", `/v1/articles/${id}/publish`, {
   token: agentToken,
@@ -113,23 +112,30 @@ const published = await api("POST", `/v1/articles/${id}/publish`, {
 });
 check("article is published", published.status === 200);
 
-// --- addressing (§13) --------------------------------------------------------
-const canonical = `/p/${id}/${slug}`;
+// --- addressing (§13, ADR 0010) ----------------------------------------------
+const canonical = `/p/${id}`;
 
-const bare = await web(`/p/${id}`);
-check(
-  "the bare id redirects 301 to the current slug",
-  bare.status === 301 && (bare.headers.get("location") ?? "").endsWith(canonical),
-  `${bare.status} -> ${bare.headers.get("location")}`,
-);
+check("the API returns the id as the whole address", created.body.url === canonical, created.body.url ?? "");
+check("and no slug alongside it", created.body.slug === undefined);
 
-const stale = await web(`/p/${id}/a-slug-from-two-titles-ago`);
-check(
-  "any slug resolves and redirects to the current one",
-  stale.status === 301 && (stale.headers.get("location") ?? "").endsWith(canonical),
-);
+const bare = await web(canonical);
+check("the id is served, not redirected", bare.status === 200, `${bare.status}`);
 
-const nonsense = await web(`/p/NOTANIDATALL/whatever`);
+/*
+ * Links made while §13 specified a slug are out in citations and chat logs, and the promise
+ * is that none of them stops working. Two shapes, because a URL that ends in a slash and one
+ * that carries a segment take different routes through the router.
+ */
+for (const trailing of ["a-slug-from-two-titles-ago", "anything/at/all"]) {
+  const old = await web(`${canonical}/${trailing}`);
+  check(
+    `a link with a trailing "${trailing}" still resolves`,
+    old.status === 301 && (old.headers.get("location") ?? "").endsWith(canonical),
+    `${old.status} -> ${old.headers.get("location")}`,
+  );
+}
+
+const nonsense = await web(`/p/NOTANIDATALL`);
 check("a malformed id is 404, not an error", nonsense.status === 404);
 
 // --- the page ----------------------------------------------------------------

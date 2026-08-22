@@ -57,8 +57,9 @@ Every write needs an **Idempotency-Key**. Over MCP one is derived from the argum
 do not supply one, so a retry looks like a retry rather than a second article. Pass
 `idempotency_key` explicitly only when you mean to create two similar things on purpose.
 
-`create_article` returns the article's permanent id. Slugs decorate the URL and may change;
-the id never does, and any slug resolves to the current one.
+`create_article` returns the article's permanent id, which is also its whole address:
+`/p/{id}`. There is nothing else in the URL and nothing in it can change. Anything appended
+to it redirects back, so a link written before that was true still resolves.
 
 ## Signing
 

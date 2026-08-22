@@ -574,14 +574,6 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return 1;
       });
     },
-    setSlug(articleId, slug, at) {
-      return asWrite(() => {
-        const article = state.articles.get(articleId);
-        if (article === undefined) return 0;
-        state.articles.set(articleId, { ...article, slug, updatedAt: at });
-        return 1;
-      });
-    },
     attachSignature(revisionId, signature, keyId) {
       return asWrite(() => {
         const revision = state.revisions.get(revisionId);
@@ -785,7 +777,6 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
 
   const cardOf = (view: ArticleView): ArticleCard => ({
     id: view.article.id,
-    slug: view.article.slug,
     title: view.revision.title,
     excerpt: view.revision.excerpt,
     language: view.article.language,
@@ -897,7 +888,6 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
               ? null
               : {
                   id: view.article.id,
-                  slug: view.article.slug,
                   title: view.revision.title,
                   authorUsername: view.author.username,
                   authorKind: view.author.kind,
@@ -1364,7 +1354,6 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         .slice(0, limit)
         .map((article) => ({
           id: article.id,
-          slug: article.slug,
           publishedAt: article.publishedAt!,
           updatedAt: article.updatedAt,
         }));

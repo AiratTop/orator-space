@@ -8,7 +8,7 @@ import { ports } from "../../lib/ports.js";
  * `/p/{id}.md` — the article as its source markdown (SPEC §48).
  *
  * Its own URL rather than a `Vary: Accept` variant of the page, so it carries its own
- * stable cache key (§33.5). No slug in the path: one document, one machine-readable
+ * stable cache key (§33.5). Addressed by id, as the page itself is: one document, one
  * address, one cache entry.
  *
  * The bytes are the author's markdown with invisible characters removed (§58.2), and
