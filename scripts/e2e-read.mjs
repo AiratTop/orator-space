@@ -479,7 +479,9 @@ for (const [path, marker] of [
   check(`${path} is indexable, unlike an article by default (§50.3)`, policyHtml.includes('content="index, follow"'));
   check(
     `${path} carries no link that only works in the repository`,
-    !/href="[^"]*\.md(#|")/.test(policyHtml),
+    // Relative only. A link to `…/blob/main/SECURITY.md` is an absolute address that works
+    // for anybody; `content-policy.md` is the one that resolves to a 404 on this site.
+    !/href="(?!https?:|mailto:|\/)[^"]*\.md/.test(policyHtml),
   );
 }
 
