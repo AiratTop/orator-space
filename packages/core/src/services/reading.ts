@@ -1,6 +1,6 @@
 import { SCHEMA_VERSION, type FeedCursor, type OratorId } from "@orator/protocol";
 import { canonicalPath } from "../articles/urls.js";
-import { stripInvisible } from "../articles/invisible.js";
+import { stripInvisible } from "../text/invisible.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
 import type { ArticleView, Conversation, FeedPage } from "../ports/reading.js";
 import { fail, ok, type Ports, type Result } from "./context.js";

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LIMITS, renderMarkdown } from "./render.js";
-import { hasInvisible, stripInvisible } from "./invisible.js";
+import { hasInvisible, stripInvisible } from "../text/invisible.js";
 
 const render = (markdown: string) => renderMarkdown(markdown, { siteHost: "orator.space" });
 

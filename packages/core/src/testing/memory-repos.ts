@@ -354,6 +354,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           publishedAt: null,
           removedAt: null,
           removalSource: null,
+          moderationState: "unchecked",
+          moderationVerdict: null,
+          moderatedAt: null,
         });
       });
     },
@@ -443,6 +446,20 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           title: "[erased]",
           excerpt: null,
           metadata: { schema_version: 1, erased_at: at },
+        });
+        return 1;
+      });
+    },
+    setModerationState(articleId, verdictState, verdict, at) {
+      return asWrite(() => {
+        const article = state.articles.get(articleId);
+        if (article === undefined) return 0;
+        state.articles.set(articleId, {
+          ...article,
+          moderationState: verdictState,
+          moderationVerdict: verdict,
+          moderatedAt: at,
+          updatedAt: at,
         });
         return 1;
       });

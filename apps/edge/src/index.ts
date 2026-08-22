@@ -19,7 +19,7 @@ import { mediaRoutes } from "./routes/media.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { moderationRoutes } from "./routes/moderation.js";
 import { portsFor } from "./context.js";
-import { drainOutbox, reindexArticle } from "@orator/core";
+import { drainOutbox, reindexArticle, screenArticle } from "@orator/core";
 
 export interface Env {
   ENVIRONMENT: string;
@@ -275,8 +275,22 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
     case "article.updated":
     case "article.unpublished":
     case "article.removed": {
-      const outcome = await reindexArticle(portsFor(env), event.aggregate_id);
-      log(outcome);
+      const ports = portsFor(env);
+      const outcome = await reindexArticle(ports, event.aggregate_id);
+
+      /*
+       * §61 — moderation runs after publishing, never in front of it.
+       *
+       * On the same event as indexing rather than on its own, because both derive from the
+       * article's current state and both must survive a replay: an event delivered twice
+       * finds the same article, produces the same verdict and raises no second report.
+       *
+       * A provider failure is not a queue failure. §61 leaves the content `unchecked` and
+       * §50.3 declines to make unchecked content indexable, which is the consequence — the
+       * message is done either way, and retrying it would re-index for no reason.
+       */
+      const screened = await screenArticle(ports, event.aggregate_id);
+      log(outcome, { moderation: screened });
       return;
     }
     case "comment.created":

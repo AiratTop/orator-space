@@ -27,6 +27,9 @@ interface ArticleRow {
   published_at: string | null;
   removed_at: string | null;
   removal_source: string | null;
+  moderation_state: string;
+  moderation_verdict: string | null;
+  moderated_at: string | null;
   author_owner_principal_id: string | null;
   author_username: string;
 }
@@ -78,6 +81,9 @@ function toArticle(row: ArticleRow | null): ArticleRecord | null {
     publishedAt: row.published_at,
     removedAt: row.removed_at,
     removalSource: row.removal_source as ArticleRecord["removalSource"],
+    moderationState: (row.moderation_state ?? "unchecked") as ArticleRecord["moderationState"],
+    moderationVerdict: row.moderation_verdict,
+    moderatedAt: row.moderated_at,
     authorUsername: row.author_username,
     ...(row.author_owner_principal_id === null
       ? {}
@@ -245,6 +251,18 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
           : db
               .prepare(`UPDATE articles SET status = ?, updated_at = ? WHERE id = ?`)
               .bind(status, at, articleId),
+      );
+    },
+
+    setModerationState(articleId, state, verdict, at) {
+      return asWrite(
+        db
+          .prepare(
+            `UPDATE articles SET moderation_state = ?, moderation_verdict = ?, moderated_at = ?,
+                                 updated_at = ?
+              WHERE id = ?`,
+          )
+          .bind(state, verdict, at, at, articleId),
       );
     },
 

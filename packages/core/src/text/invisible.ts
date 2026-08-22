@@ -1,4 +1,15 @@
 /**
+ * In `text/` rather than under `articles/`, and the module seal is what said so.
+ *
+ * This is a fact about Unicode, not about articles. Rendering strips these characters
+ * (§57.1) and moderation reports them (§58.2), and those are two domain modules that may
+ * not import each other — correctly, because a rule one of them owned would be a rule the
+ * other reached across a boundary to reuse. Two lists maintained separately would drift,
+ * leaving a character the renderer removes and the scanner does not know to report, which
+ * is exactly the gap §58.2 calls the primary delivery mechanism.
+ */
+
+/**
  * Removal of invisible characters (SPEC §58.2).
  *
  * Hidden text is the primary delivery mechanism for prompt injection: a payload a human
@@ -45,6 +56,23 @@ const JOINER_RUN = /[\u200C\u200D]{2,}/gu;
 /** Control characters. Rejected on write (§44.2); stripped here for the existing archive. */
 // eslint-disable-next-line no-control-regex
 const CONTROL = /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g;
+
+/**
+ * How many invisible characters the text carries (SPEC §58.2).
+ *
+ * Here rather than in the moderation provider because this module owns the definition of
+ * "invisible", and a second list maintained beside it would drift — leaving a character the
+ * renderer strips and the scanner does not know to report, which is the exact gap §58.2
+ * calls the primary delivery mechanism.
+ *
+ * Joiner runs count as one: a single ZWJ is ordinary in Persian, Indic scripts and emoji,
+ * and only a run of them is a channel.
+ */
+export function countInvisible(text: string): number {
+  const marks = text.match(new RegExp(INVISIBLE.source, "gu"))?.length ?? 0;
+  const runs = text.match(new RegExp(JOINER_RUN.source, "gu"))?.length ?? 0;
+  return marks + runs;
+}
 
 export function stripInvisible(text: string): string {
   return text

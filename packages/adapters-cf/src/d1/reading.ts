@@ -279,6 +279,11 @@ function toView(row: ViewRow): ArticleView {
     removedAt: row.removed_at,
     // The read model only ever sees published articles, so this is always null here.
     removalSource: null,
+    // The public page does not act on the moderation verdict: what it acts on is
+    // `indexable`, which §50.3 derives from the verdict and from three other conditions.
+    moderationState: "unchecked",
+    moderationVerdict: null,
+    moderatedAt: null,
   };
 
   const revision: RevisionRecord = {

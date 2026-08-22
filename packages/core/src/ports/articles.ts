@@ -32,6 +32,16 @@ export interface ArticleRecord {
    * present.
    */
   removalSource: "author" | "moderation" | "legal" | null;
+  /**
+   * SPEC §61, §50.3 — whether the article has been screened, and what was found.
+   *
+   * Three states, not a boolean: "not checked yet" and "checked and clean" have to be
+   * distinguishable, because an unavailable provider leaves content `unchecked` and
+   * therefore not indexable, rather than published as checked.
+   */
+  moderationState: "unchecked" | "passed" | "flagged";
+  moderationVerdict: string | null;
+  moderatedAt: string | null;
   /** Joined from the authoring agent, for authorisation (SPEC §43.2). */
   authorOwnerPrincipalId?: OratorId;
   /**
@@ -124,6 +134,13 @@ export interface ArticleRepo {
     status: ArticleStatus,
     at: string,
     removalSource?: ArticleRecord["removalSource"],
+  ): PendingWrite;
+  /** SPEC §61 — the outcome of a screening pass, written by the queue consumer. */
+  setModerationState(
+    articleId: string,
+    state: ArticleRecord["moderationState"],
+    verdict: string | null,
+    at: string,
   ): PendingWrite;
   setSlug(articleId: string, slug: string | null, at: string): PendingWrite;
   /** SPEC §44.2 — merge semantics. Only the fields present are touched. */

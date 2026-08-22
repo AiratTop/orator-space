@@ -5,7 +5,7 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { visit } from "unist-util-visit";
-import { stripInvisible } from "./invisible.js";
+import { stripInvisible } from "../text/invisible.js";
 
 /**
  * Markdown rendering and sanitisation (SPEC §57.1).

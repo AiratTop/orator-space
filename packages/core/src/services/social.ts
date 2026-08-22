@@ -1,6 +1,6 @@
 import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
-import { stripInvisible } from "../articles/invisible.js";
+import { stripInvisible } from "../text/invisible.js";
 import type { ArticleRecord, CommentRecord, EdgeKind, EdgeRecord, Stance } from "../ports/index.js";
 import { fail, ok, withinQuota, type RequestContext, type Result } from "./context.js";
 

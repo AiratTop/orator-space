@@ -8,7 +8,8 @@ import type {
   ReportStatus,
 } from "../ports/index.js";
 import { canModerate } from "../identity/authz.js";
-import { fail, ok, type RequestContext, type Result } from "./context.js";
+import { HEURISTIC_PROVIDER, screen, type ModerationVerdict } from "../moderation/heuristics.js";
+import { fail, ok, type Ports, type RequestContext, type Result } from "./context.js";
 
 /**
  * Report intake (SPEC §61).
@@ -510,4 +511,128 @@ async function undo(
   if (targetType === "comment") return [ctx.ports.social.setCommentStatus(targetId, "visible", now)];
   if (targetType === "principal") return [ctx.ports.principals.setStatus(targetId, "active", now)];
   return [];
+}
+
+// ---------------------------------------------------------------------------
+// Screening, after the fact (SPEC §61, §58.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The provider slot (SPEC §61).
+ *
+ * `check(content, context) → { action, categories, score }`, as §61 specifies. A model, an
+ * external service or a human queue can occupy it; the built-in heuristics are the floor,
+ * because §61 forbids the mandatory path depending on infrastructure one deployment happens
+ * to run (§66.6). A self-hosted model may be added beside this, never instead of it.
+ */
+export interface ModerationProvider {
+  readonly name: string;
+  check(
+    content: { title: string; body: string },
+    context: { authorKind: "human" | "agent"; trustLevel: number },
+  ): Promise<ModerationVerdict>;
+}
+
+/** The provider that needs nothing to work, and therefore always does. */
+export const heuristicProvider: ModerationProvider = {
+  name: HEURISTIC_PROVIDER,
+  async check(content) {
+    return screen(content);
+  },
+};
+
+/**
+ * Screens one published article and records what was found (SPEC §61).
+ *
+ * Runs from the queue, after publishing, never before it. §61 makes that a MUST and the
+ * reason is not latency: a moderation gate on the write path means an outage at a provider
+ * stops the platform accepting work, and a false positive silently refuses to publish
+ * somebody's article. Here a verdict changes what the article is *eligible* for (§50.3) and
+ * puts a row in a queue a person reads.
+ *
+ * Idempotent, because the queue delivers at least once: it reads the article's current
+ * state, and re-running it produces the same verdict and the same single automatic report.
+ */
+export async function screenArticle(
+  ports: Ports,
+  articleId: string,
+  provider: ModerationProvider = heuristicProvider,
+): Promise<"passed" | "flagged" | "unchecked" | "skipped"> {
+  const article = await ports.articles.findById(articleId);
+  if (article === null || article.status !== "published") return "skipped";
+  if (article.publishedRevisionId === null) return "skipped";
+
+  const revision = await ports.articles.findRevision(article.publishedRevisionId);
+  if (revision === null) return "skipped";
+
+  const body = await ports.content.get(revision.contentHash);
+  if (body === null) return "skipped";
+
+  const author = await ports.principals.findById(article.authorPrincipalId);
+  const now = ports.clock.now().toISOString();
+
+  let verdict: ModerationVerdict;
+  try {
+    verdict = await provider.check(
+      { title: revision.title, body },
+      { authorKind: author?.kind ?? "agent", trustLevel: author?.trustLevel ?? 0 },
+    );
+  } catch (error) {
+    /*
+     * §61 — an unavailable provider leaves the content `unchecked`, and unchecked content
+     * does not become indexable (§50.3).
+     *
+     * Not `passed`. The difference between "nobody looked" and "somebody looked and found
+     * nothing" is the whole reason the column has three states, and collapsing them would
+     * make an outage at a provider look like a clean bill of health for everything
+     * published during it.
+     */
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "moderation.provider.unavailable",
+        provider: provider.name,
+        article_id: articleId,
+        error: String(error),
+      }),
+    );
+    return "unchecked";
+  }
+
+  const state = verdict.action === "flag" ? "flagged" : "passed";
+  const writes = [
+    ports.articles.setModerationState(articleId, state, JSON.stringify(verdict), now),
+  ];
+
+  /*
+   * A flag raises a report rather than acting on the article.
+   *
+   * §58.2 item 6 is explicit that scanning for injection signatures is a moderation signal
+   * and not a block on publishing, and §60.1 says the same of duplicate detection. What a
+   * rule-based provider is good for is putting the right thing in front of a person; what
+   * it is not good for is deciding. The report carries the categories so the queue can be
+   * read worst-first.
+   */
+  if (state === "flagged") {
+    const existing = await ports.moderation.countRecentReports("article", articleId, "");
+    if (existing === 0) {
+      writes.push(
+        ports.moderation.insertReport({
+          id: ports.ids.next(),
+          targetType: "article",
+          targetId: articleId as OratorId,
+          // Automatic: no principal reported this, and recording one would put a person's
+          // name on a machine's judgement.
+          reporterPrincipalId: null,
+          reporterContact: null,
+          category: verdict.categories.includes("prompt_injection") ? "injection" : "spam",
+          details: `${provider.name} scored ${verdict.score.toFixed(2)}: ${verdict.categories.join(", ")}`,
+          createdAt: now,
+        }),
+      );
+    }
+  }
+
+  await ports.db.commit(writes);
+  return state;
 }

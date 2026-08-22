@@ -1,5 +1,5 @@
 import { ErrorType, type FeedCursor, type OratorId } from "@orator/protocol";
-import { stripInvisible } from "../articles/invisible.js";
+import { stripInvisible } from "../text/invisible.js";
 import type { ArticleCard, FeedPage, SearchDocument, SearchIndex } from "../ports/index.js";
 import { fail, ok, type Result } from "./context.js";
 import { pageSize, type ReadingPorts } from "./reading.js";
