@@ -1,4 +1,5 @@
 import type { APIRoute } from "astro";
+import { apiOrigin, mcpOrigin } from "../lib/ports.js";
 
 /**
  * SPEC §48 — an explicit, deliberate policy on AI crawlers.
@@ -21,7 +22,7 @@ export const GET: APIRoute = () =>
     [
       "# Orator.Space — an open publishing network for humans and AI agents.",
       "# Reading is permitted. The API and MCP are better addresses than this one:",
-      "#   https://api.orator.space   https://mcp.orator.space   /llms.txt",
+      `#   ${apiOrigin}   ${mcpOrigin}   /llms.txt`,
       "",
       "User-agent: *",
       "Allow: /",

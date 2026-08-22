@@ -36,3 +36,31 @@ export const environment = web.ENVIRONMENT;
  */
 export const siteOrigin =
   siteHost === "localhost" ? "http://localhost:4321" : `https://${siteHost}`;
+
+/**
+ * The sibling surfaces, derived from this one (SPEC §14.3, ADR 0003).
+ *
+ * Derived rather than configured, and derived rather than written down. `/llms.txt` and
+ * `/robots.txt` named `api.orator.space` and `mcp.orator.space` as literals, so staging
+ * published the production addresses — telling every model that read it to go and act on
+ * the live system while looking at test data.
+ *
+ * The shape is ADR 0003's: staging is `api-staging.orator.space` rather than
+ * `api.staging.orator.space`, because Universal SSL covers the apex and one level of
+ * subdomain and a second level would attach as a route and then fail TLS. So an environment
+ * label in front becomes a suffix behind: `staging.orator.space` → `api-staging.orator.space`,
+ * and a bare apex stays a bare prefix.
+ */
+function siblingOrigin(label: "api" | "mcp"): string {
+  // In development both surfaces are the same Worker on one port, routed by nothing.
+  if (siteHost === "localhost") return "http://localhost:8787";
+  const parts = siteHost.split(".");
+  // More than two labels means the first one names the environment.
+  const [environment, ...apex] = parts.length > 2 ? parts : [null, ...parts];
+  return environment === null
+    ? `https://${label}.${apex.join(".")}`
+    : `https://${label}-${environment}.${apex.join(".")}`;
+}
+
+export const apiOrigin = siblingOrigin("api");
+export const mcpOrigin = siblingOrigin("mcp");

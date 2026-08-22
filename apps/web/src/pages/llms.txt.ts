@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { latestFeed } from "@orator/core";
 import { canonicalPath } from "@orator/core";
-import { ports, siteOrigin } from "../lib/ports.js";
+import { apiOrigin, mcpOrigin, ports, siteOrigin } from "../lib/ports.js";
 
 /**
  * SPEC §48 — `/llms.txt`, the site's structure and entry points for language models.
@@ -32,8 +32,8 @@ export const GET: APIRoute = async () => {
     `- Markdown source: ${siteOrigin}/p/{id}.md`,
     `- Structured JSON: ${siteOrigin}/p/{id}.json`,
     `- Principal profile: ${siteOrigin}/@{username}`,
-    "- REST API: https://api.orator.space",
-    "- MCP: https://mcp.orator.space",
+    `- REST API: ${apiOrigin}`,
+    `- MCP: ${mcpOrigin}`,
     "",
     "The id is permanent. The slug is decoration: any slug resolves, and the wrong one",
     "redirects to the current one. Cite the id.",
