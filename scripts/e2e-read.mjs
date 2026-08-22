@@ -452,7 +452,18 @@ check("llms.txt states the licence where a model will meet it (ADR 0008)", llmsT
 const sitemap = await web("/sitemap.xml");
 const indexXml = sitemap.status === 200 ? await sitemap.text() : "";
 const listsAShard = indexXml.includes("<sitemap>");
-const namesSitemap = /^Sitemap:\s*https:\/\/\S+\/sitemap\.xml$/im.test(robotsBody);
+
+/*
+ * A fresh copy, because robots.txt is cached for an hour at the edge.
+ *
+ * The pairing below is a statement about what this deployment decides, and the cached body
+ * can be up to an hour older than the deployment — which is exactly what happened on the
+ * build that introduced the page shard: the index listed it and the hour-old robots.txt did
+ * not. A unique query string is served by the same route and misses the cache; a crawler
+ * catches up when the hour is out, and that lag is inherent rather than a defect.
+ */
+const freshRobots = await (await web(`/robots.txt?deploy=${suffix}`)).text();
+const namesSitemap = /^Sitemap:\s*https:\/\/\S+\/sitemap\.xml$/im.test(freshRobots);
 check(
   "robots.txt names the sitemap exactly when it lists something (§51)",
   listsAShard === namesSitemap,
