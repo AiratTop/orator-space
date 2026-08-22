@@ -2257,7 +2257,11 @@ browser refuses.
 
 This is a zone setting rather than code, which is why it survived every test the repository
 had: the checkpoints sent no `Accept` header, and so were served the unmodified page. Both
-now ask the way a browser asks.
+now ask the way a browser asks, and the read checkpoint asserts that a browser receives the
+same validator a machine does and that nothing was injected into the body.
+
+Real User Measurements were turned off for the zone on 2026-08-22, and the checkpoint is
+what will notice if that changes.
 
 ### 33.3. Revalidation is cheap
 
@@ -2818,7 +2822,7 @@ on them — Cloudflare changes them.
 
 | **R2 `put()` from a stream** | requires a **known length** | §21.1 the upload streams through a `FixedLengthStream`; a `tee()` branch is refused |
 | `crypto.DigestStream` | available | §21.1 sha256 without holding the file in memory |
-| **Web Analytics beacon injection** | **rewrites HTML for browser-shaped requests, and strips the `ETag` when it does** | §33.3 revalidation is unreachable from a browser while the zone setting is on |
+| **Web Analytics beacon injection** | **rewrites HTML for browser-shaped requests, and strips the `ETag` when it does** | §33.2 turned off for the zone; the checkpoint asserts that nothing rewrites HTML at the edge |
 
 Values not yet verified against a real deployment — queue delivery behaviour, the Analytics
 Engine SQL API, Durable Object idle cost — are listed in ADR 0001 with the phase by which

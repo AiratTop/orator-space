@@ -245,34 +245,33 @@ check("the strong form of the same tag still revalidates", strong.status === 304
 /**
  * The same page, asked for the way a browser asks for it (§33.3, §57.2).
  *
- * Every check above sent no `Accept` header, which is how this went unnoticed: Cloudflare
- * Web Analytics injects its beacon into HTML when the request looks like a browser, and
- * injecting into the body means the edge has modified a response it can no longer vouch
- * for — so it strips the `ETag`. Every reader who is actually a person therefore gets a
- * page with no validator, and §33.3's revalidation path is unreachable for the audience it
- * was designed for.
+ * Every other check here sends no `Accept` header, which is how this went unnoticed for
+ * four phases: Cloudflare Web Analytics used to inject its beacon into HTML whenever the
+ * request looked like a browser, and an edge that has rewritten the body strips the `ETag`
+ * it can no longer vouch for. A machine client got the page with its validator; a person
+ * got the same page with none, so §33.3's revalidation — the reason a 60-second `s-maxage`
+ * is affordable — was unreachable for the only client with a cache of its own. The injected
+ * script was blocked by `script-src 'self'` and never ran, so the page lost its validator
+ * for nothing.
  *
- * The injected script is blocked by our own `script-src 'self'` (§57.2) and never runs, so
- * the whole exchange is cost without a beneficiary. It is a zone setting, not code — see
- * PLAN.md §1.7.
+ * Injection is off on both zones as of 2026-08-22. This check is what would notice if it
+ * came back, or if anything else began rewriting HTML at the edge.
  */
 const browserView = await web(canonical, {
   headers: { accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
 });
 const browserBody = await browserView.text();
-const injected = browserBody.includes("cloudflareinsights.com");
 
 check("a machine client is served a page it can revalidate", !!etag);
-if (injected) {
-  skip(
-    "a browser is served a page it can revalidate",
-    "Cloudflare injects its analytics beacon into HTML for browser-shaped requests, and " +
-      "strips the ETag when it does — a zone setting (PLAN §1.7), and the script our CSP " +
-      "blocks anyway",
-  );
-} else {
-  check("a browser is served a page it can revalidate too", !!browserView.headers.get("etag"));
-}
+check(
+  "and so is a browser — nothing rewrites the HTML at the edge",
+  browserView.headers.get("etag") === etag,
+  browserView.headers.get("etag") ?? "no ETag",
+);
+check(
+  "nothing was injected into the body",
+  !/cloudflareinsights|<script[^>]+src="https:/.test(browserBody),
+);
 
 const credentialed = await web(canonical, { headers: { authorization: "Bearer whatever" } });
 check(
