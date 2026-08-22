@@ -156,7 +156,7 @@ All are Workers Custom Domains: Cloudflare creates the DNS record itself.
 | `mcp.orator.space` | `apps/edge` | MCP |
 | `media.orator.space` | `apps/edge` | serves the `media` bucket through a binding (§57.4) |
 | `docs.orator.space` | later | Phase 8+ |
-| `status.orator.space` | external host | Gatus, outside the Cloudflare workers |
+| `status.orator.space` | 301 to `status.airat.top` | Gatus, outside the Cloudflare workers |
 | `staging.orator.space` | `apps/web` staging | — |
 | `api-staging` · `mcp-staging` · `media-staging` `.orator.space` | `apps/edge` staging | **one level deep** |
 
@@ -182,13 +182,44 @@ from `assets`. That bucket needs no name of its own.
 | 1 | **Do not connect** a Worker to the repository through Cloudflare's git integration when creating it. GitHub Actions deploys | Phase 0 — §64.3 |
 | 1a | ~~Remove the HTTP Pull Consumer from `orator-events`~~ ✅ done | — |
 | ~~2~~ | ~~Budget alert on the Cloudflare account~~ ✅ done — 10 USD | — |
-| 3 | Gatus checks on `/health` and `/health/deep` | Phase 8 — §66.7 |
+| ~~3~~ | ~~Gatus checks on `/health` and `/health/deep`~~ ✅ done — see below | — |
 | 4 | Terms / Content Policy / Privacy | before public launch — §61.1, §82 |
 | 5 | ~~`SESSION_SECRET` on staging and production~~ ✅ done (`wrangler secret put SESSION_SECRET --env <env>` in `apps/web`), at least 32 characters | Phase 5 — ADR 0004 |
 | ~~6~~ | ~~An R2 API token for a presigned PUT~~ — not needed: ADR 0005 reversed §21.1, the upload goes through the Worker | — |
 | 7 | The checkpoint scripts run after every staging deploy | Phase 6 — see below |
 | ~~8~~ | ~~Turn off Cloudflare Web Analytics automatic injection~~ ✅ done — RUM off for `orator.space` and its subdomains | — |
 | ~~9~~ | ~~Stop Cloudflare AI Crawl Control managing `robots.txt`~~ ✅ done — both zones serve ours alone | — |
+
+**On item 3.** Gatus runs outside Cloudflare, on the operator's own host, which is the
+point: a status page served by the infrastructure it reports on says "ok" right up to the
+moment it says nothing. `status.orator.space` is a 301 to `status.airat.top`, so the address
+in `SPEC.md` §1 stays the public one while the host stays independent.
+
+Configured 2026-08-22, two groups — `orator.space` and `staging.orator.space` — alerting to
+Telegram and email, with `send-on-resolved` so a recovery is announced too:
+
+```text
+GET https://orator.space/                  200            5m    the page a person opens
+GET https://api.orator.space/health        200, status=ok 5m    D1 and R2 reachable
+GET https://mcp.orator.space/health        200, status=ok 5m    same worker, separate route
+GET https://media.orator.space/health      200, status=ok 5m    same worker, separate route
+GET https://api.orator.space/health/deep   200, status=ok 15m   the synthetic transaction
+```
+
+Two things about `/health/deep` that are easy to get wrong, both found by getting them
+wrong: it needs the canary's bearer token (§66.7 — it writes), and it needs a client timeout
+well above Gatus's 10-second default. A healthy run takes around 37 seconds, nearly all of
+it the `indexed` step waiting for the queue, so `client: timeout: 60s` is the setting that
+makes the check report on the pipeline rather than on Gatus's patience.
+
+Fifteen minutes, not five: each run publishes and removes an article, and the interval is
+the resolution at which a stopped pipeline is noticed, not a measure of anything.
+
+**What Gatus does not cover.** The §66.4 table — p95 publish latency, the 5xx rate, outbox
+depth, published-to-indexed p95, anything reaching the dead-letter queue, D1 size, purge
+failures. Those are thresholds over Analytics Engine, not endpoint checks, and an external
+prober cannot see them. `/health/deep` covers the one that matters most in practice, since a
+stalled pipeline fails its `indexed` step; the rest stays open on the Phase 8 gate.
 
 **On item 5.** It signs the WebAuthn challenge cookie. Local development falls back to a
 fixed development value; a deployment without it refuses to sign anyone in rather than
@@ -734,8 +765,8 @@ This is where the entire `[L]` level is closed.
 [x] deduplication, and indexability as an earned state (§50.3)
 [x] backups plus a verified restore (§31.5)
 [x] account closure (§23.5)
-[~] the §66.4 alerts; Gatus on /health and /health/deep — `/health/deep` built (§66.7); the
-    alert channel and Gatus itself are operator work (§1.7 item 3)
+[~] the §66.4 alerts; Gatus on /health and /health/deep — the endpoint checks and their
+    alert channel are live (§1.7 item 3); the threshold alerts of the §66.4 table are not
 [x] a Cloudflare budget alert — 10 USD
 [ ] branch protection re-enabled — `main` deploys to production on every push (§1.5)
 [ ] Terms, Content Policy and Privacy published
