@@ -1,0 +1,54 @@
+name: backup
+
+# SPEC §31.5 — the second of three independent mechanisms.
+#
+# Time Travel covers a bad migration and an R2 lifecycle policy covers an accidental delete.
+# This covers losing access to the account itself, which is why it runs here rather than in
+# a Worker: a backup that lives in the same failure domain as the thing it backs up is a
+# copy, not a backup. It also keeps the account-wide API token out of the request path of
+# every article.
+on:
+  schedule:
+    # Weekly, Sunday 04:40 UTC. Offset from the hour because everybody else's cron is on it.
+    - cron: "40 4 * * 0"
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  export:
+    name: export and verify
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      # Sequential, not parallel: the drill creates a database and both environments would
+      # otherwise be doing that at once for no gain.
+      max-parallel: 1
+      matrix:
+        environment: [staging, production]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: export ${{ matrix.environment }}
+        run: node scripts/backup.mjs --env ${{ matrix.environment }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      # §31.5 — "a backup nobody has restored from is not a backup". Quarterly is the
+      # minimum the specification asks for; every week costs one temporary database and
+      # answers the question that matters before somebody needs the answer.
+      - name: restore drill — ${{ matrix.environment }}
+        run: node scripts/restore-drill.mjs --env ${{ matrix.environment }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

@@ -2126,6 +2126,27 @@ lose data through a bug in the code, and said nothing about how to get it back.
 `backups/{date}/` in a bucket separate from the working ones. The export is compressed and
 checked for non-emptiness.
 
+**MUST — the export runs outside the Worker.** A backup that lives in the same failure
+domain as the thing it backs up is a copy rather than a backup, and this mechanism exists
+for the case where the account itself is unreachable. It also keeps an account-wide API
+token out of the request path of every article. A scheduled CI workflow is the cron.
+
+**MUST — the export is per-table, and the table list comes from the database.**
+`wrangler d1 export` refuses a database containing FTS5 virtual tables outright, so the
+whole-database export §31.5 assumed is not available here. Per-table is the workaround and
+also the better shape: derived tables (§37.1, §38.1, §66.2) are excluded because they are
+rebuilt rather than restored, and so are the ones whose retention is measured in hours
+(§23.4) — restoring a stale idempotency key or an already-delivered outbox row would
+resurrect state the system had deliberately finished with.
+
+**MUST.** A table the export does not recognise stops the run. Nothing in the exporter knows
+what tomorrow's migration adds, and a dump that silently omits a table is discovered during a
+restore, which is the worst moment available.
+
+**MUST — non-emptiness is checked against the schema, not against a byte count.** A dump of
+an empty database is also a few kilobytes of `CREATE TABLE`. What distinguishes a successful
+export from a catastrophic one is whether the rows are there.
+
 **MUST — how `content` is protected, and how it is not.** The real risk to content is not a
 platform failure but a bug in the Cron handler that collects orphaned objects. That risk is
 addressed by the refcount rule (§23.3), by code review and by backups — **not** by a
@@ -2147,6 +2168,11 @@ RTO (time to restore)          ≤ 4 hours
 **MUST NOT.** Restoring D1 from an export does not restore R2 objects, or the reverse. The
 integrity check after a restore is required to find revisions whose `content_ref` names a
 missing object and flag them, rather than silently returning an error to a reader.
+
+**MUST.** That check excludes erased articles. §23.3 leaves a revision row with an empty ref
+on purpose — the tombstone survives and the bytes do not — and counting those as missing
+objects would make the drill fail permanently on any deployment where somebody exercised
+their right to erasure, which teaches whoever runs it to ignore the result.
 
 ## 32. R2
 
@@ -2875,6 +2901,9 @@ on them — Cloudflare changes them.
 | **R2 `put()` from a stream** | requires a **known length** | §21.1 the upload streams through a `FixedLengthStream`; a `tee()` branch is refused |
 | `crypto.DigestStream` | available | §21.1 sha256 without holding the file in memory |
 | **Web Analytics beacon injection** | **rewrites HTML for browser-shaped requests, and strips the `ETag` when it does** | §33.2 turned off for the zone; the checkpoint asserts that nothing rewrites HTML at the edge |
+| **`wrangler d1 export`** | **refuses a database containing FTS5 virtual tables** | §31.5 the export is per-table and excludes derived data, which it should have anyway |
+| `PRAGMA integrity_check` | **rejected by the D1 query API**; `quick_check` is accepted | §31.5 the restore drill uses `quick_check` |
+| D1 export dumps | open with `PRAGMA defer_foreign_keys=TRUE` | §31.5 an import is ordered table by table and still lands with keys enforced |
 
 Values not yet verified against a real deployment — queue delivery behaviour, the Analytics
 Engine SQL API, Durable Object idle cost — are listed in ADR 0001 with the phase by which
@@ -5159,6 +5188,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 100 | The audit log is pseudonymised after twelve months, never deleted | §23.4, §62 |
 | 101 | Closure revokes in the request and disposes of articles on the queue | §23.5 |
 | 102 | Passkeys are deleted on closure, not revoked; a public key outlives the database | §23.5, §9.2 |
+| 103 | The export runs in CI, per table, and stops on a table nobody has classified | §31.5 |
+| 104 | The restore drill runs weekly against a real database, not quarterly on paper | §31.5 |
 
 ## 80. Open decisions
 
