@@ -376,10 +376,21 @@ check("the feed has its own, shorter cache policy", (feed.headers.get("cache-con
 
 // §50.1 — the front door is the one page on this site that is indexable by default.
 check("the home page is indexable", feedHtml.includes('content="index, follow"'));
-const paged = await web("/?before=01000000000000000000000000");
+// A real cursor: base64url of "<publishedAt> <id>". An undecodable one is a first page by
+// design, so a made-up string tests nothing — which is how the first version of this check
+// managed to fail against a page that was behaving correctly.
+const cursor = Buffer.from(`2030-01-01T00:00:00.000Z ${id}`).toString("base64url");
+const paged = await web(`/?before=${cursor}`);
 check(
   "a cursor page is not, having no stable address of its own",
   (await paged.text()).includes('content="noindex, follow"'),
+);
+
+const namespace = await web("/p/", { redirect: "manual" });
+check(
+  "the /p/ namespace redirects to the feed rather than 404ing",
+  namespace.status === 301 && namespace.headers.get("location") === "/",
+  `${namespace.status} ${namespace.headers.get("location") ?? ""}`,
 );
 
 const profile = await web(`/@reader-${suffix}`);
@@ -447,6 +458,15 @@ check(
   listsAShard === namesSitemap,
   `sitemap.xml ${sitemap.status}${listsAShard ? " with shards" : " empty"}, robots.txt ${namesSitemap ? "names it" : "does not"}`,
 );
+// And it always lists something, because the site's own pages are always there (§50.1).
+check("the index names the static page shard", indexXml.includes("/sitemaps/pages.xml"));
+
+const pagesShard = await web("/sitemaps/pages.xml");
+const pagesXml = await pagesShard.text();
+check("the page shard is served", pagesShard.status === 200);
+for (const path of ["/", "/terms", "/privacy", "/content-policy"]) {
+  check(`the page shard lists ${path}`, pagesXml.includes(`<loc>${webBase}${path}</loc>`));
+}
 
 if (sitemap.status === 200) {
   check("the sitemap is served as XML", sitemap.headers.get("content-type")?.startsWith("application/xml"));

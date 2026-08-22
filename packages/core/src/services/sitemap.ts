@@ -28,7 +28,25 @@ export const MAX_URLS_PER_SHARD = 50_000;
 const SHARDS_PER_RUN = 12;
 
 export const INDEX_KEY = "sitemap.xml";
+export const PAGES_KEY = "sitemaps/pages.xml";
 export const shardObjectKey = (shard: ShardKey): string => `sitemaps/articles-${shard}.xml`;
+
+/**
+ * The site's own pages (SPEC §50.1).
+ *
+ * A separate shard, and the only one that is not derived from the database. These four are
+ * written in this repository rather than published to the platform, so nothing about them is
+ * earned or revoked — §50.3's rule is about articles, and its reason (a domain judged on the
+ * pattern of machine-generated content at volume) does not reach a page a person wrote.
+ *
+ * It is also what keeps the sitemap from being empty. A network whose articles have not yet
+ * earned indexing still has a front door and three policies, and an index listing nothing is
+ * a file no crawler should have been pointed at.
+ *
+ * No `lastmod`. It is optional, and the alternative available here is the build time, which
+ * would tell a crawler these pages change every five minutes.
+ */
+export const STATIC_PAGES = ["/", "/terms", "/privacy", "/content-policy"] as const;
 
 /** `2026-08-22T…` → `2026-08`. The shard key, and the only place it is decided. */
 export const shardOf = (publishedAt: string): ShardKey => publishedAt.slice(0, 7);
@@ -59,6 +77,8 @@ export interface SitemapBuild {
   remaining: number;
   /** A shard at or over §51's limit. ADR 0009's escape hatch is a day-level key. */
   overflowing: ShardKey[];
+  /** Whether the static page shard changed, which is how a new page reaches the index. */
+  pagesRewritten: boolean;
 }
 
 /**
@@ -69,9 +89,25 @@ export interface SitemapBuild {
  * per month.
  */
 export async function rebuildSitemap(ports: SitemapPorts, siteOrigin: string): Promise<SitemapBuild> {
+  const build: SitemapBuild = { shardsBuilt: 0, urls: 0, remaining: 0, overflowing: [], pagesRewritten: false };
+
+  /*
+   * The static shard first, and by comparison rather than on a flag.
+   *
+   * There is no event that fires when a page is added to this repository, so a dirty flag
+   * would be a flag nobody sets. Reading the file and comparing costs one small R2 get per
+   * run and makes the list in the code the thing that decides — add a page, and the next
+   * cron writes it.
+   */
+  const pages = renderPages(siteOrigin);
+  if ((await ports.assets.get(PAGES_KEY)) !== pages) {
+    await ports.assets.put(PAGES_KEY, pages, "application/xml");
+    build.pagesRewritten = true;
+  }
+
   const dirty = await ports.sitemap.dirtyShards(SHARDS_PER_RUN + 1);
-  const build: SitemapBuild = { shardsBuilt: 0, urls: 0, remaining: 0, overflowing: [] };
-  if (dirty.length === 0) return build;
+  const indexExists = (await ports.assets.get(INDEX_KEY)) !== null;
+  if (dirty.length === 0 && indexExists && !build.pagesRewritten) return build;
 
   const remaining = dirty.slice(SHARDS_PER_RUN);
   build.remaining = remaining.length;
@@ -97,6 +133,18 @@ export async function rebuildSitemap(ports: SitemapPorts, siteOrigin: string): P
   const shards = (await ports.sitemap.shards()).filter((state) => state.urlCount > 0);
   await ports.assets.put(INDEX_KEY, renderIndex(shards, siteOrigin), "application/xml");
   return build;
+}
+
+/** The static shard: the site's own pages, which are always there. */
+export function renderPages(siteOrigin: string): string {
+  const urls = STATIC_PAGES.map((path) => `  <url>\n    <loc>${escapeXml(siteOrigin + path)}</loc>\n  </url>`);
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...urls,
+    "</urlset>",
+    "",
+  ].join("\n");
 }
 
 /**
@@ -137,11 +185,14 @@ export function renderIndex(
   shards: { shard: ShardKey; builtAt: string | null }[],
   siteOrigin: string,
 ): string {
-  const entries = shards.map((state) => {
+  // The static shard is always listed and always first: it is the part of the sitemap that
+  // does not depend on anybody having published anything.
+  const entries = [`  <sitemap>\n    <loc>${escapeXml(`${siteOrigin}/${PAGES_KEY}`)}</loc>\n  </sitemap>`];
+  entries.push(...shards.map((state) => {
     const loc = escapeXml(`${siteOrigin}/${shardObjectKey(state.shard)}`);
     const lastmod = state.builtAt === null ? "" : `\n    <lastmod>${escapeXml(state.builtAt)}</lastmod>`;
     return `  <sitemap>\n    <loc>${loc}</loc>${lastmod}\n  </sitemap>`;
-  });
+  }));
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',

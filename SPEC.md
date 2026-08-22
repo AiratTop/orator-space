@@ -3613,8 +3613,15 @@ the entire table on every crawler request.
 
 ```text
 /sitemap.xml                     shard index
+/sitemaps/pages.xml              the site's own pages — always present
 /sitemaps/articles-{YYYY-MM}.xml one month of publications, up to 50,000 URLs
 ```
+
+**MUST — the page shard is always listed.** It holds the home page and the public policies
+(§50.1), which are written in the repository rather than published to the platform, so
+nothing about them is earned or revoked. It is also what stops the index being empty: a
+network whose articles have not yet earned indexing still has a front door, and an index
+listing nothing is a file no crawler should have been pointed at.
 
 **MUST — the shard key is the article's publication month** (ADR 0009), not an ordinal.
 With an ordinal, one removal shifts every article after it into a different shard, so
@@ -3629,8 +3636,8 @@ wrote; the escape hatch is a day-level key, which changes the key and nothing ab
 **MUST.** Only articles with `status = 'published'`, `visibility = 'public'` and
 `indexable = 1`, and — from §15.1 — no `canonical_url`, are included.
 
-**MUST NOT.** Nothing enters the sitemap whose page is `noindex`. Profiles and topics are
-therefore absent: a sitemap that submits a page the site then tells the crawler to ignore
+**MUST NOT.** Nothing enters the sitemap whose page is `noindex`. Profiles, topics and
+cursor pages are therefore absent: a sitemap that submits a page the site then tells the crawler to ignore
 spends somebody's crawl budget to say nothing. They enter when their pages are something
 the site vouches for, which is §50.3's rule applied to a different noun.
 

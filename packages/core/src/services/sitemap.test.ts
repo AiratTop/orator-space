@@ -8,6 +8,9 @@ import { unpublishArticle } from "./publishing.js";
 import {
   escapeXml,
   INDEX_KEY,
+  PAGES_KEY,
+  renderPages,
+  STATIC_PAGES,
   markArticleShard,
   rebuildSitemap,
   renderIndex,
@@ -114,10 +117,29 @@ describe("marking a shard (SPEC §51)", () => {
 });
 
 describe("rebuilding (SPEC §51)", () => {
-  it("does nothing at all when no shard is dirty", async () => {
+  it("still writes the site's own pages when nothing has been published", async () => {
     const build = await rebuildSitemap(ports, SITE);
-    expect(build).toEqual({ shardsBuilt: 0, urls: 0, remaining: 0, overflowing: [] });
-    expect(ports.state.assets.size).toBe(0);
+    expect(build.shardsBuilt).toBe(0);
+    expect(build.pagesRewritten).toBe(true);
+
+    // The whole point: an index that names something on a network with no articles in it.
+    expect(ports.state.assets.get(PAGES_KEY)).toContain(`${SITE}/terms`);
+    expect(ports.state.assets.get(INDEX_KEY)).toContain(`${SITE}/${PAGES_KEY}`);
+  });
+
+  it("does nothing on a second run, because nothing changed", async () => {
+    await rebuildSitemap(ports, SITE);
+    const again = await rebuildSitemap(ports, SITE);
+    expect(again).toEqual({ shardsBuilt: 0, urls: 0, remaining: 0, overflowing: [], pagesRewritten: false });
+  });
+
+  it("rewrites the page shard when the list in the code changes", async () => {
+    // What a deployment before a page was added looks like from here.
+    ports.state.assets.set(PAGES_KEY, renderPages(SITE).replace(`  <url>\n    <loc>${SITE}/terms</loc>\n  </url>\n`, ""));
+    const build = await rebuildSitemap(ports, SITE);
+
+    expect(build.pagesRewritten).toBe(true);
+    expect(ports.state.assets.get(PAGES_KEY)).toContain(`${SITE}/terms`);
   });
 
   it("writes one file per month and an index naming them", async () => {
@@ -137,6 +159,7 @@ describe("rebuilding (SPEC §51)", () => {
     const index = ports.state.assets.get(INDEX_KEY)!;
     expect(index).toContain(`${SITE}/sitemaps/articles-2026-08.xml`);
     expect(index).toContain(`${SITE}/sitemaps/articles-2026-09.xml`);
+    expect(index).toContain(`${SITE}/${PAGES_KEY}`);
   });
 
   it("clears the flag, so a second run does nothing", async () => {
@@ -174,8 +197,9 @@ describe("rebuilding (SPEC §51)", () => {
     await rebuildSitemap(ports, SITE);
 
     // The shard file is written and empty; the index no longer points at it, which is what
-    // a crawler reads.
+    // a crawler reads. The site's own pages stay, which is why the index is never empty.
     expect(ports.state.assets.get(INDEX_KEY)).not.toContain("articles-2026-08.xml");
+    expect(ports.state.assets.get(INDEX_KEY)).toContain(PAGES_KEY);
   });
 });
 
@@ -205,9 +229,16 @@ describe("the XML", () => {
     expect(xml).not.toMatch(/&(?!amp;|lt;|gt;|quot;|apos;)/);
   });
 
+  it("lists every one of the site's own pages, with no lastmod to invent", () => {
+    const xml = renderPages(SITE);
+    for (const path of STATIC_PAGES) expect(xml).toContain(`<loc>${SITE}${path}</loc>`);
+    expect(xml).not.toContain("<lastmod>");
+  });
+
   it("produces an index of shards", () => {
     const xml = renderIndex([{ shard: "2026-08", builtAt: "2026-08-15T10:00:00.000Z" }], SITE);
     expect(xml).toContain("<sitemapindex");
+    expect(xml).toContain(`<loc>${SITE}/${PAGES_KEY}</loc>`);
     expect(xml).toContain(`<loc>${SITE}/sitemaps/articles-2026-08.xml</loc>`);
     expect(xml).toContain("<lastmod>2026-08-15T10:00:00.000Z</lastmod>");
   });

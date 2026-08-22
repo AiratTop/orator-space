@@ -1,5 +1,5 @@
 import type { APIRoute } from "astro";
-import { shardObjectKey } from "@orator/core";
+import { PAGES_KEY, shardObjectKey } from "@orator/core";
 import { assets } from "../../lib/ports.js";
 
 /**
@@ -10,13 +10,14 @@ import { assets } from "../../lib/ports.js";
  * any object in the bucket — today that is only sitemaps, which is exactly the kind of
  * "only" that stops being true after one more feature.
  */
-const SHARD = /^articles-\d{4}-\d{2}$/;
+const SHARD = /^(pages|articles-\d{4}-\d{2})$/;
 
 export const GET: APIRoute = async ({ params }) => {
   const name = params.shard ?? "";
   if (!SHARD.test(name)) return new Response("Not found", { status: 404 });
 
-  const body = await assets.get(shardObjectKey(name.replace(/^articles-/, "")));
+  const key = name === "pages" ? PAGES_KEY : shardObjectKey(name.replace(/^articles-/, ""));
+  const body = await assets.get(key);
   if (body === null) return new Response("Not found", { status: 404 });
 
   return new Response(body, {

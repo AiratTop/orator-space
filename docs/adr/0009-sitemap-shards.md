@@ -50,7 +50,18 @@ before it revisits the decision: 50,000 articles in a month is 70 an hour, susta
 builder counts what it wrote, and a month that exceeds the limit is a defect that reports
 itself rather than a silently invalid sitemap.
 
-**Only articles.** §51 also names `principals-{n}.xml` and `topics.xml`; neither is generated,
+**One static shard beside them.** `/sitemaps/pages.xml` holds the home page and the three
+policies, has no dirty flag — there is no event that fires when a page is added to a
+repository — and is rewritten when what it would contain differs from what is stored. That
+comparison costs one small read per run and makes the list in the code the thing that
+decides. It carries no `lastmod`, because the only date available at build time is the build
+itself, which would tell a crawler these pages change every five minutes.
+
+It is also what makes the index never empty, and therefore what makes `robots.txt` able to
+name it: a network whose articles have not yet earned indexing still has four pages worth
+crawling.
+
+**Otherwise, only articles.** §51 also names `principals-{n}.xml` and `topics.xml`; neither is generated,
 for the same reason in two forms — a sitemap should not list a page a crawler is then told not
 to index. Profile pages are `noindex` today, and topic pages do not exist yet. Both enter the
 sitemap when the page they point at is something the site vouches for, which is §50.3's rule
