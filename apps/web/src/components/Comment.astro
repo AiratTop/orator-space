@@ -1,0 +1,55 @@
+---
+import type { CommentNode } from "@orator/core";
+import { STANCE_LABEL, isContested } from "../lib/conversation.js";
+
+/**
+ * One comment and its replies (SPEC §17, §76).
+ *
+ * Recursive through `Astro.self`, because a reply to a challenge is the shape §84 is about
+ * and flattening it would lose the one thing the page exists to show. §17 caps nesting at
+ * depth 8, so the recursion is bounded by the schema rather than by a guard here.
+ */
+interface Props {
+  node: CommentNode;
+}
+
+const { node } = Astro.props;
+const { comment, html, children } = node;
+
+const stance = comment.stance === null ? null : (STANCE_LABEL[comment.stance] ?? comment.stance);
+---
+
+<li class="comment" id={`c-${comment.id}`}>
+  <p class="comment__by">
+    <a href={`/@${comment.author.username}`}>@{comment.author.username}</a>
+    {/* §49.4 — person or agent, legible without opening the profile. */}
+    {comment.author.kind === "agent" && <span class="tag tag--agent">agent</span>}
+    {comment.author.kind === "agent" && comment.author.ownerUsername && (
+      <span class="comment__owner">
+        operated by <a href={`/@${comment.author.ownerUsername}`}>@{comment.author.ownerUsername}</a>
+      </span>
+    )}
+    {stance && <span class={isContested(comment.stance) ? "tag tag--contested" : "tag"}>{stance}</span>}
+    <time datetime={comment.createdAt}>
+      {new Date(comment.createdAt).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })}
+    </time>
+    <a class="comment__anchor" href={`#c-${comment.id}`} aria-label="Link to this comment">#</a>
+  </p>
+
+  {html === null ? (
+    /* §23.2 — the row stays, so a reply below it still reads as a reply to something. */
+    <p class="comment__withheld">This comment is not available.</p>
+  ) : (
+    <div class="prose prose--tight" set:html={html} />
+  )}
+
+  {children.length > 0 && (
+    <ol class="thread thread--nested">
+      {children.map((child) => <Astro.self node={child} />)}
+    </ol>
+  )}
+</li>

@@ -1,5 +1,6 @@
 import type { FeedCursor, OratorId } from "@orator/protocol";
 import { encodeId } from "@orator/protocol";
+import type { ArticleLink } from "../ports/reading.js";
 import {
   ConstraintViolation,
   type ArticleRecord,
@@ -572,10 +573,24 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     const author = state.principals.get(article.authorPrincipalId);
     if (revision === undefined || author === undefined || author.status !== "active") return null;
     const key = revision.signatureKeyId === null ? undefined : state.keys.get(revision.signatureKeyId);
+
+    const comments = [...state.comments.values()].filter((c) => c.articleId === article.id);
+    const edges = [...state.edges.values()].filter(
+      (e) => e.srcArticleId === article.id || e.dstArticleId === article.id,
+    );
+    const changedAt = [...comments, ...edges]
+      .map((row) => row.createdAt)
+      .sort()
+      .pop();
+
     return {
       article,
       revision,
       author: summarise(author),
+      conversation: {
+        token: `${comments.length}.${comments.filter((c) => c.status === "visible").length}:${edges.length}`,
+        changedAt: changedAt ?? null,
+      },
       signingKey:
         key === undefined
           ? null
@@ -637,6 +652,59 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         .filter((v): v is ArticleView => v !== null);
       return paginate(views, limit, before);
     },
+    async loadConversation(articleId, limit) {
+      const linkOf = (edge: EdgeRecord, farEnd: OratorId | null): ArticleLink => {
+        const target = farEnd === null ? undefined : state.articles.get(farEnd);
+        const view = target === undefined ? null : viewOf(target);
+        return {
+          id: edge.id,
+          kind: edge.kind,
+          note: edge.note,
+          createdAt: edge.createdAt,
+          article:
+            view === null
+              ? null
+              : {
+                  id: view.article.id,
+                  slug: view.article.slug,
+                  title: view.revision.title,
+                  authorUsername: view.author.username,
+                  authorKind: view.author.kind,
+                },
+          uri: edge.dstUri,
+        };
+      };
+
+      const thread = [...state.comments.values()]
+        .filter((comment) => comment.articleId === articleId)
+        .sort((a, b) => a.id.localeCompare(b.id));
+      const edges = [...state.edges.values()].sort((a, b) => a.id.localeCompare(b.id));
+
+      return {
+        comments: thread.slice(0, limit).flatMap((comment) => {
+          const author = state.principals.get(comment.authorPrincipalId);
+          if (author === undefined) return [];
+          return {
+            id: comment.id,
+            parentCommentId: comment.parentCommentId,
+            depth: comment.depth,
+            stance: comment.stance,
+            body: comment.status === "visible" ? comment.contentMarkdown : null,
+            status: comment.status,
+            createdAt: comment.createdAt,
+            author: summarise(author),
+          };
+        }),
+        inbound: edges
+          .filter((edge) => edge.dstArticleId === articleId)
+          .map((edge) => linkOf(edge, edge.srcArticleId)),
+        outbound: edges
+          .filter((edge) => edge.srcArticleId === articleId)
+          .map((edge) => linkOf(edge, edge.dstArticleId)),
+        truncated: thread.length > limit,
+      };
+    },
+
     async findPrincipalByUsername(username) {
       const principal = [...state.principals.values()].find(
         (candidate) => candidate.username === username && candidate.status === "active",

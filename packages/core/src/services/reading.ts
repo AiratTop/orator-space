@@ -2,7 +2,7 @@ import { SCHEMA_VERSION, type FeedCursor, type OratorId } from "@orator/protocol
 import { canonicalPath } from "../articles/urls.js";
 import { stripInvisible } from "../articles/invisible.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
-import type { ArticleView, FeedPage } from "../ports/reading.js";
+import type { ArticleView, Conversation, FeedPage } from "../ports/reading.js";
 import { fail, ok, type Ports, type Result } from "./context.js";
 
 /**
@@ -36,6 +36,21 @@ export interface PublicArticle {
   etag: string;
   lastModified: string;
   canonicalPath: string;
+  /**
+   * The validator for the HTML page, which is a larger entity than the revision.
+   *
+   * §33.2 wrote the ETag as the revision's `content_hash`, and that was the whole of the
+   * page until the page began rendering the conversation (§76). It is not any more: a
+   * challenge, a reply and a citation change what the page says while the content hash
+   * stands still, and a cached copy that revalidates on the hash alone keeps serving a
+   * chain three links short for as long as `stale-while-revalidate` runs — a day.
+   *
+   * The `.md` and `.json` representations (§48) are the revision and nothing else, so they
+   * keep `etag`. Two validators because there are two entities, not as a hedge.
+   */
+  pageEtag: string;
+  /** The page's own `Last-Modified`: the newer of the revision and the conversation. */
+  pageLastModified: string;
 }
 
 /**
@@ -54,11 +69,17 @@ export async function loadArticle(ports: ReadingPorts, id: string): Promise<Resu
   // exists would leak the author's unpublished work as a yes/no oracle (§43.3).
   if (view === null) return fail("not-found", "Article not found");
 
+  const lastModified = view.article.publishedAt ?? view.revision.createdAt;
+  const changedAt = view.conversation.changedAt;
+
   return ok({
     view,
     etag: view.revision.contentHash,
-    lastModified: view.article.publishedAt ?? view.revision.createdAt,
+    lastModified,
     canonicalPath: canonicalPath(view.article),
+    pageEtag: `${view.revision.contentHash}.${view.conversation.token}`,
+    pageLastModified:
+      changedAt !== null && changedAt > lastModified ? changedAt : lastModified,
   });
 }
 
@@ -172,4 +193,26 @@ export async function loadProfile(
     options.before ?? null,
   );
   return ok({ principal, page });
+}
+
+/**
+ * The chain, for the page that has to show it (SPEC §76, §84).
+ *
+ * §84 says the criterion is not that the endpoints work but that a person can watch one
+ * agent publish, another challenge, the first reply and a third synthesise. Every part of
+ * that has existed in the API since Phase 5; none of it was on the page, which meant the
+ * network's only claim to being a network was visible to machines alone.
+ *
+ * Deliberately separate from `loadArticle`. A conditional request answers from the
+ * validators and must not pay for this, and the `.md` and `.json` representations are the
+ * revision alone and have no conversation to load.
+ */
+export const MAX_THREAD = 100;
+
+export async function loadConversation(
+  ports: ReadingPorts,
+  articleId: string,
+  limit: number = MAX_THREAD,
+): Promise<Conversation> {
+  return ports.reading.loadConversation(articleId, Math.min(limit, MAX_THREAD));
 }

@@ -1,0 +1,43 @@
+---
+import type { ArticleLink } from "@orator/core/ports";
+import { safeLinkHref } from "@orator/core";
+import { INBOUND_VERB, OUTBOUND_VERB, isContested } from "../lib/conversation.js";
+
+/**
+ * One edge of the knowledge graph, as a sentence (SPEC §18).
+ *
+ * An edge whose target is unreachable — a draft, a removed article, a scheme no reader
+ * should follow — still appears. The claim was made either way, and dropping the row would
+ * let the graph shrink quietly whenever a target was unpublished.
+ */
+interface Props {
+  link: ArticleLink;
+  direction: "inbound" | "outbound";
+}
+
+const { link, direction } = Astro.props;
+const verb = (direction === "inbound" ? INBOUND_VERB : OUTBOUND_VERB)[link.kind] ?? link.kind;
+const href = safeLinkHref(link);
+const external = link.article === null && href !== null;
+---
+
+<li class="chain__link">
+  <span class={isContested(link.kind) ? "tag tag--contested" : "tag"}>{verb}</span>
+
+  {link.article !== null && href !== null ? (
+    <>
+      <a href={href}>{link.article.title}</a>
+      <span class="chain__by">
+        by <a href={`/@${link.article.authorUsername}`}>@{link.article.authorUsername}</a>
+        {link.article.authorKind === "agent" && <span class="tag tag--agent">agent</span>}
+      </span>
+    </>
+  ) : external && href !== null ? (
+    /* Off-site, and treated the way §57.1.5 treats every other participant-supplied link. */
+    <a href={href} rel="ugc nofollow noopener noreferrer" target="_blank">{href}</a>
+  ) : (
+    <span class="chain__unreachable">a target that is not publicly readable</span>
+  )}
+
+  {link.note && <span class="chain__note">— {link.note}</span>}
+</li>

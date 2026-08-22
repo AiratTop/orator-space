@@ -216,9 +216,17 @@ if (!local) {
 const etag = page.headers.get("etag");
 check("the page carries an ETag", !!etag, etag ?? "");
 check(
-  "the ETag is the content hash, as a weak validator",
-  etag === `W/"${created.body.contentHash}"`,
-  `${etag} vs W/"${created.body.contentHash}"`,
+  "the ETag is a weak validator built on the content hash",
+  etag?.startsWith(`W/"${created.body.content_hash}`) === true,
+  `${etag} vs W/"${created.body.content_hash}..."`,
+);
+check(
+  "and it covers the conversation as well as the revision (§33.2, §76)",
+  // The page renders the chain, so the chain is part of the entity. A validator that was
+  // the content hash alone would let a cached copy revalidate clean while a challenge, a
+  // reply and a citation sat unrendered beneath the article for a day.
+  etag !== `W/"${created.body.content_hash}"`,
+  etag ?? "",
 );
 check(
   "the page is publicly cacheable with a short s-maxage",

@@ -11,11 +11,13 @@ import {
   latestFeed,
   loadArticle,
   loadBody,
+  loadConversation,
   loadProfile,
   pageSize,
   untrustedEnvelope,
   verifyProvenance,
 } from "./reading.js";
+import { createComment, createEdge } from "./social.js";
 
 let ports: ReturnType<typeof createMemoryPorts>;
 
@@ -119,6 +121,82 @@ describe("loading an article (SPEC §49)", () => {
     const id = await publish("Cold start");
     ports.state.principals.set(AUTHOR, { ...ports.state.principals.get(AUTHOR)!, status: "suspended" });
     expect((await loadArticle(ports, id)).ok).toBe(false);
+  });
+});
+
+/**
+ * SPEC §33.2, §76 — the page is a larger entity than the revision.
+ *
+ * §33.2 wrote the article's ETag as the revision's content hash, and that was the whole of
+ * the page until the page began rendering the conversation. It is not any more: a challenge
+ * and a reply change what a reader sees while the content hash stands still. A cached copy
+ * revalidating on the hash alone would keep serving a chain three links short for as long
+ * as `stale-while-revalidate` runs, which is a day.
+ */
+describe("the page validator (§33.2)", () => {
+  it("keeps the revision's own validator for the .md and .json representations", async () => {
+    const id = await publish("Cold start");
+    const loaded = unwrap(await loadArticle(ports, id));
+
+    expect(loaded.etag).toBe(loaded.view.revision.contentHash);
+    expect(loaded.pageEtag).toContain(loaded.view.revision.contentHash);
+    expect(loaded.pageEtag).not.toBe(loaded.etag);
+  });
+
+  it("changes when a comment arrives, though the content hash does not", async () => {
+    const id = await publish("Cold start");
+    const before = unwrap(await loadArticle(ports, id));
+
+    unwrap(await createComment(ctx(), id, { content: "The second run is warm.", stance: "challenges" }));
+    const after = unwrap(await loadArticle(ports, id));
+
+    expect(after.etag).toBe(before.etag);
+    expect(after.pageEtag).not.toBe(before.pageEtag);
+  });
+
+  it("changes when an edge is asserted about the article", async () => {
+    const id = await publish("Cold start");
+    const other = await publish("A second measurement");
+    const before = unwrap(await loadArticle(ports, id));
+
+    unwrap(await createEdge(ctx(), { srcArticleId: other, kind: "challenges", dstArticleId: id }));
+    const after = unwrap(await loadArticle(ports, id));
+
+    expect(after.pageEtag).not.toBe(before.pageEtag);
+  });
+
+  it("moves Last-Modified forward to the newest thing on the page", async () => {
+    const id = await publish("Cold start");
+    const before = unwrap(await loadArticle(ports, id));
+
+    unwrap(await createComment(ctx(), id, { content: "Later." }));
+    const after = unwrap(await loadArticle(ports, id));
+
+    expect(after.lastModified).toBe(before.lastModified);
+    expect(after.pageLastModified >= before.pageLastModified).toBe(true);
+  });
+});
+
+describe("the conversation on the page (§76, §84)", () => {
+  it("carries the thread, the inbound challenge and the outbound citation", async () => {
+    const id = await publish("Cold start");
+    const rebuttal = await publish("Cold start is a measurement artefact");
+    const cited = await publish("What both are measuring");
+
+    unwrap(await createComment(ctx(), id, { content: "The second run is warm.", stance: "challenges" }));
+    unwrap(await createEdge(ctx(), { srcArticleId: rebuttal, kind: "challenges", dstArticleId: id }));
+    unwrap(await createEdge(ctx(), { srcArticleId: id, kind: "cites", dstArticleId: cited }));
+
+    const chain = await loadConversation(ports, id);
+
+    expect(chain.comments.map((c) => c.stance)).toEqual(["challenges"]);
+    expect(chain.inbound.map((l) => l.article?.title)).toEqual(["Cold start is a measurement artefact"]);
+    expect(chain.outbound.map((l) => l.article?.title)).toEqual(["What both are measuring"]);
+  });
+
+  it("is empty for an article nobody has answered", async () => {
+    const chain = await loadConversation(ports, await publish("Cold start"));
+    expect(chain).toEqual({ comments: [], inbound: [], outbound: [], truncated: false });
   });
 });
 

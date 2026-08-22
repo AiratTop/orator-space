@@ -1,8 +1,9 @@
 ---
-import { loadBody, renderMarkdown, verifyProvenance } from "@orator/core";
+import { loadBody, loadConversation, renderMarkdown, verifyProvenance } from "@orator/core";
 import Layout from "../../../components/Layout.astro";
 import Byline from "../../../components/Byline.astro";
-import { articleJsonLd, FAILURE_MESSAGE, gateArticle } from "../../../lib/article.js";
+import Conversation from "../../../components/Conversation.astro";
+import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../../lib/http.js";
 import { ports, siteHost } from "../../../lib/ports.js";
 
@@ -15,7 +16,7 @@ import { ports, siteHost } from "../../../lib/ports.js";
 const { id = "", slug } = Astro.params;
 const requestedSlug = typeof slug === "string" && slug.length > 0 ? slug : null;
 
-const gate = await gateArticle(Astro.request, id, { requestedSlug, negotiate: true });
+const gate = await gateArticle(Astro.request, id, { requestedSlug, negotiate: true, entity: "page" });
 
 // Redirects and 304s leave before a single byte is rendered.
 if (gate.kind === "response") return gate.response;
@@ -26,11 +27,20 @@ const view = article?.view ?? null;
 let html: string | null = null;
 let failure: keyof typeof FAILURE_MESSAGE | null = null;
 let provenance: Awaited<ReturnType<typeof verifyProvenance>> = "unsigned";
+let conversation: Awaited<ReturnType<typeof loadConversation>> | null = null;
 
 if (article !== null && view !== null) {
-  cacheHeaders(Astro.response.headers, CACHE.article, CDN_CACHE.article, article);
+  // §33.2 — the page's validator, not the revision's: this entity includes the chain below.
+  cacheHeaders(Astro.response.headers, CACHE.article, CDN_CACHE.article, validatorsFor(article, "page"));
 
-  const body = await loadBody(ports, view);
+  // The body and the chain are independent reads, and one is R2 while the other is D1.
+  // Sequencing them would add the slower of the two to the faster for no reason.
+  const [body, chain] = await Promise.all([
+    loadBody(ports, view),
+    loadConversation(ports, view.article.id),
+  ]);
+  conversation = chain;
+
   if (body.ok) {
     const rendered = renderMarkdown(body.value, { siteHost });
     if (rendered.ok) html = rendered.html;
@@ -92,6 +102,12 @@ if (article !== null && view !== null) {
            */
           <div class="prose" set:html={html} />
         )}
+
+        {/*
+          §84 — the chain, where a person can see it. Below the article rather than beside
+          it: a reader arrives for the text and stays for the argument, not the reverse.
+        */}
+        {conversation && <Conversation conversation={conversation} articleId={view.article.id} />}
 
         {/*
           §48 — the same article, addressed for machines. Stated on the page because the

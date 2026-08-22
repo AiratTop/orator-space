@@ -7,7 +7,7 @@ import {
   type RenderFailure,
 } from "@orator/core";
 import { isOratorId, negotiateRepresentation, representationPath } from "@orator/protocol";
-import { negotiatedRedirect, notModified, permanentRedirect } from "./http.js";
+import { negotiatedRedirect, notModified, permanentRedirect, type Validators } from "./http.js";
 import { ports, siteOrigin } from "./ports.js";
 
 /**
@@ -34,7 +34,22 @@ export interface GateOptions {
   requestedSlug?: string | null;
   /** Whether `Accept` may redirect to another representation. False on the variants. */
   negotiate: boolean;
+  /**
+   * Which entity this route serves.
+   *
+   * The HTML page renders the conversation as well as the article (§76), so it is a
+   * different entity from the `.md` and `.json` representations and carries a different
+   * validator. Stated per route rather than inferred, because getting it wrong means
+   * serving a stale chain rather than failing visibly.
+   */
+  entity: "page" | "revision";
 }
+
+/** SPEC §33.2 — what the route sends, and what it compares `If-None-Match` against. */
+export const validatorsFor = (article: PublicArticle, entity: GateOptions["entity"]): Validators =>
+  entity === "page"
+    ? { etag: article.pageEtag, lastModified: article.pageLastModified }
+    : { etag: article.etag, lastModified: article.lastModified };
 
 export async function gateArticle(
   request: Request,
@@ -72,7 +87,7 @@ export async function gateArticle(
     }
   }
 
-  const revalidated = notModified(request, article);
+  const revalidated = notModified(request, validatorsFor(article, options.entity));
   if (revalidated !== null) return { kind: "response", response: revalidated };
 
   return { kind: "ok", article };

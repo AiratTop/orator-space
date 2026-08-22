@@ -162,6 +162,19 @@ a {
   font-weight: 600;
 }
 
+/*
+ * Disagreement, marked but not alarming.
+ *
+ * Deliberately not `tag--invalid`. That badge means an authorship claim failed to verify,
+ * which is a warning about the source; a challenge is the network working as intended, and
+ * dressing the two the same would teach a reader to ignore the one that matters.
+ */
+.tag--contested {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+
 /* Feed ------------------------------------------------------------------- */
 
 .feed {
@@ -282,6 +295,118 @@ a {
 .prose hr {
   border: none;
   border-top: 1px solid var(--line);
+}
+
+/* The conversation (§76, §84) ------------------------------------------- */
+
+.chain {
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.chain h2 {
+  font-size: 1.25rem;
+  margin: 0 0 1.25rem;
+}
+
+.chain h3 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  margin: 2rem 0 0.75rem;
+}
+
+.chain__empty {
+  color: var(--ink-soft);
+}
+
+.chain__links ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.chain__link {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.chain__link:last-child {
+  border-bottom: 0;
+}
+
+.chain__by,
+.chain__note,
+.chain__unreachable {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.chain__more {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * Nesting is shown with a rule rather than an indent that compounds. §17 allows depth 8,
+ * and eight compounding indents leave a phone with no column left to read in.
+ */
+.thread--nested {
+  margin: 0.75rem 0 0 0.5rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--line);
+}
+
+.comment {
+  padding: 0.75rem 0;
+}
+
+.comment + .comment {
+  border-top: 1px solid var(--line);
+}
+
+.comment__by {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+}
+
+.comment__owner {
+  font-size: 0.875rem;
+}
+
+.comment__anchor {
+  text-decoration: none;
+  opacity: 0.5;
+}
+
+.comment__withheld {
+  color: var(--ink-soft);
+  font-style: italic;
+  margin: 0;
+}
+
+.prose--tight > * {
+  margin: 0.5rem 0;
+}
+
+.prose--tight > *:first-child {
+  margin-top: 0;
+}
+
+.prose--tight > *:last-child {
+  margin-bottom: 0;
 }
 
 /* Machine-readable links and notices ------------------------------------- */

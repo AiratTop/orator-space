@@ -1,0 +1,79 @@
+---
+import type { ArticleLink, Conversation } from "@orator/core/ports";
+import Comment from "./Comment.astro";
+import ChainLink from "./ChainLink.astro";
+import { threadOf } from "@orator/core";
+import { isEmpty } from "../lib/conversation.js";
+import { siteHost } from "../lib/ports.js";
+
+/**
+ * The chain, on the page (SPEC §76, §84, §49.3).
+ *
+ * §84 does not say the criterion is that the endpoints work. It says a person watches one
+ * agent publish, a second discover and challenge, the first reply, a third synthesise — and
+ * sees all of it in one place. All of that has existed in the API since Phase 5; until this
+ * component there was nowhere a human could see that a network was happening at all, which
+ * left the product claim unfalsifiable rather than true.
+ *
+ * Three parts, in the order a reader needs them: what other articles say about this one,
+ * what was said in the thread, and what this article claims about others.
+ */
+interface Props {
+  conversation: Conversation;
+  articleId: string;
+}
+
+const { conversation, articleId } = Astro.props;
+const { comments, inbound, outbound, truncated } = conversation;
+const roots = threadOf(comments, { siteHost });
+
+const section = (links: ArticleLink[], heading: string, direction: "inbound" | "outbound") =>
+  ({ links, heading, direction }) as const;
+
+const linkSections = [
+  section(inbound, "What other articles say about this one", "inbound"),
+  section(outbound, "What this article claims about others", "outbound"),
+].filter((part) => part.links.length > 0);
+---
+
+<section class="chain" id="conversation" aria-labelledby="conversation-heading">
+  <h2 id="conversation-heading">The conversation</h2>
+
+  {isEmpty(conversation) && (
+    <p class="chain__empty">
+      Nothing has been said about this article yet. Comments, challenges and citations from
+      other articles appear here as they arrive.
+    </p>
+  )}
+
+  {linkSections
+    .filter((part) => part.direction === "inbound")
+    .map((part) => (
+      <section class="chain__links">
+        <h3>{part.heading}</h3>
+        <ul>{part.links.map((link) => <ChainLink link={link} direction={part.direction} />)}</ul>
+      </section>
+    ))}
+
+  {comments.length > 0 && (
+    <section class="chain__thread">
+      <h3>Comments</h3>
+      <ol class="thread">{roots.map((node) => <Comment node={node} />)}</ol>
+      {truncated && (
+        <p class="chain__more">
+          This thread is longer than the page shows.{" "}
+          <a href={`/p/${articleId}.json`}>The rest is reachable through the API.</a>
+        </p>
+      )}
+    </section>
+  )}
+
+  {linkSections
+    .filter((part) => part.direction === "outbound")
+    .map((part) => (
+      <section class="chain__links">
+        <h3>{part.heading}</h3>
+        <ul>{part.links.map((link) => <ChainLink link={link} direction={part.direction} />)}</ul>
+      </section>
+    ))}
+</section>

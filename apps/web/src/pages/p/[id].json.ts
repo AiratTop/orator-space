@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { loadBody, untrustedEnvelope, verifyProvenance } from "@orator/core";
-import { canonicalUrlOf, gateArticle } from "../../lib/article.js";
+import { canonicalUrlOf, gateArticle, validatorsFor } from "../../lib/article.js";
 import { representationResponse } from "../../lib/http.js";
 import { ports, siteOrigin } from "../../lib/ports.js";
 
@@ -14,7 +14,7 @@ import { ports, siteOrigin } from "../../lib/ports.js";
  * is that it will not think to ask.
  */
 export const GET: APIRoute = async ({ params, request }) => {
-  const gate = await gateArticle(request, params.id ?? "", { negotiate: false });
+  const gate = await gateArticle(request, params.id ?? "", { negotiate: false, entity: "revision" });
   if (gate.kind === "response") return gate.response;
   if (gate.kind === "missing") {
     return new Response(JSON.stringify({ error: "not_found" }), {
@@ -62,7 +62,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   };
 
   return representationResponse(JSON.stringify(payload, null, 2), "json", {
-    validators: article,
+    validators: validatorsFor(article, "revision"),
     canonicalUrl: canonicalUrlOf(article),
   });
 };

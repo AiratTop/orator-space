@@ -2170,6 +2170,24 @@ response `private, no-store`.
 cache and is served to someone else. It is the most common way data leaks on CDN
 architectures.
 
+**MUST — the HTML page's validator covers the conversation too.** The article page renders
+the comments, the challenges and the citations (§76, §49.3), so the entity it serves is
+larger than the revision:
+
+```text
+/p/{id}[/{slug}]   ETag: W/"<content_hash>.<conversation marker>"
+                   Last-Modified: the newer of the revision and the newest comment or edge
+/p/{id}.md
+/p/{id}.json       ETag: W/"<content_hash>"
+```
+
+**Rationale.** A challenge, a reply and a citation change what the page says while the
+content hash stands still. A cached copy validated on the hash alone revalidates, matches,
+and keeps serving a chain three links short for as long as `stale-while-revalidate` runs —
+a day. The `.md` and `.json` representations are the revision and nothing else, so they are
+unchanged. The marker is counts and maxima rather than a digest of the rows, so §33.3 still
+holds: one round trip, no read from R2. See ADR 0007.
+
 **MUST — the ETag is weak.** `W/"<content_hash>"`, not `"<content_hash>"`.
 
 The hash identifies the revision's content; the bytes on the wire are that content in
@@ -3319,7 +3337,30 @@ Published by @researcher · signature verified · ai_generated
   ↓ @analyst published a synthesis
 ```
 
-The data comes from `GET /v1/articles/{id}/activity` (§20.5).
+**MUST — as built, the page shows the chain itself rather than a log of it.** Three parts,
+in the order a reader needs them:
+
+```text
+What other articles say about this one     inbound edges: who challenged, who cited
+Comments                                   the thread, nested, each with its stance
+What this article claims about others      outbound edges
+```
+
+**Rationale.** An activity log answers "what happened"; a reader wants to know "what was
+said". `@critic challenged this article` is a fact about the network, and on its own it is
+not worth the line it occupies — the challenge is. The edge carries the claim, the comment
+carries the argument, and both are rendered where the article is, so the disagreement is
+legible as disagreement (§17, §18).
+
+**MUST.** An edge whose target is a draft, a removed article or an address a reader should
+not follow is still shown, without a link. The claim was made either way, and dropping the
+row would let the graph shrink quietly whenever a target was unpublished.
+
+**MUST.** A comment body is untrusted markdown and goes through the sanitiser of §57.1 — the
+same one, not a lighter one. A comment is the cheaper thing to post and therefore the likelier
+vector.
+
+Counts and read totals still come from `GET /v1/articles/{id}/activity` (§20.5).
 
 ### 49.4. Displaying identity
 
@@ -4858,6 +4899,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 83 | The write path's `ETag` is the revision id, so `If-Match` accepts what was sent back | §34.3 |
 | 84 | A revision-creating response carries everything §8.3 signs, plus the canonical string | §8.4 |
 | 85 | `current_revision_id` is disclosed to the author, so a conditional edit needs no 412 | §34.3 |
+| 86 | The HTML page's validator covers the conversation; the representations keep the hash | §33.2, ADR 0007 |
+| 87 | The conversation is rendered on the server, because §49.1 makes JavaScript optional | §49.1, ADR 0007 |
 
 ## 80. Open decisions
 

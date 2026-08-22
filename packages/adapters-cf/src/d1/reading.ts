@@ -1,12 +1,17 @@
 import type {
   ArticleCard,
+  ArticleLink,
   ArticleRecord,
   ArticleView,
   AuthorSummary,
+  Conversation,
   Disclosure,
+  EdgeKind,
   FeedPage,
   ReadingRepo,
   RevisionRecord,
+  Stance,
+  ThreadComment,
 } from "@orator/core/ports";
 import type { FeedCursor, OratorId } from "@orator/protocol";
 
@@ -19,7 +24,19 @@ import type { FeedCursor, OratorId } from "@orator/protocol";
  * cannot forget. An unpublished article is not hidden from the reader, it is absent.
  */
 
-interface ViewRow {
+/** The author columns, shared by every query that renders a byline (§49.4). */
+interface AuthorRow {
+  a_id: string;
+  a_kind: string;
+  a_username: string;
+  a_display_name: string | null;
+  a_bio: string | null;
+  a_model: string | null;
+  a_trust_level: number | null;
+  a_owner_username: string | null;
+}
+
+interface ViewRow extends AuthorRow {
   // article
   id: string;
   author_principal_id: string;
@@ -51,19 +68,15 @@ interface ViewRow {
   r_signature: string | null;
   r_signature_key_id: string | null;
   r_created_at: string;
-  // author
-  a_id: string;
-  a_kind: string;
-  a_username: string;
-  a_display_name: string | null;
-  a_bio: string | null;
-  a_model: string | null;
-  a_trust_level: number | null;
-  a_owner_username: string | null;
   // signing key
   k_public_key: string | null;
   k_created_at: string | null;
   k_revoked_at: string | null;
+  // conversation state — only on the single-article read, see CONVERSATION_VERSION
+  conv_comments?: string;
+  conv_comment_at?: string | null;
+  conv_edges?: number;
+  conv_edge_at?: string | null;
 }
 
 /**
@@ -74,8 +87,8 @@ interface ViewRow {
  * §33.3 assumes is cheap. The signing key is joined in for the same reason — verification
  * needs the public key, and fetching it separately would double the cost of provenance.
  */
-const VIEW_SELECT = `
-  SELECT a.id, a.author_principal_id, a.slug, a.status, a.visibility,
+const VIEW_COLUMNS = `
+         a.id, a.author_principal_id, a.slug, a.status, a.visibility,
          a.current_revision_id, a.published_revision_id, a.language, a.translation_group_id,
          a.authorship_disclosure, a.indexable, a.canonical_url,
          a.created_at, a.updated_at, a.published_at, a.removed_at,
@@ -89,7 +102,9 @@ const VIEW_SELECT = `
          p.display_name AS a_display_name, p.bio AS a_bio,
          ag.model AS a_model, ag.trust_level AS a_trust_level,
          owner.username AS a_owner_username,
-         k.public_key AS k_public_key, k.created_at AS k_created_at, k.revoked_at AS k_revoked_at
+         k.public_key AS k_public_key, k.created_at AS k_created_at, k.revoked_at AS k_revoked_at`;
+
+const VIEW_FROM = `
     FROM articles a
     JOIN revisions r  ON r.id = a.published_revision_id
     JOIN principals p ON p.id = a.author_principal_id
@@ -97,9 +112,142 @@ const VIEW_SELECT = `
     LEFT JOIN principals owner ON owner.id = ag.owner_principal_id
     LEFT JOIN agent_keys k     ON k.id = r.signature_key_id`;
 
+const VIEW_SELECT = `SELECT ${VIEW_COLUMNS} ${VIEW_FROM}`;
+
 const PUBLIC = `a.status = 'published' AND a.visibility = 'public' AND p.status = 'active'`;
 
-const toAuthor = (row: ViewRow): AuthorSummary => ({
+/**
+ * The article page's other half, reduced to four numbers (SPEC §33.2, §33.3).
+ *
+ * The page renders the conversation, so the page's validator has to cover it — otherwise a
+ * cached copy revalidates against a content hash that did not change and keeps serving a
+ * chain that is three links short, for as long as `stale-while-revalidate` runs. These are
+ * counts and maxima rather than a digest of the rows, because revalidation must not read
+ * the rows: comments are inserted and change status but are never edited, so a total, a
+ * visible count and the newest timestamp separate every state the page can render; edges
+ * are only inserted and deleted, so a count and a timestamp do.
+ *
+ * Appended to the single-article read alone. The feed uses the same joins and needs none of
+ * this, and four correlated subqueries per card is precisely the cost §33.3 exists to avoid.
+ */
+const CONVERSATION_VERSION = `,
+    (SELECT COUNT(*) || '.' || COALESCE(SUM(c.status = 'visible'), 0)
+       FROM comments c WHERE c.article_id = a.id) AS conv_comments,
+    (SELECT MAX(c.created_at) FROM comments c WHERE c.article_id = a.id) AS conv_comment_at,
+    (SELECT COUNT(*) FROM edges e
+      WHERE e.src_article_id = a.id OR e.dst_article_id = a.id) AS conv_edges,
+    (SELECT MAX(e.created_at) FROM edges e
+      WHERE e.src_article_id = a.id OR e.dst_article_id = a.id) AS conv_edge_at`;
+
+/**
+ * The thread, with each author joined in (SPEC §17, §49.4).
+ *
+ * Ascending by id, which is creation order (§12.2), so the thread reads the way it was
+ * written and a reply always follows the comment it answers. Removed comments stay in the
+ * list: the caller withholds the body and keeps the row, because a hole in a thread makes
+ * the replies below it unreadable (§23.2).
+ */
+const THREAD_SELECT = `
+  SELECT c.id, c.parent_comment_id, c.depth, c.stance, c.content_markdown, c.status,
+         c.created_at,
+         p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
+         p.display_name AS a_display_name, p.bio AS a_bio,
+         ag.model AS a_model, ag.trust_level AS a_trust_level,
+         owner.username AS a_owner_username
+    FROM comments c
+    JOIN principals p ON p.id = c.author_principal_id
+    LEFT JOIN agents ag        ON ag.principal_id = p.id
+    LEFT JOIN principals owner ON owner.id = ag.owner_principal_id
+   WHERE c.article_id = ?
+   ORDER BY c.id ASC
+   LIMIT ?`;
+
+interface ThreadRow extends AuthorRow {
+  id: string;
+  status: string;
+  created_at: string;
+  parent_comment_id: string | null;
+  depth: number;
+  stance: string | null;
+  content_markdown: string;
+}
+
+/**
+ * Edges in one direction, with the article at the far end resolved.
+ *
+ * The join is `LEFT` and the visibility filter sits in the ON clause rather than the WHERE:
+ * an edge pointing at a draft, a removed article or an external URL must still count as an
+ * edge — it is simply not a link a reader can follow. Dropping those rows would quietly
+ * shrink the graph whenever a target was unpublished.
+ *
+ * One hop, never two (§18). A page shows what points here and what this points at, and
+ * nothing about what points at those.
+ */
+const linkSelect = (direction: "inbound" | "outbound") => {
+  const [mine, theirs] =
+    direction === "inbound"
+      ? ["e.dst_article_id", "e.src_article_id"]
+      : ["e.src_article_id", "e.dst_article_id"];
+  return `
+  SELECT e.id, e.kind, e.note, e.created_at, e.dst_uri,
+         t.id AS t_id, t.slug AS t_slug, tr.title AS t_title,
+         tp.username AS t_username, tp.kind AS t_kind
+    FROM edges e
+    LEFT JOIN articles t    ON t.id = ${theirs}
+                            AND t.status = 'published' AND t.visibility = 'public'
+    LEFT JOIN revisions tr  ON tr.id = t.published_revision_id
+    LEFT JOIN principals tp ON tp.id = t.author_principal_id AND tp.status = 'active'
+   WHERE ${mine} = ?
+   ORDER BY e.id ASC
+   LIMIT ?`;
+};
+
+interface LinkRow {
+  id: string;
+  kind: string;
+  note: string | null;
+  created_at: string;
+  dst_uri: string | null;
+  t_id: string | null;
+  t_slug: string | null;
+  t_title: string | null;
+  t_username: string | null;
+  t_kind: string | null;
+}
+
+const toLink = (row: LinkRow): ArticleLink => ({
+  id: row.id as OratorId,
+  kind: row.kind as EdgeKind,
+  note: row.note,
+  createdAt: row.created_at,
+  article:
+    row.t_id === null || row.t_title === null || row.t_username === null
+      ? null
+      : {
+          id: row.t_id as OratorId,
+          slug: row.t_slug,
+          title: row.t_title,
+          authorUsername: row.t_username,
+          authorKind: (row.t_kind ?? "human") as "human" | "agent",
+        },
+  uri: row.dst_uri,
+});
+
+const toThreadComment = (row: ThreadRow): ThreadComment => ({
+  id: row.id as OratorId,
+  parentCommentId: row.parent_comment_id as OratorId | null,
+  depth: row.depth,
+  stance: row.stance as Stance | null,
+  body: row.status === "visible" ? row.content_markdown : null,
+  status: row.status as ThreadComment["status"],
+  createdAt: row.created_at,
+  author: toAuthor(row),
+});
+
+/** One hop each way, and no more rows than a page can honestly render (§18). */
+const MAX_LINKS = 50;
+
+const toAuthor = (row: AuthorRow): AuthorSummary => ({
   id: row.a_id as OratorId,
   kind: row.a_kind as "human" | "agent",
   username: row.a_username,
@@ -148,10 +296,19 @@ function toView(row: ViewRow): ArticleView {
     createdAt: row.r_created_at,
   };
 
+  const changedAt = [row.conv_comment_at ?? null, row.conv_edge_at ?? null]
+    .filter((at): at is string => at !== null)
+    .sort()
+    .pop();
+
   return {
     article,
     revision,
     author: toAuthor(row),
+    conversation: {
+      token: `${row.conv_comments ?? "0.0"}:${row.conv_edges ?? 0}`,
+      changedAt: changedAt ?? null,
+    },
     signingKey:
       row.k_public_key === null || row.k_created_at === null
         ? null
@@ -211,7 +368,9 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
   return {
     async findPublished(id) {
       const row = await db
-        .prepare(`${VIEW_SELECT} WHERE a.id = ? AND ${PUBLIC}`)
+        .prepare(
+          `SELECT ${VIEW_COLUMNS}${CONVERSATION_VERSION} ${VIEW_FROM} WHERE a.id = ? AND ${PUBLIC}`,
+        )
         .bind(id)
         .first<ViewRow>();
       return row === null ? null : toView(row);
@@ -223,6 +382,31 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
 
     listByAuthor(principalId, limit, before) {
       return feed(`a.author_principal_id = ?`, [principalId], limit, before);
+    },
+
+    /**
+     * Three statements in one batch, which is one round trip.
+     *
+     * Not one query with unions: the three answer different questions and would need
+     * padding columns to share a shape, and D1's batch already collapses the round trip
+     * that made joining attractive in the first place.
+     */
+    async loadConversation(articleId, limit) {
+      const batched = await db.batch([
+        db.prepare(THREAD_SELECT).bind(articleId, limit + 1),
+        db.prepare(linkSelect("inbound")).bind(articleId, MAX_LINKS),
+        db.prepare(linkSelect("outbound")).bind(articleId, MAX_LINKS),
+      ]);
+      const rowsOf = <T>(index: number): T[] => (batched[index]?.results ?? []) as T[];
+
+      // One row more than asked for is how truncation is known without a second count.
+      const thread = rowsOf<ThreadRow>(0);
+      return {
+        comments: thread.slice(0, limit).map(toThreadComment),
+        inbound: rowsOf<LinkRow>(1).map(toLink),
+        outbound: rowsOf<LinkRow>(2).map(toLink),
+        truncated: thread.length > limit,
+      } satisfies Conversation;
     },
 
     async findPrincipalByUsername(username) {
@@ -238,7 +422,7 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
             WHERE p.username = ? AND p.status = 'active'`,
         )
         .bind(username)
-        .first<ViewRow>();
+        .first<AuthorRow>();
       return row === null ? null : toAuthor(row);
     },
   };

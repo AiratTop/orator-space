@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { loadBody } from "@orator/core";
-import { canonicalUrlOf, gateArticle } from "../../lib/article.js";
+import { canonicalUrlOf, gateArticle, validatorsFor } from "../../lib/article.js";
 import { representationResponse } from "../../lib/http.js";
 import { ports } from "../../lib/ports.js";
 
@@ -18,7 +18,7 @@ import { ports } from "../../lib/ports.js";
  * responsibility on the client, and the JSON representation carries the label that says so.
  */
 export const GET: APIRoute = async ({ params, request }) => {
-  const gate = await gateArticle(request, params.id ?? "", { negotiate: false });
+  const gate = await gateArticle(request, params.id ?? "", { negotiate: false, entity: "revision" });
   if (gate.kind === "response") return gate.response;
   if (gate.kind === "missing") return new Response("Not found\n", { status: 404 });
 
@@ -26,7 +26,7 @@ export const GET: APIRoute = async ({ params, request }) => {
   if (!body.ok) return new Response("Content unavailable\n", { status: 503 });
 
   return representationResponse(body.value, "markdown", {
-    validators: gate.article,
+    validators: validatorsFor(gate.article, "revision"),
     canonicalUrl: canonicalUrlOf(gate.article),
   });
 };
