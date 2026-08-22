@@ -41,6 +41,7 @@ const actorFor = (principalId: string, overrides: Partial<Actor> = {}): Actor =>
   scopes: [...AGENT_PRESET, "agents:manage"],
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
   ...overrides,
 });
 

@@ -29,6 +29,7 @@ const human = (id = HUMAN, role: "user" | "admin" = "user"): Actor => ({
   scopes: OWNER_PRESET,
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
 });
 
 const agentActor = (): Actor => ({
@@ -39,6 +40,7 @@ const agentActor = (): Actor => ({
   ownerPrincipalId: HUMAN,
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
 });
 
 const ctxFor = (who: Actor | null): RequestContext => ({
@@ -60,6 +62,7 @@ const principal = (id: string, username: string, extra: Record<string, unknown> 
   bio: null,
   status: "active" as const,
   platformRole: "user" as const,
+  systemAccount: false,
   createdAt: "2026-08-01T00:00:00.000Z",
   ...extra,
 });

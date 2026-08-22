@@ -734,7 +734,8 @@ This is where the entire `[L]` level is closed.
 [x] deduplication, and indexability as an earned state (§50.3)
 [x] backups plus a verified restore (§31.5)
 [x] account closure (§23.5)
-[ ] the §66.4 alerts; Gatus on /health and /health/deep
+[~] the §66.4 alerts; Gatus on /health and /health/deep — `/health/deep` built (§66.7); the
+    alert channel and Gatus itself are operator work (§1.7 item 3)
 [x] a Cloudflare budget alert — 10 USD
 [ ] branch protection re-enabled — `main` deploys to production on every push (§1.5)
 [ ] Terms, Content Policy and Privacy published

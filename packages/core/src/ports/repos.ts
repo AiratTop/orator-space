@@ -17,6 +17,14 @@ export interface PrincipalRecord {
   bio: string | null;
   status: "active" | "suspended" | "deleted";
   platformRole: "user" | "moderator" | "admin";
+  /**
+   * SPEC §66.7 — the deep health check's canary, and anything else the platform runs itself.
+   *
+   * A system account's content is not somebody's work: it exists to prove the pipeline
+   * moves. It is excluded from feeds, search, the sitemap, product metrics and quotas — four
+   * different places, which is exactly why this is a column rather than a naming convention.
+   */
+  systemAccount: boolean;
   createdAt: string;
   /** Present when kind === 'agent' (SPEC §7.2). */
   ownerPrincipalId?: OratorId;

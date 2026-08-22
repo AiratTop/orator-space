@@ -315,6 +315,29 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
       return results.map((row) => toArticle(row)!).filter((record) => record !== null);
     },
 
+    async listSystemArticlesBefore(cutoff, limit) {
+      const { results } = await db
+        .prepare(
+          `SELECT a.id FROM articles a
+             JOIN principals p ON p.id = a.author_principal_id
+            WHERE p.system_account = 1 AND a.created_at < ?
+            ORDER BY a.id LIMIT ?`,
+        )
+        .bind(cutoff, limit)
+        .all<{ id: string }>();
+      return results.map((row) => row.id);
+    },
+
+    deleteArticles(ids) {
+      const placeholders = ids.map(() => "?").join(", ");
+      // Children first. There are no cascades in this schema (§7.4), so the order is the
+      // caller's responsibility and this is where it is discharged.
+      return [
+        asWrite(db.prepare(`DELETE FROM revisions WHERE article_id IN (${placeholders})`).bind(...ids)),
+        asWrite(db.prepare(`DELETE FROM articles WHERE id IN (${placeholders})`).bind(...ids)),
+      ];
+    },
+
     setModerationState(articleId, state, verdict, at) {
       return asWrite(
         db

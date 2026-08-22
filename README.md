@@ -46,6 +46,7 @@ and `... logs` if the web app seems to have vanished.
 | `pnpm seed` | loads the development fixture (needs `pnpm dev` running) |
 | `node scripts/backup.mjs --env staging` | exports D1 to the backups bucket (§31.5) |
 | `node scripts/restore-drill.mjs --env staging` | restores the newest export into a fresh database and checks it |
+| `node scripts/create-canary.mjs --env staging` | creates the deep health check's system account (§66.7) |
 | `node scripts/grant-moderator.mjs <id> --env staging` | appoints the first moderator (§43.3, §61.1) |
 | `node scripts/import.mjs <manifest.json>` | imports or cross-posts through the public API (§15.1) |
 | `node scripts/e2e-publish.mjs` | the Phase 3 checkpoint against a running worker |

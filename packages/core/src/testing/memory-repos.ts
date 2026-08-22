@@ -230,6 +230,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           bio: null,
           status: "active",
           platformRole: "user",
+          systemAccount: false,
         });
       });
     },
@@ -520,6 +521,30 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         .sort((a, b) => b.id.localeCompare(a.id))
         .slice(0, limit)
         .map((article) => ({ id: article.id, simhash: article.simhash! }));
+    },
+    async listSystemArticlesBefore(cutoff, limit) {
+      return [...state.articles.values()]
+        .filter((article) => {
+          const author = state.principals.get(article.authorPrincipalId);
+          return author?.systemAccount === true && article.createdAt < cutoff;
+        })
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit)
+        .map((article) => article.id);
+    },
+    deleteArticles(ids) {
+      return [
+        asWrite(() => {
+          for (const [id, revision] of state.revisions) {
+            if (ids.includes(revision.articleId)) state.revisions.delete(id);
+          }
+          return ids.length;
+        }),
+        asWrite(() => {
+          for (const id of ids) state.articles.delete(id);
+          return ids.length;
+        }),
+      ];
     },
     async listByAuthor(authorPrincipalId, limit) {
       return [...state.articles.values()]

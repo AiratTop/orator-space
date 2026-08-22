@@ -13,3 +13,4 @@ export * from "./outbox.js";
 export * from "./indexing.js";
 export * from "./retention.js";
 export * from "./closure.js";
+export * from "./health.js";

@@ -48,6 +48,7 @@ const principal = (id: string, username: string, extra: Record<string, unknown> 
   bio: null,
   status: "active" as const,
   platformRole: "user" as const,
+  systemAccount: false,
   createdAt: "2026-08-01T00:00:00.000Z",
   ...extra,
 });

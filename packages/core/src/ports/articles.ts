@@ -178,6 +178,23 @@ export interface ArticleRepo {
    */
   listByAuthor(authorPrincipalId: string, limit: number): Promise<ArticleRecord[]>;
 
+  /**
+   * SPEC §66.7 — articles belonging to a system account, older than a cutoff.
+   *
+   * For the retention pass that clears what an unhealthy deep check left behind. Ordinary
+   * articles are never hard-deleted (§23.2); these were never citable.
+   */
+  listSystemArticlesBefore(cutoff: string, limit: number): Promise<string[]>;
+  /**
+   * Two statements, in order: the revisions and then the articles.
+   *
+   * `revisions.article_id` is a declared foreign key with `NO ACTION` (§7.4) — this schema
+   * has no cascades on purpose, because a delete nobody can see is a delete nobody audits.
+   * So the order is the caller's to get right, and it is expressed here rather than left to
+   * whoever writes the batch.
+   */
+  deleteArticles(ids: readonly string[]): PendingWrite[];
+
   /** SPEC §61 — the outcome of a screening pass, written by the queue consumer. */
   setModerationState(
     articleId: string,

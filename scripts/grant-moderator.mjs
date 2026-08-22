@@ -16,6 +16,7 @@
  * requires (§43.1). Grant it to as few principals as the deployment can operate with.
  */
 import { spawnSync } from "node:child_process";
+import { newId } from "./lib/orator-id.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -79,10 +80,8 @@ const token = `orat_sk_live_${b62(secret)}`;
 const tokenHash = await sha256Hex(token);
 const prefix = token.slice(0, 20);
 
-// Sortable, like every other id in the system (§12.2). Not the server's generator, but the
-// same shape and the same ordering property.
 const now = new Date();
-const tokenId = `06${now.getTime().toString(32).toUpperCase().padStart(11, "0")}${b62(secret.slice(0, 8)).slice(0, 13).toUpperCase().padEnd(13, "0")}`;
+const tokenId = newId(now);
 
 const sql = [
   `UPDATE principals SET platform_role = '${role}' WHERE id = '${principalId}' AND kind = 'human';`,

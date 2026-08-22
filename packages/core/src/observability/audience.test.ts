@@ -21,6 +21,7 @@ const agent: Actor = {
   ownerPrincipalId: "OWNER-H",
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
 };
 
 const person: Actor = {
@@ -30,6 +31,7 @@ const person: Actor = {
   scopes: OWNER_PRESET,
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
 };
 
 const BROWSER = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36";

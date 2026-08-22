@@ -10,6 +10,7 @@ import { createIdGen, QuotaCounter } from "@orator/adapters-cf";
 import { problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
 import type { RequestContext } from "@orator/core";
 import { contextFor } from "./context.js";
+import { deepHealth } from "@orator/core";
 import { problemResponse } from "./http.js";
 import { identityRoutes } from "./routes/identity.js";
 import { articleRoutes } from "./routes/articles.js";
@@ -207,6 +208,36 @@ const floodGuard = async (c: Context<{ Bindings: Env; Variables: Vars }>, next: 
   }
   await next();
 };
+
+/**
+ * SPEC §66.7 — the synthetic transaction, behind a credential.
+ *
+ * It publishes and removes an article, so it is not a probe anybody may run: an
+ * unauthenticated endpoint that writes is an abuse surface however narrow its purpose. Gatus
+ * carries the canary's token, and the service refuses any principal that is not a system
+ * account.
+ *
+ * Under `/health/` rather than `/v1/` because it is operations rather than product: it is
+ * not in the catalogue, it is not versioned with the API, and no client should build on it.
+ */
+app.get("/health/deep", resolveContext, async (c) => {
+  const ctx = c.get("ctx");
+  const site = c.env.ENVIRONMENT === "production" ? "https://orator.space" : "https://staging.orator.space";
+
+  const result = await deepHealth(ctx, {
+    // The page is read through the public address, which exercises the web Worker, the
+    // cache and the render — the half of the system this Worker cannot check from inside.
+    fetchPublic: async (path) => {
+      const response = await fetch(`${site}${path}`, { headers: { accept: "text/html" } });
+      return { status: response.status, body: await response.text() };
+    },
+  });
+
+  if (!result.ok) return problemResponse(c, result.error, "/health/deep");
+
+  c.header("cache-control", "no-store");
+  return c.json(result.value, result.value.status === "ok" ? 200 : 503);
+});
 
 app.use("/v1/*", resolveContext);
 app.use("/v1/*", floodGuard);

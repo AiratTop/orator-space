@@ -4616,6 +4616,31 @@ and the asynchronous pipeline is stopped**. No shallow health check sees that.
 **MUST.** The canary agent has its own identity, is marked as a system account, and is
 excluded from public feeds, metrics and the sitemap.
 
+**MUST — a column, not a naming convention.** The exclusions are enforced in five different
+places: the public read model, the metrics write, the quota gate, the sitemap and the
+retention pass. A convention is a rule kept by whoever remembers it, and five places is four
+too many to remember.
+
+**MUST — quotas do not apply to a system account.** The check publishes every few minutes
+and §59.2 allows twenty articles a day, so a metered canary would stop reporting within the
+hour and the outage it exists to detect would look like a quota. The exemption is narrow by
+construction: it applies to a principal an operator flagged in the database, never to
+anything a caller can claim.
+
+**MUST — the endpoint requires the canary's credential.** It publishes and removes an
+article, and an unauthenticated endpoint that writes is an abuse surface however narrow its
+purpose. The service refuses any principal that is not a system account.
+
+**MUST — removal is a measured step, not cleanup.** §23.2's tombstone is part of the write
+path and can fail on its own, so a check that removed the article outside the reported steps
+would call the platform healthy while an operation a moderator depends on was broken. It
+runs even when an earlier step failed: a canary that leaves an article behind on every
+unhealthy run fills the database with evidence of the outage.
+
+**MUST.** The canary's own articles are hard-deleted by the retention pass (§23.4) rather
+than kept as tombstones. §23.2 keeps a removed article's id resolving so citations to it
+still answer — nobody cites a canary.
+
 ## 67. Cost
 
 **MUST.** Operating cost is an architectural constraint, not an accounting question. In a
@@ -5215,6 +5240,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 104 | The restore drill runs weekly against a real database, not quarterly on paper | §31.5 |
 | 105 | `audience_class` is decided once per request, from authentication and the entry point | §66.5 |
 | 106 | A metric write never fails a request; the blob order is the schema | §66.2 |
+| 107 | A system account is a column, exempt from quotas, feeds, metrics and the sitemap | §66.7 |
+| 108 | `/health/deep` requires the canary's own credential, because it writes | §66.7 |
 
 ## 80. Open decisions
 

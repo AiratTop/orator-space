@@ -26,7 +26,7 @@ import type {
   TopicRepo,
 } from "../ports/index.js";
 import type { Actor } from "../identity/authz.js";
-import type { QuotaAction, QuotaVerdict } from "../identity/quota.js";
+import { unmetered, type QuotaAction, type QuotaVerdict } from "../identity/quota.js";
 import type { AudienceClass } from "../observability/audience.js";
 
 /** Everything a service is allowed to reach. Assembled once per request by the adapter. */
@@ -154,6 +154,18 @@ export async function withinQuota(
 ): Promise<Result<QuotaVerdict>> {
   const actor = ctx.actor;
   if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  /*
+   * §66.7 — the canary is exempt, and it has to be.
+   *
+   * The deep check publishes every few minutes and §59.2 allows twenty articles a day, so a
+   * metered canary would stop reporting after an hour and the outage it exists to detect
+   * would look like a quota. The exemption is narrow by construction: it applies to a
+   * principal an operator flagged in the database, and to nothing a caller can claim.
+   */
+  if (actor.systemAccount) {
+    return ok(unmetered(action, actor.trustLevel, ctx.ports.clock.now()));
+  }
 
   const principalId = chargeTo ?? actor.principalId;
   const verdict = await ctx.ports.quota.consume(principalId, action, actor.trustLevel);

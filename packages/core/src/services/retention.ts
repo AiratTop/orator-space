@@ -22,6 +22,15 @@ export const RETENTION_HOURS = {
   pendingMedia: 24,
   /** §23.4 — not deleted. Pseudonymised: the action stays, the person does not. */
   auditIdentity: 365 * 24,
+  /**
+   * SPEC §66.7 — the deep check's own articles.
+   *
+   * A healthy run removes its article within seconds. An unhealthy one leaves a tombstone,
+   * so the database accumulates one row per failure — evidence of an outage stored forever
+   * by the thing that detected it. These are hard-deleted rather than kept, because §23.2's
+   * reason for a tombstone does not apply: nobody cites a canary.
+   */
+  canaryArticles: 24,
 } as const;
 
 /**
@@ -36,6 +45,7 @@ export const RETENTION_HOURS = {
 const BATCH = 500;
 
 export interface RetentionReport {
+  canaryArticlesDeleted: number;
   outboxDeleted: number;
   idempotencyDeleted: number;
   mediaDeleted: number;
@@ -58,8 +68,10 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
     BATCH,
   );
   const mediaDeleted = await collectStaleMedia(ports, before(RETENTION_HOURS.pendingMedia));
+  const canaryArticlesDeleted = await collectCanaryArticles(ports, before(RETENTION_HOURS.canaryArticles));
 
   return {
+    canaryArticlesDeleted,
     outboxDeleted,
     idempotencyDeleted,
     mediaDeleted,
@@ -97,5 +109,19 @@ async function collectStaleMedia(ports: Ports, cutoff: string): Promise<number> 
   }
 
   await ports.db.commit([ports.media.deleteRecords(stale)]);
+  return stale.length;
+}
+
+/**
+ * The deep check's leftovers (SPEC §66.7, §23.2).
+ *
+ * §23.2 keeps a removed article's id resolving so that citations to it still answer. A
+ * canary article was never citable — it is excluded from feeds, search and the sitemap, and
+ * it existed for seconds — so the tombstone protects nothing and the row is deleted outright.
+ */
+async function collectCanaryArticles(ports: Ports, cutoff: string): Promise<number> {
+  const stale = await ports.articles.listSystemArticlesBefore(cutoff, 100);
+  if (stale.length === 0) return 0;
+  await ports.db.commit(ports.articles.deleteArticles(stale));
   return stale.length;
 }

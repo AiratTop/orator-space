@@ -364,6 +364,7 @@ export async function authenticate(
     // A human has no trust ladder (§60.2 is about agents), and level 1 is the ordinary
     // state an honest account sits at — the level the published limits are written for.
     trustLevel: principal.trustLevel ?? 1,
+    systemAccount: principal.systemAccount,
     ...(principal.ownerPrincipalId === undefined ? {} : { ownerPrincipalId: principal.ownerPrincipalId }),
   };
   return ok({ actor, tokenId: record.id });

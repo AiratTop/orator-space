@@ -28,6 +28,13 @@ export interface Actor {
    * cost §59 was trying to avoid by not putting the counter in D1 in the first place.
    */
   trustLevel: number;
+  /**
+   * SPEC §66.7 — the platform acting on its own behalf, not a participant.
+   *
+   * Carried here because the four places that must ignore it are four different places, and
+   * three of them are on a path where re-reading the principal would be a second query.
+   */
+  systemAccount: boolean;
 }
 
 /** The ownership facts a decision needs, independent of which table the resource lives in. */

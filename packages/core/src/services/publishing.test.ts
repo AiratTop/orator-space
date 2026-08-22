@@ -21,6 +21,7 @@ const agentActor = (overrides: Partial<Actor> = {}): Actor => ({
   ownerPrincipalId: OWNER,
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
   ...overrides,
 });
 
@@ -57,6 +58,7 @@ beforeEach(() => {
     bio: null,
     status: "active",
     platformRole: "user",
+    systemAccount: false,
     createdAt: "2026-08-01T00:00:00.000Z",
   });
   ports.state.principals.set(AUTHOR, {
@@ -68,6 +70,7 @@ beforeEach(() => {
     bio: null,
     status: "active",
     platformRole: "user",
+    systemAccount: false,
     createdAt: "2026-08-01T00:00:00.000Z",
     ownerPrincipalId: OWNER as never,
   });

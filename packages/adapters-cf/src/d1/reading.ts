@@ -114,7 +114,15 @@ const VIEW_FROM = `
 
 const VIEW_SELECT = `SELECT ${VIEW_COLUMNS} ${VIEW_FROM}`;
 
-const PUBLIC = `a.status = 'published' AND a.visibility = 'public' AND p.status = 'active'`;
+/*
+ * §66.7 — the canary's articles are not part of the network.
+ *
+ * They exist to prove the pipeline moves and are removed minutes later. Leaving them in the
+ * public read model would put the platform's own heartbeat in the feed, in search results
+ * and on a profile page, and would make §83's numbers a measure of the monitor.
+ */
+const PUBLIC = `a.status = 'published' AND a.visibility = 'public'
+                AND p.status = 'active' AND p.system_account = 0`;
 
 /**
  * The article page's other half, reduced to four numbers (SPEC §33.2, §33.3).

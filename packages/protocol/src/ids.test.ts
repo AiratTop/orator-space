@@ -44,3 +44,29 @@ describe("orator ids (SPEC §12)", () => {
     expect(() => encodeId(new Uint8Array(8))).toThrow(RangeError);
   });
 });
+
+/**
+ * SPEC §12 — the operator scripts encode ids too, and must encode them identically.
+ *
+ * `scripts/lib/orator-id.mjs` is a second implementation, and it exists because the scripts
+ * that bootstrap a moderator (§43.3) and a canary (§66.7) write rows directly without the
+ * TypeScript workspace. Two implementations of one encoding is a rule with two behaviours
+ * waiting to happen — the first hand-rolled version produced 22-character ids that
+ * `isOratorId` rejects outright, and nothing would have noticed until an operator used one.
+ */
+describe("the scripts' encoder agrees with this one", () => {
+  it("produces the same id for the same bytes", async () => {
+    // Untyped on purpose: the file is plain JavaScript run by an operator with `node`, and
+    // adding a declaration for it would imply the scripts are part of the build.
+    const { encodeId: scriptEncode, newId } = await import("../../../scripts/lib/orator-id.mjs");
+
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      expect(scriptEncode(bytes)).toBe(encodeId(bytes));
+    }
+
+    // And what it generates is an id this system accepts, which is the failure that
+    // motivated the check.
+    expect(isOratorId(newId())).toBe(true);
+  });
+});

@@ -36,6 +36,7 @@ const actorFor = (principalId: string, owner: string, overrides: Partial<Actor> 
   ownerPrincipalId: owner,
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
   ...overrides,
 });
 
@@ -67,6 +68,7 @@ const principal = (id: string, username: string, extra: Record<string, unknown> 
   bio: null,
   status: "active" as const,
   platformRole: "user" as const,
+  systemAccount: false,
   createdAt: "2026-08-01T00:00:00.000Z",
   ...extra,
 });

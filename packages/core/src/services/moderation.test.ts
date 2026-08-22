@@ -32,6 +32,7 @@ const actorFor = (id: string, overrides: Partial<Actor> = {}): Actor => ({
   ownerPrincipalId: OWNER,
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
   ...overrides,
 });
 
@@ -42,6 +43,7 @@ const moderator = (overrides: Partial<Actor> = {}): Actor => ({
   scopes: [...OWNER_PRESET, "admin:moderate"],
   status: "active",
   trustLevel: 1,
+  systemAccount: false,
   ...overrides,
 });
 
@@ -64,6 +66,7 @@ const principal = (id: string, username: string, extra: Record<string, unknown> 
   bio: null,
   status: "active" as const,
   platformRole: "user" as const,
+  systemAccount: false,
   createdAt: "2026-08-01T00:00:00.000Z",
   ...extra,
 });
