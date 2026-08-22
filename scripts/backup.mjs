@@ -69,6 +69,26 @@ const DERIVED = new Set([
 const INTERNAL = new Set(["_cf_KV", "sqlite_sequence"]);
 
 /**
+ * The tables a restore has to bring back, named one by one.
+ *
+ * Listing them rather than deriving them is the entire point. This file used to compute the
+ * export as "everything present, minus the three exclusion sets", and then check for
+ * unclassified tables against a set built from that same subtraction — so every table was
+ * classified by construction and the check could not fail. It ran green through five
+ * migrations and would have run green through the one that added a table nobody had thought
+ * about, which is the only case it existed for.
+ */
+const SOURCE = new Set([
+  "principals", "human_accounts", "agents", "agent_keys", "api_tokens",
+  "webauthn_credentials", "sessions", "articles", "revisions", "comments",
+  "edges", "follows", "topics", "article_topics", "media", "events",
+  "audit_log", "reports", "moderation_actions",
+  // Cloudflare's record of which migrations have run. Restoring without it makes the new
+  // database re-apply every migration over a schema that already has them.
+  "d1_migrations",
+]);
+
+/**
  * Tables that hold state whose retention is measured in hours (SPEC §23.4).
  *
  * Restoring a day-old idempotency key would resurrect a guard against a request that
@@ -104,8 +124,8 @@ const present = query(
   `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
 ).map((row) => row.name);
 
-const tables = present.filter((name) => !DERIVED.has(name) && !INTERNAL.has(name) && !TRANSIENT.has(name));
-const excluded = present.filter((name) => DERIVED.has(name) || INTERNAL.has(name) || TRANSIENT.has(name));
+const tables = present.filter((name) => SOURCE.has(name));
+const excluded = present.filter((name) => !SOURCE.has(name));
 
 console.log(`  ${tables.length} tables to export, ${excluded.length} excluded by policy`);
 
@@ -116,11 +136,23 @@ console.log(`  ${tables.length} tables to export, ${excluded.length} excluded by
  * decided whether it is a source of truth, this stops — rather than producing a dump that
  * looks complete and is not. The failure is loud now instead of during a restore.
  */
-const known = new Set([...DERIVED, ...INTERNAL, ...TRANSIENT, ...tables]);
-const unclassified = present.filter((name) => !known.has(name));
+const classified = new Set([...SOURCE, ...DERIVED, ...INTERNAL, ...TRANSIENT]);
+const unclassified = present.filter((name) => !classified.has(name));
 if (unclassified.length > 0) {
   console.error(`\n  Unclassified tables: ${unclassified.join(", ")}`);
-  console.error("  Add each to DERIVED, INTERNAL or TRANSIENT in this file, or leave it in the export.\n");
+  console.error("  Add each to SOURCE, DERIVED, INTERNAL or TRANSIENT in this file.\n");
+  process.exit(1);
+}
+
+/*
+ * And the other direction: a table this file expects and the database does not have.
+ *
+ * A dropped table, a migration that never ran, or a typo in the list above all look the
+ * same from here — an export quietly missing a table it was asked for.
+ */
+const absent = [...SOURCE].filter((name) => !present.includes(name));
+if (absent.length > 0) {
+  console.error(`\n  Expected tables that are not in the database: ${absent.join(", ")}`);
   process.exit(1);
 }
 
