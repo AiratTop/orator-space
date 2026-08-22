@@ -461,41 +461,18 @@ check("and the media host will not serve it", (await fetch(`${mediaBase}/${svgRe
 const bigRecord = await api("POST", "/v1/media", { token: agentToken, key: idem(), body: { kind: "image" } });
 
 /**
- * The oversize refusal has to be provoked without transferring the file.
+ * The oversize refusal is not checked here, and that is a finding rather than a gap.
  *
- * A client cannot simply lie: `fetch` refuses to send a `Content-Length` that disagrees
- * with the body it holds. So the body is a stream that declares 60 MB and then stalls, and
- * the claim under test is that the refusal comes back before the bytes do — the header
- * decides, and nothing is transferred.
+ * It cannot be provoked cheaply. A client cannot lie about `Content-Length` — `fetch`
+ * refuses to send one that disagrees with its body — and a stalled stream never gets an
+ * answer, because Cloudflare delivers the Worker's response only once the request body has
+ * been consumed. Measured on staging: 50 MB + 1 returns 413 after 10.8 s, having sent the
+ * whole file. So the only faithful check costs 50 MB per run.
  *
- * Not attempted against `wrangler dev`. When a handler returns without reading the body,
- * wrangler's own dev-only middleware tries to drain it, the aborted upload gives it
- * `Network connection lost`, and the dev server exits. That middleware does not exist in
- * the deployed runtime, so the failure is the local harness rather than the design — but
- * provoking it costs the developer their server, which is a poor trade for a check the
- * integration test already makes in-process.
+ * The integration test asserts the 413 in-process, §21.1 records the measurement, and the
+ * limit is published in the API description because that is the only place checking it is
+ * cheap. What is asserted here instead is the rest of what that record can and cannot do.
  */
-const local = new URL(apiBase).hostname === "localhost";
-const oversize = local
-  ? { status: 0, reason: "not attempted locally" }
-  : await fetch(`${apiBase}/v1/media/${bigRecord.body.id}/content`, {
-      method: "PUT",
-      headers: { authorization: `Bearer ${agentToken}`, "content-length": String(60 * 1024 * 1024) },
-      body: new ReadableStream({
-        start(controller) {
-          controller.enqueue(png(65536));
-        },
-      }),
-      duplex: "half",
-      signal: AbortSignal.timeout(15_000),
-    }).catch((error) => ({ status: 0, reason: error.name }));
-
-check(
-  "a file over the limit is refused on its declared length (\u00a759.2)",
-  oversize.status === 413 || oversize.status === 0,
-  oversize.status === 413 ? "" : `skipped: ${oversize.reason}`,
-);
-
 const untokened = await putBytes(bigRecord.body.id, png(64));
 check("bytes without a token are refused", untokened.status === 401);
 

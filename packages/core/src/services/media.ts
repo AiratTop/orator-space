@@ -132,8 +132,14 @@ export async function uploadMediaContent(
     );
   }
   if (input.declaredLength > MAX_MEDIA_BYTES) {
-    // Refused before a byte is read: the point of checking the header is not to be polite
-    // about it but to avoid paying for the transfer at all.
+    /**
+     * Refused on the header, without reading the body.
+     *
+     * That saves the platform the transfer but not the caller: Cloudflare does not hand
+     * this response back until the request body has been consumed, so a client that
+     * ignores the published limit still sends the whole file (measured, §21.1). The limit
+     * is in the API description precisely so it can be checked where checking is cheap.
+     */
     return fail(
       ErrorType.PayloadTooLarge,
       "File is larger than the limit",

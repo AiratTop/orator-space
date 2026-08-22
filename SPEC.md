@@ -1511,8 +1511,17 @@ request.body → TransformStream  counts bytes, keeps the first 64 for sniffing,
 length, and a `tee()` branch is such a stream. It is also the enforcement — a body that
 does not match its declared length tears the stream instead of being stored.
 
-**MUST.** A `Content-Length` above the per-file limit (§59.2), or absent, is refused before
-a byte is read: `413 payload-too-large` and `411`-shaped validation respectively.
+**MUST.** A `Content-Length` above the per-file limit (§59.2) is refused with
+`413 payload-too-large`, and an absent one with a validation error. The Worker reads none
+of the body in either case.
+
+**Measured, 2026-08-22.** The client still sends it. A 50 MB + 1 upload to staging returned
+`413` after 10.8 s, having transferred the whole file: Cloudflare does not deliver the
+Worker's response to the client until the request body has been consumed. The refusal
+therefore costs the platform nothing and costs the caller the upload, and no code in a
+Worker can change that. Cloudflare's own request body limit is the only gate that acts
+earlier. Clients are told the limit in the OpenAPI description so they can check locally,
+which is the only place the check can be cheap.
 
 **MUST.** Bytes that do not sniff to an allowed type are deleted and the record becomes
 `rejected`, not `pending`. A rejected record is evidence of what happened; a pending one is

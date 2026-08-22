@@ -191,10 +191,11 @@ describe("what the declared length is for", () => {
     /**
      * Nothing ever took a reader on it.
      *
-     * The point of reading the header is to refuse before paying for the transfer, so a
-     * refusal that has already consumed the body would be a refusal in name only. `locked`
-     * is the honest probe: a source's `pull` fires when the stream is constructed, which
-     * says nothing about whether this code read anything.
+     * What that buys is smaller than it looks — Cloudflare holds the response until the
+     * body is consumed anyway (§21.1) — but the Worker doing no work and holding no bytes
+     * for a request it has already refused is still the correct shape. `locked` is the
+     * honest probe: a source's `pull` fires when the stream is constructed, which says
+     * nothing about whether this code read anything.
      */
     expect(body.locked).toBe(false);
   });

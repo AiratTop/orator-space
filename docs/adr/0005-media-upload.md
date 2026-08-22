@@ -83,6 +83,14 @@ between two stores. Phase 5 closes without an operator step.
 ceiling is now structural rather than a policy number, and raising it past the Worker's
 request body limit would mean reopening this.
 
+**Measured afterwards, and it corrected a claim.** The first draft of §21.1 said an
+oversized upload is refused "before a byte is read". True of the Worker, misleading about
+the client: a 50 MB + 1 upload to staging returned `413` after 10.8 s having sent the whole
+file, because Cloudflare does not hand the Worker's response back until the request body is
+consumed. The refusal is free for the platform and expensive for the caller, and nothing in
+a Worker can change that. The spec now says so, and the limit is published in the API
+description so a client can check before spending the bandwidth.
+
 **Not free.** Ingress is not billed and streaming is I/O rather than CPU, so the 30 s CPU
 ceiling is not the one that applies; a long upload does hold a Worker invocation open for
 its duration. At the volumes §1 describes this is not measurable. If it becomes so, the

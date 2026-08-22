@@ -581,8 +581,9 @@ export const OPERATIONS: readonly Operation[] = [
     summary: "Upload the bytes of a reserved media record",
     description:
       "Send the file as the raw body with a correct `Content-Length`; chunked encoding is not " +
-      "accepted, because the declared length is what bounds the write. Anything above the " +
-      "per-file limit is refused with 413 before a byte is read. The `Content-Type` header is " +
+      "accepted, because the declared length is what bounds the write. Anything above 52428800 " +
+      "bytes is refused with 413 on the header alone \u2014 but check the size before sending: the " +
+      "platform delivers that response only after the body has been transferred. The `Content-Type` header is " +
       "recorded and then ignored: the stored type is what the leading bytes say it is, and a " +
       "type outside the allow-list \u2014 SVG included \u2014 is deleted and the record left " +
       "`rejected` (\u00a721.1, \u00a757.4). A retry re-uploads; the record must still be `pending`.",
