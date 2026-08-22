@@ -2243,6 +2243,13 @@ every browser asks for compression. Verified on staging — `curl` sees a strong
 a validator that only matched one of them would answer `200` to a request that deserved
 `304`.
 
+**MUST NOT — nothing outside this repository may write the crawler policy.** §48 states it
+and `robots.txt` carries it; a CDN feature that prepends its own block to the same file is
+not an addition but a second, contradictory policy in one document. Cloudflare's AI Crawl
+Control does exactly that by default and disallows the crawlers this platform exists to
+serve. Found on both zones in Phase 8; see PLAN.md §1.7 item 9. The read checkpoint asserts
+it, because a zone setting can negate the product's premise without a line of code changing.
+
 **MUST NOT — nothing may rewrite the HTML at the edge.** An intermediary that modifies a
 response body can no longer vouch for the validator the origin computed, so it removes it.
 Cloudflare's Web Analytics beacon does exactly that, and only for requests that look like a

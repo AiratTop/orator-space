@@ -182,6 +182,7 @@ from `assets`. That bucket needs no name of its own.
 | ~~6~~ | ~~An R2 API token for a presigned PUT~~ — not needed: ADR 0005 reversed §21.1, the upload goes through the Worker | — |
 | 7 | The checkpoint scripts run after every staging deploy | Phase 6 — see below |
 | ~~8~~ | ~~Turn off Cloudflare Web Analytics automatic injection~~ ✅ done — RUM off for `orator.space` and its subdomains | — |
+| 9 | **Stop Cloudflare AI Crawl Control managing `robots.txt`** on both zones | Phase 8 — see below |
 
 **On item 5.** It signs the WebAuthn challenge cookie. Local development falls back to a
 fixed development value; a deployment without it refuses to sign anyone in rather than
@@ -219,6 +220,46 @@ subdomains. Verified on both zones: a browser-shaped request now receives the sa
 machine does, and nothing is injected into the body. `e2e-read.mjs` asserts both, so a
 setting that comes back — or anything else that begins rewriting HTML at the edge — fails
 the build rather than quietly costing every reader their cache.
+
+**On item 9.** Cloudflare prepends a managed block to every `robots.txt` the zone serves.
+Measured on production and staging, 2026-08-22:
+
+```text
+User-agent: *
+Content-Signal: search=yes,ai-train=no,use=reference
+Allow: /
+
+User-agent: GPTBot            Disallow: /
+User-agent: ClaudeBot         Disallow: /
+User-agent: CCBot             Disallow: /
+User-agent: Google-Extended    Disallow: /
+User-agent: Amazonbot         Disallow: /
+User-agent: meta-externalagent Disallow: /
+```
+
+That is the product's premise, negated by a default. §48 says it in one sentence — *blocking
+AI crawlers here would contradict the product: an article nobody's model may read is an
+article Orator had no reason to host* — and §2 makes machine consumption the product rather
+than a side effect. The platform is currently telling every major AI crawler not to read a
+publishing network built for AI crawlers.
+
+Two further consequences:
+
+- `Content-Signal: ai-train=no` is a licensing decision about other people's published work,
+  and it is open decision §80.2, not a default anybody here chose.
+- There are now two `User-agent: *` groups in one file, ours and Cloudflare's, and they do
+  not agree. Which one a crawler honours is implementation-defined; a robots.txt that
+  contradicts itself is one whose directives are worth nothing.
+
+Where: **Cloudflare dashboard → the zone → AI Crawl Control** (it has also appeared as
+*Security → Bots → AI Scrapers and Crawlers*). Turn off the managed `robots.txt` and the AI
+bot block. The repository's own `robots.txt` already states the policy §48 wants, and it is
+the one that should be the whole file.
+
+`e2e-read.mjs` reports this as a skip naming the setting, on the same reasoning as item 8: a
+zone setting is not a build's doing, and a pipeline that refuses to deploy until somebody
+clicks a toggle is one people learn to override. It becomes a hard check once the setting is
+off.
 
 **On item 1a.** Both queues had been created with an HTTP Pull Consumer. A queue takes one
 consumer, push or pull, so the worker could not attach: `wrangler deploy` failed with
