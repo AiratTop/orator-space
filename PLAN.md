@@ -6,7 +6,7 @@ The order of work on Orator.Space.
 |---|---|
 | **Version** | 1.1 |
 | **Revised** | 2026-08-22 |
-| **Tracks** | `SPEC.md` v2.2 |
+| **Tracks** | `SPEC.md` v2.3 |
 
 ---
 
@@ -172,7 +172,7 @@ from `assets`. That bucket needs no name of its own.
 |---|---|---|
 | 1 | **Do not connect** a Worker to the repository through Cloudflare's git integration when creating it. GitHub Actions deploys | Phase 0 — §64.3 |
 | 1a | ~~Remove the HTTP Pull Consumer from `orator-events`~~ ✅ done | — |
-| 2 | Budget alert on the Cloudflare account | before Phase 3 — §67.2 |
+| ~~2~~ | ~~Budget alert on the Cloudflare account~~ ✅ done — 10 USD | — |
 | 3 | Gatus checks on `/health` and `/health/deep` | Phase 8 — §66.7 |
 | 4 | Terms / Content Policy / Privacy | before public launch — §61.1, §82 |
 | 5 | ~~`SESSION_SECRET` on staging and production~~ ✅ done (`wrangler secret put SESSION_SECRET --env <env>` in `apps/web`), at least 32 characters | Phase 5 — ADR 0004 |
@@ -410,7 +410,7 @@ refused. Unit tests had missed it; the end-to-end run caught it immediately.
    path (§33.5).
 6. JSON-LD (§52), Open Graph.
 
-**Acceptance** — `scripts/e2e-read.mjs` against a running pair of Workers:
+**Acceptance** — `scripts/e2e-read.mjs`, 80 checks against a running pair of Workers:
 
 ```
 [x] the page is served from edge cache; a repeat request is a HIT
@@ -465,20 +465,10 @@ the launch gate (§11) is not closed, and the first article should be a delibera
 follows; `GET /v1/events`; passkeys and browser sessions; search; OpenAPI generated from
 `protocol`.
 
-**Acceptance:**
-
-```
-[ ] OpenAPI is generated, not hand-written
-[ ] every error matches the §45.1 catalogue, with Retry-After where required
-[ ] X-Request-Id runs end to end: request → outbox → consumer
-[ ] GET /v1/events returns notifications by cursor
-[ ] passkey sign-in works; a session is not accepted on api.orator.space
-```
-
 **Settled before this phase:** FTS5 is available in D1 (Phase −1, check 3), so search uses
 it and needs no fallback.
 
-**Acceptance** — `scripts/e2e-phase5.mjs`, 77 checks against a running pair of Workers:
+**Acceptance** — `scripts/e2e-phase5.mjs`, 97 checks against a running pair of Workers:
 
 ```
 [x] OpenAPI is generated, not hand-written
@@ -547,7 +537,7 @@ by media id so a variant can sit beside it without moving anything.
 untrusted-content labelling (§58.2); tool descriptions written to be read by a model;
 annotations on irreversible operations.
 
-**Acceptance** — `scripts/e2e-phase6.mjs`, 33 checks driven by `@modelcontextprotocol/sdk`:
+**Acceptance** — `scripts/e2e-phase6.mjs`, 34 checks driven by `@modelcontextprotocol/sdk`:
 
 ```
 [x] the server connects from a standard MCP host using a bearer token
@@ -625,15 +615,17 @@ This is where the entire `[L]` level is closed.
 
 ```
 [ ] quotas on Durable Objects and rate limits (§59)
-[ ] report intake, moderation queue, moderator actions (§61)
+[x] report intake — POST /v1/reports, delivered in Phase 5
+[ ] the moderation queue and moderator actions (§61)
 [ ] a moderation provider that does not depend on self-hosted infrastructure
 [ ] deduplication, and indexability as an earned state (§50.3)
 [ ] backups plus a verified restore (§31.5)
 [ ] account closure (§23.5)
 [ ] the §66.4 alerts; Gatus on /health and /health/deep
-[ ] a Cloudflare budget alert
+[x] a Cloudflare budget alert — 10 USD
 [ ] Terms, Content Policy and Privacy published
-[ ] sitemap, robots, llms.txt
+[x] robots.txt and llms.txt, delivered in Phase 4
+[ ] the sitemap: shards built into `assets`, served from the apex
 ```
 
 **Public registration does not open until this list is closed in full.**
@@ -646,7 +638,7 @@ Order is decided by observation, not by plan. Entry conditions:
 
 | Phase | Entry condition |
 |---|---|
-| Media (§78 Phase 9) | demand for images in articles appears |
+| Image variants and transformations (§21.2) | articles carry images large enough for the original to be the wrong thing to serve. Upload and serving exist since Phase 5; only the resizing does not, and §21.2 puts it behind a platform product rather than in a Worker |
 | Materialised feeds | feed p95 exceeds 200 ms |
 | Semantic search | FTS gives unsatisfactory results on real queries |
 | Webhooks | polling becomes a measurable problem |
