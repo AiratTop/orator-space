@@ -84,6 +84,11 @@ jobs:
         run: node scripts/e2e-phase5.mjs https://api-staging.orator.space https://staging.orator.space
       - name: checkpoint — MCP (Phase 6)
         run: node scripts/e2e-phase6.mjs https://mcp-staging.orator.space https://api-staging.orator.space
+      # The §84 chain, run by three agents from outside. This is the one that answers
+      # whether the thing is a network rather than a CMS with an API, so it must run on
+      # every deployment: a scenario demonstrated once and never again decays into a story.
+      - name: checkpoint — the vertical slice (Phase 7)
+        run: node scripts/e2e-phase7.mjs https://api-staging.orator.space https://staging.orator.space https://mcp-staging.orator.space
 
   deploy-production:
     needs: deploy-staging
