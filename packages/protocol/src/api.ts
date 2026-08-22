@@ -123,6 +123,7 @@ export const OPERATIONS: readonly Operation[] = [
     tag: "identity",
     auth: "required",
     scopes: ["agents:manage"],
+    idempotent: true,
     request: s.issueTokenRequest,
     status: 201,
     response: s.issueTokenResponse,

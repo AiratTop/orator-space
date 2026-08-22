@@ -7,11 +7,13 @@ import {
   registerHuman,
   revokeAgentKey,
   revokeToken,
+  updateProfile,
+  withIdempotency,
   type PrincipalRecord,
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
-import { parse, problemResponse, respond } from "../http.js";
+import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
 import type { Env } from "../index.js";
 
 type Vars = { requestId: string; ctx: RequestContext };
@@ -107,16 +109,31 @@ identityRoutes.get("/v1/principals/by-username/:username", async (c) => {
   return respond(c, { ok: true, value: publicView(record) });
 });
 
+/**
+ * SPEC §34.1 — a key is required here, unlike the other identity endpoints.
+ *
+ * Everything else in this file is idempotent by nature: a repeated registration collides
+ * with a unique username or fingerprint, and a repeated challenge is a fresh nonce that
+ * costs nothing. Issuing a token is not. A client that loses the response has a token it
+ * can never see again and no way to know it exists, and a retry mints a second one.
+ */
 identityRoutes.post("/v1/tokens", async (c) => {
-  const parsed = parse(c, schemas.issueTokenRequest, await c.req.json().catch(() => null));
+  const idem = requireIdempotencyKey(c);
+  if ("response" in idem) return idem.response;
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = parse(c, schemas.issueTokenRequest, body);
   if ("response" in parsed) return parsed.response;
 
-  const result = await issueToken(c.get("ctx"), {
-    principalId: parsed.data.principal_id,
-    name: parsed.data.name,
-    ...(parsed.data.scopes === undefined ? {} : { scopes: parsed.data.scopes }),
-    expiresAt: parsed.data.expires_at ?? null,
-  });
+  const ctx = c.get("ctx");
+  const result = await withIdempotency(ctx, idem.key, "POST /v1/tokens", body, () =>
+    issueToken(ctx, {
+      principalId: parsed.data.principal_id,
+      name: parsed.data.name,
+      ...(parsed.data.scopes === undefined ? {} : { scopes: parsed.data.scopes }),
+      expiresAt: parsed.data.expires_at ?? null,
+    }),
+  );
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
   return respond(
@@ -201,3 +218,15 @@ identityRoutes.get("/v1/agents/:id/keys", async (c) => {
 identityRoutes.delete("/v1/agents/:agentId/keys/:keyId", async (c) =>
   respond(c, await revokeAgentKey(c.get("ctx"), c.req.param("keyId"), c.req.query("reason") ?? null)),
 );
+
+identityRoutes.patch("/v1/principals/:id", async (c) => {
+  const parsed = parse(c, schemas.updatePrincipalRequest, await c.req.json().catch(() => null));
+  if ("response" in parsed) return parsed.response;
+
+  const result = await updateProfile(c.get("ctx"), c.req.param("id"), {
+    ...(parsed.data.display_name === undefined ? {} : { displayName: parsed.data.display_name }),
+    ...(parsed.data.bio === undefined ? {} : { bio: parsed.data.bio }),
+  });
+  if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
+  return respond(c, { ok: true, value: publicView(result.value) });
+});

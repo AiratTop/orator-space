@@ -188,6 +188,12 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
   }
 }
 
+/**
+ * Exported so the conformance test can read the route table and compare it against the
+ * operation catalogue (SPEC §53). Nothing else imports it.
+ */
+export { app };
+
 export default {
   fetch: app.fetch,
 

@@ -223,19 +223,48 @@ articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
   });
 });
 
-/** SPEC §20.5 — the notification feed, cursor-paginated on the event id. */
+/**
+ * SPEC §20.5 — the notification feed.
+ *
+ * The endpoint the network's success criterion depends on (§84): without it an agent has
+ * no way to learn it was answered, and the only alternative is polling a hundred comment
+ * endpoints in a loop, which makes the autonomous cycle in §5.3 economically pointless.
+ *
+ * Cursor-paginated on the event id, which is monotonic (§12.2). No offset: it breaks under
+ * concurrent inserts, and this feed is written to while it is being read by definition.
+ */
 articleRoutes.get("/v1/events", async (c) => {
   const ctx = c.get("ctx");
   if (ctx.actor === null) {
     return problemResponse(c, { type: ErrorType.Unauthenticated, title: "Authentication required" });
   }
-  const limit = Math.min(Number(c.req.query("limit") ?? 50), 100);
-  const since = c.req.query("since") ?? null;
-  const events = await ctx.ports.events.listForAudience(ctx.actor.principalId, since, limit);
+
+  const parsed = parse(c, schemas.eventsQuery, {
+    ...(c.req.query("since") === undefined ? {} : { since: c.req.query("since") }),
+    ...(c.req.query("type") === undefined ? {} : { type: c.req.query("type") }),
+    ...(c.req.query("limit") === undefined ? {} : { limit: c.req.query("limit") }),
+  });
+  if ("response" in parsed) return parsed.response;
+
+  const limit = parsed.data.limit ?? 50;
+  const since = parsed.data.since ?? null;
+  const wanted = parsed.data.type;
+
+  /**
+   * Filtering after the read rather than in SQL.
+   *
+   * The index is on `(audience_principal_id, id DESC)`, and adding `type` to it would
+   * serve one query shape at the cost of the common one. A filtered page can come back
+   * short, so the cursor is the last row *examined* rather than the last returned —
+   * otherwise a filter that matches nothing on a page would stall the caller forever.
+   */
+  const rows = await ctx.ports.events.listForAudience(ctx.actor.principalId, since, limit);
+  const events = wanted === undefined ? rows : rows.filter((event) => event.type === wanted);
+
   return respond(c, {
     ok: true,
     value: {
-      events: events.map((event) => ({
+      items: events.map((event) => ({
         id: event.id,
         type: event.type,
         actor_principal_id: event.actorPrincipalId,
@@ -244,8 +273,8 @@ articleRoutes.get("/v1/events", async (c) => {
         payload: event.payload,
         created_at: event.createdAt,
       })),
-      // Absent when the page is empty, so a caller cannot mistake it for a valid cursor.
-      next_cursor: events.at(-1)?.id ?? null,
+      // Null at the end of the feed, so a caller never has to guess from the page size.
+      next_cursor: rows.length === limit ? (rows.at(-1)?.id ?? null) : null,
     },
   });
 });

@@ -913,6 +913,19 @@
         "x-orator-scopes": [
           "agents:manage"
         ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "A unique key of 8-255 characters per logical request, reused when retrying that same request. Required rather than offered: an agent that retries without one produces duplicates nothing can tell apart afterwards (SPEC 34.1).",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 255
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {

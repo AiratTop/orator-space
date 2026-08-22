@@ -52,6 +52,12 @@ export interface PrincipalRepo {
   insertPrincipal(principal: NewPrincipal): PendingWrite;
   insertHumanAccount(principalId: OratorId, email: string | null, createdAt: string): PendingWrite;
   insertAgent(agent: NewAgent): PendingWrite;
+  /** SPEC §44.2 — merge semantics; the username is deliberately not among the fields. */
+  updateProfile(
+    principalId: string,
+    fields: { displayName?: string | null; bio?: string | null },
+    at: string,
+  ): PendingWrite;
 }
 
 export interface TokenRecord {

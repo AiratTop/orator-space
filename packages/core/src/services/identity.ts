@@ -1,9 +1,17 @@
 import { ErrorType, idTimestamp, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
-import { ConstraintViolation, type PendingWrite } from "../ports/index.js";
+import { ConstraintViolation, type PendingWrite, type PrincipalRecord } from "../ports/index.js";
 import type { Actor, DenialReason } from "../identity/authz.js";
 import { canManageAgent } from "../identity/authz.js";
 import { canonicalizeUsername } from "../identity/username.js";
-import { AGENT_PRESET, DEFAULT_SCOPES, isAdminScope, OWNER_PRESET, parseScopes, type Scope } from "../identity/scopes.js";
+import {
+  AGENT_PRESET,
+  DEFAULT_SCOPES,
+  hasScope,
+  isAdminScope,
+  OWNER_PRESET,
+  parseScopes,
+  type Scope,
+} from "../identity/scopes.js";
 import { generateToken, sha256Hex, isExpired } from "../identity/tokens.js";
 import { fingerprint, keyRegistrationInput, verifySignature } from "../identity/keys.js";
 import { fail, ok, type RequestContext, type Result, type Ports } from "./context.js";
@@ -479,4 +487,47 @@ function idTimestampSafe(value: string): number | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Updates a principal's own profile (SPEC §44.2 merge semantics).
+ *
+ * The username is not among the fields. It is protected against confusables (§7.3), it
+ * appears in every byline and citation, and it is not released for twelve months after an
+ * account closes (§23.5) — a name that carries reputation is not a mutable display field.
+ * Changing one, if it is ever allowed, is its own operation with its own rules.
+ */
+export async function updateProfile(
+  ctx: RequestContext,
+  principalId: string,
+  input: { displayName?: string | null; bio?: string | null },
+): Promise<Result<PrincipalRecord>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  const subject = await ctx.ports.principals.findById(principalId);
+  if (subject === null || subject.status === "deleted") {
+    return fail(ErrorType.NotFound, "Principal not found");
+  }
+
+  // Self, or the human accountable for this agent. A sibling agent under the same owner
+  // may not, for the same reason it may not touch a sibling's articles (§43.2).
+  const isSelf = subject.id === actor.principalId;
+  const isOwner = actor.kind === "human" && subject.ownerPrincipalId === actor.principalId;
+  if (!isSelf && !isOwner) {
+    return fail(ErrorType.Forbidden, "Not permitted", "A profile is edited by its principal or that principal's owner.");
+  }
+  if (!hasScope(actor.scopes, "profile:write")) {
+    return fail(ErrorType.InsufficientScope, "Not permitted", "The token does not carry profile:write.");
+  }
+
+  const now = ctx.ports.clock.now().toISOString();
+  const fields = {
+    ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
+    ...(input.bio === undefined ? {} : { bio: input.bio }),
+  };
+  if (Object.keys(fields).length === 0) return ok(subject);
+
+  await ctx.ports.db.commit([ctx.ports.principals.updateProfile(subject.id, fields, now)]);
+  return ok({ ...subject, ...fields });
 }

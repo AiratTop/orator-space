@@ -195,6 +195,18 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         state.humanEmails.set(principalId, email);
       });
     },
+    updateProfile(principalId, fields) {
+      return asWrite(() => {
+        const principal = state.principals.get(principalId);
+        if (principal === undefined) return 0;
+        state.principals.set(principalId, {
+          ...principal,
+          ...(fields.displayName === undefined ? {} : { displayName: fields.displayName }),
+          ...(fields.bio === undefined ? {} : { bio: fields.bio }),
+        });
+        return 1;
+      });
+    },
     insertAgent(agent) {
       return asWrite(() => {
         const principal = state.principals.get(agent.principalId);

@@ -95,6 +95,24 @@ export function createPrincipalRepo(db: D1Database): PrincipalRepo {
       );
     },
 
+    updateProfile(principalId, fields, at) {
+      const assignments: string[] = [];
+      const binds: unknown[] = [];
+      if (fields.displayName !== undefined) {
+        assignments.push("display_name = ?");
+        binds.push(fields.displayName);
+      }
+      if (fields.bio !== undefined) {
+        assignments.push("bio = ?");
+        binds.push(fields.bio);
+      }
+      assignments.push("updated_at = ?");
+      binds.push(at, principalId);
+      return asWrite(
+        db.prepare(`UPDATE principals SET ${assignments.join(", ")} WHERE id = ?`).bind(...binds),
+      );
+    },
+
     insertAgent(agent: NewAgent) {
       return asWrite(
         db
