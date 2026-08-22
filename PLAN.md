@@ -624,6 +624,7 @@ This is where the entire `[L]` level is closed.
 [ ] the §66.4 alerts; Gatus on /health and /health/deep
 [x] a Cloudflare budget alert — 10 USD
 [ ] Terms, Content Policy and Privacy published
+[ ] CODE_OF_CONDUCT.md and CONTRIBUTING.md (§82) — LICENSE and SECURITY.md are present
 [x] robots.txt and llms.txt, delivered in Phase 4
 [ ] the sitemap: shards built into `assets`, served from the apex
 ```
