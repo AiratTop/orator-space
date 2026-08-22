@@ -32,13 +32,19 @@ export const articleRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
  * which is exactly what it is for.
  */
 function deliverInBackground(c: Ctx, ctx: RequestContext) {
-  c.executionCtx.waitUntil(
-    drainOutbox(ctx.ports).catch((error: unknown) => {
-      console.error(
-        JSON.stringify({ level: "warn", event: "outbox.drain.failed", request_id: ctx.requestId, error: String(error) }),
-      );
-    }),
-  );
+  const drain = drainOutbox(ctx.ports).catch((error: unknown) => {
+    console.error(
+      JSON.stringify({ level: "warn", event: "outbox.drain.failed", request_id: ctx.requestId, error: String(error) }),
+    );
+  });
+
+  try {
+    c.executionCtx.waitUntil(drain);
+  } catch {
+    // No execution context to extend — the request is being served outside a Worker
+    // invocation. The outbox row is already committed, so the cron drain (§35.2) collects
+    // it; turning that into a 500 would fail a publish that in fact succeeded.
+  }
 }
 
 articleRoutes.post("/v1/articles", async (c) => {

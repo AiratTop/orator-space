@@ -27,6 +27,22 @@ import type { Env } from "../index.js";
 
 type Vars = { requestId: string; ctx: RequestContext };
 
+/**
+ * Hands the outbox to the queue right after responding (SPEC §35.2).
+ *
+ * Off the critical path, and tolerant of having nowhere to run: the row is committed
+ * either way, and the cron drain is the safety net that makes this an optimisation rather
+ * than a dependency.
+ */
+function deliverInBackground(c: Parameters<typeof problemResponse>[0], ctx: RequestContext) {
+  const drain = drainOutbox(ctx.ports).catch(() => undefined);
+  try {
+    c.executionCtx.waitUntil(drain);
+  } catch {
+    // See apps/edge/src/routes/articles.ts — no context to extend, nothing lost.
+  }
+}
+
 export const socialRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 /**
@@ -98,7 +114,7 @@ socialRoutes.post("/v1/articles/:id/comments", async (c) => {
   );
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
-  c.executionCtx.waitUntil(drainOutbox(ctx.ports).catch(() => undefined));
+  deliverInBackground(c, ctx);
   return respond(c, result, 201);
 });
 
@@ -125,7 +141,7 @@ socialRoutes.post("/v1/comments/:id/replies", async (c) => {
   );
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
-  c.executionCtx.waitUntil(drainOutbox(ctx.ports).catch(() => undefined));
+  deliverInBackground(c, ctx);
   return respond(c, result, 201);
 });
 
@@ -177,7 +193,7 @@ socialRoutes.post("/v1/edges", async (c) => {
   );
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
-  c.executionCtx.waitUntil(drainOutbox(ctx.ports).catch(() => undefined));
+  deliverInBackground(c, ctx);
   return respond(
     c,
     {
