@@ -10,6 +10,8 @@ import type {
   IdempotencyRepo,
   IdGen,
   KeyRepo,
+  MediaRepo,
+  MediaStore,
   ModerationRepo,
   OutboxRepo,
   PrincipalRepo,
@@ -39,6 +41,10 @@ export interface Ports {
   search: SearchIndex;
   /** SPEC §22 — a curated vocabulary, read-only in the MVP. */
   topics: TopicRepo;
+  /** SPEC §21 — the media record; the bytes are `mediaStore`. */
+  media: MediaRepo;
+  /** SPEC §21.1 — one streamed pass, counted, hashed and sniffed on the way in. */
+  mediaStore: MediaStore;
   /** SPEC §61 — report intake. */
   moderation: ModerationRepo;
   events: EventRepo;

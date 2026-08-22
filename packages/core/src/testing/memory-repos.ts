@@ -38,7 +38,11 @@ import {
   type TopicRepo,
   type TokenRecord,
   type TokenRepo,
+  type MediaRecord,
+  type MediaRepo,
+  type MediaStore,
 } from "../ports/index.js";
+import { SNIFF_BYTES } from "../media/sniff.js";
 import type { Ports } from "../services/context.js";
 import { createMemoryContentStore } from "./memory-content-store.js";
 
@@ -71,6 +75,9 @@ export interface MemoryState {
   searchDocs: Map<string, SearchDocument>;
   topics: Map<string, TopicRecord>;
   reports: NewReport[];
+  media: Map<string, MediaRecord>;
+  /** The bytes, keyed the same way the R2 adapter keys them. */
+  mediaBytes: Map<string, Uint8Array>;
   articleTopics: Map<string, Set<string>>;
   edges: Map<string, EdgeRecord>;
   follows: Set<string>;
@@ -103,6 +110,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     searchDocs: new Map(),
     topics: new Map(),
     reports: [],
+    media: new Map(),
+    mediaBytes: new Map(),
     articleTopics: new Map(),
     edges: new Map(),
     follows: new Set(),
@@ -147,6 +156,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         searchDocs: new Map(state.searchDocs),
         topics: new Map(state.topics),
         reports: [...state.reports],
+        media: new Map(state.media),
+        mediaBytes: new Map(state.mediaBytes),
         articleTopics: new Map(state.articleTopics),
         edges: new Map(state.edges),
         follows: new Set(state.follows),
@@ -797,6 +808,96 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
   };
 
 
+  const media: MediaRepo = {
+    async findById(id) {
+      return state.media.get(id) ?? null;
+    },
+    insert: (record) =>
+      asWrite(() => {
+        state.media.set(record.id, {
+          ...record,
+          status: "pending",
+          storageKey: null,
+          contentType: null,
+          byteSize: null,
+          checksumSha256: null,
+          finalizedAt: null,
+        });
+        return 1;
+      }),
+    markReady: (id, stored) =>
+      asWrite(() => {
+        const record = state.media.get(id);
+        // Conditional on `pending`, exactly as the SQL is: a double is only useful if it
+        // refuses what the real thing refuses (SPEC §34.3).
+        if (record === undefined || record.status !== "pending") return 0;
+        state.media.set(id, { ...record, status: "ready", ...stored });
+        return 1;
+      }),
+    markRejected: (id, at) =>
+      asWrite(() => {
+        const record = state.media.get(id);
+        if (record === undefined || record.status !== "pending") return 0;
+        state.media.set(id, { ...record, status: "rejected", finalizedAt: at });
+        return 1;
+      }),
+  };
+
+  /**
+   * The media store, in memory.
+   *
+   * It buffers, where the real one streams — the difference the adapter exists to hide.
+   * What it does reproduce is the part the domain depends on: a body that does not match
+   * its declared length is refused rather than stored, because that is the contract the
+   * service handles a failure from.
+   */
+  const mediaStore: MediaStore = {
+    async put(key, body, declaredLength) {
+      const chunks: Uint8Array[] = [];
+      let byteSize = 0;
+      const reader = body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        byteSize += value.byteLength;
+      }
+      if (byteSize !== declaredLength) {
+        throw new Error(`declared ${declaredLength} bytes, received ${byteSize}`);
+      }
+      const bytes = new Uint8Array(byteSize);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+      }
+      state.mediaBytes.set(key, bytes);
+      const digest = await crypto.subtle.digest("SHA-256", bytes);
+      return {
+        byteSize,
+        sha256: [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join(""),
+        leading: bytes.subarray(0, SNIFF_BYTES),
+      };
+    },
+    async get(key) {
+      const bytes = state.mediaBytes.get(key);
+      if (bytes === undefined) return null;
+      return {
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(bytes);
+            controller.close();
+          },
+        }),
+        byteSize: bytes.byteLength,
+        etag: `"${bytes.byteLength}"`,
+      };
+    },
+    async delete(key) {
+      state.mediaBytes.delete(key);
+    },
+  };
+
   const moderation: ModerationRepo = {
     insertReport: (report) => asWrite(() => void state.reports.push(report)),
     async countRecentReports(targetType, targetId, since) {
@@ -820,6 +921,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     social,
     search,
     topics,
+    media,
+    mediaStore,
     moderation,
     events,
     idempotency,

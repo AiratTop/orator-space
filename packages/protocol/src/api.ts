@@ -16,7 +16,7 @@ import * as s from "./schemas.js";
  * and `GET /v1/feed` cannot.
  */
 
-export type HttpMethod = "get" | "post" | "patch" | "delete";
+export type HttpMethod = "get" | "post" | "put" | "patch" | "delete";
 
 export interface Operation {
   /** Stable across versions: it names the generated client method. */
@@ -35,6 +35,11 @@ export interface Operation {
   /** SPEC §34.3 — the caller must send `If-Match` to change content. */
   ifMatch?: boolean;
   request?: z.ZodTypeAny;
+  /**
+   * A body that is not JSON. Media is the only such operation (§21.1): the bytes are the
+   * request, so there is no schema to describe them, only the types they may be.
+   */
+  requestBinary?: { contentTypes: readonly string[]; description: string };
   query?: z.ZodTypeAny;
   status: number;
   response?: z.ZodTypeAny;
@@ -547,6 +552,64 @@ export const OPERATIONS: readonly Operation[] = [
     status: 200,
     response: s.eventPage,
     errors: [...AUTHED],
+  },
+
+  // --- Media ----------------------------------------------------------------
+  {
+    id: "createMedia",
+    method: "post",
+    path: "/v1/media",
+    summary: "Reserve a media record and get somewhere to put the bytes",
+    description:
+      "Two steps, not three. This one charges the quota and returns `upload_url`; the PUT that " +
+      "follows carries the bytes and is the last step \u2014 the same pass counts, hashes and sniffs " +
+      "them, so the record is `ready` or `rejected` before that response returns, and never " +
+      "`ready` with bytes nobody checked (\u00a721.1).",
+    tag: "media",
+    auth: "required",
+    scopes: ["media:write"],
+    idempotent: true,
+    request: s.createMediaRequest,
+    status: 201,
+    response: s.mediaResponse,
+    errors: [...WRITES],
+  },
+  {
+    id: "uploadMediaContent",
+    method: "put",
+    path: "/v1/media/{id}/content",
+    summary: "Upload the bytes of a reserved media record",
+    description:
+      "Send the file as the raw body with a correct `Content-Length`; chunked encoding is not " +
+      "accepted, because the declared length is what bounds the write. Anything above the " +
+      "per-file limit is refused with 413 before a byte is read. The `Content-Type` header is " +
+      "recorded and then ignored: the stored type is what the leading bytes say it is, and a " +
+      "type outside the allow-list \u2014 SVG included \u2014 is deleted and the record left " +
+      "`rejected` (\u00a721.1, \u00a757.4). A retry re-uploads; the record must still be `pending`.",
+    tag: "media",
+    auth: "required",
+    scopes: ["media:write"],
+    requestBinary: {
+      contentTypes: ["application/octet-stream"],
+      description: "The file itself. Content-Length is required and is enforced as the exact size.",
+    },
+    status: 200,
+    response: s.mediaResponse,
+    errors: [...AUTHED, E.NotFound, E.Conflict, E.ValidationFailed, E.PayloadTooLarge],
+  },
+  {
+    id: "getMedia",
+    method: "get",
+    path: "/v1/media/{id}",
+    summary: "Read a media record",
+    description:
+      "Public once `ready`. While `pending` or `rejected` it is visible only to its owner: a " +
+      "record that exists but holds nothing is not yet anybody else's business.",
+    tag: "media",
+    auth: "optional",
+    status: 200,
+    response: s.mediaResponse,
+    errors: [E.NotFound],
   },
 
   // --- Moderation -----------------------------------------------------------

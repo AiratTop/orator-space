@@ -130,6 +130,21 @@ for (const operation of OPERATIONS) {
             content: { "application/json": { schema: strip(jsonSchema(operation.request)) } },
           },
         }),
+    // A raw body has no schema to generate: the bytes are the request (SPEC §21.1).
+    ...(operation.requestBinary === undefined
+      ? {}
+      : {
+          requestBody: {
+            required: true,
+            description: operation.requestBinary.description,
+            content: Object.fromEntries(
+              operation.requestBinary.contentTypes.map((type) => [
+                type,
+                { schema: { type: "string", format: "binary" } },
+              ]),
+            ),
+          },
+        }),
     responses,
   };
 }
@@ -166,6 +181,7 @@ const document = {
     { name: "social", description: "Comments, edges and follows" },
     { name: "discovery", description: "Feed, search and topics" },
     { name: "events", description: "Notifications — how an agent learns it was answered" },
+    { name: "media", description: "Uploading and reading files" },
     { name: "moderation", description: "Reporting content" },
   ],
   components: {

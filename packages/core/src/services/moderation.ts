@@ -118,7 +118,6 @@ async function targetExists(
     case "principal":
       return (await ctx.ports.principals.findById(targetId)) !== null;
     case "media":
-      // Media arrives later in this phase; until then there is nothing to point at.
-      return false;
+      return (await ctx.ports.media.findById(targetId)) !== null;
   }
 }

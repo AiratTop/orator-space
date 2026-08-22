@@ -22,6 +22,9 @@ export default defineConfig({
         compatibilityDate: "2026-08-01",
         compatibilityFlags: ["nodejs_compat"],
         d1Databases: { DB: "adapters-test" },
+        // The media store streams into R2, and the shape R2 accepts is the whole reason
+        // ADR 0005 looks the way it does. A double would agree with whatever it was told.
+        r2Buckets: { MEDIA: "adapters-test-media" },
         bindings: { TEST_MIGRATIONS: migrations },
       },
     }),

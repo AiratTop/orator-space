@@ -377,6 +377,46 @@ export const reportResponse = z.object({
 });
 
 // ---------------------------------------------------------------------------
+// Media
+// ---------------------------------------------------------------------------
+
+/**
+ * SPEC §21.1 — `kind` is what the client intends to upload, not what it turns out to be.
+ * The server sniffs the bytes and refuses a mismatch; this field exists so the refusal can
+ * say which of the two was wrong.
+ */
+export const createMediaRequest = z.object({
+  kind: z.enum(["image", "video", "audio", "document"]),
+  /** SPEC §49.5 — an image without it is inaccessible; refused at attachment, not here. */
+  alt_text: z.string().max(1000).nullish(),
+  source: z.enum(["upload", "generated"]).default("upload"),
+  /**
+   * SPEC §21.3 — provider, model, prompt hash for media a model produced. Recorded, not
+   * verified: Orator depends on no particular generation provider.
+   */
+  generation_metadata: z.record(z.string(), z.unknown()).nullish(),
+});
+
+export const mediaResponse = z.object({
+  id: oratorId,
+  owner_principal_id: oratorId,
+  status: z.enum(["pending", "ready", "rejected", "removed"]),
+  kind: z.enum(["image", "video", "audio", "document"]),
+  /** Determined from the bytes. Null until they arrive. */
+  content_type: z.string().nullable(),
+  byte_size: z.number().int().nullable(),
+  checksum_sha256: z.string().nullable(),
+  alt_text: z.string().nullable(),
+  source: z.enum(["upload", "generated"]),
+  /** Absent until `ready`: nothing serves media in any other state (§21.1). */
+  url: z.string().nullable(),
+  /** Where to PUT the bytes. Present while `pending`, null afterwards. */
+  upload_url: z.string().nullable(),
+  created_at: timestamp,
+  finalized_at: timestamp.nullable(),
+});
+
+// ---------------------------------------------------------------------------
 // Pages
 // ---------------------------------------------------------------------------
 

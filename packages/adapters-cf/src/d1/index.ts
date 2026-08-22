@@ -9,5 +9,6 @@ export * from "./reading.js";
 export * from "./social.js";
 export * from "./search.js";
 export * from "./topics.js";
+export * from "./media.js";
 export * from "./moderation.js";
 export * from "./passkeys.js";
