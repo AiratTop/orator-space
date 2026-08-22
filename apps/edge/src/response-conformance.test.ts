@@ -78,6 +78,7 @@ beforeAll(async () => {
   };
   const critic = (await record("registerHuman", "/v1/humans", json({ username: `rc-critic-${s}` }))) as {
     token: string;
+    id: string;
   };
 
   await record("getPrincipal", `/v1/principals/${owner.id}`);
@@ -210,6 +211,19 @@ beforeAll(async () => {
     method: "POST",
     headers: auth(owner.token),
   });
+
+  /*
+   * Last, because it revokes the token everything above depends on (§23.5).
+   *
+   * `critic` rather than `owner`: the owner is the moderator by now, and closing that
+   * account would leave the moderation calls above holding a revoked credential if this
+   * harness ever grew a step after them.
+   */
+  await record(
+    "closeAccount",
+    `/v1/principals/${critic.id}/close`,
+    json({ confirm: "close", articles: "pseudonymise" }, auth(critic.token, { "idempotency-key": `rc-close-${s}` })),
+  );
 });
 
 describe("responses match what the catalogue promises", () => {

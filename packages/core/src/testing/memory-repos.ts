@@ -36,7 +36,11 @@ import {
   type SearchIndex,
   type SocialRepo,
   type ModerationRepo,
+  type CredentialRecord,
+  type CredentialRepo,
   type ModerationActionRecord,
+  type SessionRecord,
+  type SessionRepo,
   type ReportRecord,
   type TopicRecord,
   type TopicRepo,
@@ -78,6 +82,8 @@ export interface MemoryState {
   comments: Map<string, CommentRecord>;
   searchDocs: Map<string, SearchDocument>;
   topics: Map<string, TopicRecord>;
+  credentials: CredentialRecord[];
+  sessions: (SessionRecord & { tokenHash: string })[];
   reports: ReportRecord[];
   moderationActions: ModerationActionRecord[];
   media: Map<string, MediaRecord>;
@@ -114,6 +120,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     comments: new Map(),
     searchDocs: new Map(),
     topics: new Map(),
+    credentials: [],
+    sessions: [],
     reports: [],
     moderationActions: [],
     media: new Map(),
@@ -161,6 +169,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         comments: new Map(state.comments),
         searchDocs: new Map(state.searchDocs),
         topics: new Map(state.topics),
+        credentials: [...state.credentials],
+        sessions: [...state.sessions],
         reports: [...state.reports],
         moderationActions: [...state.moderationActions],
         media: new Map(state.media),
@@ -189,6 +199,17 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
     async findBySkeleton(skeleton) {
       return [...state.principals.values()].find((p) => p.usernameSkeleton === skeleton) ?? null;
+    },
+    async listAgentsOwnedBy(ownerPrincipalId) {
+      return [...state.principals.values()].filter(
+        (principal) => principal.ownerPrincipalId === ownerPrincipalId,
+      );
+    },
+    blankHumanAccount(principalId, _at) {
+      return asWrite(() => {
+        state.humanEmails.set(principalId, null);
+        return 1;
+      });
     },
     async countAgentsOwnedBy(ownerPrincipalId) {
       return [...state.principals.values()].filter((p) => p.ownerPrincipalId === ownerPrincipalId).length;
@@ -255,6 +276,18 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
   };
 
   const tokens: TokenRepo = {
+    revokeAllFor(principalId, at) {
+      return asWrite(() => {
+        let n = 0;
+        for (const [id, token] of state.tokens) {
+          if (token.principalId === principalId && token.revokedAt === null) {
+            state.tokens.set(id, { ...token, revokedAt: at });
+            n += 1;
+          }
+        }
+        return n;
+      });
+    },
     async findByHash(tokenHash) {
       return [...state.tokens.values()].find((t) => t.tokenHash === tokenHash) ?? null;
     },
@@ -483,6 +516,12 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         .sort((a, b) => b.id.localeCompare(a.id))
         .slice(0, limit)
         .map((article) => ({ id: article.id, simhash: article.simhash! }));
+    },
+    async listByAuthor(authorPrincipalId, limit) {
+      return [...state.articles.values()]
+        .filter((article) => article.authorPrincipalId === authorPrincipalId)
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit);
     },
     setModerationState(articleId, verdictState, verdict, at) {
       return asWrite(() => {
@@ -1117,6 +1156,56 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+  /**
+   * §9.2, §23.5 — the browser credentials, as far as the API surface needs them.
+   *
+   * Only what account closure uses. `memory-auth.ts` holds the full doubles for the passkey
+   * ceremony; duplicating those here would give two stores that could disagree about
+   * whether somebody is signed in.
+   */
+  const credentials: CredentialRepo = {
+    async findByCredentialId() {
+      return null;
+    },
+    async listFor(principalId) {
+      return state.credentials.filter((record) => record.principalId === principalId);
+    },
+    insert: (credential) =>
+      asWrite(() => void state.credentials.push({ ...credential, lastUsedAt: null })),
+    recordUse: () => asWrite(() => 1),
+    deleteAllFor: (principalId) =>
+      asWrite(() => {
+        const before = state.credentials.length;
+        state.credentials = state.credentials.filter((record) => record.principalId !== principalId);
+        return before - state.credentials.length;
+      }),
+  };
+
+  const sessions: SessionRepo = {
+    async findByHash() {
+      return null;
+    },
+    insert: (session) => asWrite(() => void state.sessions.push(session)),
+    touch: () => asWrite(() => 1),
+    revoke: (id, at) =>
+      asWrite(() => {
+        const session = state.sessions.find((entry) => entry.id === id);
+        if (session !== undefined) session.revokedAt = at;
+        return 1;
+      }),
+    revokeAllFor: (principalId, at) =>
+      asWrite(() => {
+        let n = 0;
+        for (const session of state.sessions) {
+          if (session.principalId === principalId && session.revokedAt === null) {
+            session.revokedAt = at;
+            n += 1;
+          }
+        }
+        return n;
+      }),
+  };
+
   const moderation: ModerationRepo = {
     insertReport: (report) =>
       asWrite(() =>
@@ -1193,6 +1282,10 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     articles,
     reading,
     quota,
+    // §23.5 — a closure has to revoke every way in. The doubles are the same shape as the
+    // real repos, so a test that forgets one fails here rather than in production.
+    credentials,
+    sessions,
     social,
     search,
     topics,

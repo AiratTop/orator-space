@@ -75,5 +75,12 @@ export function createTokenRepo(db: D1Database): TokenRepo {
     touch(id, at) {
       return asWrite(db.prepare(`UPDATE api_tokens SET last_used_at = ? WHERE id = ?`).bind(at, id));
     },
+    revokeAllFor(principalId, at) {
+      return asWrite(
+        db
+          .prepare(`UPDATE api_tokens SET revoked_at = ? WHERE principal_id = ? AND revoked_at IS NULL`)
+          .bind(at, principalId),
+      );
+    },
   };
 }

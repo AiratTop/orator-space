@@ -372,6 +372,31 @@ export const publishResponse = z.object({
   }),
 });
 
+/**
+ * SPEC §23.5 — closing an account, and choosing what happens to the writing.
+ *
+ * The two are separable questions and the request asks both, because §23.5 says closing an
+ * account is not a matter of deleting articles. `pseudonymise` is the default meaning of
+ * "keep": the username was never personal data, and what identified a person is cleared
+ * either way.
+ */
+export const closeAccountRequest = z.object({
+  confirm: z.literal("close").describe("Required verbatim: every token and passkey is revoked"),
+  articles: z
+    .enum(["pseudonymise", "unpublish", "erase"])
+    .describe("What happens to published work. Erasure does not come back (§23.3)"),
+  reason: z.string().max(500).nullish(),
+});
+
+export const closeAccountResponse = z.object({
+  principal_id: oratorId,
+  tokens_revoked: z.number().int(),
+  agents_suspended: z.number().int(),
+  articles: z.enum(["pseudonymise", "unpublish", "erase"]),
+  /** SPEC §23.5 — the earliest date the username could be given to somebody else. */
+  username_reserved_until: timestamp,
+});
+
 export const eraseRequest = z.object({
   confirm: z.literal("erase").describe("Required verbatim: the bytes do not come back (§23.3)"),
   reason: z.string().max(500).nullish(),

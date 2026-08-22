@@ -733,7 +733,7 @@ This is where the entire `[L]` level is closed.
 [x] a moderation provider that does not depend on self-hosted infrastructure
 [x] deduplication, and indexability as an earned state (§50.3)
 [ ] backups plus a verified restore (§31.5)
-[ ] account closure (§23.5)
+[x] account closure (§23.5)
 [ ] the §66.4 alerts; Gatus on /health and /health/deep
 [x] a Cloudflare budget alert — 10 USD
 [ ] branch protection re-enabled — `main` deploys to production on every push (§1.5)

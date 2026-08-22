@@ -307,6 +307,14 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
       return results as { id: OratorId; simhash: string }[];
     },
 
+    async listByAuthor(authorPrincipalId, limit) {
+      const { results } = await db
+        .prepare(`${ARTICLE_SELECT} WHERE a.author_principal_id = ? ORDER BY a.id LIMIT ?`)
+        .bind(authorPrincipalId, limit)
+        .all<ArticleRow>();
+      return results.map((row) => toArticle(row)!).filter((record) => record !== null);
+    },
+
     setModerationState(articleId, state, verdict, at) {
       return asWrite(
         db

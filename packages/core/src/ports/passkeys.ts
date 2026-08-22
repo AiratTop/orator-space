@@ -104,6 +104,15 @@ export interface CredentialRepo {
   insert(credential: Omit<CredentialRecord, "lastUsedAt">): PendingWrite;
   /** SPEC §42.2 — a sign count that fails to advance is the cloned-authenticator signal. */
   recordUse(id: string, signCount: number, at: string): PendingWrite;
+  /**
+   * SPEC §23.5 — removed outright on account closure, not revoked.
+   *
+   * A public key bound to an authenticator somebody still carries is the one credential
+   * here that continues to exist outside the database. Keeping a revoked copy would keep a
+   * record of which device belonged to a person who asked to be forgotten, and it protects
+   * nothing: the account it opened is closed.
+   */
+  deleteAllFor(principalId: string): PendingWrite;
 }
 
 export interface SessionRepo {

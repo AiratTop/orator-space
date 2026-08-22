@@ -67,6 +67,28 @@ export function createPrincipalRepo(db: D1Database): PrincipalRepo {
       return row?.n ?? 0;
     },
 
+    async listAgentsOwnedBy(ownerPrincipalId) {
+      const { results } = await db
+        .prepare(`${SELECT} WHERE a.owner_principal_id = ?`)
+        .bind(ownerPrincipalId)
+        .all<Row>();
+      return results.map((row) => toRecord(row)!).filter((record) => record !== null);
+    },
+
+    blankHumanAccount(principalId, _at) {
+      // §23.5 — the email is the personal datum; `locale` goes with it because it is one
+      // more thing about a person that nothing needs any more. The row stays: it is a
+      // foreign key target for articles, comments, edges and audit entries.
+      return asWrite(
+        db
+          .prepare(
+            `UPDATE human_accounts SET email = NULL, email_verified_at = NULL, locale = NULL
+              WHERE principal_id = ?`,
+          )
+          .bind(principalId),
+      );
+    },
+
     insertPrincipal(principal: NewPrincipal) {
       return asWrite(
         db

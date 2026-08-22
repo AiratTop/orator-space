@@ -55,6 +55,12 @@ export function createMemoryAuthPorts(options: { now?: Date } = {}): MemoryAuth 
     async listFor(principalId) {
       return [...credentialStore.values()].filter((c) => c.principalId === principalId);
     },
+    deleteAllFor: (principalId) =>
+      asWrite(() => {
+        for (const [id, record] of credentialStore) {
+          if (record.principalId === principalId) credentialStore.delete(id);
+        }
+      }),
     insert: (credential) =>
       asWrite(() => {
         credentialStore.set(credential.id, { ...credential, lastUsedAt: null });

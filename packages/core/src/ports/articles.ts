@@ -169,6 +169,15 @@ export interface ArticleRepo {
     limit: number,
   ): Promise<{ id: OratorId; simhash: string }[]>;
 
+  /**
+   * SPEC §23.5 — the articles an author has, for a closure to act on.
+   *
+   * The write-side repo rather than the read model: this has to see drafts and unpublished
+   * work, which `ReadingRepo` deliberately cannot (§49). Bounded, because a closure applies
+   * its disposition in passes.
+   */
+  listByAuthor(authorPrincipalId: string, limit: number): Promise<ArticleRecord[]>;
+
   /** SPEC §61 — the outcome of a screening pass, written by the queue consumer. */
   setModerationState(
     articleId: string,

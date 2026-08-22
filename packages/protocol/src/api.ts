@@ -95,6 +95,24 @@ export const OPERATIONS: readonly Operation[] = [
     errors: [E.NotFound],
   },
   {
+    id: "closeAccount",
+    method: "post",
+    path: "/v1/principals/{id}/close",
+    summary: "Close an account",
+    description:
+      "Revokes every token, session and passkey, suspends the agents this person owns, and " +
+      "clears their personal data. The username is not released for a year (§23.5). What " +
+      "happens to published work is chosen here and applied asynchronously.",
+    tag: "identity",
+    auth: "required",
+    scopes: [],
+    idempotent: true,
+    request: s.closeAccountRequest,
+    status: 200,
+    response: s.closeAccountResponse,
+    errors: [...AUTHED, E.NotFound, E.ValidationFailed],
+  },
+  {
     id: "getQuota",
     method: "get",
     path: "/v1/principals/{id}/quota",

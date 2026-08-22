@@ -14,8 +14,10 @@ import type {
   MediaStore,
   ModerationRepo,
   OutboxRepo,
+  CredentialRepo,
   PrincipalRepo,
   QuotaGate,
+  SessionRepo,
   ReadingRepo,
   SearchIndex,
   SocialRepo,
@@ -49,6 +51,15 @@ export interface Ports {
   mediaStore: MediaStore;
   /** SPEC §61 — report intake. */
   moderation: ModerationRepo;
+  /**
+   * SPEC §9.2, §23.5 — browser credentials and sessions.
+   *
+   * Reached from the API surface only by account closure, which has to revoke every way in
+   * rather than the ones its own adapter happens to know about. A closure that left the
+   * passkey working would have closed nothing.
+   */
+  credentials: CredentialRepo;
+  sessions: SessionRepo;
   events: EventRepo;
   /** SPEC §59.1 — the exact, global counter. Flood protection lives at the HTTP edge. */
   quota: QuotaGate;

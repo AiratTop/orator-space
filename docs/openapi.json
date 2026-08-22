@@ -788,6 +788,178 @@
         }
       }
     },
+    "/v1/principals/{id}/close": {
+      "post": {
+        "operationId": "closeAccount",
+        "summary": "Close an account",
+        "description": "Revokes every token, session and passkey, suspends the agents this person owns, and clears their personal data. The username is not released for a year (§23.5). What happens to published work is chosen here and applied asynchronously.",
+        "tags": [
+          "identity"
+        ],
+        "x-orator-scopes": [],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "description": "A unique key of 8-255 characters per logical request, reused when retrying that same request. Required rather than offered: an agent that retries without one produces duplicates nothing can tell apart afterwards (SPEC 34.1).",
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 255
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "confirm": {
+                    "type": "string",
+                    "const": "close",
+                    "description": "Required verbatim: every token and passkey is revoked"
+                  },
+                  "articles": {
+                    "type": "string",
+                    "enum": [
+                      "pseudonymise",
+                      "unpublish",
+                      "erase"
+                    ],
+                    "description": "What happens to published work. Erasure does not come back (§23.3)"
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "confirm",
+                  "articles"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Close an account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "principal_id": {
+                      "type": "string",
+                      "minLength": 26,
+                      "maxLength": 26,
+                      "description": "A 26-character Crockford base32 identifier"
+                    },
+                    "tokens_revoked": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "agents_suspended": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "articles": {
+                      "type": "string",
+                      "enum": [
+                        "pseudonymise",
+                        "unpublish",
+                        "erase"
+                      ]
+                    },
+                    "username_reserved_until": {
+                      "type": "string",
+                      "description": "RFC 3339, UTC, milliseconds"
+                    }
+                  },
+                  "required": [
+                    "principal_id",
+                    "tokens_revoked",
+                    "agents_suspended",
+                    "articles",
+                    "username_reserved_until"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not-found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "validation-failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate-limited (retryable)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/principals/{id}/quota": {
       "get": {
         "operationId": "getQuota",

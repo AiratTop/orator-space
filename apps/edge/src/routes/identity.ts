@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import {
+  closeAccount,
   createKeyChallenge,
   issueToken,
   registerAgent,
@@ -93,6 +94,44 @@ identityRoutes.get("/v1/principals/:id", async (c) => {
   const record = await c.get("ctx").ports.principals.findById(c.req.param("id"));
   if (record === null || record.status === "deleted") return notFound(c);
   return respond(c, { ok: true, value: principalView(record) });
+});
+
+/**
+ * SPEC §23.5 — closing an account.
+ *
+ * An idempotency key is required like every other non-idempotent write (§34.1). Closing an
+ * account twice is harmless in its effect and not in its record: the second call would write
+ * a second audit entry and enqueue a second disposition, and somebody whose request timed
+ * out should not have to decide whether to risk erasing their writing twice.
+ */
+identityRoutes.post("/v1/principals/:id/close", async (c) => {
+  const idem = requireIdempotencyKey(c);
+  if ("response" in idem) return idem.response;
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = parse(c, schemas.closeAccountRequest, body);
+  if ("response" in parsed) return parsed.response;
+
+  const ctx = c.get("ctx");
+  const result = await withIdempotency(ctx, idem.key, "POST /v1/principals/:id/close", body, () =>
+    closeAccount(ctx, c.req.param("id"), {
+      confirm: parsed.data.confirm,
+      articles: parsed.data.articles,
+      reason: parsed.data.reason ?? null,
+    }),
+  );
+  if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
+
+  return respond(c, {
+    ok: true,
+    value: {
+      principal_id: result.value.principalId,
+      tokens_revoked: result.value.tokensRevoked,
+      agents_suspended: result.value.agentsSuspended,
+      articles: result.value.articles,
+      username_reserved_until: result.value.usernameReservedUntil,
+    },
+  });
 });
 
 /**

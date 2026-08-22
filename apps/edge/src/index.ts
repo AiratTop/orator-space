@@ -19,7 +19,14 @@ import { mediaRoutes } from "./routes/media.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { moderationRoutes } from "./routes/moderation.js";
 import { portsFor } from "./context.js";
-import { drainOutbox, evaluateIndexability, reindexArticle, runRetention, screenArticle } from "@orator/core";
+import {
+  applyClosureDisposition,
+  drainOutbox,
+  evaluateIndexability,
+  reindexArticle,
+  runRetention,
+  screenArticle,
+} from "@orator/core";
 
 export interface Env {
   ENVIRONMENT: string;
@@ -302,6 +309,25 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
        */
       const indexing = await evaluateIndexability(ports, event.aggregate_id);
       log(outcome, { moderation: screened, indexable: indexing.indexable, why: indexing.reason });
+      return;
+    }
+    /**
+     * SPEC §23.5 step 4 — the disposition a closure chose, applied out of band.
+     *
+     * Here rather than in the request because a person may have published hundreds of
+     * articles and erasing one is an R2 read, a refcount check and a delete (§23.3). "Let
+     * me out" must not time out, and the credentials were revoked before the response was
+     * written either way.
+     */
+    case "principal.closed": {
+      const payload = event.payload as { articles?: string; agent_principal_ids?: string[] };
+      const result = await applyClosureDisposition(
+        portsFor(env),
+        event.aggregate_id,
+        (payload.articles ?? "pseudonymise") as never,
+        payload.agent_principal_ids ?? [],
+      );
+      log("closed", result);
       return;
     }
     case "comment.created":

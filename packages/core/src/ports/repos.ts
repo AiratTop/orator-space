@@ -48,6 +48,16 @@ export interface PrincipalRepo {
   /** Uniqueness is enforced on the skeleton, not the display form (SPEC §7.3). */
   findBySkeleton(skeleton: string): Promise<PrincipalRecord | null>;
   countAgentsOwnedBy(ownerPrincipalId: string): Promise<number>;
+  /** SPEC §23.5 — the agents that move to `suspended` when their owner closes an account. */
+  listAgentsOwnedBy(ownerPrincipalId: string): Promise<PrincipalRecord[]>;
+  /**
+   * SPEC §23.5 — clears the personal data and keeps the row.
+   *
+   * The row is a foreign key target for articles, comments, edges and audit entries. Deleting
+   * it would break every one of those, and §23.5 keeps the username reserved in any case —
+   * so what goes is the contents, not the record that the account existed.
+   */
+  blankHumanAccount(principalId: string, at: string): PendingWrite;
 
   insertPrincipal(principal: NewPrincipal): PendingWrite;
   insertHumanAccount(principalId: OratorId, email: string | null, createdAt: string): PendingWrite;
@@ -99,6 +109,8 @@ export interface TokenRepo {
   revoke(id: string, at: string): PendingWrite;
   /** Recorded out of band; doing it inline turns every API call into a write. */
   touch(id: string, at: string): PendingWrite;
+  /** SPEC §23.5 — every token of a principal, in one statement. */
+  revokeAllFor(principalId: string, at: string): PendingWrite;
 }
 
 export interface KeyRecord {
