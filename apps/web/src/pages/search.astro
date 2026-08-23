@@ -124,10 +124,18 @@ const canonicalPath = query.length === 0 ? "/search" : `/search${Astro.url.searc
           </ul>
         ) : (
           <>
+            {/*
+              `paged={false}`: this list is not a window onto a larger one.
+
+              A ranked page has no "newer" and no "older" — the ordering is a score, not a
+              chronology — and the pager left on would have announced "newest first" and
+              "that is the oldest" about a set that was never sorted by time.
+            */}
             <Feed
               page={{ cards: found, next: null, previous: null }}
               basePath="/search"
               empty=""
+              paged={false}
             />
             <p class="search__ranked">
               Ranked by relevance, and this is the whole of it. A ranking is a score over an

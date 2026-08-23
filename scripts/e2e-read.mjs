@@ -544,6 +544,13 @@ check(
   "",
 );
 check("an empty search asks rather than errors", (await web("/search")).status === 200);
+check(
+  // §38.1 — a relevance ordering is a score, not a chronology, so "newer" and "older" are
+  // not meaningful. The pager was left on for one commit and announced "that is the oldest"
+  // about a set that was never sorted by time.
+  "results carry no pager, because a ranking has no second page",
+  !searchHtml.includes("That is the oldest") && !searchHtml.includes("Newest first"),
+);
 
 /*
  * One 404, wherever it is reached from (§49.5).
