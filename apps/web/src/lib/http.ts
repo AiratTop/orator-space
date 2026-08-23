@@ -9,12 +9,25 @@ import { CONTENT_TYPES, type Representation } from "@orator/protocol";
  * then pay for the body.
  */
 
-/** SPEC §33.2. Not per-route constants: one table, so no page can invent its own policy. */
+/**
+ * SPEC §33.2. Not per-route constants: one table, so no page can invent its own policy.
+ *
+ * Every entry states `max-age` as well as `s-maxage`, and the reason is not symmetry.
+ * `s-maxage` addresses shared caches only, so a response carrying it alone gives a *browser*
+ * no stated freshness at all — and a cache with no stated freshness is permitted to guess
+ * one (RFC 9111 §4.2.2), which in practice means a tenth of the age since `Last-Modified`.
+ * For an article published a year ago that is over a month of a reader holding a copy that
+ * predates every comment on it.
+ *
+ * Measured on staging, 2026-08-23: nobody had noticed, because Cloudflare's Browser Cache
+ * TTL was rewriting the header on the way out of its cache and imposing four hours of its
+ * own. Both are wrong and the fix is one thing — say what we mean.
+ */
 export const CACHE = {
-  article: "public, s-maxage=60, stale-while-revalidate=86400",
-  feed: "public, s-maxage=30, stale-while-revalidate=300",
+  article: "public, max-age=60, s-maxage=60, stale-while-revalidate=86400",
+  feed: "public, max-age=30, s-maxage=30, stale-while-revalidate=300",
   /** The policies. They change a few times a year and are read by crawlers. */
-  policy: "public, s-maxage=3600, stale-while-revalidate=86400",
+  policy: "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
   /** Anything reached with credentials, and anything that failed. */
   private: "private, no-store",
 } as const;

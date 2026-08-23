@@ -76,7 +76,7 @@ export const GET: APIRoute = async () => {
   return new Response(body, {
     headers: {
       "content-type": "text/markdown; charset=utf-8",
-      "cache-control": "public, s-maxage=300, stale-while-revalidate=3600",
+      "cache-control": "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
     },
   });
 };

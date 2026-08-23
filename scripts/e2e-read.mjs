@@ -247,6 +247,25 @@ if (!local) {
 // --- caching (§33) -------------------------------------------------------------
 const etag = page.headers.get("etag");
 check("the page carries an ETag", !!etag, etag ?? "");
+
+/*
+ * §33.2 — the browser is told a freshness, and it is ours.
+ *
+ * Two ways this breaks, and both were live until 2026-08-23. `s-maxage` addresses shared
+ * caches only, so a response carrying it alone lets a browser guess its own freshness
+ * (RFC 9111 §4.2.2) — a tenth of the age since `Last-Modified`, which for an old article is
+ * weeks. And Cloudflare's Browser Cache TTL rewrote the header on the way out of its cache,
+ * imposing four hours and dropping `stale-while-revalidate`. A zone setting that comes back
+ * fails the build rather than quietly costing every reader §33.3's revalidation.
+ */
+const cache = page.headers.get("cache-control") ?? "";
+check("the page states a browser freshness of its own", /max-age=60\b/.test(cache), cache);
+check("and keeps stale-while-revalidate", cache.includes("stale-while-revalidate"), cache);
+check(
+  "and nothing rewrote it on the way out",
+  !/max-age=(?!60\b)\d+/.test(cache.replace(/s-maxage=\d+/, "")),
+  cache,
+);
 check(
   "the ETag is a weak validator built on the content hash",
   etag?.startsWith(`W/"${created.body.content_hash}`) === true,

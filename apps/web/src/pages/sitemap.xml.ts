@@ -19,7 +19,7 @@ export const GET: APIRoute = async () => {
   return new Response(body, {
     headers: {
       "content-type": "application/xml; charset=utf-8",
-      "cache-control": "public, s-maxage=300, stale-while-revalidate=3600",
+      "cache-control": "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
       "cloudflare-cdn-cache-control": "public, max-age=300, stale-while-revalidate=3600",
     },
   });

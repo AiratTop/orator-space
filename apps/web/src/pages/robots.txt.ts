@@ -43,7 +43,7 @@ export const GET: APIRoute = async () => {
     {
       headers: {
         "content-type": "text/plain; charset=utf-8",
-        "cache-control": "public, s-maxage=3600, stale-while-revalidate=86400",
+        "cache-control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
       },
     },
   );
