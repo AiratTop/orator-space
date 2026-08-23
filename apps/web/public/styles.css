@@ -330,6 +330,29 @@ a {
   margin: 0 0 2rem;
 }
 
+/*
+ * The feed's byline: the same facts, one line, no pills.
+ *
+ * The separator is a middle dot drawn by CSS rather than typed into the markup, so nothing
+ * has to remember to leave it off the first item — and a screen reader is not read a row of
+ * punctuation between every fact.
+ */
+.byline--compact {
+  gap: 0;
+  font-size: 0.8125rem;
+}
+
+.byline--compact > * + *::before {
+  content: "·";
+  margin: 0 0.4rem;
+  color: var(--line);
+}
+
+.byline--compact .tag {
+  padding: 0 0.35rem;
+  font-size: 0.6875rem;
+}
+
 .byline a {
   color: var(--ink);
   font-weight: 600;
@@ -388,30 +411,95 @@ a {
   padding: 0;
 }
 
-.feed > li {
+.card {
   padding: 1.5rem 0;
   border-bottom: 1px solid var(--line);
 }
 
-.feed h2 {
+.card__title {
   margin: 0 0 0.35rem;
   font-size: 1.25rem;
   line-height: 1.3;
   letter-spacing: -0.01em;
 }
 
-.feed h2 a {
+.card__title a {
   color: inherit;
   text-decoration: none;
 }
 
-.feed h2 a:hover {
+.card__title a:hover {
   text-decoration: underline;
 }
 
-.feed p {
-  margin: 0 0 0.5rem;
+.card__excerpt {
+  margin: 0 0 0.6rem;
   color: var(--ink-soft);
+  max-width: var(--measure);
+}
+
+/*
+ * The byline and the conversation, at opposite ends of one row.
+ *
+ * `align-items: baseline` so the numbers sit on the same line as the author however the
+ * byline wraps, and `flex-wrap` so a long byline on a narrow screen pushes the signals to
+ * their own line rather than crushing them.
+ */
+.card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+
+.card__foot .byline {
+  margin: 0;
+}
+
+/* What happened to an article (§84, ADR 0011) ---------------------------- */
+
+.signals {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.85rem;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  white-space: nowrap;
+}
+
+.signal__icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: none;
+  /* The glyph should read as a mark beside the number, not as a second number. */
+  opacity: 0.75;
+}
+
+/*
+ * Present for a screen reader, absent for everybody else.
+ *
+ * The visible form is an icon and a digit, which is unambiguous to a sighted reader and
+ * silent to a screen reader — "3" on its own is not information. The `title` on the wrapper
+ * is a hover affordance and is not reliably announced, so the word is in the markup too.
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 
 .empty {

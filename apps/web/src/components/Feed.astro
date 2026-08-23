@@ -3,6 +3,7 @@ import { canonicalPath } from "@orator/core";
 import type { FeedPage } from "@orator/core/ports";
 import { encodeFeedCursor } from "@orator/protocol";
 import Byline from "./Byline.astro";
+import Signals from "./Signals.astro";
 
 /**
  * A list of articles (SPEC §49.2, §37.1, §44.2).
@@ -21,9 +22,18 @@ interface Props {
   page: FeedPage & { total?: number };
   basePath: string;
   empty: string;
+  /**
+   * Whether this list is a window onto a larger one.
+   *
+   * False for search, which returns one ranked page and no cursor (§38.1) — a relevance
+   * ordering is a score over an index that changes while it is read, so "older" and "newer"
+   * are not meaningful there and a pager saying "that is the oldest" would be a lie about a
+   * list that was never chronological.
+   */
+  paged?: boolean;
 }
 
-const { page, basePath, empty } = Astro.props;
+const { page, basePath, empty, paged = true } = Astro.props;
 const href = (param: "before" | "after", cursor: NonNullable<FeedPage["next"]>) =>
   `${basePath}?${param}=${encodeFeedCursor(cursor)}`;
 
@@ -39,21 +49,34 @@ const atTheEnd = page.next === null && page.cards.length > 0;
 ) : (
   <ul class="feed">
     {page.cards.map((card) => (
-      <li>
-        <h2><a href={canonicalPath(card)}>{card.title}</a></h2>
-        {card.excerpt && <p>{card.excerpt}</p>}
-        <Byline
-          author={card.author}
-          disclosure={card.authorshipDisclosure}
-          publishedAt={card.publishedAt}
-          readingTimeSeconds={card.readingTimeSeconds}
-        />
+      <li class="card">
+        <h2 class="card__title"><a href={canonicalPath(card)}>{card.title}</a></h2>
+        {card.excerpt && <p class="card__excerpt">{card.excerpt}</p>}
+
+        {/*
+          The byline and the conversation on one row, at opposite ends.
+
+          §84 is the reason the second half is here at all: this network's claim is that
+          articles answer each other, and a list showing only titles and authors hides the
+          one thing that distinguishes it from a list of blog posts. A reader scanning the
+          feed can see where the argument is before opening anything.
+        */}
+        <div class="card__foot">
+          <Byline
+            author={card.author}
+            disclosure={card.authorshipDisclosure}
+            publishedAt={card.publishedAt}
+            readingTimeSeconds={card.readingTimeSeconds}
+            compact
+          />
+          <Signals conversation={card.conversation} />
+        </div>
       </li>
     ))}
   </ul>
 )}
 
-{page.cards.length > 0 && (
+{paged && page.cards.length > 0 && (
   <nav class="pager" aria-label="Feed pages">
     <span class="pager__side">
       {previousHref !== null ? (
@@ -77,7 +100,7 @@ const atTheEnd = page.next === null && page.cards.length > 0;
   </nav>
 )}
 
-{previousHref !== null && (
+{paged && previousHref !== null && (
   /* Somewhere to land other than one step back, for a reader several pages down. */
   <p class="pager__home"><a href={basePath}>Back to the latest</a></p>
 )}

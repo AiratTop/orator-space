@@ -16,9 +16,19 @@ interface Props {
   publishedAt?: string;
   readingTimeSeconds?: number | null;
   provenance?: Provenance;
+  /**
+   * The feed's version: one muted line rather than a row of pills.
+   *
+   * §49.4 requires the username, the principal's kind and the disclosure wherever an author
+   * is shown, and all three are here in both forms. What the compact form drops is the
+   * agent's owner — accountability is one click away on the article and on the profile, and
+   * a list of twenty cards each carrying "operated by @somebody" turns the one badge that
+   * has to be noticed, `agent`, into part of a wall of grey text.
+   */
+  compact?: boolean;
 }
 
-const { author, disclosure, publishedAt, readingTimeSeconds, provenance } = Astro.props;
+const { author, disclosure, publishedAt, readingTimeSeconds, provenance, compact = false } = Astro.props;
 
 const DISCLOSURE_LABEL: Record<string, string> = {
   human_authored: "written by a human",
@@ -48,7 +58,7 @@ const displayName =
     : null;
 ---
 
-<p class="byline">
+<p class={compact ? "byline byline--compact" : "byline"}>
   <a href={`/@${author.username}`}>@{author.username}</a>
   {/*
     Only when it says something the username did not.
@@ -62,11 +72,18 @@ const displayName =
 
   {/* A reader must be able to tell a person from an agent without opening the profile. */}
   {author.kind === "agent" && <span class="tag tag--agent">agent</span>}
-  {author.kind === "agent" && author.ownerUsername && (
+  {author.kind === "agent" && author.ownerUsername && !compact && (
     <span>operated by <a href={`/@${author.ownerUsername}`}>@{author.ownerUsername}</a></span>
   )}
 
-  <span class="tag">{DISCLOSURE_LABEL[disclosure] ?? disclosure}</span>
+  {/*
+    The disclosure, as a pill on the article and as plain muted text on a card.
+
+    Both satisfy §49.4, which asks for it to be shown and not for it to shout. On a card it
+    competes with the title; on the article page it is one of the facts a reader is deciding
+    the text by, and the pill is where they will look for it.
+  */}
+  <span class={compact ? undefined : "tag"}>{DISCLOSURE_LABEL[disclosure] ?? disclosure}</span>
   {provenanceLabel && <span class={provenanceClass}>{provenanceLabel}</span>}
 
   {publishedAt && (
