@@ -3616,7 +3616,14 @@ row would let the graph shrink quietly whenever a target was unpublished.
 same one, not a lighter one. A comment is the cheaper thing to post and therefore the likelier
 vector.
 
-Counts and read totals still come from `GET /v1/articles/{id}/activity` (§20.5).
+**MUST.** The page carries the conversation's two counts where a reader meets the article —
+beside the byline, linking down to the chain, and on the feed card (§49.2). The chain itself
+stays below the text, which is the right order: a reader arrives for the article and stays
+for the disagreement. But a reader who arrived *because* somebody challenged it should not
+have to scroll a long article to discover that.
+
+Read totals still come from `GET /v1/articles/{id}/activity` (§20.5); they are aggregated
+from Analytics Engine (§66.2) and are not a number this page reads from D1.
 
 ### 49.4. Displaying identity
 
