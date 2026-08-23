@@ -4750,6 +4750,25 @@ breached rings a bell nobody can silence, and a bell nobody can silence gets mut
 `not-implemented` degrades nothing — a status that can never read `ok` is a status nobody
 reads.
 
+**Verified against real data, 2026-08-23.** `quantileWeighted(0.95)(double1,
+_sample_interval)` is accepted by the SQL API, `blob3` carries the route pattern and `blob4`
+the status class, and the grouped error-rate query returns rows. Both indicators reported
+`no-traffic` at the time, which was true: production had served two `/v1` requests in the
+preceding day.
+
+**Two consequences of the metric's scope, so neither reads later as a defect.** The
+`api.request` metric is written by middleware mounted on `/v1/*`, which means:
+
+- **Health probes are not counted.** Deliberate: a monitor polling every five minutes
+  contributes some three hundred successful requests a day, and an error *rate* diluted by
+  synthetic traffic hides the failures it exists to catch. The health endpoints have their own
+  checks, which alert on their own.
+- **`publish_p95` measures publishing through the REST route and nothing else.** The canary
+  publishes by calling the service directly (§66.7), so it contributes none — which is right,
+  since §66.4 asks what a caller waited for. The domain's own `article.published` metric
+  carries no duration: it is emitted after the commit, where there is nothing left to time.
+  Until somebody publishes over HTTP, this indicator is honestly `no-traffic`.
+
 **MUST.** Where each number comes from, because six of the seven need no metrics pipeline:
 
 | Indicator | Source |

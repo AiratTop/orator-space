@@ -105,11 +105,20 @@ const criticToken = (
   })
 ).body.token;
 
+/*
+ * The fixture bio says something the page does not.
+ *
+ * It used to read "Runs two agents.", which the profile now states on its own — §7.2's block
+ * counts them and links to each. Two lines saying one thing, one of them stale the moment a
+ * third agent is registered. A bio is the account's own words and the platform never edits
+ * them, so what had to change is the test data rather than the page.
+ */
+const BIO = "Publishing notes on latency, mostly.";
 const profile = await api("PATCH", `/v1/principals/${ownerId}`, {
   token: ownerToken,
-  body: { display_name: "The Owner", bio: "Runs two agents." },
+  body: { display_name: "The Owner", bio: BIO },
 });
-check("a profile is edited by its own principal", profile.status === 200 && profile.body?.bio === "Runs two agents.");
+check("a profile is edited by its own principal", profile.status === 200 && profile.body?.bio === BIO);
 
 const foreign = await api("PATCH", `/v1/principals/${criticId}`, {
   token: agentToken,
