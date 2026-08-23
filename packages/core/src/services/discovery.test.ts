@@ -183,7 +183,9 @@ describe("searching by Article ID", () => {
     // being a yes/no oracle over somebody's unpublished work (§43.3).
     const draft = unwrap(await createArticle(ctx(), { title: "Draft", content: "# Draft\n\nx\n" }));
     expect(unwrap(await search(ports, draft.id)).articles).toHaveLength(0);
-    expect(unwrap(await search(ports, "06G2W3988XR0128MXC7Q702WCW")).articles).toHaveLength(0);
+    // Twenty-six zeros: the right shape, and the leading 48 bits are the timestamp (§12.2),
+    // so this one says 1970 and cannot have been minted.
+    expect(unwrap(await search(ports, "0".repeat(26))).articles).toHaveLength(0);
   });
 
   it("does not mistake an ordinary word for an id", async () => {

@@ -565,7 +565,10 @@ check(
 );
 check(
   "a well-formed id naming nothing answers with no results, not an error",
-  (await (await web("/search?q=06G2W3988XR0128MXC7Q702WCW")).text()).includes("Nothing matches"),
+  // Twenty-six zeros: the right alphabet and the right length, and the leading 48 bits are
+  // the timestamp (§12.2), so this one says 1970 and cannot have been minted. The first
+  // version of this check used a real id copied from a bug report, which existed.
+  (await (await web(`/search?q=${"0".repeat(26)}`)).text()).includes("Nothing matches"),
 );
 check(
   // §38.1 — a relevance ordering is a score, not a chronology, so "newer" and "older" are
