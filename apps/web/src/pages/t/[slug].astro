@@ -1,0 +1,101 @@
+---
+import { INDEXABLE_THRESHOLD, loadTopic } from "@orator/core";
+import { decodeFeedCursor } from "@orator/protocol";
+import Layout from "../../components/Layout.astro";
+import Feed from "../../components/Feed.astro";
+import NotFound from "../../components/NotFound.astro";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
+import { topicPorts } from "../../lib/ports.js";
+
+/**
+ * One topic (SPEC §22.1, §49.2, §50.1).
+ *
+ * Flat addresses, deliberately: `/t/llm`, never `/t/ai/llm`. The hierarchy is data, not an
+ * address — a section in the path would mean that moving a topic under a different section
+ * breaks every permanent link into it, and permanence is what §8 promises.
+ *
+ * A section's page lists its children's articles, de-duplicated (§22.1), and names the
+ * children so a reader can narrow. A leaf lists its own.
+ */
+const slug = Astro.params.slug ?? "";
+const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
+const result = await loadTopic(topicPorts, slug, { ...(before === null ? {} : { before }) });
+
+if (!result.ok) {
+  Astro.response.status = 404;
+  cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
+}
+
+const page = result.ok ? result.value : null;
+
+/*
+ * §51, §50.3 — indexable once the listing is worth submitting, and never on a cursor page.
+ *
+ * The threshold is the same number the sitemap uses, and it is the same decision: a topic
+ * page listing one article says less than that article's own entry does, and adds a second
+ * URL competing for it (§50.2). The count here is what the page can show rather than what
+ * the sitemap will vouch for, which is the looser of the two — a page carrying `index` that
+ * the sitemap has not submitted is ordinary; the reverse is a contradiction.
+ */
+const indexable = page !== null && before === null && page.cards.length >= INDEXABLE_THRESHOLD;
+
+if (page !== null) cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
+
+const canonicalPath = `/t/${slug}`;
+---
+
+{page === null ? (
+  <NotFound
+    heading="No topic at that address"
+    explanation="The vocabulary is curated rather than typed (§22), so a topic either exists or never did. Every one of them is listed at /topics."
+  />
+) : (
+  <Layout
+    title={page.topic.label}
+    description={page.topic.description ?? undefined}
+    canonicalPath={canonicalPath}
+    indexable={indexable}
+  >
+    <main id="main" class="wrap wrap--wide">
+      {/*
+        The section a leaf belongs to, named and linked. A reader who arrived from a search
+        result has no other way to find out that this topic sits inside a wider one.
+      */}
+      {page.topic.parentSlug !== null && (
+        <p class="topic__parent">
+          <a href={`/t/${page.topic.parentSlug}`}>&larr; {page.topic.parentSlug}</a>
+        </p>
+      )}
+
+      <h1 class="title">{page.topic.label}</h1>
+
+      {/*
+        The description is on the page and in the meta description, from one field (§22.2).
+        A reader and a crawler are being told the same sentence, which is the only
+        arrangement in which neither can go stale relative to the other.
+      */}
+      {page.topic.description && <p class="topic__description">{page.topic.description}</p>}
+
+      {page.topic.status === "archived" && (
+        <p class="notice" role="status">
+          This topic is archived. Its page stays where it was and nothing new is sorted into
+          it.
+        </p>
+      )}
+
+      {page.children.length > 0 && (
+        <ul class="topic__children">
+          {page.children.map((child) => (
+            <li><a href={`/t/${child.slug}`}>{child.label}</a></li>
+          ))}
+        </ul>
+      )}
+
+      <Feed
+        page={{ cards: page.cards, next: page.next, previous: page.previous }}
+        basePath={canonicalPath}
+        empty="Nothing has been sorted into this topic yet."
+      />
+    </main>
+  </Layout>
+)}

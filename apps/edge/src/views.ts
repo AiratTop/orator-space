@@ -258,4 +258,10 @@ export const topicView = (topic: TopicRecord) => ({
   slug: topic.slug,
   label: topic.label,
   description: topic.description,
+  // §22.1 — the hierarchy is data rather than an address, so a client that wants to render
+  // it has to be told; the slug alone cannot say what a topic sits under.
+  parent: topic.parentSlug,
+  // §22.1 — an archived topic still answers, and a caller building a picker needs to know
+  // not to offer it.
+  status: topic.status,
 });

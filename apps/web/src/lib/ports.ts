@@ -4,8 +4,9 @@ import {
   createR2ContentStore,
   createReadingRepo,
   createSearchIndex,
+  createTopicRepo,
 } from "@orator/adapters-cf";
-import type { ReadingPorts, SearchPorts } from "@orator/core";
+import type { ReadingPorts, SearchPorts, TopicPorts } from "@orator/core";
 
 /**
  * The ports the public web is allowed to reach (SPEC §28, §49).
@@ -58,6 +59,20 @@ export const searchPorts: SearchPorts = {
  * work under no limit at all would be an inconsistency with a bill attached.
  */
 export const searchLimiter = web.FLOOD_SEARCH;
+
+/**
+ * Reading, plus the curated vocabulary (SPEC §22, §28).
+ *
+ * `TopicRepo` is read-only by construction — the vocabulary arrives by migration and
+ * membership from the classifier, so there is nothing here to narrow further. It is a
+ * separate object rather than an addition to `ports` for the same reason `searchPorts` is:
+ * a page that does not render topics has no use for the repo, and the smallest set a page
+ * can reach is the one it should be handed.
+ */
+export const topicPorts: TopicPorts = {
+  ...ports,
+  topics: createTopicRepo(web.DB),
+};
 
 /**
  * The generated files, read-only (SPEC §51).

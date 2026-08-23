@@ -1677,3 +1677,139 @@ a {
   border-color: var(--warn);
   color: var(--warn);
 }
+
+/* ---------------------------------------------------------------------------
+ * Topics (SPEC §22.1, §49.5)
+ *
+ * The count is the reason this page is more than a list of words, so it is given a column
+ * of its own rather than a parenthesis: a reader scanning for "where is anything happening"
+ * reads down the numbers, and a number in brackets after a variable-length label cannot be
+ * scanned. An empty topic stays on the page and is dimmed — the vocabulary is decided in
+ * advance (§22.2), so it will always be ahead of what has been written, and hiding the gap
+ * would misrepresent the shape of the network.
+ * ------------------------------------------------------------------------ */
+
+.topics__lede {
+  color: var(--ink-soft);
+  max-width: var(--measure);
+  margin: 0 0 2.5rem;
+}
+
+.branch {
+  margin: 0 0 2.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line);
+}
+
+.branch__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.branch__heading a {
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.branch__heading a:hover {
+  text-decoration: underline;
+}
+
+.branch__count,
+.leaf__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+.branch__description {
+  margin: 0.25rem 0 1rem;
+  color: var(--ink-soft);
+  max-width: var(--measure);
+}
+
+.leaves {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.5rem 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+}
+
+.leaf {
+  display: grid;
+  grid-template-columns: 1fr max-content;
+  gap: 0 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.leaf--empty .leaf__name {
+  color: var(--ink-soft);
+}
+
+.leaf__name {
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.leaf__name:hover {
+  text-decoration: underline;
+}
+
+.leaf__description {
+  grid-column: 1 / -1;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.topic__parent {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+}
+
+.topic__parent a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.topic__parent a:hover {
+  text-decoration: underline;
+}
+
+.topic__description {
+  margin: 0 0 1.5rem;
+  color: var(--ink-soft);
+  max-width: var(--measure);
+  font-size: 1.0625rem;
+}
+
+.topic__children {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.topic__children a {
+  display: inline-block;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.topic__children a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

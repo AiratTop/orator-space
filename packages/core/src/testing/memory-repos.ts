@@ -1214,17 +1214,49 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     async findBySlug(slug) {
       return [...state.topics.values()].find((topic) => topic.slug === slug) ?? null;
     },
-    async listArticles(topicId, limit, after) {
-      const ids = state.articleTopics.get(topicId) ?? new Set<string>();
+    async tree() {
+      const all = [...state.topics.values()];
+      const count = (topic: TopicRecord) =>
+        new Set(
+          [topic, ...all.filter((child) => child.parentSlug === topic.slug)].flatMap((t) => [
+            ...(state.articleTopics.get(t.id) ?? []),
+          ]),
+        ).size;
+      return all
+        .filter((topic) => topic.parentSlug === null && topic.status === "active")
+        .map((section) => ({
+          section,
+          articles: count(section),
+          children: all
+            .filter((topic) => topic.parentSlug === section.slug && topic.status === "active")
+            .map((topic) => ({ topic, articles: count(topic) })),
+        }));
+    },
+    async listArticles(topicId, limit, before) {
+      const section = [...state.topics.values()].find((topic) => topic.id === topicId);
+      const own = [...state.topics.values()]
+        .filter((topic) => section !== undefined && topic.parentSlug === section.slug)
+        .map((topic) => topic.id);
+      const ids = new Set([topicId, ...own].flatMap((id) => [...(state.articleTopics.get(id) ?? [])]));
       const views = [...ids]
-        .filter((id) => after === null || id > after)
+        .filter((id) => before === null || id < before)
         .sort()
+        .reverse()
         .slice(0, limit)
         .map((id) => state.articles.get(id))
         .filter((article) => article !== undefined)
         .map((article) => viewOf(article))
         .filter((view): view is ArticleView => view !== null);
       return views.map(cardOf);
+    },
+    async indexableCounts() {
+      const counts = new Map<string, number>();
+      for (const topic of state.topics.values()) {
+        const ids = [...(state.articleTopics.get(topic.id) ?? [])];
+        const n = ids.filter((id) => state.articles.get(id)?.indexable === true).length;
+        if (n > 0) counts.set(topic.slug, n);
+      }
+      return counts;
     },
   };
 

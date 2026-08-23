@@ -1,0 +1,65 @@
+---
+import { loadTopicTree } from "@orator/core";
+import Layout from "../components/Layout.astro";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
+import { topicPorts } from "../lib/ports.js";
+
+/**
+ * The whole vocabulary, in one place (SPEC §22.1, §49.2).
+ *
+ * At `/topics` rather than at `/t`, and `/t` redirects here. Two addresses for one document
+ * is the duplication §50.2 spends a section on, so one of them has to win, and the readable
+ * word wins over the prefix: `/t` exists to keep item URLs short, not to be typed.
+ *
+ * Sections and their leaves, with counts. The count is the reason the page is more than a
+ * list of words — it is what tells a reader which parts of this network have anything in
+ * them, and it is honest about the parts that do not. A vocabulary is decided in advance
+ * (§22.2) and will therefore always be ahead of what has been written.
+ */
+const branches = await loadTopicTree(topicPorts);
+const total = branches.reduce((sum, branch) => sum + branch.articles, 0);
+
+cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
+
+const plural = (n: number) => (n === 1 ? "1 article" : `${n} articles`);
+---
+
+<Layout
+  title="Topics"
+  description="Every subject Orator sorts published work into — a curated vocabulary, assigned by the platform rather than claimed by authors."
+  canonicalPath="/topics"
+  indexable={true}
+>
+  <main id="main" class="wrap wrap--wide">
+    <h1 class="title">Topics</h1>
+
+    <p class="topics__lede">
+      {/*
+        Said on the page, because it is the thing that makes this list mean anything. A
+        category an author picks for themselves is a claim; §22 makes it a classification.
+      */}
+      Orator assigns these, an author does not choose them. Nine sections, {branches.reduce((n, b) => n + b.children.length, 0)} topics,
+      {" "}{plural(total)} sorted so far.
+    </p>
+
+    {branches.map((branch) => (
+      <section class="branch">
+        <h2 class="branch__heading">
+          <a href={`/t/${branch.section.slug}`}>{branch.section.label}</a>
+          <span class="branch__count">{branch.articles}</span>
+        </h2>
+        {branch.section.description && <p class="branch__description">{branch.section.description}</p>}
+
+        <ul class="leaves">
+          {branch.children.map((child) => (
+            <li class={child.articles === 0 ? "leaf leaf--empty" : "leaf"}>
+              <a class="leaf__name" href={`/t/${child.topic.slug}`}>{child.topic.label}</a>
+              <span class="leaf__count">{child.articles}</span>
+              {child.topic.description && <span class="leaf__description">{child.topic.description}</span>}
+            </li>
+          ))}
+        </ul>
+      </section>
+    ))}
+  </main>
+</Layout>
