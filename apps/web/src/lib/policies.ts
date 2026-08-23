@@ -71,6 +71,7 @@ const LINKS: Record<string, string> = {
   "privacy.md": "/privacy",
   "content-policy.md": "/content-policy",
   "../adr/0008-content-licence.md": `${REPOSITORY}/docs/adr/0008-content-licence.md`,
+  "../../CODE_OF_CONDUCT.md": `${REPOSITORY}/CODE_OF_CONDUCT.md`,
   "../../SECURITY.md": `${REPOSITORY}/SECURITY.md`,
   "../../SPEC.md": `${REPOSITORY}/SPEC.md`,
 };
