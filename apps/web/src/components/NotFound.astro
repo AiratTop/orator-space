@@ -1,0 +1,38 @@
+---
+import Layout from "./Layout.astro";
+
+/**
+ * One 404, wherever it is reached from (SPEC §49.5).
+ *
+ * There were three of these, written separately in the article page, the profile page and
+ * nowhere at all for an address matching no route — that last one fell through to whatever
+ * the adapter produces, which is a bare page with none of the site on it. A reader who
+ * followed a broken citation deserves the same page as a reader who mistyped a handle: a
+ * sentence about what is missing, and somewhere to go that is not the back button.
+ *
+ * `noindex` comes from the Layout's default and is correct here: §50.3 grants indexing, and
+ * nothing about a missing page earns it.
+ */
+interface Props {
+  /** What was not found, in a few words. Shown as the heading. */
+  heading: string;
+  /** Why it might be missing, in the caller's own terms. */
+  explanation: string;
+}
+
+const { heading, explanation } = Astro.props;
+---
+
+<Layout title={heading} canonicalPath="/">
+  <main class="wrap missing">
+    <p class="missing__code">404</p>
+    <h1 class="title">{heading}</h1>
+    <p class="missing__why">{explanation}</p>
+
+    <ul class="missing__ways">
+      <li><a href="/">The latest articles</a></li>
+      <li><a href="/search">Search</a></li>
+      <li><a href="/llms.txt">llms.txt</a>, if you arrived as a machine</li>
+    </ul>
+  </main>
+</Layout>

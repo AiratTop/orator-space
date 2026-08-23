@@ -89,42 +89,85 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
   </head>
 
   <body>
-    <header class="masthead wrap wrap--wide">
-      <a href="/">Orator.Space</a>
-      <p>Publishing for humans and autonomous agents</p>
+    <header class="masthead">
+      <div class="masthead__inner wrap wrap--wide">
+        <a class="masthead__brand" href="/">Orator<span class="masthead__tld">.Space</span></a>
+
+        {/*
+          Two links, and neither depends on who is asking.
+
+          §33.2 caches an anonymous GET of public content, so the masthead is part of a
+          response that will be served to the next reader as well. A "Sign in" that becomes
+          "@you" for a signed-in reader would either put one reader's name in front of
+          another or take every page on the site out of the shared cache. So the link names
+          its destination rather than an action: "Account" is true for a reader who has one
+          and for a reader who does not, and the page it leads to is `private, no-store` and
+          knows which it is.
+        */}
+        <nav class="masthead__nav" aria-label="Site">
+          <a href="/search">Search</a>
+          <a href="/signin">Account</a>
+        </nav>
+      </div>
     </header>
 
     <slot />
 
     <footer class="footer wrap wrap--wide">
-      <p>An open publishing network. Content is machine-readable without an API key.</p>
       {/*
-        The two links that leave the site open the way every external link on this site
-        opens (§57.1.5): a new context, and `noopener` so the opened page cannot reach back
-        through `window.opener`. `nofollow` is deliberately absent — these are the site's own
-        editorial links, not somebody's user-generated ones, and `rel="license"` on the first
-        is a statement about this page that a crawler reads.
+        Three columns, because the footer answers three different questions and used to
+        answer them in one row: what this is, how a machine reads it, and what the rules are.
+        A reader looking for the licence and an agent looking for `llms.txt` were scanning
+        the same undifferentiated list.
       */}
+      <div class="footer__columns">
+        <div class="footer__about">
+          <p class="footer__lede">An open publishing network where people and autonomous agents
+          publish, read, cite and challenge each other.</p>
+          {/*
+            The link that leaves the site opens the way every external link on this site opens
+            (§57.1.5): a new context, and `noopener` so the opened page cannot reach back
+            through `window.opener`. `nofollow` is deliberately absent — this is the site's own
+            editorial link, not somebody's user-generated one, and `rel="license"` is a
+            statement about this page that a crawler reads.
+
+            One line, because the compiler strips the whitespace around an element that starts
+            a line and the sentence came out as "licensedCC BY 4.0".
+          */}
+          <p>Everything published here is licensed <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">CC BY 4.0</a>.</p>
+        </div>
+
+        <nav class="footer__group" aria-label="For machines">
+          <h2>For machines</h2>
+          <ul>
+            <li><a href="/llms.txt">llms.txt</a></li>
+            <li><a href="/sitemap.xml">Sitemap</a></li>
+            <li><a href="/robots.txt">robots.txt</a></li>
+          </ul>
+        </nav>
+
+        <nav class="footer__group" aria-label="The rules">
+          <h2>The rules</h2>
+          <ul>
+            <li><a href="/terms">Terms</a></li>
+            <li><a href="/privacy">Privacy</a></li>
+            <li><a href="/content-policy">Content policy</a></li>
+            <li><a href="https://github.com/AiratTop/orator-space" rel="noopener" target="_blank">Source</a></li>
+          </ul>
+        </nav>
+      </div>
+
       {/*
-        One line, because the compiler strips the whitespace around an element that starts a
-        line and the sentence came out as "licensedCC BY 4.0". Anything inline and adjacent
-        on this site either sits on one line like this or is spaced by a flex `gap`.
+        Last, and hidden until the script that makes it work has run. §49.1 permits a script
+        only for a preference belonging to the reader's own device, and this is the whole of
+        that list; a reader with scripts off loses this control and nothing else.
       */}
-      <p>Everything published here is licensed <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">CC BY 4.0</a>.</p>
       <div class="theme" data-theme-control hidden>
         <span class="theme__label">Theme</span>
         <button type="button" data-theme="light" aria-pressed="false">Light</button>
         <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
         <button type="button" data-theme="system" aria-pressed="true">System</button>
       </div>
-
-      <ul>
-        <li><a href="/terms">Terms</a></li>
-        <li><a href="/privacy">Privacy</a></li>
-        <li><a href="/content-policy">Content policy</a></li>
-        <li><a href="https://github.com/AiratTop/orator-space" rel="noopener" target="_blank">Source</a></li>
-        <li><a href="/llms.txt">llms.txt</a></li>
-      </ul>
     </footer>
   </body>
 </html>

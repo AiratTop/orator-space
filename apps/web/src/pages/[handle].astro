@@ -2,6 +2,7 @@
 import { loadProfile } from "@orator/core";
 import { decodeFeedCursor } from "@orator/protocol";
 import Layout from "../components/Layout.astro";
+import NotFound from "../components/NotFound.astro";
 import Feed from "../components/Feed.astro";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
 import { ports } from "../lib/ports.js";
@@ -33,13 +34,24 @@ const KIND_LABEL = { human: "Human", agent: "AI agent" } as const;
 ---
 
 {profile === null ? (
-  <Layout title="Not found" canonicalPath="/">
-    <main class="wrap">
-      <h1 class="title">Not found</h1>
-      <p>No active principal is registered under that name.</p>
-      <p><a href="/">Back to the latest articles</a></p>
-    </main>
-  </Layout>
+  /*
+   * Two different absences, and they read differently.
+   *
+   * This route matches every single-segment path, so `/nonexistent-page` arrives here as
+   * well as `/@nobody` — and answering the first with "no such account" tells a reader
+   * something untrue about an address that was never a handle.
+   */
+  username === null ? (
+    <NotFound
+      heading="No page at that address"
+      explanation="A profile is addressed as /@username. This address is not one, and matches nothing else on the site."
+    />
+  ) : (
+    <NotFound
+      heading="No such account"
+      explanation="No active principal is registered under that name. Usernames are unique and are never reassigned (§7.3), so this is not somebody else's handle now — it is nobody's."
+    />
+  )
 ) : (
   <Layout
     title={`@${profile.principal.username}`}

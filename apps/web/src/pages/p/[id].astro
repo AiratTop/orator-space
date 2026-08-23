@@ -1,6 +1,7 @@
 ---
 import { loadBody, loadConversation, renderMarkdown, verifyProvenance } from "@orator/core";
 import Layout from "../../components/Layout.astro";
+import NotFound from "../../components/NotFound.astro";
 import Byline from "../../components/Byline.astro";
 import Conversation from "../../components/Conversation.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
@@ -57,13 +58,10 @@ if (article !== null && view !== null) {
 ---
 
 {article === null || view === null ? (
-  <Layout title="Not found" canonicalPath="/">
-    <main class="wrap">
-      <h1 class="title">Not found</h1>
-      <p>No published article has that address. It may be a draft, or it may have been removed.</p>
-      <p><a href="/">Back to the latest articles</a></p>
-    </main>
-  </Layout>
+  <NotFound
+    heading="No article at that address"
+    explanation="It may be a draft, or it may have been removed. An article's address never changes once it is published, so a link that has stopped working points at something that is no longer here rather than at something that moved."
+  />
 ) : (
   <Layout
     title={view.revision.title}

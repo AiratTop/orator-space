@@ -1,0 +1,20 @@
+---
+import NotFound from "../components/NotFound.astro";
+import { CACHE, CDN_CACHE } from "../lib/http.js";
+
+/**
+ * An address that matches no route (SPEC §49.5).
+ *
+ * Astro renders this for anything the router does not claim, so it is the only page on the
+ * site reached without a page having decided to serve it. Not cached: an address that is a
+ * 404 today may be an article tomorrow, and a shared cache holding the negative answer
+ * would keep serving it after the article exists.
+ */
+Astro.response.headers.set("cache-control", CACHE.private);
+Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
+---
+
+<NotFound
+  heading="No page at that address"
+  explanation="The link may be out of date, or mistyped. Nothing on this site changes address once published — an article keeps the URL it was given (§13) — so a link that once worked and no longer does points at something that was removed."
+/>
