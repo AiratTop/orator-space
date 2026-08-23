@@ -118,7 +118,18 @@ const when = (iso: string) => iso.slice(0, 10);
         </p>
 
         <div class="secret__row">
-          <code class="secret__value" id="token-value">{outcome.token}</code>
+          {/*
+            A control rather than a run of text: it is the largest thing here and the thing
+            somebody looks at, so it is what they click. The button beside it stays for
+            anyone who does not think to.
+          */}
+          <code
+            class="secret__value"
+            id="token-value"
+            role="button"
+            tabindex="0"
+            title="Click to copy"
+          >{outcome.token}</code>
           <button class="button button--small" id="copy-token" type="button">Copy</button>
         </div>
 

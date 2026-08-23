@@ -3723,6 +3723,22 @@ authentication to read what is already public is pointless and contradicts §2.
 position is that reading is permitted, since the platform exists for machine consumption of
 content.
 
+**MUST NOT — `Disallow` is not how a page is kept out of an index.** A page that should not
+be listed carries `noindex` and stays fetchable, because a crawler that may not fetch it
+never reads the `noindex` and the address stays eligible to appear as a bare link with no
+description. Disallowing a `noindex` page is the mechanism by which URLs get stuck in an
+index rather than removed from it, and the mistake is easy to make because both settings
+sound like the same instruction.
+
+So `/@handles`, `/signin` and `/settings` are absent from `robots.txt` deliberately, and
+each carries `noindex` instead (§50.3 — indexing is earned, and none of them earns it).
+
+**MUST — `Disallow` is for a URL space, not for a page.** `/search` is disallowed because
+its address space is unbounded by construction: the cost being avoided is the crawl itself,
+spent on an infinity of generated pages, rather than the listing of any one of them. That is
+the test for adding a line: does fetching this cost a budget that belongs to the articles.
+A single page fails it, however much one would prefer it unlisted.
+
 ## 49. The web interface
 
 ### 49.1. Technology
@@ -5866,6 +5882,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 129 | Classification and screening never share one inference | §61, §22.3 |
 | 130 | `flagged` is the strongest automated verdict; removal is a person's | §61, §23.2 |
 | 131 | A topic page enters the sitemap on three indexable articles, and leaves below it | §51, §50.3 |
+| 132 | A page kept out of an index carries `noindex` and stays fetchable; `Disallow` is for a URL space | §48, §50.3 |
 
 ## 80. Open decisions
 

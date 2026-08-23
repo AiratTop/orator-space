@@ -1445,10 +1445,14 @@ a {
   display: flex;
   align-items: stretch;
   gap: 0.5rem;
+  /* On a phone the value alone is wider than the screen, so the button goes underneath
+     rather than squeezing the thing somebody has to read character by character. */
+  flex-wrap: wrap;
 }
 
 .secret__value {
-  flex: 1 1 auto;
+  flex: 1 1 16rem;
+  cursor: pointer;
   font-family: var(--mono);
   font-size: 0.9375rem;
   padding: 0.75rem;
@@ -1459,6 +1463,15 @@ a {
   word-break: break-all;
   /* One click selects the whole thing, for anyone whose clipboard access is refused. */
   user-select: all;
+}
+
+.secret__value:hover {
+  border-color: var(--accent);
+}
+
+.secret__value:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 #copy-token {
@@ -1766,7 +1779,13 @@ a {
 .issue {
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 0.5rem 0.875rem;
+  padding: 0.625rem 1rem;
+}
+
+/* Open, the last thing in here is a submit button, and it was sitting on the border. A
+   control flush against a frame reads as clipped rather than as placed. */
+.issue[open] {
+  padding-bottom: 1.25rem;
 }
 
 .issue--wide {
@@ -1782,6 +1801,10 @@ a {
 .issue__form {
   margin-top: 1rem;
   max-width: 26rem;
+}
+
+.issue__form > .button {
+  margin-top: 0.25rem;
 }
 
 .field textarea,
@@ -1870,7 +1893,9 @@ a {
   margin: 0;
   display: grid;
   gap: 0.5rem 2rem;
-  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  /* `min()` rather than a bare 20rem: a track has a minimum, and on a screen narrower than
+     the minimum the track keeps it and the page scrolls sideways. */
+  grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
 }
 
 .leaf {
