@@ -11,6 +11,7 @@ import {
   createMetricsQuery,
   createSloRepo,
   createWorkersAiClassifier,
+  createWorkersAiModerator,
   QuotaCounter,
   recordDeadLetter,
   systemClock,
@@ -35,10 +36,12 @@ import {
   evaluateSlo,
   markArticleShard,
   classifyArticle,
+  heuristicProvider,
   rebuildSitemap,
   reindexArticle,
   runRetention,
   screenArticle,
+  withFloor,
 } from "@orator/core";
 
 export interface Env {
@@ -60,7 +63,7 @@ export interface Env {
    * both, and the closed vocabulary that neuters an injection aimed at a classifier is
    * exactly what one aimed at a verdict would be choosing from.
    */
-  AI: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
   /** SPEC §59.1 — the approximate half: per-colo flood protection, per IP and per token. */
   FLOOD: RateLimit;
   /** §59.2 names search separately, and the binding's limit is fixed per binding. */
@@ -442,7 +445,27 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
        * §50.3 declines to make unchecked content indexable, which is the consequence — the
        * message is done either way, and retrying it would re-index for no reason.
        */
-      const screened = await screenArticle(ports, event.aggregate_id);
+      /*
+       * §61, §80.19 — the floor, plus something that reads where there is one.
+       *
+       * Two providers rather than a choice, because they see different things: the heuristic
+       * finds what is mechanically visible and a model tells spam from an argument somebody
+       * dislikes. If the model is unavailable and the heuristic found nothing, the article is
+       * left `unchecked` rather than passed — "the rules matched nothing" is not "somebody
+       * looked" (§61).
+       *
+       * A missing binding is not that failure. It is a deployment configured without a
+       * reading provider — the local dev server, and the `workerd` tests — and §61's floor
+       * exists precisely so that such a deployment still screens. Conflating the two would
+       * mark everything published locally as unchecked and therefore unindexable, for a
+       * reason that has nothing to do with the content.
+       */
+      const ai = env.AI;
+      const screened = await screenArticle(
+        ports,
+        event.aggregate_id,
+        ai === undefined ? heuristicProvider : withFloor(heuristicProvider, createWorkersAiModerator(ai)),
+      );
 
       /*
        * §22.3, §38.3 — classification, on the same event and independent of everything else.
@@ -455,11 +478,10 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
        * A redelivery is free rather than merely harmless: the content hash of the body that
        * was read is recorded, so the same bytes are never sent to a model twice (§22.3).
        */
-      const classified = await classifyArticle(
-        ports,
-        event.aggregate_id,
-        createWorkersAiClassifier(env.AI),
-      );
+      const classified =
+        ai === undefined
+          ? { status: "skipped" as const, topics: [] as string[] }
+          : await classifyArticle(ports, event.aggregate_id, createWorkersAiClassifier(ai));
 
       /*
        * §50.3 — after screening, because the verdict is one of its four conditions.

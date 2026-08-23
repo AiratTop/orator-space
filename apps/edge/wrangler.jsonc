@@ -39,17 +39,18 @@
    */
 
   /*
-   * SPEC §22.3, §38.3 — the classifier.
+   * SPEC §22.3, §38.3, §61 — the classifier and the reading moderation provider.
    *
-   * On the binding rather than over the network with a key: the model runs in the same
-   * account as everything else, which is what makes a hosted model a reasonable second
-   * implementation of §61's provider abstraction rather than a new dependency to manage.
+   * Declared per environment and deliberately absent from this block, which is the one the
+   * local dev server and the `workerd` tests read. Workers AI has no local simulator, so its
+   * presence here makes the test pool open a remote proxy session — which needs a Cloudflare
+   * token in CI and turns a hermetic unit test into a network call against a paid API.
    *
-   * One binding, two callers with different consequences — classification and screening —
-   * and §61 requires them to be two calls rather than one. Sharing an inference between a
-   * topic and a verdict would put the weaker discipline in charge of both.
+   * The absence is a supported state rather than a gap: §61's floor is a provider that
+   * depends on nothing, and the Worker treats a missing binding as "this deployment has no
+   * reading provider" — screening by the heuristic alone, classification skipped — which is
+   * a different thing from an outage and is logged as such.
    */
-  "ai": { "binding": "AI" },
   "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
 
