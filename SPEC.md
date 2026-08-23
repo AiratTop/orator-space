@@ -2321,6 +2321,40 @@ a day. The `.md` and `.json` representations are the revision and nothing else, 
 unchanged. The marker is counts and maxima rather than a digest of the rows, so §33.3 still
 holds: one round trip, no read from R2. See ADR 0007.
 
+**MUST — a validator covers the template as well as the content.** A response the Worker
+*composes* carries the build identity in its ETag; a response that is stored bytes and
+nothing else does not:
+
+```text
+/p/{id}            W/"<content_hash>.<conversation marker>.<build>"    page
+/p/{id}.json       W/"<content_hash>.<build>"                          envelope (§58.2)
+/{policy}          W/"<document fingerprint>.<build>"                  page
+/{policy}.md       W/"<document fingerprint>.md.<build>"               links rewritten here
+/p/{id}.md         W/"<content_hash>"                                  the author's bytes
+```
+
+**Rationale.** An HTML page is stored content rendered through a template, and the template
+ships with the deployment. A validator over the content alone answers "unchanged" to a page
+the deployment has just rewritten: the edge revalidates, receives `304`, and keeps serving
+the previous build for the whole `stale-while-revalidate` window — a day on an article.
+Nothing purges it, and §33.4's purge is by article, on publication, and would not fire.
+
+Found on 2026-08-23. `/content-policy` served a page from before the markdown link was
+added, an hour after the deployment that added it, while the origin behind it served the
+new one — and the read checkpoint passed, because CI reaches a different edge than the
+reader who reported it. The page carried no ETag at all, so the edge could not ask whether
+its copy was current; it could only wait out `max-age`, which was an hour. It is now five
+minutes, because a policy page costs no D1 read and no R2 read and a long TTL buys nothing
+but an hour in which the terms say something the network no longer says.
+
+**MUST NOT** put the build in an article's `.md` validator. Rebuilding the site does not
+change what an author wrote, and a redeploy that invalidated every article body would make
+every deployment a re-fetch of the whole corpus for every cache holding it.
+
+**MUST.** Two representations of one document do not share a validator, even where they sit
+at different URLs and no cache could confuse them. A shared validator is a trap for whoever
+adds the third representation.
+
 **MUST — the ETag is weak.** `W/"<content_hash>"`, not `"<content_hash>"`.
 
 The hash identifies the revision's content; the bytes on the wire are that content in
@@ -2365,7 +2399,8 @@ what will notice if that changes.
 
 The `ETag` is the revision's `content_hash`, which is already in D1. Revalidation is one
 indexed query against D1, with no read of the body from R2, answering `304`. A short
-`s-maxage` therefore puts no meaningful load on the origin.
+`s-maxage` therefore puts no meaningful load on the origin. The build suffix of §33.2 costs
+nothing to compute: it is a compile-time constant.
 
 ### 33.4. Invalidation
 

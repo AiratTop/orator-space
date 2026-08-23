@@ -1,26 +1,12 @@
 ---
 import Policy from "../components/Policy.astro";
 import { POLICIES } from "../lib/policies.js";
-import { negotiateRepresentation } from "@orator/protocol";
-import { CACHE, CDN_CACHE, cacheHeaders, negotiatedRedirect } from "../lib/http.js";
+import { policyGate, policyHeaders } from "../lib/policy-http.js";
 
-/*
- * §33.5 — `Accept` is the secondary mechanism, and it redirects.
- *
- * The same behaviour the article page has, for the same reason: a machine that asked for
- * markdown and was handed HTML has to notice and ask again, and two surfaces should not
- * differ on something a client cannot see in advance. `Accept: text/markdown` is not what a
- * browser sends, so nothing a person does reaches this.
- *
- * In the page rather than in the component: only a page may return a Response, and a
- * `return` in a component's frontmatter ends the frontmatter and renders anyway — which is
- * what it did here for one commit's worth of confusion.
- */
-if (negotiateRepresentation(Astro.request.headers.get("accept")) === "markdown") {
-  return negotiatedRedirect(`/terms.md`);
-}
-
-cacheHeaders(Astro.response.headers, CACHE.policy, CDN_CACHE.policy);
+/* §33.5 negotiation and §33.2 revalidation, both decided before anything renders. */
+const gate = policyGate(Astro.request, "terms");
+if (gate instanceof Response) return gate;
+policyHeaders(Astro.response.headers, gate);
 ---
 
 <Policy policy={POLICIES["terms"]} />

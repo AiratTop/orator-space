@@ -676,6 +676,42 @@ for (const [path, marker] of [
     `${path} offers its markdown, which is what a model came for (§48)`,
     policyHtml.includes(`href="${path}.md"`),
   );
+  /*
+   * The validator, which is what makes a deployment reach a reader (§33.1, §33.2).
+   *
+   * Found on 2026-08-23: `/content-policy` was serving a page from before the markdown link
+   * was added, an hour after the deployment that added it, while the origin behind it served
+   * the new one — and this checkpoint passed, because CI reaches a different edge than the
+   * reader who reported it. The page carried no ETag at all, so the edge could not ask
+   * whether its copy was current; it could only wait out `max-age`, which was an hour.
+   *
+   * The symptom itself is per-location and unreachable from here, so what is asserted is the
+   * mechanism: the page offers a validator, revalidating against it works, the two
+   * representations do not share one, and both name the same build — which is the part that
+   * makes a deployment invalidate a page whose stored content did not change.
+   */
+  const policyEtag = policy.headers.get("etag");
+  check(`${path} carries an ETag, so the edge can revalidate rather than wait`, !!policyEtag, `${policyEtag}`);
+  check(
+    `${path} is held for minutes, not hours`,
+    /(^|[ ,])max-age=300\b/.test(policy.headers.get("cache-control") ?? ""),
+    policy.headers.get("cache-control") ?? "",
+  );
+  if (policyEtag) {
+    const revalidatedPolicy = await web(path, { headers: { "if-none-match": policyEtag } });
+    check(`${path} answers a conditional request with 304`, revalidatedPolicy.status === 304, `${revalidatedPolicy.status}`);
+  }
+  const mdEtag = md.headers.get("etag");
+  check(`${path} and ${path}.md do not share one validator`, policyEtag !== mdEtag, `${policyEtag}`);
+  // The last dot-segment is the build (`composedEtag`). Both representations come from one
+  // deployment, so it is the same in both — and it is what a redeploy moves.
+  const buildOf = (tag) => (tag ?? "").replace(/"$/, "").split(".").pop();
+  check(
+    `${path} names the build that produced it`,
+    !!buildOf(policyEtag) && buildOf(policyEtag) === buildOf(mdEtag),
+    `${buildOf(policyEtag)} vs ${buildOf(mdEtag)}`,
+  );
+
   check(
     `${path} carries no link that only works in the repository`,
     // Relative only. A link to `…/blob/main/SECURITY.md` is an absolute address that works

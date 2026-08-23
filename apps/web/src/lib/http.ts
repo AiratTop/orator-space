@@ -26,8 +26,16 @@ import { CONTENT_TYPES, type Representation } from "@orator/protocol";
 export const CACHE = {
   article: "public, max-age=60, s-maxage=60, stale-while-revalidate=86400",
   feed: "public, max-age=30, s-maxage=30, stale-while-revalidate=300",
-  /** The policies. They change a few times a year and are read by crawlers. */
-  policy: "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
+  /**
+   * The policies.
+   *
+   * Five minutes, not the hour this used to say. A policy page costs no D1 read and no R2
+   * read — the documents are compiled into the bundle — so the only thing a long TTL buys
+   * is a saved Worker invocation, and what it costs is an hour in which the network's terms
+   * say something the network no longer says. That is the wrong side of the trade for these
+   * three pages in particular.
+   */
+  policy: "public, max-age=300, s-maxage=300, stale-while-revalidate=86400",
   /** Anything reached with credentials, and anything that failed. */
   private: "private, no-store",
 } as const;
@@ -46,7 +54,7 @@ export const CACHE = {
 export const CDN_CACHE = {
   article: "public, max-age=60, stale-while-revalidate=86400",
   feed: "public, max-age=30, stale-while-revalidate=300",
-  policy: "public, max-age=3600, stale-while-revalidate=86400",
+  policy: "public, max-age=300, stale-while-revalidate=86400",
   private: "no-store",
 } as const;
 
@@ -54,6 +62,28 @@ export interface Validators {
   etag: string;
   lastModified: string;
 }
+
+/**
+ * Which build produced this response (SPEC §33.1).
+ *
+ * Defined by Vite at compile time — see the note in `astro.config.mjs` for why it exists.
+ */
+export const BUILD_ID: string = __BUILD_ID__;
+
+/**
+ * A validator for a representation this build *composes* rather than stores.
+ *
+ * §33.1 puts correctness in revalidation, and revalidation is only correct when the
+ * validator covers the whole entity. An HTML page is stored content plus a template, and a
+ * template lives in the deployment: an ETag over the content alone answers "unchanged" to a
+ * page that a deployment has just rewritten, and the edge keeps the old one for its whole
+ * `stale-while-revalidate` window.
+ *
+ * So: anything assembled here — a rendered page, a policy with its links rewritten, a JSON
+ * envelope — carries the build. An article's `.md` is the author's bytes and nothing else,
+ * and does not: rebuilding the site does not change what they wrote.
+ */
+export const composedEtag = (etag: string): string => `${etag}.${BUILD_ID}`;
 
 /**
  * The ETag, as a weak validator.
@@ -79,7 +109,18 @@ const sameEntity = (a: string, b: string): boolean =>
  * Called before the body is read, which is the entire point: §33.3 promises revalidation
  * costs one indexed D1 query, and it only does if the R2 read happens after this.
  */
-export function notModified(request: Request, validators: Validators): Response | null {
+export function notModified(
+  request: Request,
+  validators: Validators,
+  /**
+   * Which row of the CACHE table this 304 restates.
+   *
+   * A 304 carries the freshness the cache should now apply, so answering a policy page's
+   * revalidation with an article's sixty seconds would quietly shorten it. Defaults to the
+   * article's, which is what every caller but the policies wants.
+   */
+  policy: keyof typeof CACHE = "article",
+): Response | null {
   const tag = quoteEtag(validators.etag);
   const ifNoneMatch = request.headers.get("if-none-match");
   if (ifNoneMatch === null) return null;
@@ -95,8 +136,8 @@ export function notModified(request: Request, validators: Validators): Response 
     status: 304,
     headers: {
       etag: tag,
-      "cache-control": CACHE.article,
-      "cloudflare-cdn-cache-control": CDN_CACHE.article,
+      "cache-control": CACHE[policy],
+      "cloudflare-cdn-cache-control": CDN_CACHE[policy],
       "last-modified": new Date(validators.lastModified).toUTCString(),
     },
   });

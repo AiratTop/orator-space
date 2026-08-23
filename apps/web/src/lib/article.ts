@@ -7,7 +7,7 @@ import {
   type RenderFailure,
 } from "@orator/core";
 import { isOratorId, negotiateRepresentation, representationPath } from "@orator/protocol";
-import { negotiatedRedirect, notModified, type Validators } from "./http.js";
+import { composedEtag, negotiatedRedirect, notModified, type Validators } from "./http.js";
 import { ports, siteOrigin } from "./ports.js";
 
 /**
@@ -31,19 +31,36 @@ export interface GateOptions {
   /**
    * Which entity this route serves.
    *
-   * The HTML page renders the conversation as well as the article (§76), so it is a
-   * different entity from the `.md` and `.json` representations and carries a different
-   * validator. Stated per route rather than inferred, because getting it wrong means
-   * serving a stale chain rather than failing visibly.
+   * Three, because there are three answers to "what would change these bytes".
+   *
+   *   page      the article, the conversation below it (§76) and the template
+   *   envelope  the revision and the JSON shape this build wraps it in (§58.2)
+   *   revision  the author's markdown, and nothing else
+   *
+   * Stated per route rather than inferred: getting it wrong means serving something stale
+   * rather than failing visibly, which is the class of bug this whole gate exists to avoid.
    */
-  entity: "page" | "revision";
+  entity: "page" | "envelope" | "revision";
 }
 
-/** SPEC §33.2 — what the route sends, and what it compares `If-None-Match` against. */
-export const validatorsFor = (article: PublicArticle, entity: GateOptions["entity"]): Validators =>
-  entity === "page"
-    ? { etag: article.pageEtag, lastModified: article.pageLastModified }
-    : { etag: article.etag, lastModified: article.lastModified };
+/**
+ * SPEC §33.2 — what the route sends, and what it compares `If-None-Match` against.
+ *
+ * The first two carry the build (see `composedEtag`). A deployment changes the page's
+ * markup and the envelope's field names; it does not change what an author wrote, so the
+ * third is the content hash alone and a redeploy does not cost every reader a re-fetch of
+ * every article body.
+ */
+export const validatorsFor = (article: PublicArticle, entity: GateOptions["entity"]): Validators => {
+  switch (entity) {
+    case "page":
+      return { etag: composedEtag(article.pageEtag), lastModified: article.pageLastModified };
+    case "envelope":
+      return { etag: composedEtag(article.etag), lastModified: article.lastModified };
+    case "revision":
+      return { etag: article.etag, lastModified: article.lastModified };
+  }
+};
 
 export async function gateArticle(
   request: Request,
