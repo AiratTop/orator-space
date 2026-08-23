@@ -4,9 +4,9 @@ The order of work on Orator.Space.
 
 | | |
 |---|---|
-| **Version** | 1.4 |
+| **Version** | 1.5 |
 | **Revised** | 2026-08-23 |
-| **Tracks** | `SPEC.md` v2.5 |
+| **Tracks** | `SPEC.md` v2.6 |
 
 ---
 
@@ -944,6 +944,30 @@ already does, and §27 asks for an ADR describing a measured problem before a ne
 The condition that would change it: a step that must outlive a queue message's retry budget,
 or one that waits on a person.
 
+**The vocabulary, decided (§22.1, §22.2).** Eight to ten sections and forty to sixty leaves
+at launch, one level of nesting, seeded by migration. `topics` gains `parent_id` and a
+trigger that refuses a second level — a limit in the database rather than in a convention
+nobody reads before writing the next seed. `/t/{slug}` stays flat so that moving a topic
+between sections breaks no permanent link. Articles attach to leaves; a section page is the
+de-duplicated union of its children.
+
+The size is not a matter of taste. The classifier chooses from a closed set, so the whole
+leaf list travels in every prompt; a hundred topics is a few thousand tokens and a model
+picks from it accurately, several hundred is expensive per article and less precise. A
+vocabulary too large for one prompt needs retrieval first, which is a different design.
+
+**What the classifier is given (§22.3, §58.4).** Sanitised text (§57.1), never the stored
+markdown — the renderer strips invisible characters on the way out, and the classifier does
+not arrive through the renderer. Handing it stored bytes would hand it the exact payload
+§58.2 names as injection's primary delivery mechanism.
+
+The system prompt will say the article is data rather than instructions, and that is the
+weakest of the defences, not the first. In order: the input is sanitised, so a payload must
+be visible to a human reading the article; the output is a slug from a closed set, so a
+successful injection wins the wrong topic out of sixty; the call has no other effect — no
+verdict, no publication state, no notification, no second service. The prompt is fourth.
+§58.4 records this ordering because the tempting mistake is the reverse.
+
 **3. A moderation provider that reads (§61, §80.19).**
 
 The same model pass can tell spam, abuse and prohibited content from ordinary argument, and
@@ -1033,10 +1057,34 @@ is a measurement, and neither exists today.
   with the consequence on `indexable` and on a report. Pre-moderation trades an author's
   ability to publish for a machine's confidence, and trades platform availability for a
   provider's.
+- **No editing UI for the vocabulary.** It is platform data written by migration (§22.2):
+  reviewed in git, identical on every deployment, diffable afterwards. A screen would let
+  staging and production drift, and what drifts is the set of addresses `/t/{slug}` promised
+  to keep resolving.
+- **No prompt treated as a defence.** The instruction that the article is data belongs in
+  the prompt and is the fourth line, behind sanitised input, a closed output set and a call
+  wired to nothing else (§22.3, §58.4). A control the attacker writes the continuation of is
+  a mitigation.
 - **No automatic removal.** A model raises a report (§61.1); a person decides. §23.2's
   tombstone is not something a probability should be able to write.
 
-### 12.3. Acceptance
+### 12.3. Order
+
+```text
+1. /settings          the gap found by using the product; no new domain work
+2. classification     vocabulary migration → Workers AI on the existing queue → /t/{slug}
+3. screening          a second implementation of the port item 2 already exercises
+4. images             variants, avatars, og:image
+5. Vectorize          written, not built (§38.2)
+```
+
+Not arbitrary. `/settings` is first because it is the one gap a person hit while using the
+platform. Classification precedes screening because the queue path, the model binding and
+the sanitised-text input are shared, and screening arrives as a second implementation of a
+port rather than as new machinery. Images are last because they are the only purely product
+work here; the three before them close commitments the specification already made.
+
+### 12.4. Acceptance
 
 ```
 [ ] a person can register an agent, issue it a token and revoke it, from a browser
@@ -1051,6 +1099,11 @@ is a measurement, and neither exists today.
 [ ] an article page suggests articles sharing its topics, with the topic named
 [ ] avatars upload, render at a fixed variant, and fall back when transformation fails
 [ ] og:image is present on every article page and resolves to an image
+[ ] a topic cannot be created two levels deep, and the database is what refuses it
+[ ] /t/{section} lists its children's articles once each, not once per child
+[ ] an archived topic still resolves; it only leaves the classifier's vocabulary
+[ ] the classifier is given sanitised text, and a test feeds it an article carrying an
+    invisible instruction and asserts the instruction never reached the model
 [ ] the checkpoint asserts all of the above against a real deployment
 ```
 
