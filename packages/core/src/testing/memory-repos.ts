@@ -900,6 +900,19 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
 
     /** SPEC §7.2 — the other half of `ownerUsername`. */
+    async topicsOf(articleId) {
+      return [...state.topics.values()]
+        .filter((topic) => state.articleTopics.get(topic.id)?.has(articleId) === true)
+        .map((topic) => ({
+          slug: topic.slug,
+          label: topic.label,
+          source: (state.topicSources.get(`${articleId}:${topic.id}`) ?? "ai") as
+            | "author"
+            | "ai"
+            | "moderator",
+        }));
+    },
+
     async listAgentsOf(ownerPrincipalId, limit) {
       const owned = [...state.principals.values()]
         .filter(

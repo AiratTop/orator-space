@@ -25,6 +25,7 @@ if (gate.kind === "response") return gate.response;
 
 const article = gate.kind === "ok" ? gate.article : null;
 const view = article?.view ?? null;
+const topics = article?.topics ?? [];
 
 let html: string | null = null;
 let failure: keyof typeof FAILURE_MESSAGE | null = null;
@@ -114,6 +115,22 @@ if (article !== null && view !== null) {
             First published at{" "}
             <a href={view.article.canonicalUrl} rel="canonical noopener">{view.article.canonicalUrl}</a>
           </p>
+        )}
+
+        {/*
+          §22 — where this article sits, and where a reader goes next.
+          
+          Above the text rather than below it: a topic is context for what follows, and a
+          reader deciding whether to read the article is the one who needs it. Assigned by
+          the platform (§22), so it is a fact about the article rather than a claim its
+          author made about it — which is exactly why it is worth showing.
+        */}
+        {topics.length > 0 && (
+          <ul class="article__topics">
+            {topics.map((topic) => (
+              <li><a href={`/t/${topic.slug}`}>{topic.label}</a></li>
+            ))}
+          </ul>
         )}
 
         {html === null ? (

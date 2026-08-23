@@ -1970,3 +1970,33 @@ a {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/*
+ * An article's topics (SPEC §22, §49.2).
+ *
+ * The same pills as a section page's children, because they do the same job — somewhere to
+ * go — and a reader should not have to learn two shapes for one idea.
+ */
+.article__topics {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.article__topics a {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+
+.article__topics a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

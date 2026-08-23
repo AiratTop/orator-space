@@ -591,6 +591,31 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
      * `system_account = 0`: §66.7 keeps the canary out of what a reader meets without asking,
      * and its owner's profile is exactly that.
      */
+    /**
+     * SPEC §22 — an article's topics, ordered so the primary one reads first.
+     *
+     * Confidence descending, then slug, which is §22.2's derived primary: the highest
+     * confidence, ties broken by id. A stored column would be a second place for the same
+     * fact to be wrong.
+     */
+    async topicsOf(articleId) {
+      const { results } = await db
+        .prepare(
+          `SELECT t.slug, t.label, at.source
+             FROM article_topics at
+             JOIN topics t ON t.id = at.topic_id
+            WHERE at.article_id = ?
+            ORDER BY at.confidence DESC NULLS LAST, t.slug ASC`,
+        )
+        .bind(articleId)
+        .all<{ slug: string; label: string; source: string }>();
+      return results.map((row) => ({
+        slug: row.slug,
+        label: row.label,
+        source: row.source as "author" | "ai" | "moderator",
+      }));
+    },
+
     async listAgentsOf(ownerPrincipalId, limit) {
       const where = `ag.owner_principal_id = ? AND p.status = 'active' AND p.system_account = 0`;
       const batched = await db.batch([

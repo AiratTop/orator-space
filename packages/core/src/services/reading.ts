@@ -3,6 +3,7 @@ import { canonicalPath } from "../articles/urls.js";
 import { stripInvisible } from "../text/invisible.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
 import type {
+  ArticleTopic,
   ArticleView,
   AuthoredCommentPage,
   CitationPage,
@@ -41,6 +42,8 @@ export type ReadingPorts = Pick<Ports, "reading" | "content">;
 
 export interface PublicArticle {
   view: ArticleView;
+  /** SPEC §22 — what the platform sorted this into, and where a reader goes next. */
+  topics: ArticleTopic[];
   /** SPEC §33.2 — the ETag is the revision's content hash, already in D1. */
   etag: string;
   lastModified: string;
@@ -73,7 +76,13 @@ export interface PublicArticle {
 export type Provenance = "verified" | "invalid" | "unsigned" | "key-unavailable";
 
 export async function loadArticle(ports: ReadingPorts, id: string): Promise<Result<PublicArticle>> {
-  const view = await ports.reading.findPublished(id);
+  // In parallel: the topics query is independent of whether the article turns out to be
+  // readable, and serialising them would add a round trip to every article page for a list
+  // that is usually one row.
+  const [view, topics] = await Promise.all([
+    ports.reading.findPublished(id),
+    ports.reading.topicsOf(id),
+  ]);
   // Deliberately indistinguishable from an id that never existed. Confirming that a draft
   // exists would leak the author's unpublished work as a yes/no oracle (§43.3).
   if (view === null) return fail("not-found", "Article not found");
@@ -83,6 +92,7 @@ export async function loadArticle(ports: ReadingPorts, id: string): Promise<Resu
 
   return ok({
     view,
+    topics,
     etag: view.revision.contentHash,
     lastModified,
     canonicalPath: canonicalPath(view.article),

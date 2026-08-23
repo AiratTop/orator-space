@@ -4,6 +4,7 @@ import {
   urlFor,
   type ArticleCard,
   type ArticleForActor,
+  type ArticleTopic,
   type CommentRecord,
   type CommentSummary,
   type EdgeRecord,
@@ -87,6 +88,7 @@ export const principalView = (record: PrincipalRecord) => ({
 export const articleView = (
   { article, revision, body, canSeeDraft }: ArticleForActor,
   origin: string,
+  topics: readonly ArticleTopic[] = [],
 ) => ({
   id: article.id,
   url: urlFor(article.id),
@@ -112,6 +114,13 @@ export const articleView = (
   author_principal_id: article.authorPrincipalId,
   published_at: article.publishedAt,
   indexable: article.indexable,
+  /*
+   * SPEC §22 — assigned by the platform, never claimed by the author.
+   *
+   * `source` is carried because the three values mean different things to a caller: `ai` is
+   * the ordinary path, and `author` or `moderator` means somebody corrected it.
+   */
+  topics: topics.map((topic) => ({ slug: topic.slug, label: topic.label, source: topic.source })),
   // §34.3 — the value to send back as `If-Match`, and only to someone entitled to the
   // draft. `revision` above is the one being served; after an unpublished edit those are
   // two different revisions, and an author holding only the published id would be refused

@@ -65,6 +65,14 @@ export interface ArticleView {
   signingKey: { publicKey: string; createdAt: string; revokedAt: string | null } | null;
 }
 
+/** SPEC §22 — a topic as an article page shows it: somewhere to go, and its name. */
+export interface ArticleTopic {
+  slug: string;
+  label: string;
+  /** Which source put it there (§22). A reader is not shown this; the API carries it. */
+  source: "author" | "ai" | "moderator";
+}
+
 /** What a feed row needs. Deliberately not an ArticleView: a card must not read R2. */
 export interface ArticleCard {
   id: OratorId;
@@ -149,6 +157,15 @@ export interface ReadingRepo {
    * say how many it is not showing rather than quietly truncating.
    */
   listAgentsOf(ownerPrincipalId: string, limit: number): Promise<OperatedAgents>;
+
+  /**
+   * SPEC §22 — the topics an article was sorted into, for its own page.
+   *
+   * A second query rather than a join onto `findPublished`, which loads one row and says so:
+   * topics are zero to five rows and would multiply the article, the revision and the author
+   * by five to carry them. Issued in parallel, so the page still costs one round trip.
+   */
+  topicsOf(articleId: string): Promise<ArticleTopic[]>;
 
   /** SPEC §49.2 — the profile's tabs. `before` is an id, which is also the sort key (§12.2). */
   listCommentsByAuthor(principalId: string, limit: number, before: string | null): Promise<AuthoredCommentPage>;

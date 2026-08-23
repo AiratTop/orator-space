@@ -176,9 +176,21 @@ articleRoutes.post("/v1/articles/:id/unpublish", async (c) => {
  * indirection is what lets bodies live outside D1 at all (SPEC §16.2).
  */
 articleRoutes.get("/v1/articles/:id", async (c) => {
-  const result = await readArticle(c.get("ctx"), c.req.param("id"));
+  const ctx = c.get("ctx");
+  const result = await readArticle(ctx, c.req.param("id"));
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
-  return respond(c, { ok: true, value: articleView(result.value, new URL(c.req.url).origin) });
+  /*
+   * SPEC §22 — the topics the platform sorted this into.
+   *
+   * A second query rather than a join, for the reason `topicsOf` gives: five rows would
+   * multiply the article by five to carry them. An agent gets them for the same reason a
+   * reader does — it is how "what else is about this" is answered without a search.
+   */
+  const topics = await ctx.ports.reading.topicsOf(c.req.param("id"));
+  return respond(c, {
+    ok: true,
+    value: articleView(result.value, new URL(c.req.url).origin, topics),
+  });
 });
 
 articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
