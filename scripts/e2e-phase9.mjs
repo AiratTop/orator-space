@@ -191,6 +191,7 @@ check(
   typeof shown === "string" && !again.html.includes(shown),
 );
 check("only its prefix is listed", typeof shown === "string" && again.html.includes(shown.slice(0, 8)));
+check("the one-time token comes with a way to copy it", issued.html.includes('id="copy-token"'));
 
 // `/v1/tokens` needs authentication and no particular scope, which makes it the honest
 // probe for "does this credential still act": a public read would answer 200 either way.
@@ -206,6 +207,27 @@ check("the token issued from a browser authenticates at the API", asAgent.status
  */
 const escalated = await submit({ action: "token.issue", principal: agentId, name: "wide", preset: "admin" });
 check("a scope preset the page does not offer is refused", escalated.status === 200 && /Unknown scope preset/.test(escalated.html));
+
+/*
+ * The bug this catches: one static scope list under a `<select>`.
+ *
+ * Choosing "Read only" left the publishing scopes on the page, which answered "what am I
+ * handing out" with somebody else's answer. A page cannot be tested for what CSS shows, but
+ * it can be tested for the thing that made the bug possible — that the two lists exist and
+ * differ.
+ */
+const listFor = (html, preset) =>
+  (html.match(new RegExp(`data-preset="${preset}"[\\s\\S]*?</ul>`)) ?? [""])[0];
+const readList = listFor(again.html, "read");
+const agentList = listFor(again.html, "agent");
+check(
+  "each scope preset carries its own list, not one shared with the others",
+  readList !== "" && agentList !== "" && readList !== agentList,
+);
+check(
+  "and the read-only preset does not offer to publish",
+  readList.includes("articles:read") && !readList.includes("articles:publish"),
+);
 
 const tokenId = (again.html.match(/name="token" value="([0-9A-Z]{26})"/) ?? [])[1];
 const revoked = await submit({ action: "token.revoke", token: tokenId });

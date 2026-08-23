@@ -1,0 +1,57 @@
+---
+import { PRESETS, type PresetName } from "../lib/settings-actions.js";
+
+/**
+ * The form that mints a credential (SPEC §42.2).
+ *
+ * The preset is a radio group rather than a `<select>`, and that is the fix for a real bug
+ * rather than a preference: the scopes were listed in a static line under a select, so
+ * choosing "Read only" left the page showing the publishing scopes. A list that does not
+ * change when the choice does is worse than no list — it is a wrong answer to "what am I
+ * handing out".
+ *
+ * Radios and `:has()` rather than a script, so the right list is shown before any
+ * JavaScript arrives and in a browser where none does. Where `:has()` is unsupported every
+ * list is shown at once, which is legible rather than wrong.
+ */
+interface Props {
+  principalId: string;
+  /** Unique per form on the page: two forms would otherwise share label targets. */
+  scope: string;
+  presets: readonly PresetName[];
+  placeholder: string;
+}
+
+const { principalId, scope, presets, placeholder } = Astro.props;
+---
+
+<form method="post" class="issue__form">
+  <input type="hidden" name="action" value="token.issue" />
+  <input type="hidden" name="principal" value={principalId} />
+
+  <div class="field">
+    <label for={`name-${scope}`}>What it is for</label>
+    <input id={`name-${scope}`} name="name" type="text" maxlength="60" placeholder={placeholder} required />
+    <p class="field__hint">The only way to tell one token from another later.</p>
+  </div>
+
+  <fieldset class="presets">
+    <legend>What it may do</legend>
+
+    {presets.map((preset, index) => (
+      <label class="preset">
+        <input type="radio" name="preset" value={preset} checked={index === 0} />
+        <span class="preset__label">{PRESETS[preset].label}</span>
+        <span class="preset__summary">{PRESETS[preset].summary}</span>
+      </label>
+    ))}
+
+    {presets.map((preset) => (
+      <ul class="scopes" data-preset={preset}>
+        {PRESETS[preset].scopes.map((name) => <li class="scope">{name}</li>)}
+      </ul>
+    ))}
+  </fieldset>
+
+  <button class="button" type="submit">Issue token</button>
+</form>

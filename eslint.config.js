@@ -43,6 +43,7 @@ export default tseslint.config(
         window: "readonly",
         document: "readonly",
         navigator: "readonly",
+        setTimeout: "readonly",
         localStorage: "readonly",
         fetch: "readonly",
         atob: "readonly",

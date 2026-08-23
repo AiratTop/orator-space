@@ -1441,8 +1441,14 @@ a {
   font-weight: 600;
 }
 
+.secret__row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
 .secret__value {
-  display: block;
+  flex: 1 1 auto;
   font-family: var(--mono);
   font-size: 0.9375rem;
   padding: 0.75rem;
@@ -1451,13 +1457,13 @@ a {
   background: var(--paper);
   /* A token is one long unbroken string; without this it forces the page sideways. */
   word-break: break-all;
+  /* One click selects the whole thing, for anyone whose clipboard access is refused. */
   user-select: all;
 }
 
-.secret__scopes {
-  margin: 0.75rem 0 0;
-  font-size: 0.875rem;
-  color: var(--ink-soft);
+#copy-token {
+  flex: 0 0 auto;
+  align-self: stretch;
 }
 
 .panel {
@@ -1569,7 +1575,24 @@ a {
   margin-top: 1rem;
 }
 
-.token,
+/*
+ * A token row.
+ *
+ * A grid rather than a wrapping flex row, because the four things on it answer four
+ * different questions and a reader compares them down the column: what it is called, what it
+ * may do, whether anything still uses it, and the control that removes it. Flex put them in
+ * a different place on every row depending on how long the name was.
+ */
+.token {
+  display: grid;
+  grid-template-columns: minmax(9rem, max-content) 1fr max-content max-content;
+  align-items: start;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9375rem;
+}
+
 .key,
 .session {
   display: flex;
@@ -1587,6 +1610,12 @@ a {
   border-bottom: none;
 }
 
+.token__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
 .token__name,
 .session__browser {
   font-weight: 600;
@@ -1595,11 +1624,10 @@ a {
 .token__prefix,
 .key__fingerprint {
   font-family: var(--mono);
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   color: var(--ink-soft);
 }
 
-.token__scopes,
 .token__used,
 .key__label,
 .key__added,
@@ -1608,15 +1636,119 @@ a {
   font-size: 0.8125rem;
 }
 
-.token__scopes {
-  /* The scopes are the point of the row and the longest thing on it, so they take the
-     remaining space and push the revoke button to the end. */
-  flex: 1 1 12rem;
+.token__used {
+  white-space: nowrap;
+  padding-top: 0.125rem;
+}
+
+/*
+ * A scope is a chip, not a word in a run-on line.
+ *
+ * Eleven scopes joined by separators read as one long string and nobody counts them. As
+ * discrete objects the difference between "read only" and "publish and take part" is visible
+ * at a glance, which is the whole question somebody is answering when they issue a token.
+ */
+.scopes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.scope {
   font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  padding: 0.0625rem 0.375rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.scopes--inline {
+  margin-top: 0.25rem;
+}
+
+/*
+ * The preset chooser (SPEC §42.2).
+ *
+ * Radios and `:has()` rather than a `<select>` and a script. The list under a select did not
+ * change when the choice did, which is worse than showing nothing: it answered "what am I
+ * handing out" incorrectly. Here the choice and its consequence are the same control.
+ *
+ * Where `:has()` is unsupported, every list is shown at once — legible, and not wrong.
+ */
+.presets {
+  border: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+}
+
+.presets legend {
+  padding: 0;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.preset {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0 0.5rem;
+  align-items: baseline;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 0.375rem;
+  cursor: pointer;
+}
+
+.preset:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--paper-soft);
+}
+
+.preset__label {
+  font-weight: 600;
+}
+
+.preset__summary {
+  grid-column: 2;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.presets:has(input:checked) .scopes[data-preset] {
+  display: none;
+}
+
+.presets:has(input[value="read"]:checked) .scopes[data-preset="read"],
+.presets:has(input[value="agent"]:checked) .scopes[data-preset="agent"],
+.presets:has(input[value="owner"]:checked) .scopes[data-preset="owner"] {
+  display: flex;
+}
+
+.scopes[data-preset] {
+  margin-top: 0.5rem;
 }
 
 .token__revoke {
-  margin-left: auto;
+  justify-self: end;
+}
+
+@media (max-width: 40rem) {
+  /* One column: at this width the grid's four tracks are four one-word lines. */
+  .token {
+    grid-template-columns: 1fr;
+  }
+
+  .token__revoke {
+    justify-self: start;
+  }
 }
 
 .button--small {

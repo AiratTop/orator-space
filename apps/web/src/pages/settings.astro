@@ -5,7 +5,9 @@ import { accountContext, principalOf, sameOrigin } from "../lib/account.js";
 import { authPorts, clearedSessionCookie, readCookie, SESSION_COOKIE } from "../lib/auth.js";
 import { CACHE, CDN_CACHE } from "../lib/http.js";
 import { siteOrigin } from "../lib/ports.js";
-import { PRESETS, performAction, type ActionOutcome } from "../lib/settings-actions.js";
+import IssueToken from "../components/IssueToken.astro";
+import TokenList from "../components/TokenList.astro";
+import { AGENT_PRESETS, OWN_PRESETS, performAction, type ActionOutcome } from "../lib/settings-actions.js";
 
 /**
  * The account (SPEC §49.2, §7.2, §42.2, §9.1).
@@ -71,7 +73,6 @@ if (Astro.request.method === "POST") {
 const result = await accountView(ctx, session.sessionId);
 if (result.ok) view = result.value;
 
-const scopeList = (scopes: readonly string[]) => scopes.join(" · ");
 const agentLabel = (agent: AgentView) => agent.principal.displayName ?? `@${agent.principal.username}`;
 
 /** A browser string is long and nobody reads it whole; the first token is what identifies it. */
@@ -110,13 +111,20 @@ const when = (iso: string) => iso.slice(0, 10);
     */}
     {outcome.kind === "token" && (
       <section class="secret" role="status">
-        <h2 class="secret__heading">Your new token: {outcome.name}</h2>
+        <h2 class="secret__heading">{outcome.name}</h2>
         <p class="secret__warning">
-          This is the only time it is shown. Copy it now — Orator stores a hash and cannot
-          show it again.
+          This is the only time this token is shown. Orator stores a hash of it and cannot
+          show it again — if it is lost, revoke it and issue another.
         </p>
-        <code class="secret__value">{outcome.token}</code>
-        <p class="secret__scopes">Scopes: {scopeList(outcome.scopes)}</p>
+
+        <div class="secret__row">
+          <code class="secret__value" id="token-value">{outcome.token}</code>
+          <button class="button button--small" id="copy-token" type="button">Copy</button>
+        </div>
+
+        <ul class="scopes scopes--inline">
+          {outcome.scopes.map((name) => <li class="scope">{name}</li>)}
+        </ul>
       </section>
     )}
 
@@ -151,27 +159,7 @@ const when = (iso: string) => iso.slice(0, 10);
                   </dl>
 
                   <h3 class="agent__subheading">Tokens</h3>
-                  {agent.tokens.length === 0 ? (
-                    <p class="panel__empty">None. This agent cannot call the API yet.</p>
-                  ) : (
-                    <ul class="tokens">
-                      {agent.tokens.map((token) => (
-                        <li class="token">
-                          <span class="token__name">{token.name}</span>
-                          <code class="token__prefix">{token.prefix}…</code>
-                          <span class="token__scopes">{scopeList(token.scopes)}</span>
-                          <span class="token__used">
-                            {token.lastUsedAt === null ? "never used" : `last used ${when(token.lastUsedAt)}`}
-                          </span>
-                          <form method="post" class="token__revoke">
-                            <input type="hidden" name="action" value="token.revoke" />
-                            <input type="hidden" name="token" value={token.id} />
-                            <button class="button button--quiet button--small" type="submit">Revoke</button>
-                          </form>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <TokenList tokens={agent.tokens} empty="None. This agent cannot call the API yet." />
 
                   {agent.keys.length > 0 && (
                     <>
@@ -191,23 +179,12 @@ const when = (iso: string) => iso.slice(0, 10);
                   <div class="agent__actions">
                     <details class="issue">
                       <summary>Issue a token</summary>
-                      <form method="post" class="issue__form">
-                        <input type="hidden" name="action" value="token.issue" />
-                        <input type="hidden" name="principal" value={agent.principal.id} />
-                        <div class="field">
-                          <label for={`name-${agent.principal.id}`}>What it is for</label>
-                          <input id={`name-${agent.principal.id}`} name="name" type="text" maxlength="60" placeholder="production" required />
-                        </div>
-                        <div class="field">
-                          <label for={`preset-${agent.principal.id}`}>Scopes</label>
-                          <select id={`preset-${agent.principal.id}`} name="preset">
-                            <option value="agent" selected>{PRESETS.agent.label}</option>
-                            <option value="read">{PRESETS.read.label}</option>
-                          </select>
-                          <p class="field__hint">{scopeList(PRESETS.agent.scopes)}</p>
-                        </div>
-                        <button class="button button--small" type="submit">Issue</button>
-                      </form>
+                      <IssueToken
+                        principalId={agent.principal.id}
+                        scope={agent.principal.id}
+                        presets={AGENT_PRESETS}
+                        placeholder="production"
+                      />
                     </details>
 
                     <form method="post">
@@ -259,48 +236,21 @@ const when = (iso: string) => iso.slice(0, 10);
             one that publishes not be the same credential.
           </p>
 
-          {view.tokens.length === 0 ? (
-            <p class="panel__empty">None.</p>
-          ) : (
-            <ul class="tokens">
-              {view.tokens.map((token) => (
-                <li class="token">
-                  <span class="token__name">{token.name}</span>
-                  <code class="token__prefix">{token.prefix}…</code>
-                  <span class="token__scopes">{scopeList(token.scopes)}</span>
-                  <span class="token__used">
-                    {token.lastUsedAt === null ? "never used" : `last used ${when(token.lastUsedAt)}`}
-                  </span>
-                  <form method="post" class="token__revoke">
-                    <input type="hidden" name="action" value="token.revoke" />
-                    <input type="hidden" name="token" value={token.id} />
-                    <button class="button button--quiet button--small" type="submit">Revoke</button>
-                  </form>
-                </li>
-              ))}
-            </ul>
-          )}
+          <TokenList tokens={view.tokens} empty="None yet." />
 
           <details class="issue issue--wide">
             <summary>Issue a token</summary>
-            <form method="post" class="issue__form">
-              <input type="hidden" name="action" value="token.issue" />
-              <input type="hidden" name="principal" value={view.principal.id} />
-              <div class="field">
-                <label for="own-name">What it is for</label>
-                <input id="own-name" name="name" type="text" maxlength="60" placeholder="my laptop" required />
-              </div>
-              <div class="field">
-                <label for="own-preset">Scopes</label>
-                <select id="own-preset" name="preset">
-                  <option value="read" selected>{PRESETS.read.label}</option>
-                  <option value="agent">{PRESETS.agent.label}</option>
-                  <option value="owner">{PRESETS.owner.label}</option>
-                </select>
-                <p class="field__hint">Read only is the default on purpose: a token that could publish because nobody chose is the kind of default noticed after it has been used.</p>
-              </div>
-              <button class="button" type="submit">Issue</button>
-            </form>
+            {/*
+              Read only is first, and first is what is selected. §43.1's reasoning about
+              defaults: a token that could publish because nobody chose is the kind of
+              default that is only noticed after it has been used.
+            */}
+            <IssueToken
+              principalId={view.principal.id}
+              scope="own"
+              presets={OWN_PRESETS}
+              placeholder="my laptop"
+            />
           </details>
         </section>
 
@@ -356,4 +306,5 @@ const when = (iso: string) => iso.slice(0, 10);
   </main>
 
   <script src="/passkey.js" is:inline defer></script>
+  <script src="/settings.js" is:inline defer></script>
 </Layout>

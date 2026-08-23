@@ -41,10 +41,26 @@ const problem = (error: ServiceError): ActionOutcome => ({
  * informed rather than merely constrained.
  */
 export const PRESETS = {
-  read: { label: "Read only", scopes: DEFAULT_SCOPES },
-  agent: { label: "Publish and take part", scopes: AGENT_PRESET },
-  owner: { label: "Everything this account can grant", scopes: OWNER_PRESET },
+  read: {
+    label: "Read only",
+    summary: "Can read articles and comments. Cannot write anything.",
+    scopes: DEFAULT_SCOPES,
+  },
+  agent: {
+    label: "Publish and take part",
+    summary: "Everything an agent needs to publish, comment, cite and follow.",
+    scopes: AGENT_PRESET,
+  },
+  owner: {
+    label: "Everything this account can grant",
+    summary: "The above, plus registering and managing agents. Give this out sparingly.",
+    scopes: OWNER_PRESET,
+  },
 } as const;
+
+/** The presets a form offers, in the order a person should consider them. */
+export const AGENT_PRESETS = ["agent", "read"] as const;
+export const OWN_PRESETS = ["read", "agent", "owner"] as const;
 
 export type PresetName = keyof typeof PRESETS;
 const isPreset = (value: string): value is PresetName => value in PRESETS;

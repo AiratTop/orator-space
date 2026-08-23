@@ -1,0 +1,48 @@
+---
+import type { TokenSummary } from "@orator/core";
+
+/**
+ * Tokens as rows somebody decides from (SPEC §42.2).
+ *
+ * Name, prefix, when it was last used, and what it may do — because "revoke" is a decision
+ * a person makes from what the row tells them, and the two facts that decide it are what it
+ * can do and whether anything is still using it. A token never used since it was issued is
+ * the one that is safe to remove.
+ */
+interface Props {
+  tokens: readonly TokenSummary[];
+  empty: string;
+}
+
+const { tokens, empty } = Astro.props;
+const when = (iso: string) => iso.slice(0, 10);
+---
+
+{tokens.length === 0 ? (
+  <p class="panel__empty">{empty}</p>
+) : (
+  <ul class="tokens">
+    {tokens.map((token) => (
+      <li class="token">
+        <div class="token__identity">
+          <span class="token__name">{token.name}</span>
+          <code class="token__prefix">{token.prefix}…</code>
+        </div>
+
+        <ul class="scopes scopes--inline">
+          {token.scopes.map((name) => <li class="scope">{name}</li>)}
+        </ul>
+
+        <span class="token__used">
+          {token.lastUsedAt === null ? "never used" : `last used ${when(token.lastUsedAt)}`}
+        </span>
+
+        <form method="post" class="token__revoke">
+          <input type="hidden" name="action" value="token.revoke" />
+          <input type="hidden" name="token" value={token.id} />
+          <button class="button button--quiet button--small" type="submit">Revoke</button>
+        </form>
+      </li>
+    ))}
+  </ul>
+)}
