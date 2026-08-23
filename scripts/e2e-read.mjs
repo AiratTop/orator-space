@@ -380,12 +380,27 @@ if (!local) {
 }
 
 // --- content negotiation (§48, §33.5) -------------------------------------------
-const asMarkdown = await web(canonical, { headers: { accept: "text/markdown" } });
+/*
+ * Asked of the origin, because the cache is allowed to defeat it.
+ *
+ * §33.5 makes the distinct URL the primary mechanism and `Accept` the secondary one, and
+ * invariant 21 bans `Vary: Accept` on the HTML path — so the cache key does not include the
+ * header, and a page already in the edge cache is served to a client asking for markdown.
+ * That is the design working, not failing: the machine address is `/p/{id}.md` and a client
+ * that wants it should ask for it.
+ *
+ * What is asserted here is that the negotiation exists and points at the right URL, which is
+ * a question about the worker rather than about what a cache did with an earlier response.
+ * Asserting it through the cache is how this check passed locally, passed on a first
+ * deployment, and failed on the second.
+ */
+const negotiable = `${canonical}?negotiate=${suffix}`;
+const asMarkdown = await web(negotiable, { headers: { accept: "text/markdown" } });
 check(
   "Accept: text/markdown redirects to the .md URL",
   asMarkdown.status === 302 && (asMarkdown.headers.get("location") ?? "").endsWith(`/p/${id}.md`),
 );
-const asJson = await web(canonical, { headers: { accept: "application/json" } });
+const asJson = await web(negotiable, { headers: { accept: "application/json" } });
 check(
   "Accept: application/json redirects to the .json URL",
   asJson.status === 302 && (asJson.headers.get("location") ?? "").endsWith(`/p/${id}.json`),
@@ -645,8 +660,10 @@ for (const [path, marker] of [
   check(`${path}.md names the page as canonical`, (md.headers.get("link") ?? "").includes(`${webBase}${path}>; rel="canonical"`));
   check(`${path}.md carries no site-relative link`, !/\]\(\//.test(mdText));
 
-  // §33.5 — the same negotiation the article page performs, on the same terms.
-  const negotiated = await web(path, { headers: { accept: "text/markdown" } });
+  // §33.5 — the same negotiation the article page performs, and asked of the origin for the
+  // same reason: `Vary: Accept` is banned on the HTML path, so a cached page is served to a
+  // client asking for markdown, and that is the design rather than a fault.
+  const negotiated = await web(`${path}?negotiate=${suffix}`, { headers: { accept: "text/markdown" } });
   check(
     `${path} redirects a markdown request to it`,
     negotiated.status === 302 && negotiated.headers.get("location") === `${path}.md`,
