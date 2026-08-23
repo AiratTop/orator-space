@@ -29,9 +29,6 @@ const check = (name, ok, detail = "") => {
 const section = (name) => console.log(`\n${name}`);
 
 const suffix = Math.random().toString(36).slice(2, 8);
-let keys = 0;
-const idem = () => `p9-${suffix}-${(keys += 1)}`;
-
 async function api(method, path, { token, body, key } = {}) {
   const response = await fetch(`${apiBase}${path}`, {
     method,

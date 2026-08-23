@@ -27,6 +27,7 @@ export default tseslint.config(
         TextEncoder: "readonly",
         Buffer: "readonly",
         URL: "readonly",
+        URLSearchParams: "readonly",
         ReadableStream: "readonly",
         AbortSignal: "readonly",
         performance: "readonly",
