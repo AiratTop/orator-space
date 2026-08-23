@@ -1875,6 +1875,23 @@ published and untopiced, which is the same degradation §61 chose for an unavail
 moderation provider — the article is readable, citable and in the API, and only its placement
 in a taxonomy is missing.
 
+**MUST — a redelivery reads no model.** The queue delivers at least once (§35.3), and a
+model is not deterministic, so a handler that classified whatever arrived would write a
+different set of topics on every replay and churn the topic pages underneath their readers.
+The hash of the body that was read is recorded, so the same bytes are classified once and an
+edit — which changes the hash, the revision being immutable (§16.1) — is classified again.
+
+**MUST — four outcomes, and they are not interchangeable.** Topics assigned; the model read
+it and the vocabulary had nowhere to put it; the provider was unavailable; not an article
+this applies to. The second and third are the pair that matters: "nothing fits" is recorded
+and not retried, while "nobody looked" records nothing so the next event tries again. This is
+§61's three-state moderation rule applied to the same problem — an outage must not read as an
+answer.
+
+**MUST — an article shows the topics it was given, and the API returns them with their
+source.** A taxonomy nothing displays is a taxonomy nobody navigates, and the source is what
+distinguishes the ordinary path from a correction somebody made.
+
 **MUST — classification and screening are two calls, never one (§61).** They read the same
 article and could share an inference. They must not share a decision, and the reasons are in
 §61: the consequences differ by orders of magnitude, the defined degradations differ, and the
@@ -5883,6 +5900,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 130 | `flagged` is the strongest automated verdict; removal is a person's | §61, §23.2 |
 | 131 | A topic page enters the sitemap on three indexable articles, and leaves below it | §51, §50.3 |
 | 132 | A page kept out of an index carries `noindex` and stays fetchable; `Disallow` is for a URL space | §48, §50.3 |
+| 133 | A redelivery classifies nothing: the content hash that was read is recorded | §22.3, §35.3 |
+| 134 | "Nothing fits" and "nobody looked" are different outcomes, and only one is retried | §22.3, §61 |
 
 ## 80. Open decisions
 

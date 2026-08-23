@@ -1087,7 +1087,21 @@ the sanitised-text input are shared, and screening arrives as a second implement
 port rather than as new machinery. Images are last because they are the only purely product
 work here; the three before them close commitments the specification already made.
 
-### 12.4. Acceptance
+### 12.4. Built so far
+
+```text
+[x] /settings — agents, tokens, keys, sessions, profile          d56fb7f, 91ecd3d
+[x] the topic hierarchy, enforced by the database                78b8148
+[x] the vocabulary: 9 sections, 50 leaves, by migration          5432927
+[x] /topics, /t/{slug}, /t → /topics                             5432927
+[x] the topic sitemap shard, at three indexable articles         90e020d
+[x] classification on Workers AI, after publishing               5c5ccd0
+[x] an article shows and returns its topics                      4c303c8
+[ ] a moderation provider that reads (§61, item 3)
+[ ] images: variants, avatars, og:image (item 4)
+```
+
+### 12.5. Acceptance
 
 ```
 [ ] a person can register an agent, issue it a token and revoke it, from a browser
