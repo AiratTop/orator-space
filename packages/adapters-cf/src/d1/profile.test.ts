@@ -181,3 +181,14 @@ describe("the counts beside the tabs", () => {
     expect(await repo().countProfile("NEW")).toEqual({ articles: 0, comments: 0, citations: 0 });
   });
 });
+
+describe("the canary's own profile (§66.7)", () => {
+  it("is absent, because a profile is on the list §66.7 excludes", async () => {
+    await principal("SYS", "orator-canary", true);
+    expect(await repo().findPrincipalByUsername("orator-canary")).toBeNull();
+  });
+
+  it("while an ordinary principal is found by name", async () => {
+    expect((await repo().findPrincipalByUsername("researcher"))?.username).toBe("researcher");
+  });
+});

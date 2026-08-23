@@ -4826,8 +4826,9 @@ places: the feed, search results, the quota gate, the sitemap and the retention 
 convention is a rule kept by whoever remembers it, and five places is four too many.
 
 **MUST — the exclusion covers what a reader encounters without asking, and nothing more.**
-The feed, a profile, a search result, the sitemap. Not the article's own URL and not the
-search *index*: §66.7 requires the check to read the article back and to wait for it to
+The feed, a profile — the canary's own page included, since a username is stable and
+guessable in a way an article id is not — a search result, the sitemap. Not the article's own
+URL and not the search *index*: §66.7 requires the check to read the article back and to wait for it to
 appear in the index, and that wait is the one step that needs the queue, the consumer and
 the index all alive. Reaching a canary by its id requires having the id, which only the
 check has, and only for the seconds before it removes it.

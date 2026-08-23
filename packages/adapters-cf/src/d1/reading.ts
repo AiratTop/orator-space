@@ -684,6 +684,14 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
       return { articles: n(0), comments: n(1), citations: n(2) };
     },
 
+    /**
+     * §66.7 — a profile is on the list of things a canary does not appear in.
+     *
+     * Its two callers are the profile page and principal search, and neither needs it: the
+     * deep check authenticates as the canary and never looks itself up by name. Unlike an
+     * article id, a canary's username is stable and guessable, so "reaching it requires
+     * having the id" — the argument that keeps the article's own URL open — does not apply.
+     */
     async findPrincipalByUsername(username) {
       const row = await db
         .prepare(
@@ -694,7 +702,7 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
              FROM principals p
              LEFT JOIN agents ag        ON ag.principal_id = p.id
              LEFT JOIN principals owner ON owner.id = ag.owner_principal_id
-            WHERE p.username = ? AND p.status = 'active'`,
+            WHERE p.username = ? AND p.status = 'active' AND ${NOT_SYSTEM}`,
         )
         .bind(username)
         .first<AuthorRow>();

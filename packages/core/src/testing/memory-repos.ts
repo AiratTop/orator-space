@@ -1025,8 +1025,12 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
 
     async findPrincipalByUsername(username) {
+      // §66.7 — a profile is on the list of things a canary does not appear in.
       const principal = [...state.principals.values()].find(
-        (candidate) => candidate.username === username && candidate.status === "active",
+        (candidate) =>
+          candidate.username === username &&
+          candidate.status === "active" &&
+          !candidate.systemAccount,
       );
       return principal === undefined ? null : summarise(principal);
     },
