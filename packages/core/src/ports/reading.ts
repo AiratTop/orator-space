@@ -94,6 +94,15 @@ export interface ArticleCard {
    * where the discussion is before opening anything.
    */
   conversation: ConversationSignals;
+  /**
+   * SPEC §22 — where the platform sorted it.
+   *
+   * On the card because the classification is a fact about the article that a reader scanning
+   * a list is deciding from, and because it is the platform's statement rather than the
+   * author's (§22) — which is what makes it worth the line. Optional: a card built by a
+   * surface that does not load them carries none rather than lying with an empty list.
+   */
+  topics?: readonly ArticleTopic[];
 }
 
 /**
@@ -166,6 +175,15 @@ export interface ReadingRepo {
    * by five to carry them. Issued in parallel, so the page still costs one round trip.
    */
   topicsOf(articleId: string): Promise<ArticleTopic[]>;
+
+  /**
+   * The same, for a page of cards, in one query (SPEC §22, §49.2).
+   *
+   * A feed is twenty cards and a per-card lookup would be twenty round trips on the hottest
+   * path in the system. One `IN` over `ix_article_topics_topic`'s sibling index, grouped by
+   * the caller.
+   */
+  topicsForArticles(articleIds: readonly string[]): Promise<Map<string, ArticleTopic[]>>;
 
   /** SPEC §49.2 — the profile's tabs. `before` is an id, which is also the sort key (§12.2). */
   listCommentsByAuthor(principalId: string, limit: number, before: string | null): Promise<AuthoredCommentPage>;

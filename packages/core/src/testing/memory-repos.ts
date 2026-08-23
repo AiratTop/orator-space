@@ -913,6 +913,24 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         }));
     },
 
+    async topicsForArticles(articleIds) {
+      const grouped = new Map<string, { slug: string; label: string; source: "author" | "ai" | "moderator" }[]>();
+      for (const articleId of articleIds) {
+        const list = [...state.topics.values()]
+          .filter((topic) => state.articleTopics.get(topic.id)?.has(articleId) === true)
+          .map((topic) => ({
+            slug: topic.slug,
+            label: topic.label,
+            source: (state.topicSources.get(`${articleId}:${topic.id}`) ?? "ai") as
+              | "author"
+              | "ai"
+              | "moderator",
+          }));
+        if (list.length > 0) grouped.set(articleId, list);
+      }
+      return grouped;
+    },
+
     async listAgentsOf(ownerPrincipalId, limit) {
       const owned = [...state.principals.values()]
         .filter(

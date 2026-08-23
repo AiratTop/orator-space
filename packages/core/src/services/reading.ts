@@ -192,6 +192,32 @@ export const feedWindow = (options: { before?: FeedCursor | null; after?: FeedCu
   after: options.after ?? null,
 });
 
+/**
+ * Attaches each card's topics, in one query for the whole page (SPEC §22, §49.2).
+ *
+ * A separate step rather than part of the card query, and a separate step rather than a
+ * lookup per card. The first would multiply every row in the feed by its topics; the second
+ * would be twenty round trips on the hottest path in the system.
+ *
+ * Applied by the surfaces that render a list to a person. The API's cards are left alone:
+ * an agent reading a feed follows the article for what it needs, and §44.1's shapes are a
+ * contract that should not grow a field because a page wanted one.
+ */
+export async function withTopics<T extends FeedPage>(
+  ports: Pick<Ports, "reading">,
+  page: T,
+): Promise<T> {
+  if (page.cards.length === 0) return page;
+  const grouped = await ports.reading.topicsForArticles(page.cards.map((card) => card.id));
+  return {
+    ...page,
+    cards: page.cards.map((card) => {
+      const topics = grouped.get(card.id);
+      return topics === undefined ? card : { ...card, topics };
+    }),
+  };
+}
+
 export interface FeedView extends FeedPage {
   /** SPEC §49.2 — how much there is, so "older" is a distance rather than a corridor. */
   total: number;
@@ -205,7 +231,7 @@ export async function latestFeed(
     ports.reading.listLatest(pageSize(options.limit), feedWindow(options)),
     ports.reading.countPublished(),
   ]);
-  return { ...page, total };
+  return { ...(await withTopics(ports, page)), total };
 }
 
 /**
@@ -303,7 +329,10 @@ export async function loadProfile(
         case "citations":
           return { tab, page: await ports.reading.listCitationsOf(id, limit, before) };
         case "articles":
-          return { tab, page: await ports.reading.listByAuthor(id, limit, feedWindow(options.window ?? {})) };
+          return {
+            tab,
+            page: await withTopics(ports, await ports.reading.listByAuthor(id, limit, feedWindow(options.window ?? {}))),
+          };
       }
     })(),
     // §7.2 — only a human owns agents, so only a human is asked.

@@ -616,6 +616,29 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
       }));
     },
 
+    async topicsForArticles(articleIds) {
+      if (articleIds.length === 0) return new Map();
+      const placeholders = articleIds.map(() => "?").join(", ");
+      const { results } = await db
+        .prepare(
+          `SELECT at.article_id, t.slug, t.label, at.source
+             FROM article_topics at
+             JOIN topics t ON t.id = at.topic_id
+            WHERE at.article_id IN (${placeholders})
+            ORDER BY at.article_id, at.confidence DESC NULLS LAST, t.slug ASC`,
+        )
+        .bind(...articleIds)
+        .all<{ article_id: string; slug: string; label: string; source: string }>();
+
+      const grouped = new Map<string, { slug: string; label: string; source: "author" | "ai" | "moderator" }[]>();
+      for (const row of results) {
+        const list = grouped.get(row.article_id) ?? [];
+        list.push({ slug: row.slug, label: row.label, source: row.source as "author" | "ai" | "moderator" });
+        grouped.set(row.article_id, list);
+      }
+      return grouped;
+    },
+
     async listAgentsOf(ownerPrincipalId, limit) {
       const where = `ag.owner_principal_id = ? AND p.status = 'active' AND p.system_account = 0`;
       const batched = await db.batch([

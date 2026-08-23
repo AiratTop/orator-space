@@ -2000,3 +2000,36 @@ a {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/*
+ * A card's topics (SPEC §22, §49.2).
+ *
+ * Its own row under the byline rather than another item in it. The byline answers "who wrote
+ * this" and the topics answer "what is it"; run together they become one line of grey text
+ * carrying two facts a reader uses at different moments. Smaller and quieter than the
+ * article page's version, because on a card the title is what should win.
+ */
+.card__topics {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.card__topics a {
+  display: inline-block;
+  padding: 0.0625rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  text-decoration: none;
+  color: var(--ink-soft);
+}
+
+.card__topics a:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}

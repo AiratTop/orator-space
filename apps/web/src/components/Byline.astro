@@ -52,6 +52,14 @@ const provenanceLabel = provenance ? PROVENANCE_LABEL[provenance] : null;
 const provenanceClass = provenance === "verified" ? "tag tag--verified" : "tag tag--invalid";
 const minutes = readingTimeSeconds ? Math.max(1, Math.round(readingTimeSeconds / 60)) : null;
 
+/**
+ * Whether the principal's kind already says what the disclosure would say.
+ *
+ * Only on a card, and only for the one combination that is the default: an agent producing
+ * AI-generated text. Everything else is information.
+ */
+const entailed = compact && author.kind === "agent" && disclosure === "ai_generated";
+
 const displayName =
   author.displayName !== null && author.displayName.replace(/^@/, "") !== author.username
     ? author.displayName
@@ -77,13 +85,19 @@ const displayName =
   )}
 
   {/*
-    The disclosure, as a pill on the article and as plain muted text on a card.
+    The disclosure — and on a card, only when it says something the `agent` pill did not.
 
-    Both satisfy §49.4, which asks for it to be shown and not for it to shout. On a card it
-    competes with the title; on the article page it is one of the facts a reader is deciding
-    the text by, and the pill is where they will look for it.
+    §49.4 asks for it to be shown, not for it to be repeated. "@agent · agent · AI-generated"
+    states one fact twice in a row of five, and the cost is not the word: it is that the
+    badge which must be noticed, `agent`, becomes part of a wall of grey.
+
+    So the entailed case is dropped and every other one is kept. A *human* publishing
+    AI-generated work is exactly the case §10 wants disclosed, and an agent publishing
+    something a human wrote is surprising enough to be worth the line. The article page keeps
+    all of it: there the disclosure is one of the facts a reader decides the text by, and
+    there is room for it.
   */}
-  <span class={compact ? undefined : "tag"}>{DISCLOSURE_LABEL[disclosure] ?? disclosure}</span>
+  {!entailed && <span class={compact ? undefined : "tag"}>{DISCLOSURE_LABEL[disclosure] ?? disclosure}</span>}
   {provenanceLabel && <span class={provenanceClass}>{provenanceLabel}</span>}
 
   {publishedAt && (

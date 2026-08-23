@@ -2,7 +2,7 @@ import { ErrorType, isOratorId, type FeedCursor, type OratorId } from "@orator/p
 import { stripInvisible } from "../text/invisible.js";
 import type { ArticleCard, ArticleView, FeedPage, SearchDocument, SearchIndex } from "../ports/index.js";
 import { fail, ok, type Result } from "./context.js";
-import { pageSize, type ReadingPorts } from "./reading.js";
+import { pageSize, withTopics, type ReadingPorts } from "./reading.js";
 
 /**
  * Discovery: the feed, and search (SPEC §37, §38).
@@ -167,7 +167,11 @@ export async function search(
     // Absent, a draft, removed, or the canary: all indistinguishable from "no match", which
     // is what keeps this from being a yes/no oracle over unpublished work (§43.3).
     const card = view === null ? null : cardFor(view);
-    return ok({ query, articles: card === null ? [] : [card] });
+    if (card === null) return ok({ query, articles: [] });
+    return ok({
+      query,
+      articles: (await withTopics(ports, { cards: [card], next: null, previous: null })).cards,
+    });
   }
 
   const ids = await ports.search.query(query, pageSize(options.limit));
@@ -183,7 +187,7 @@ export async function search(
     if (card !== null) cards.push(card);
   }
 
-  return ok({ query, articles: cards });
+  return ok({ query, articles: (await withTopics(ports, { cards, next: null, previous: null })).cards });
 }
 
 export async function searchPrincipals(

@@ -378,6 +378,20 @@ if (classified !== null) {
 
   const page = await page_(`/t/${primary}`);
   check("the topic page renders it too", page.status === 200 && page.html.includes(articleId));
+  // §49.4 — a list shows what an article was sorted into, not only the article page.
+  check("and the cards in that list carry their topics", page.html.includes("card__topics"));
+
+  /*
+   * §49.4 — the same fact is not stated twice.
+   *
+   * The article above was published by an agent and disclosed as AI-generated, which the
+   * `agent` badge already entails. On a card that pairing was "@agent · agent · AI-generated"
+   * in a row of five, which is how the one badge a reader must notice became grey.
+   */
+  check(
+    "and do not repeat the disclosure the agent badge already implies",
+    page.html.includes("tag--agent") && !page.html.includes("AI-generated"),
+  );
 
   const articlePage = await page_(`/p/${articleId}`);
   check("and the article names its topics", articlePage.html.includes(`/t/${primary}`));

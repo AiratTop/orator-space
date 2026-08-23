@@ -1,7 +1,7 @@
 import { ErrorType, type FeedCursor } from "@orator/protocol";
 import type { ArticleCard, TopicBranch, TopicRecord, TopicRepo } from "../ports/index.js";
 import { fail, ok, type Result } from "./context.js";
-import { pageSize, type ReadingPorts } from "./reading.js";
+import { pageSize, withTopics, type ReadingPorts } from "./reading.js";
 
 /**
  * Topic pages (SPEC §22, §22.1, §49.2).
@@ -49,7 +49,9 @@ export async function loadTopic(
   // One extra row, which is how "is there another page" is answered without a second count.
   const cards = await ports.topics.listArticles(topic.id, limit + 1, options.before?.id ?? null);
 
-  const page = cards.slice(0, limit);
+  // The other topics each article sits in. On a topic page one of them is always this one,
+  // and the rest are the reason to show them: they are how a reader moves sideways.
+  const page = (await withTopics(ports, { cards: cards.slice(0, limit), next: null, previous: null })).cards;
   const last = page.at(-1);
   const next =
     cards.length > limit && last !== undefined ? { publishedAt: last.publishedAt, id: last.id } : null;

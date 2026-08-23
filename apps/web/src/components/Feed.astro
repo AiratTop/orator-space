@@ -71,6 +71,21 @@ const atTheEnd = page.next === null && page.cards.length > 0;
           />
           <Signals conversation={card.conversation} />
         </div>
+
+        {/*
+          §22 — where the platform put it, on the row below the byline.
+
+          Below rather than beside: the byline answers "who wrote this" and the topics answer
+          "what is it", and interleaving them makes one line of grey text out of two facts a
+          reader uses differently. At most three (§22.2), so the row cannot become a wall.
+        */}
+        {card.topics && card.topics.length > 0 && (
+          <ul class="card__topics">
+            {card.topics.map((topic) => (
+              <li><a href={`/t/${topic.slug}`}>{topic.label}</a></li>
+            ))}
+          </ul>
+        )}
       </li>
     ))}
   </ul>
