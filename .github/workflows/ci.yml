@@ -91,6 +91,11 @@ jobs:
       # every deployment: a scenario demonstrated once and never again decays into a story.
       - name: checkpoint — the vertical slice (Phase 7)
         run: node scripts/e2e-phase7.mjs https://api-staging.orator.space https://staging.orator.space https://mcp-staging.orator.space
+      # The first page on this site that writes, and the first that renders a secret. It
+      # runs here because both of those are things a regression makes silently worse: a
+      # cacheable account page is not a stale page, it is somebody else's token.
+      - name: checkpoint — the account page (Phase 9)
+        run: node scripts/e2e-phase9.mjs https://api-staging.orator.space https://staging.orator.space
 
   deploy-production:
     needs: deploy-staging
