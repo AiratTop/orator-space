@@ -71,10 +71,21 @@ function systemPrompt(input: ClassificationInput): string {
  * Reads whatever the model produced.
  *
  * Deliberately forgiving about the wrapper and unforgiving about the contents: a model that
- * puts prose around its JSON has still answered, while a model that names a topic outside
- * the vocabulary has not — and that second judgement is not made here (§22.3 makes it in one
- * place, over every provider).
+ * puts prose around its JSON, or stops before closing a brace, has still answered — while a
+ * model that names a topic outside the vocabulary has not, and that second judgement is not
+ * made here (§22.3 makes it in one place, over every provider).
+ *
+ * The tolerance is not defensive programming. The first live call returned
+ * `{"topics":[{"slug":"inference","confidence":0.8},…]` with no closing brace, and a parser
+ * that required valid JSON would have read a working model as an empty answer — which is
+ * `unplaced`, gets recorded, and is never retried. Being strict here would have quietly
+ * unclassified every article.
+ *
+ * Safety does not rest on this. Every slug is checked against the vocabulary afterwards, so
+ * the worst a sloppy parse can do is propose something that gets discarded.
  */
+const PAIR = /"slug"\s*:\s*"([^"]{1,64})"(?:[^{}]*?"confidence"\s*:\s*([0-9.]+))?/g;
+
 function parseCandidates(raw: unknown): ClassificationCandidate[] {
   const text =
     typeof raw === "string"
@@ -83,30 +94,16 @@ function parseCandidates(raw: unknown): ClassificationCandidate[] {
         ? ((raw as { response: string }).response)
         : "";
 
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end <= start) return [];
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    // Not an outage: the model answered and the answer was unusable. Empty means "nowhere
-    // to put it", which is the honest reading of an answer nobody can parse.
-    return [];
+  const candidates: ClassificationCandidate[] = [];
+  for (const match of text.matchAll(PAIR)) {
+    const slug = match[1];
+    if (slug === undefined) continue;
+    const confidence = match[2] === undefined ? 1 : Number(match[2]);
+    // A model that omits the score has still made a choice; the service's threshold decides,
+    // and defaulting to 1 lets it decide rather than discarding the answer here.
+    candidates.push({ slug, confidence: Number.isFinite(confidence) ? confidence : 1 });
   }
-
-  const topics = (parsed as { topics?: unknown })?.topics;
-  if (!Array.isArray(topics)) return [];
-
-  return topics.flatMap((entry): ClassificationCandidate[] => {
-    const slug = (entry as { slug?: unknown })?.slug;
-    if (typeof slug !== "string") return [];
-    const confidence = Number((entry as { confidence?: unknown })?.confidence);
-    // A model that omits the score has still made a choice; the service's threshold is what
-    // decides, and defaulting to 1 lets it decide rather than discarding the answer here.
-    return [{ slug, confidence: Number.isFinite(confidence) ? confidence : 1 }];
-  });
+  return candidates;
 }
 
 export function createWorkersAiClassifier(ai: AiBinding, model = MODEL): Classifier {

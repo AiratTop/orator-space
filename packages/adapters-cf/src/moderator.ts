@@ -82,6 +82,15 @@ const SYSTEM = [
 /** Above this, the verdict is a flag. Below it, a signal nobody needs to read. */
 const FLAG_AT = 0.7;
 
+/**
+ * Reads the verdict, tolerantly (see the classifier's parser for why).
+ *
+ * A model that stops before closing a brace has still answered, and requiring valid JSON
+ * would turn a working provider into a silent stream of `allow` — the one direction in
+ * which a parsing bug is a moderation failure rather than a taxonomy one.
+ */
+const SEVERITY = /"severity"\s*:\s*([0-9.]+)/;
+
 function parseVerdict(raw: unknown): { categories: string[]; severity: number } {
   const text =
     typeof raw === "string"
@@ -90,31 +99,24 @@ function parseVerdict(raw: unknown): { categories: string[]; severity: number } 
         ? (raw as { response: string }).response
         : "";
 
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end <= start) return { categories: [], severity: 0 };
+  /*
+   * The categories are found by looking for the words themselves rather than by walking a
+   * structure. The set is closed (below), so a word appearing anywhere in the answer can
+   * only be one of seven — and a model that mentions `spam` while explaining why an article
+   * is not spam is a false positive that costs a report somebody dismisses, which §61 already
+   * treats as the acceptable direction to be wrong in.
+   */
+  const categories = [...CATEGORIES].filter((category) =>
+    new RegExp(`"${category}"`).test(text),
+  );
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    /*
-     * An unparseable answer is not an outage and is not a pass either.
-     *
-     * It is reported as nothing found, which is what it is: the model said something and
-     * nobody can tell what. Treating it as a failure would mark healthy content `unchecked`
-     * every time a model rambled; treating it as a flag would put rambling in a queue.
-     */
-    return { categories: [], severity: 0 };
-  }
+  const match = SEVERITY.exec(text);
+  const severity = match === null ? 0 : Number(match[1]);
 
-  const raw_categories = (parsed as { categories?: unknown })?.categories;
-  const categories = Array.isArray(raw_categories)
-    ? raw_categories.filter((value): value is string => typeof value === "string" && CATEGORIES.has(value))
-    : [];
-  const severity = Number((parsed as { severity?: unknown })?.severity);
-
-  return { categories, severity: Number.isFinite(severity) ? Math.min(1, Math.max(0, severity)) : 0 };
+  return {
+    categories,
+    severity: Number.isFinite(severity) ? Math.min(1, Math.max(0, severity)) : 0,
+  };
 }
 
 export function createWorkersAiModerator(ai: AiBinding, model = MODEL): ModerationProvider {
