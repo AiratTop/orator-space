@@ -23,7 +23,18 @@ import { stripInvisible } from "@orator/core";
  * probability may write.
  */
 
-const MODEL = "@cf/meta/llama-3.1-8b-instruct";
+/*
+ * The same model the classifier uses, and a note about a better one.
+ *
+ * `@cf/meta/llama-guard-3-8b` is in the catalogue and is fine-tuned for exactly this
+ * judgement, with a stable hazard taxonomy — it would be the right provider for the
+ * `illegal`, `sexual` and `self-harm` half of the categories below. It is not used yet
+ * because it does not cover spam or deception, which is the half §61's heuristic cannot
+ * reach either, and adding it means two model calls per article and a second parser. The
+ * condition that would change it: flagged articles a moderator consistently rejects, which
+ * is a measurement nobody can take until somebody is reading the queue.
+ */
+const MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 const MAX_BODY_CHARS = 6_000;
 const MAX_OUTPUT_TOKENS = 200;
 

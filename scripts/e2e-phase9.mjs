@@ -310,6 +310,10 @@ const BODY = [
 
 const drafted = await api("POST", "/v1/articles", {
   token: workingToken,
+  // §34.1 — every write on this surface names the attempt it belongs to, so a retry is one
+  // article rather than two. Left out of the first draft of this file, and the checkpoint
+  // said so on the first run against a real deployment.
+  key: `p9-draft-${suffix}`,
   body: { title: `Inference latency ${suffix}`, content: BODY },
 });
 check("an article is drafted", drafted.status === 201, JSON.stringify(drafted.body).slice(0, 120));
@@ -333,7 +337,7 @@ check("readable immediately, whatever the classifier is doing", immediately.stat
 check("and carries a topics field even before it has any", Array.isArray(immediately.body?.topics));
 
 let classified = null;
-for (let attempt = 0; attempt < 30; attempt++) {
+for (let attempt = 0; attempt < 60; attempt++) {
   const read = await api("GET", `/v1/articles/${articleId}`);
   if ((read.body?.topics ?? []).length > 0) {
     classified = read.body.topics;

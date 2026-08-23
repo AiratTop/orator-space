@@ -19,7 +19,14 @@ import type { ClassificationCandidate, Classifier, ClassificationInput } from "@
  * and the cost per article matters more here than the last few points of accuracy: every
  * published article passes through this exactly once (§22.3's content hash sees to that).
  */
-const MODEL = "@cf/meta/llama-3.1-8b-instruct";
+/*
+ * The `-fp8` suffix is not decoration. The unquantised `@cf/meta/llama-3.1-8b-instruct` is
+ * not in Cloudflare's catalogue, and naming it produced exactly the failure §22.3 specifies
+ * — the article published, untopiced, nothing recorded — which is correct behaviour and
+ * indistinguishable from an outage from outside. A model id is configuration that only a
+ * checkpoint against a real deployment can verify.
+ */
+const MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
 
 /** Enough for five slugs and their scores, and not enough for anything else. */
 const MAX_OUTPUT_TOKENS = 160;
