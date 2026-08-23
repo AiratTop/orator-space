@@ -52,8 +52,16 @@ export const THRESHOLDS = {
   outboxDepth: 100,
   outboxAgeSeconds: 300,
   indexingP95Seconds: 60,
-  /** How far back a dead letter still counts as news. */
-  deadLetterWindowMinutes: 60,
+  /**
+   * How far back a dead letter still counts as news.
+   *
+   * A day, not an hour. The alert clears on its own — there is no acknowledgement to record
+   * and adding one would be a workflow for an event that should happen approximately never
+   * — so the window is how long an operator has to notice. An hour is long enough to send a
+   * notification and short enough that the dashboard is green again before anybody who was
+   * asleep looks at it. Retention still bounds the table at thirty days (§23.4).
+   */
+  deadLetterWindowMinutes: 24 * 60,
   /** §31.3 — D1's ceiling, and §66.4's two marks on the way to it. */
   databaseLimitBytes: 10 * 1024 * 1024 * 1024,
   databaseWarnFraction: 0.6,
@@ -115,7 +123,7 @@ export async function evaluateSlo(ports: SloPorts): Promise<SloReport> {
       state: deadLetters > 0 ? "breached" : "ok",
       value: deadLetters,
       unit: "count",
-      threshold: `any, within ${THRESHOLDS.deadLetterWindowMinutes} minutes`,
+      threshold: `any, within ${THRESHOLDS.deadLetterWindowMinutes / 60} hours`,
     },
     databaseIndicator(bytes),
     {

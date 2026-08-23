@@ -108,6 +108,14 @@ describe("the dead-letter queue (§66.4)", () => {
     const report = await evaluate(repo({ async deadLettered() { return 1; } }));
     expect(find(report, "dead_lettered").state).toBe("breached");
   });
+
+  it("asks about a day, which is how long an operator has to notice", async () => {
+    // The alert clears on its own — there is nothing to acknowledge — so the window is the
+    // whole of the notice period. An hour of it passes while somebody is asleep.
+    let asked: string | null = null;
+    await evaluate(repo({ async deadLettered(since) { asked = since; return 0; } }));
+    expect(Date.parse(NOW.toISOString()) - Date.parse(asked!)).toBe(24 * 3_600_000);
+  });
 });
 
 describe("the database's size (§31.3, §66.4)", () => {

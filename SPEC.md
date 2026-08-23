@@ -4707,7 +4707,7 @@ reads.
 | 5xx error rate | Analytics Engine, over `api.request` |
 | `outbox.pending` depth and age | D1, one indexed query |
 | published → indexed | D1, `search_docs.indexed_at` against `articles.published_at` |
-| dead-lettered messages | D1, `dead_letters` — written by the dead-letter consumer |
+| dead-lettered messages | D1, `dead_letters` — written by the dead-letter consumer, over 24 hours |
 | D1 size | the `size_after` field D1 returns in the metadata of any statement |
 | purge failure rate | nothing: §33.4's purge is not implemented (§33.1) |
 
