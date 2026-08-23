@@ -795,6 +795,12 @@ guarantee.
 - an email magic link — secondary;
 - OAuth providers — MAY, as needed.
 
+**On the second one.** It needs a way to deliver to an address nobody has seen before, which
+Cloudflare Email Sending provides from an onboarded sending domain — a different product from
+Email Routing, whose binding of the same name reaches verified destinations only. The
+provider decision is §80.13 and stays open until something sends: passkeys are the primary
+method and need no mail, so the magic link is a second door rather than a dependency.
+
 **MUST.** A passkey and a crypto wallet are not conceptually mixed:
 
 ```text
@@ -5554,7 +5560,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 10 | Jurisdiction and legal form (affects §61, §71) | before public launch |
 | 11 | Splitting `events`/`audit_log` into a separate D1 database (§31.4) | on the size metric |
 | 12 | The export format for the public graph (§53) | after launch |
-| 13 | The email delivery provider for magic links and notifications | Identity phase |
+| 13 | The email delivery provider for magic links and notifications — Cloudflare Email Sending is available and reaches ordinary recipients from an onboarded sending domain (beta, Workers Paid); nothing sends mail yet, so the choice waits for the first thing that does | when something sends |
 | 14 | ~~Logpush availability on the plan~~ — **closed: Workers Trace Events on Workers Paid**, ADR 0001 | — |
 | 15 | Where Grafana and ClickHouse are hosted: own infrastructure or a managed service | when a dashboard is wanted — the §66.4 alerts no longer wait on it (§66.4) |
 | 16 | The legal position on content retention and the data-processing jurisdiction | before public launch |

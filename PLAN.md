@@ -856,13 +856,41 @@ days by the retention pass.
 policy, the code of conduct, all three policies. It has to receive mail before registration
 opens, which is Cloudflare Email Routing on the zone, forwarding to a real mailbox.
 
-**On sending.** Workers Paid does include a `send_email` binding, and it is worth being
-precise about what it can do: it delivers **only to addresses verified as destinations in
-the account's Email Routing**. That covers operational mail to the operator, and it does not
-cover a magic link to somebody who signed up ten seconds ago, which is the case open
-decision §80.13 is about. Sign-in is by passkey (§9.2) and needs no email at all, so the
-decision stays open rather than blocking anything — and when it is taken, it will be about
-a delivery provider, not about a binding that is already there.
+**On sending — corrected 2026-08-23.** This paragraph previously said the platform could
+deliver only to addresses verified as destinations in the account's Email Routing. That is
+true of Email Routing and false of what is actually available.
+
+**Cloudflare Email Service** is a separate product from Email Routing: Email Sending is in
+beta, requires Workers Paid, and delivers to ordinary recipients once a **sending domain** is
+onboarded with its DNS records. The sender is what is verified — an unverified one is refused
+with `E_SENDER_NOT_VERIFIED` — and the recipient is not.
+
+Onboarded on this account, 2026-08-23: `notify.orator.space` and `notify-staging.orator.space`.
+
+**Where the error came from, because it will catch somebody else.** Both products expose a
+binding named `send_email`, and the restriction — "only verified destinations" — belongs to
+the Routing one. A binding name shared by two products with different rules is the kind of
+thing that reads as settled and is not, which is why it is written down here rather than
+quietly fixed.
+
+**When something does send, it sends through two bindings, not one.** The binding takes
+restriction attributes, and they are worth using rather than leaving open:
+
+```jsonc
+{ "name": "MAIL_OPS",  "destination_address": "mail@orator.space" }
+{ "name": "MAIL_USER", "allowed_sender_addresses": ["noreply@notify.orator.space"] }
+```
+
+Operational mail has exactly one destination and can be pinned to it; a magic link cannot be,
+since its whole purpose is to reach an address nobody has seen before. Splitting them means a
+defect on the user path cannot mail an arbitrary address from an operational sender, and a
+defect on the operational path cannot mail anybody at all. One binding with no restrictions
+would give both defects the same reach.
+
+Nothing sends email today: sign-in is by passkey (§9.2) and needs none. So §80.13 is
+answerable rather than answered — a provider now exists on the platform the rest of this runs
+on, and the decision is worth taking when something actually needs to send, with the beta
+status of Email Sending as part of what is weighed.
 
 ---
 
