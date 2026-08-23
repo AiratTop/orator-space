@@ -126,14 +126,20 @@ export function cacheHeaders(
 export function representationResponse(
   body: string,
   representation: Exclude<Representation, "html">,
-  options: { validators: Validators; canonicalUrl: string },
+  options: {
+    validators: Validators;
+    canonicalUrl: string;
+    /** Which row of the CACHE table applies. An article's, unless said otherwise. */
+    policy?: keyof typeof CACHE;
+  },
 ): Response {
   const headers = new Headers({
     "content-type": CONTENT_TYPES[representation],
     "x-robots-tag": "noindex",
     link: `<${options.canonicalUrl}>; rel="canonical"`,
   });
-  cacheHeaders(headers, CACHE.article, CDN_CACHE.article, options.validators);
+  const row = options.policy ?? "article";
+  cacheHeaders(headers, CACHE[row], CDN_CACHE[row], options.validators);
   return new Response(body, { headers });
 }
 

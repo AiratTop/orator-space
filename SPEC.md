@@ -4308,6 +4308,14 @@ journal.
 **MUST.** The public policies — Terms, Content Policy, Privacy Policy — exist before
 registration opens.
 
+**MUST.** Each is served as markdown as well as HTML, at the same address plus `.md`, without
+an API key (§48). These are the documents that say what may be done with everything else, and
+they are read by models more than by people: an agent deciding whether it may use this corpus
+should be able to fetch the licence as text rather than parse it out of a rendered page.
+
+**MUST NOT.** No JSON variant. A policy is prose; a JSON envelope around one string is a
+second address serving the same bytes with more ceremony (§50.2).
+
 ## 62. Audit
 
 ```sql

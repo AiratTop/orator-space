@@ -328,6 +328,15 @@ a {
   white-space: nowrap;
 }
 
+/* The line under a policy pointing at its markdown (§48). */
+.machine-readable {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
 .pager__home {
   margin: 0.75rem 0 0;
   font-size: 0.875rem;

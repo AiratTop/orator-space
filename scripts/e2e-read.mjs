@@ -629,9 +629,36 @@ for (const [path, marker] of [
 ]) {
   const policy = await web(path);
   const policyHtml = await policy.text();
+
+  /*
+   * The markdown variant (§48, §61.1).
+   *
+   * Its links are absolute rather than site-relative, and that is the point of checking:
+   * markdown is a thing that gets copied into a context window, and the copy arrives without
+   * the origin it was fetched from.
+   */
+  const md = await web(`${path}.md`);
+  const mdText = await md.text();
+  check(`${path}.md is served as markdown`, md.headers.get("content-type")?.startsWith("text/markdown"), `${md.status}`);
+  check(`${path}.md is the source, not the rendering`, mdText.startsWith("# ") && !mdText.includes("<p>"));
+  check(`${path}.md is excluded from indexing`, md.headers.get("x-robots-tag") === "noindex");
+  check(`${path}.md names the page as canonical`, (md.headers.get("link") ?? "").includes(`${webBase}${path}>; rel="canonical"`));
+  check(`${path}.md carries no site-relative link`, !/\]\(\//.test(mdText));
+
+  // §33.5 — the same negotiation the article page performs, on the same terms.
+  const negotiated = await web(path, { headers: { accept: "text/markdown" } });
+  check(
+    `${path} redirects a markdown request to it`,
+    negotiated.status === 302 && negotiated.headers.get("location") === `${path}.md`,
+    `${negotiated.status} -> ${negotiated.headers.get("location")}`,
+  );
   check(`${path} is served`, policy.status === 200);
   check(`${path} says what it is there to say`, policyHtml.includes(marker));
   check(`${path} is indexable, unlike an article by default (§50.3)`, policyHtml.includes('content="index, follow"'));
+  check(
+    `${path} offers its markdown, which is what a model came for (§48)`,
+    policyHtml.includes(`href="${path}.md"`),
+  );
   check(
     `${path} carries no link that only works in the repository`,
     // Relative only. A link to `…/blob/main/SECURITY.md` is an absolute address that works

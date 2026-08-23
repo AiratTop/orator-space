@@ -40,5 +40,15 @@ if (!rendered.ok) throw new Error(`the ${policy.slug} policy did not render: ${r
       */}
       <div set:html={rendered.html} />
     </article>
+
+    {/*
+      §48, applied to the documents that say what may be done with the rest.
+      These are read by models more than by people, and an agent deciding whether it may use
+      this corpus should be able to fetch the licence as text rather than parse it out of a
+      rendered page.
+    */}
+    <p class="machine-readable">
+      Machine-readable, no API key required: <a href={`/${policy.slug}.md`} rel="alternate" type="text/markdown">markdown</a>
+    </p>
   </main>
 </Layout>

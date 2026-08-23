@@ -1,6 +1,7 @@
 import termsSource from "../../../../docs/policies/terms.md?raw";
 import privacySource from "../../../../docs/policies/privacy.md?raw";
 import contentSource from "../../../../docs/policies/content-policy.md?raw";
+import { siteOrigin } from "./ports.js";
 
 /**
  * The public policies (SPEC §61.1, §82).
@@ -24,8 +25,25 @@ export interface Policy {
   title: string;
   description: string;
   body: string;
+  /**
+   * The whole document, title included, for `/{slug}.md` (SPEC §48).
+   *
+   * Its links are absolute rather than site-relative: a markdown file is a thing that gets
+   * copied — into a context window, into a prompt, into somebody's notes — and the copy
+   * arrives without the origin it was fetched from. The HTML page keeps the relative form,
+   * where the origin is never in doubt.
+   */
+  markdown: string;
   /** The `**Last updated: …**` line, as an ISO date, for `<time>` and the modified meta. */
   updated: string;
+  /**
+   * A validator for the markdown (§33.2).
+   *
+   * Over the bytes, not over the "Last updated" line. A correction that does not move that
+   * date is exactly the change a cache must notice, and a validator derived from a date the
+   * author has to remember to bump is a validator that does not move when it matters.
+   */
+  etag: string;
 }
 
 const SUMMARY: Record<PolicySlug, string> = {
@@ -65,12 +83,12 @@ const LINKS: Record<string, string> = {
  * subject is what you are permitted to do with other people's work is exactly the wrong
  * place for a dead end.
  */
-function absoluteLinks(slug: PolicySlug, body: string): string {
+function absoluteLinks(slug: PolicySlug, body: string, origin = ""): string {
   return body.replace(/\]\(([^)\s]+)\)/g, (whole, href: string) => {
     if (/^(https?:|mailto:|#)/.test(href)) return whole;
     const target = LINKS[href];
     if (target === undefined) throw new Error(`policy ${slug} links to ${href}, which has no web address`);
-    return `](${target})`;
+    return `](${target.startsWith("/") ? origin + target : target})`;
   });
 }
 
@@ -96,6 +114,23 @@ function promoteHeadings(body: string): string {
     .join("\n");
 }
 
+/**
+ * FNV-1a, 32-bit. A validator, not a digest.
+ *
+ * Synchronous, which `crypto.subtle` is not, and this runs at module load. Nothing here is
+ * a security boundary: the question a validator answers is "are these the same bytes I
+ * already have", and an accidental collision between two versions of a policy is not a
+ * threat model, it is a lottery ticket.
+ */
+function fingerprint(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
 function parse(slug: PolicySlug, source: string): Policy {
   const lines = source.split("\n");
   const heading = lines.findIndex((line) => line.startsWith("# "));
@@ -109,7 +144,9 @@ function parse(slug: PolicySlug, source: string): Policy {
     title: lines[heading]!.slice(2).trim(),
     description: SUMMARY[slug],
     body: promoteHeadings(absoluteLinks(slug, lines.slice(heading + 1).join("\n"))),
+    markdown: absoluteLinks(slug, source, siteOrigin),
     updated: updated[1]!,
+    etag: `${slug}-${fingerprint(source)}`,
   };
 }
 
