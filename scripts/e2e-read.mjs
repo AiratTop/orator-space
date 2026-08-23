@@ -251,21 +251,42 @@ check("the page carries an ETag", !!etag, etag ?? "");
 /*
  * §33.2 — the browser is told a freshness, and it is ours.
  *
- * Two ways this breaks, and both were live until 2026-08-23. `s-maxage` addresses shared
- * caches only, so a response carrying it alone lets a browser guess its own freshness
- * (RFC 9111 §4.2.2) — a tenth of the age since `Last-Modified`, which for an old article is
- * weeks. And Cloudflare's Browser Cache TTL rewrote the header on the way out of its cache,
- * imposing four hours and dropping `stale-while-revalidate`. A zone setting that comes back
- * fails the build rather than quietly costing every reader §33.3's revalidation.
+ * `s-maxage` addresses shared caches only, so a response carrying it alone leaves a browser
+ * with no stated freshness and free to invent one (RFC 9111 §4.2.2) — a tenth of the age
+ * since `Last-Modified`, which for an old article is weeks. Until 2026-08-23 that was hidden
+ * behind a second fault: Cloudflare's Browser Cache TTL rewrote the header on the way out of
+ * its cache and imposed four hours of its own. The zone now respects what we send, and this
+ * fails the build if that comes back.
+ *
+ * Two requests, because they answer different questions. What the origin says is asserted
+ * through a URL the edge has not cached; what a reader receives is asserted on the ordinary
+ * one. They differ legitimately in exactly one way, below.
  */
+const fromOrigin = (await web(`${canonical}?cache=${suffix}`)).headers.get("cache-control") ?? "";
+check("the origin states a browser freshness of its own", /(^|[ ,])max-age=60\b/.test(fromOrigin), fromOrigin);
+check("and stale-while-revalidate, which is what makes §33.1 cheap", fromOrigin.includes("stale-while-revalidate"));
+
 const cache = page.headers.get("cache-control") ?? "";
-check("the page states a browser freshness of its own", /max-age=60\b/.test(cache), cache);
-check("and keeps stale-while-revalidate", cache.includes("stale-while-revalidate"), cache);
+check("a reader is given our max-age and nobody else's", /(^|[ ,])max-age=60\b/.test(cache), cache);
 check(
-  "and nothing rewrote it on the way out",
-  !/max-age=(?!60\b)\d+/.test(cache.replace(/s-maxage=\d+/, "")),
+  "and no foreign max-age was substituted",
+  !/(^|[ ,])max-age=(?!60\b)\d+/.test(cache),
   cache,
 );
+/*
+ * The one legitimate difference: Cloudflare consumes `stale-while-revalidate` rather than
+ * forwarding it, so a response served from its cache arrives without the directive. The edge
+ * still honours it — that is what `Cloudflare-CDN-Cache-Control` asks for — and the browser
+ * revalidates after sixty seconds instead of serving stale. Asserted rather than assumed,
+ * because if it ever starts forwarding it the reader's behaviour changes.
+ */
+if (!local) {
+  check(
+    "and the edge keeps stale-while-revalidate to itself",
+    !cache.includes("stale-while-revalidate") || page.headers.get("cf-cache-status") !== "HIT",
+    `${page.headers.get("cf-cache-status") ?? "no status"}: ${cache}`,
+  );
+}
 check(
   "the ETag is a weak validator built on the content hash",
   etag?.startsWith(`W/"${created.body.content_hash}`) === true,
