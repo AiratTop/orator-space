@@ -1058,6 +1058,90 @@ a {
   margin-bottom: 0;
 }
 
+/* Sign-in (§42.2, §9.2) --------------------------------------------------- */
+
+.account__lede {
+  max-width: var(--measure);
+}
+
+.account__action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+}
+
+.button {
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--paper);
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.button:hover {
+  filter: brightness(1.1);
+}
+
+/* The action that is not the one the page is for. */
+.button--quiet {
+  border-color: var(--line);
+  background: none;
+  color: var(--ink-soft);
+}
+
+.button--quiet:hover {
+  filter: none;
+  border-color: var(--ink-soft);
+  color: var(--ink);
+}
+
+/*
+ * Three questions a reader meeting a passkey for the first time actually has.
+ *
+ * A description list rather than prose: each is a question with one answer, and a reader
+ * deciding whether to trust an unfamiliar mechanism is scanning for the one that worries
+ * them rather than reading a paragraph.
+ */
+.account__facts {
+  margin: 2rem 0 0;
+  max-width: var(--measure);
+  border-top: 1px solid var(--line);
+}
+
+.account__facts dt {
+  margin-top: 1.25rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.account__facts dd {
+  margin: 0.25rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.account__note,
+.account__status {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  max-width: var(--measure);
+}
+
+.account__status:empty {
+  margin: 0;
+}
+
+/* Specific enough to beat `.machine ul`, which lays its links out as a row. */
+.machine ul.machine__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 /* Machine-readable links and notices ------------------------------------- */
 
 .machine {

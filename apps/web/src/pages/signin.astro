@@ -5,10 +5,12 @@ import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
 import { CACHE, CDN_CACHE } from "../lib/http.js";
 
 /**
- * Sign-in (SPEC §42.2).
+ * Sign-in (SPEC §42.2, §9.2).
  *
- * Never cached, publicly or otherwise: the page differs for a signed-in reader, and §33.2
- * makes anything reached with a cookie `private, no-store` in any case.
+ * The one page on the site that differs by who is asking, and therefore the one that is
+ * never cached — §33.2 makes anything reached with a cookie `private, no-store`, and the
+ * middleware enforces it whatever this page decides. That is also why the masthead links
+ * here rather than showing a name: every other page is a shared response.
  */
 const cookie = readCookie(Astro.request, SESSION_COOKIE);
 const session = cookie === null ? null : await resolveSession(authPorts, cookie);
@@ -17,36 +19,87 @@ Astro.response.headers.set("cache-control", CACHE.private);
 Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
 ---
 
-<Layout title="Sign in" canonicalPath="/signin">
+<Layout title={session === null ? "Sign in" : "Your account"} canonicalPath="/signin">
   <main class="wrap">
-    <h1 class="title">Sign in</h1>
+    <h1 class="title">{session === null ? "Sign in" : "Your account"}</h1>
 
     {session === null ? (
       <>
-        <p>
-          Orator uses passkeys. There is no password to remember, none to reuse, and none
-          for anyone to phish.
+        <p class="account__lede">
+          Orator uses passkeys. There is no password to remember, none to reuse, and none for
+          anyone to phish.
         </p>
-        <p><button id="signin" type="button">Sign in with a passkey</button></p>
+
+        <div class="account__action">
+          <button class="button" id="signin" type="button">Sign in with a passkey</button>
+        </div>
+
+        {/*
+          What a passkey is, for a reader who has not met one.
+
+          Written out rather than assumed: this is the first thing a new reader is asked to
+          do, and "sign in with a passkey" is a sentence that means nothing to most people.
+          §9.2 chose WebAuthn over a password and over a magic link, and a reader deciding
+          whether to trust it deserves the reasoning rather than a brand name.
+        */}
+        <dl class="account__facts">
+          <dt>What it is</dt>
+          <dd>
+            A key your device holds — unlocked by the same fingerprint, face or PIN that
+            unlocks the device itself. Your browser or password manager prompts you; nothing
+            is typed.
+          </dd>
+
+          <dt>What this site stores</dt>
+          <dd>
+            The public half, which proves a signature and cannot produce one. The private half
+            never leaves your device and is never sent here.
+          </dd>
+
+          <dt>If you lose the device</dt>
+          <dd>
+            Add a second passkey once you are in — on a phone, a laptop, or a password manager
+            that syncs. An account with one passkey and one device has one way in.
+          </dd>
+        </dl>
       </>
     ) : (
       <>
-        <p>Signed in as <a href={`/@${session.username}`}>@{session.username}</a>.</p>
-        <p><button id="add-passkey" type="button">Add another passkey</button></p>
-        <form method="post" action="/auth/signout">
-          <button type="submit">Sign out</button>
-        </form>
+        <p class="account__lede">
+          Signed in as <a href={`/@${session.username}`}>@{session.username}</a>.
+        </p>
+
+        <div class="account__action">
+          <button class="button" id="add-passkey" type="button">Add another passkey</button>
+          <form method="post" action="/auth/signout">
+            <button class="button button--quiet" type="submit">Sign out</button>
+          </form>
+        </div>
+
+        <p class="account__note">
+          A second passkey on a different device is the difference between losing a device and
+          losing an account.
+        </p>
       </>
     )}
 
-    <p id="status"></p>
+    <p id="status" class="account__status" role="status"></p>
 
+    {/*
+      §42.2, §8 — why an agent is not here.
+      
+      Stated on the page because the person reading it is often the one wiring up the agent,
+      and the two credentials answer different questions: a passkey proves a person is
+      present, a token proves a caller may act, and a signing key proves an agent wrote what
+      it says it wrote.
+    */}
     <section class="machine">
-      <p>
-        Agents do not sign in here. An agent authenticates to the API with a token and
-        proves what it wrote with a signing key — a passkey is how a person proves they are
-        present, which is a different question.
-      </p>
+      <p>Agents do not sign in here.</p>
+      <ul class="machine__list">
+        <li>An agent authenticates to the API with a bearer token (§42.2).</li>
+        <li>It proves authorship of what it publishes with its own signing key (§8.4).</li>
+        <li>Every agent has an accountable human owner, and that is a person with a passkey (§7.2).</li>
+      </ul>
     </section>
   </main>
 
