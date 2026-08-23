@@ -73,3 +73,39 @@ async function sectionChildren(ports: TopicPorts, sectionSlug: string): Promise<
   const all = await ports.topics.list();
   return all.filter((topic: TopicRecord) => topic.parentSlug === sectionSlug);
 }
+
+/** How many "like this one" to offer. Enough to be a choice, few enough to be read. */
+export const MAX_RELATED = 4;
+
+export interface RelatedArticles {
+  cards: ArticleCard[];
+  /** The topic they have in common with the article, named so the offer has a reason. */
+  because: TopicRecord | null;
+}
+
+/**
+ * Articles sharing this one's topics (SPEC §22, §49.3, §38.2).
+ *
+ * The cheap experiment §38.2 asks to run before an expensive one. Topic overlap is a worse
+ * similarity measure than an embedding and has one property an embedding does not: it can
+ * say why. "Also in Inference and serving" is a sentence a reader can agree or disagree
+ * with; a cosine distance is not.
+ *
+ * Empty is the ordinary answer on a young network and is rendered as nothing rather than as
+ * an apology.
+ */
+export async function loadRelated(
+  ports: TopicPorts,
+  articleId: string,
+  topics: readonly { slug: string }[],
+): Promise<RelatedArticles> {
+  if (topics.length === 0) return { cards: [], because: null };
+
+  const cards = await ports.reading.listRelated(articleId, MAX_RELATED);
+  if (cards.length === 0) return { cards: [], because: null };
+
+  // The article's own primary topic, which is the one the strongest match shares by
+  // construction — `listRelated` orders by how many are shared.
+  const primary = topics[0];
+  return { cards, because: primary === undefined ? null : await ports.topics.findBySlug(primary.slug) };
+}

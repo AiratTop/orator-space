@@ -563,6 +563,37 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
       return feed(`${NOT_SYSTEM} AND a.author_principal_id = ?`, [principalId], limit, window);
     },
 
+    /**
+     * Articles sharing this one's topics (SPEC §22, §49.3).
+     *
+     * The cheap half of "articles like this one", and the reason §22's classification was
+     * built before a vector store (§38.2): topic overlap gives a reader a recommendation
+     * with a reason they can read — *also in Inference and serving* — where a vector
+     * distance gives a list and no account of itself.
+     *
+     * Ordered by how many topics are shared and then by recency. Two shared topics is a
+     * stronger claim than one, and among equals the newer article is the better offer.
+     */
+    async listRelated(articleId, limit) {
+      const { results } = await db
+        .prepare(
+          `${VIEW_SELECT}
+             JOIN (
+               SELECT other.article_id AS id, COUNT(*) AS shared
+                 FROM article_topics other
+                WHERE other.topic_id IN (SELECT topic_id FROM article_topics WHERE article_id = ?1)
+                  AND other.article_id <> ?1
+                GROUP BY other.article_id
+             ) m ON m.id = a.id
+            WHERE ${PUBLIC} AND ${NOT_SYSTEM} AND a.published_at IS NOT NULL
+            ORDER BY m.shared DESC, a.published_at DESC, a.id DESC
+            LIMIT ?2`,
+        )
+        .bind(articleId, limit)
+        .all<ViewRow>();
+      return results.map(toCard);
+    },
+
     async countPublished() {
       // Served by the partial index on `published_at`, so it is a scan of the published
       // rows rather than of the table — the same index the feed itself uses.

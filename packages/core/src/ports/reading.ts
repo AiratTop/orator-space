@@ -185,6 +185,15 @@ export interface ReadingRepo {
    */
   topicsForArticles(articleIds: readonly string[]): Promise<Map<string, ArticleTopic[]>>;
 
+  /**
+   * SPEC §22, §49.3 — articles sharing this one's topics.
+   *
+   * The cheap half of "articles like this one", and the reason classification was built
+   * before a vector store (§38.2): overlap gives a recommendation with a reason a reader can
+   * read, where a distance gives a list and no account of itself.
+   */
+  listRelated(articleId: string, limit: number): Promise<ArticleCard[]>;
+
   /** SPEC §49.2 — the profile's tabs. `before` is an id, which is also the sort key (§12.2). */
   listCommentsByAuthor(principalId: string, limit: number, before: string | null): Promise<AuthoredCommentPage>;
   listCitationsOf(principalId: string, limit: number, before: string | null): Promise<CitationPage>;

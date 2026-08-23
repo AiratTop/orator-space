@@ -2033,3 +2033,28 @@ a {
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/*
+ * "Also in …" (SPEC §22, §38.2, §49.3).
+ *
+ * After the conversation rather than beside the text: a reader who has finished is the one
+ * choosing what to read next, and a reader still reading is being interrupted. The heading
+ * names the topic because that is the whole reason for doing this from a taxonomy rather
+ * than from a vector — the offer comes with a reason somebody can disagree with.
+ */
+.related {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.related__heading {
+  margin: 0 0 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.related__heading a {
+  color: inherit;
+}

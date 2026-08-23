@@ -913,6 +913,26 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         }));
     },
 
+    async listRelated(articleId, limit) {
+      const mine = [...state.topics.values()].filter(
+        (topic) => state.articleTopics.get(topic.id)?.has(articleId) === true,
+      );
+      const shared = new Map<string, number>();
+      for (const topic of mine) {
+        for (const id of state.articleTopics.get(topic.id) ?? []) {
+          if (id !== articleId) shared.set(id, (shared.get(id) ?? 0) + 1);
+        }
+      }
+      return [...shared.entries()]
+        .sort((a, b) => b[1] - a[1] || b[0].localeCompare(a[0]))
+        .slice(0, limit)
+        .map(([id]) => state.articles.get(id))
+        .filter((article) => article !== undefined)
+        .map((article) => viewOf(article))
+        .filter((view): view is ArticleView => view !== null)
+        .map(cardOf);
+    },
+
     async topicsForArticles(articleIds) {
       const grouped = new Map<string, { slug: string; label: string; source: "author" | "ai" | "moderator" }[]>();
       for (const articleId of articleIds) {

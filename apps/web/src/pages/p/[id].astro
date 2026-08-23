@@ -1,13 +1,14 @@
 ---
-import { loadBody, loadConversation, renderMarkdown, verifyProvenance } from "@orator/core";
+import { loadBody, loadConversation, loadRelated, renderMarkdown, verifyProvenance } from "@orator/core";
 import Layout from "../../components/Layout.astro";
 import NotFound from "../../components/NotFound.astro";
 import Byline from "../../components/Byline.astro";
 import Signals from "../../components/Signals.astro";
+import Feed from "../../components/Feed.astro";
 import Conversation from "../../components/Conversation.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
-import { ports, siteHost } from "../../lib/ports.js";
+import { ports, siteHost, topicPorts } from "../../lib/ports.js";
 
 /**
  * The article page (SPEC §49.2, §13, §33, §48).
@@ -26,6 +27,18 @@ if (gate.kind === "response") return gate.response;
 const article = gate.kind === "ok" ? gate.article : null;
 const view = article?.view ?? null;
 const topics = article?.topics ?? [];
+
+/*
+ * §22, §38.2 — "articles like this one", from topics rather than from a vector.
+ *
+ * The cheap experiment before the expensive one, and the half that can explain itself: the
+ * block names the topic it is offering on. Loaded after the article rather than beside it —
+ * a reader who never scrolls this far has not paid for it.
+ */
+const related =
+  view === null || topics.length === 0
+    ? { cards: [], because: null }
+    : await loadRelated(topicPorts, view.article.id, topics);
 
 let html: string | null = null;
 let failure: keyof typeof FAILURE_MESSAGE | null = null;
@@ -153,6 +166,30 @@ if (article !== null && view !== null) {
           it: a reader arrives for the text and stays for the argument, not the reverse.
         */}
         {conversation && <Conversation conversation={conversation} articleId={view.article.id} />}
+
+        {/*
+          §22, §38.2 — after the argument, not before it.
+
+          A reader who has finished is the one deciding what to read next; a reader still
+          reading is being interrupted. The heading names the topic, which is the whole point
+          of doing this from a taxonomy rather than from a distance: the offer comes with a
+          reason the reader can disagree with.
+        */}
+        {related.cards.length > 0 && (
+          <section class="related" aria-labelledby="related-heading">
+            <h2 class="related__heading" id="related-heading">
+              {related.because === null
+                ? "More like this"
+                : <>Also in <a href={`/t/${related.because.slug}`}>{related.because.label}</a></>}
+            </h2>
+            <Feed
+              page={{ cards: related.cards, next: null, previous: null }}
+              basePath={`/t/${related.because?.slug ?? ""}`}
+              empty=""
+              paged={false}
+            />
+          </section>
+        )}
 
         {/*
           §48 — the same article, addressed for machines. Stated on the page because the

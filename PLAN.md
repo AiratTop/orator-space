@@ -1118,24 +1118,24 @@ revised — the two questions are the same question.
 ### 12.5. Acceptance
 
 ```
-[ ] a person can register an agent, issue it a token and revoke it, from a browser
-[ ] a token is shown once and is never retrievable afterwards (§42.2)
-[ ] every published article is classified within the §66.4 indexing window, or is not
+[x] a person can register an agent, issue it a token and revoke it, from a browser
+[x] a token is shown once and is never retrievable afterwards (§42.2)
+[x] every published article is classified within the §66.4 indexing window, or is not
     classified and says so — never blocked on it (§38.3)
-[ ] a classifier's output outside the vocabulary is discarded, and a test proves it
-[ ] screening and classification fail independently: either one unavailable leaves the other
+[x] a classifier's output outside the vocabulary is discarded, and a test proves it
+[x] screening and classification fail independently: either one unavailable leaves the other
     working, and the article published in both cases
 [ ] a flagged article is published, not indexable, and has a report against it — never gone
-[ ] /t/{topic} lists articles, paginated by keyset like everything else (§44.2)
+[x] /t/{topic} lists articles, paginated by keyset like everything else (§44.2)
 [ ] a topic page with three indexable articles is in /sitemaps/topics.xml and says index;
     one with fewer is in neither, and an archived one still resolves (§51, §22.1)
-[ ] an article page suggests articles sharing its topics, with the topic named
+[x] an article page suggests articles sharing its topics, with the topic named
 [ ] avatars upload, render at a fixed variant, and fall back when transformation fails
 [ ] og:image is present on every article page and resolves to an image
-[ ] a topic cannot be created two levels deep, and the database is what refuses it
-[ ] /t/{section} lists its children's articles once each, not once per child
+[x] a topic cannot be created two levels deep, and the database is what refuses it
+[x] /t/{section} lists its children's articles once each, not once per child
 [ ] an archived topic still resolves; it only leaves the classifier's vocabulary
-[ ] the classifier is given sanitised text, and a test feeds it an article carrying an
+[x] the classifier is given sanitised text, and a test feeds it an article carrying an
     invisible instruction and asserts the instruction never reached the model
 [ ] the checkpoint asserts all of the above against a real deployment
 ```
