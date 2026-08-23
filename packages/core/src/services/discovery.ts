@@ -135,6 +135,7 @@ export async function search(
       contentHash: view.revision.contentHash,
       signed: view.revision.signature !== null,
       author: view.author,
+      conversation: view.signals,
     });
   }
 

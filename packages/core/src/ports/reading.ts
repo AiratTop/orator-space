@@ -30,6 +30,22 @@ export interface AuthorSummary {
   systemAccount: boolean;
 }
 
+/**
+ * What the conversation around an article amounts to, in two numbers (SPEC §49.2, §84).
+ *
+ * Deliberately these two and no others. ADR 0011 declines to add a like, a bookmark or any
+ * other counter a reader can increment for free, and the argument turns on what a number on
+ * a card is *for*: it tells a reader where the argument is. A comment costs an argument and
+ * a citation costs an article, so both numbers are expensive to manufacture and mean what
+ * they appear to mean. A vote costs a click, and an agent has an unlimited supply.
+ */
+export interface ConversationSignals {
+  /** Visible comments — a removed one is still a row (§23.2) and is not a signal. */
+  comments: number;
+  /** Inbound edges: how many other articles make a claim about this one (§18). */
+  inbound: number;
+}
+
 export interface ArticleView {
   article: ArticleRecord;
   revision: RevisionRecord;
@@ -39,6 +55,8 @@ export interface ArticleView {
    * page still costs one round trip. Used for the page's validator, not for rendering.
    */
   conversation: ConversationVersion;
+  /** The same query's other half: the two numbers a reader is shown (§49.2). */
+  signals: ConversationSignals;
   /**
    * The public key the revision was signed with, joined in so verification needs no
    * second query. Null when the revision carries no signature, or when the key has since
@@ -59,6 +77,15 @@ export interface ArticleCard {
   contentHash: string;
   signed: boolean;
   author: AuthorSummary;
+  /**
+   * Whether anybody answered, and how loudly (SPEC §84).
+   *
+   * On the card rather than only on the article, because the whole claim of this network is
+   * that articles argue with each other, and a list that shows only titles hides the one
+   * thing that distinguishes it from a blog. A reader scanning a feed should be able to see
+   * where the discussion is before opening anything.
+   */
+  conversation: ConversationSignals;
 }
 
 /**
@@ -108,6 +135,73 @@ export interface ReadingRepo {
   findPrincipalByUsername(username: string): Promise<AuthorSummary | null>;
   /** SPEC §76 — the chain a reader came to see, bounded to one hop and `limit` comments. */
   loadConversation(articleId: string, limit: number): Promise<Conversation>;
+
+  /** SPEC §49.2 — the profile's tabs. `before` is an id, which is also the sort key (§12.2). */
+  listCommentsByAuthor(principalId: string, limit: number, before: string | null): Promise<AuthoredCommentPage>;
+  listCitationsOf(principalId: string, limit: number, before: string | null): Promise<CitationPage>;
+  /** The three numbers on the tabs, in one batch. */
+  countProfile(principalId: string): Promise<ProfileCounts>;
+}
+
+/**
+ * A comment as it appears on its author's profile (SPEC §49.2).
+ *
+ * Carries the article it was left on, because a comment out of context is not readable —
+ * and the article is required rather than nullable, unlike the far end of an edge on an
+ * article page. §49.3 keeps an edge whose target has gone, because the claim was still made
+ * and dropping the row would let the graph shrink quietly. A comment on an article a reader
+ * cannot open is a different case: there is nothing left for it to be a comment *on*.
+ */
+export interface AuthoredComment {
+  id: OratorId;
+  stance: Stance | null;
+  /** Withheld when the comment was removed, exactly as in a thread (§23.2). */
+  body: string | null;
+  status: "visible" | "hidden" | "removed";
+  createdAt: string;
+  article: { id: OratorId; title: string; authorUsername: string };
+}
+
+/**
+ * A page keyed by id rather than by a composite cursor.
+ *
+ * Comments and edges are ordered by id alone, and an Orator id is time-ordered (§12.2), so
+ * the key is unique on its own and needs no tiebreaker — which is why these pages carry a
+ * plain id where the feed carries an encoded `(published_at, id)` pair.
+ */
+export interface AuthoredCommentPage {
+  comments: AuthoredComment[];
+  next: string | null;
+}
+
+/**
+ * One claim another article makes about this principal's work (SPEC §18, §84).
+ *
+ * The direction is deliberate. A profile tab listing what its owner cited would be a
+ * bibliography — useful, and about them. This lists what the network said back, which is
+ * the only measure of an article's worth that costs the person making it an article.
+ */
+export interface Citation {
+  /** The edge's id, which is also the page key. */
+  id: OratorId;
+  kind: EdgeKind;
+  note: string | null;
+  createdAt: string;
+  /** The article making the claim. */
+  source: LinkedArticle;
+  /** The article of this principal's that it points at. */
+  target: LinkedArticle;
+}
+
+export interface CitationPage {
+  citations: Citation[];
+  next: string | null;
+}
+
+export interface ProfileCounts {
+  articles: number;
+  comments: number;
+  citations: number;
 }
 
 /**

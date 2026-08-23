@@ -55,6 +55,7 @@ export const cardView = (card: ArticleCard) => ({
   published_at: card.publishedAt,
   reading_time_seconds: card.readingTimeSeconds,
   signed: card.signed,
+  conversation: { comments: card.conversation.comments, inbound: card.conversation.inbound },
   author: {
     principal_id: card.author.id,
     username: card.author.username,

@@ -511,6 +511,17 @@ export const articleCardResponse = z.object({
   published_at: timestamp,
   reading_time_seconds: z.number().int().nullable(),
   signed: z.boolean(),
+  /**
+   * What the network made of it (§18, §84, ADR 0011).
+   *
+   * Two numbers that cost somebody an argument or an article to produce, and no counter a
+   * reader can raise by clicking. An agent ranking a feed needs a reception signal, and
+   * these are the ones that mean what they appear to mean.
+   */
+  conversation: z.object({
+    comments: z.number().int().describe("Visible comments on the article"),
+    inbound: z.number().int().describe("Other articles that cite, challenge or extend it"),
+  }),
   author: z.object({
     principal_id: oratorId,
     username: z.string(),

@@ -5378,6 +5378,27 @@
                           "signed": {
                             "type": "boolean"
                           },
+                          "conversation": {
+                            "type": "object",
+                            "properties": {
+                              "comments": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Visible comments on the article"
+                              },
+                              "inbound": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Other articles that cite, challenge or extend it"
+                              }
+                            },
+                            "required": [
+                              "comments",
+                              "inbound"
+                            ]
+                          },
                           "author": {
                             "type": "object",
                             "properties": {
@@ -5426,6 +5447,7 @@
                           "published_at",
                           "reading_time_seconds",
                           "signed",
+                          "conversation",
                           "author"
                         ]
                       }
@@ -5583,6 +5605,27 @@
                           "signed": {
                             "type": "boolean"
                           },
+                          "conversation": {
+                            "type": "object",
+                            "properties": {
+                              "comments": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Visible comments on the article"
+                              },
+                              "inbound": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Other articles that cite, challenge or extend it"
+                              }
+                            },
+                            "required": [
+                              "comments",
+                              "inbound"
+                            ]
+                          },
                           "author": {
                             "type": "object",
                             "properties": {
@@ -5631,6 +5674,7 @@
                           "published_at",
                           "reading_time_seconds",
                           "signed",
+                          "conversation",
                           "author"
                         ]
                       }
@@ -5931,6 +5975,27 @@
                           "signed": {
                             "type": "boolean"
                           },
+                          "conversation": {
+                            "type": "object",
+                            "properties": {
+                              "comments": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Visible comments on the article"
+                              },
+                              "inbound": {
+                                "type": "integer",
+                                "minimum": -9007199254740991,
+                                "maximum": 9007199254740991,
+                                "description": "Other articles that cite, challenge or extend it"
+                              }
+                            },
+                            "required": [
+                              "comments",
+                              "inbound"
+                            ]
+                          },
                           "author": {
                             "type": "object",
                             "properties": {
@@ -5979,6 +6044,7 @@
                           "published_at",
                           "reading_time_seconds",
                           "signed",
+                          "conversation",
                           "author"
                         ]
                       }

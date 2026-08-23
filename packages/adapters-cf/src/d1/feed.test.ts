@@ -135,3 +135,71 @@ describe("the total", () => {
     expect(await repo().countPublished()).toBe(4);
   });
 });
+
+describe("what a card says about the conversation (§49.2, ADR 0011)", () => {
+  beforeEach(async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO comments (id, article_id, depth, author_principal_id, content_markdown,
+                               content_hash, status, created_at)
+         VALUES ('C1', 'A4', 0, 'P1', 'visible', 'h1', 'visible', ?)`,
+      ).bind(AT(11)),
+      env.DB.prepare(
+        `INSERT INTO comments (id, article_id, depth, author_principal_id, content_markdown,
+                               content_hash, status, created_at)
+         VALUES ('C2', 'A4', 0, 'P1', 'removed', 'h2', 'removed', ?)`,
+      ).bind(AT(11)),
+      // A3 challenges A4, and A4 cites A3: one edge each way between the same pair.
+      env.DB.prepare(
+        `INSERT INTO edges (id, src_article_id, kind, dst_article_id, created_by_principal_id, created_at)
+         VALUES ('E1', 'A3', 'challenges', 'A4', 'P1', ?)`,
+      ).bind(AT(11)),
+      env.DB.prepare(
+        `INSERT INTO edges (id, src_article_id, kind, dst_article_id, created_by_principal_id, created_at)
+         VALUES ('E2', 'A4', 'cites', 'A3', 'P1', ?)`,
+      ).bind(AT(11)),
+    ]);
+  });
+
+  it("counts visible comments and inbound edges only", async () => {
+    const page = await repo().listLatest(5, NONE);
+    const card = page.cards.find((c) => c.id === "A4")!;
+
+    expect(card.conversation.comments).toBe(1);
+    // A4 has one edge pointing at it and one pointing away. Only the first is a signal
+    // about A4 — what an article claims about others says nothing about its reception.
+    expect(card.conversation.inbound).toBe(1);
+  });
+
+  it("carries the same two numbers on the single-article read", async () => {
+    const view = await repo().findPublished("A4");
+    expect(view?.signals).toEqual({ comments: 1, inbound: 1 });
+  });
+
+  /**
+   * The cost of those two numbers, asserted rather than assumed.
+   *
+   * Two correlated subqueries run per row of a feed page. That is affordable only while
+   * both are index seeks — `ix_comments_article` and `ix_edges_dst` — and the difference
+   * between a seek and a scan is invisible until the table is large and the bill arrives.
+   * SQLite will say which it chose, so ask it.
+   */
+  it("pays for them with index seeks, not table scans", async () => {
+    const { results } = await env.DB.prepare(
+      `EXPLAIN QUERY PLAN
+       SELECT a.id,
+              (SELECT COUNT(*) FROM comments c
+                WHERE c.article_id = a.id AND c.status = 'visible') AS sig_comments,
+              (SELECT COUNT(*) FROM edges e WHERE e.dst_article_id = a.id) AS sig_inbound
+         FROM articles a
+        WHERE a.published_at IS NOT NULL
+        ORDER BY a.published_at DESC, a.id DESC
+        LIMIT 20`,
+    ).all<{ detail: string }>();
+
+    const plan = results.map((row) => row.detail);
+    expect(plan.some((line) => /SEARCH c .*ix_comments_article/.test(line))).toBe(true);
+    expect(plan.some((line) => /SEARCH e .*ix_edges_dst/.test(line))).toBe(true);
+    expect(plan.some((line) => /SCAN (c|e)\b/.test(line))).toBe(false);
+  });
+});

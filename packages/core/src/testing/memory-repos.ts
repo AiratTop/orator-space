@@ -26,6 +26,7 @@ import {
   type PrincipalRecord,
   type PrincipalRepo,
   type ArticleCard,
+  type LinkedArticle,
   type ArticleView,
   type AuthorSummary,
   type FeedPage,
@@ -768,6 +769,10 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         token: `${comments.length}.${comments.filter((c) => c.status === "visible").length}:${edges.length}`,
         changedAt: changedAt ?? null,
       },
+      signals: {
+        comments: comments.filter((c) => c.status === "visible").length,
+        inbound: edges.filter((e) => e.dstArticleId === article.id).length,
+      },
       signingKey:
         key === undefined
           ? null
@@ -786,6 +791,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     contentHash: view.revision.contentHash,
     signed: view.revision.signature !== null,
     author: view.author,
+    conversation: view.signals,
   });
 
   const cursorOf = (card: ArticleCard): FeedCursor => ({ publishedAt: card.publishedAt, id: card.id });
@@ -873,6 +879,91 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
     async countPublished() {
       return [...state.articles.values()].map(viewOf).filter((v) => v !== null).length;
+    },
+
+    /*
+     * The profile tabs (§49.2). Written the long way rather than with a shared helper: the
+     * point of this double is to be obviously correct next to SQL that is merely correct.
+     */
+    async listCommentsByAuthor(principalId, limit, before) {
+      const rows = [...state.comments.values()]
+        .filter((c) => c.authorPrincipalId === principalId)
+        .filter((c) => {
+          const article = state.articles.get(c.articleId);
+          return article !== undefined && viewOf(article) !== null;
+        })
+        .filter((c) => before === null || c.id < before)
+        .sort((a, b) => b.id.localeCompare(a.id));
+
+      const page = rows.slice(0, limit);
+      return {
+        comments: page.map((c) => {
+          const view = viewOf(state.articles.get(c.articleId)!)!;
+          return {
+            id: c.id,
+            stance: c.stance,
+            body: c.status === "visible" ? c.contentMarkdown : null,
+            status: c.status,
+            createdAt: c.createdAt,
+            article: {
+              id: view.article.id,
+              title: view.revision.title,
+              authorUsername: view.author.username,
+            },
+          };
+        }),
+        next: rows.length > limit ? (page[page.length - 1]?.id ?? null) : null,
+      };
+    },
+
+    async listCitationsOf(principalId, limit, before) {
+      const linked = (view: ArticleView): LinkedArticle => ({
+        id: view.article.id,
+        title: view.revision.title,
+        authorUsername: view.author.username,
+        authorKind: view.author.kind,
+      });
+
+      const rows = [...state.edges.values()]
+        .filter((e) => before === null || e.id < before)
+        .map((edge) => {
+          const target = edge.dstArticleId === null ? undefined : state.articles.get(edge.dstArticleId);
+          const source = state.articles.get(edge.srcArticleId);
+          const targetView = target === undefined ? null : viewOf(target);
+          const sourceView = source === undefined ? null : viewOf(source);
+          if (targetView === null || sourceView === null) return null;
+          if (targetView.article.authorPrincipalId !== principalId) return null;
+          // §84 — what other people said, which is why a self-citation is not one.
+          if (sourceView.article.authorPrincipalId === principalId) return null;
+          return {
+            id: edge.id,
+            kind: edge.kind,
+            note: edge.note,
+            createdAt: edge.createdAt,
+            source: linked(sourceView),
+            target: linked(targetView),
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => row !== null)
+        .sort((a, b) => b.id.localeCompare(a.id));
+
+      const page = rows.slice(0, limit);
+      return { citations: page, next: rows.length > limit ? (page[page.length - 1]?.id ?? null) : null };
+    },
+
+    async countProfile(principalId) {
+      const all = Number.MAX_SAFE_INTEGER;
+      const [comments, citations] = await Promise.all([
+        reading.listCommentsByAuthor(principalId, all, null),
+        reading.listCitationsOf(principalId, all, null),
+      ]);
+      return {
+        articles: [...state.articles.values()].filter(
+          (a) => a.authorPrincipalId === principalId && viewOf(a) !== null,
+        ).length,
+        comments: comments.comments.length,
+        citations: citations.citations.length,
+      };
     },
     async loadConversation(articleId, limit) {
       const linkOf = (edge: EdgeRecord, farEnd: OratorId | null): ArticleLink => {

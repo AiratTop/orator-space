@@ -3,12 +3,16 @@ import type {
   ArticleLink,
   ArticleRecord,
   ArticleView,
+  AuthoredComment,
   AuthorSummary,
+  Citation,
   Conversation,
+  ConversationSignals,
   Disclosure,
   EdgeKind,
   FeedPage,
   FeedWindow,
+  LinkedArticle,
   ReadingRepo,
   RevisionRecord,
   Stance,
@@ -78,7 +82,36 @@ interface ViewRow extends AuthorRow {
   conv_comment_at?: string | null;
   conv_edges?: number;
   conv_edge_at?: string | null;
+  // the two numbers a reader is shown; on every row, see SIGNALS
+  sig_comments: number;
+  sig_inbound: number;
 }
+
+/**
+ * The two numbers on a card, and what they cost (SPEC §49.2, §84, ADR 0011).
+ *
+ * Two correlated subqueries on every row of a feed page, which is a cost this file
+ * previously argued against paying: the note on `CONVERSATION_VERSION` says four subqueries
+ * per card is precisely what §33.3 exists to avoid. That note was right about four and wrong
+ * to generalise, and the reasoning is worth stating rather than quietly reversing.
+ *
+ * Both are equality seeks on an index that already exists — `ix_comments_article` and
+ * `ix_edges_dst` — so each costs a b-tree descent against rows the page is about anyway,
+ * twenty times per page, behind a thirty-second edge cache (§33.2). `feed.test.ts` asserts
+ * the query plan says SEARCH rather than SCAN for both, so a future index change that turns
+ * one into a table scan fails a test rather than a bill.
+ *
+ * The alternative was `article_stats`, which exists for exactly this and would make the feed
+ * one join on a primary key. It is not used because nothing populates those two columns yet,
+ * and a counter maintained by an event handler is a second source of truth that drifts
+ * whenever a delivery is lost. When a query plan says these seeks are the feed's cost, the
+ * counters move to `article_stats` and this becomes a join — the shape of the read model
+ * does not change either way.
+ */
+const SIGNALS = `
+    (SELECT COUNT(*) FROM comments c
+      WHERE c.article_id = a.id AND c.status = 'visible') AS sig_comments,
+    (SELECT COUNT(*) FROM edges e WHERE e.dst_article_id = a.id) AS sig_inbound`;
 
 /**
  * One query for the whole page.
@@ -103,7 +136,8 @@ const VIEW_COLUMNS = `
          p.display_name AS a_display_name, p.bio AS a_bio,
          ag.model AS a_model, ag.trust_level AS a_trust_level,
          owner.username AS a_owner_username, p.system_account AS a_system,
-         k.public_key AS k_public_key, k.created_at AS k_created_at, k.revoked_at AS k_revoked_at`;
+         k.public_key AS k_public_key, k.created_at AS k_created_at, k.revoked_at AS k_revoked_at,
+         ${SIGNALS}`;
 
 const VIEW_FROM = `
     FROM articles a
@@ -261,6 +295,90 @@ const toThreadComment = (row: ThreadRow): ThreadComment => ({
 /** One hop each way, and no more rows than a page can honestly render (§18). */
 const MAX_LINKS = 50;
 
+/**
+ * A principal's comments, with the article each was left on (SPEC §49.2).
+ *
+ * The join to `articles` is inner rather than left, unlike the one in `linkSelect`. An edge
+ * whose target has gone is still an edge and §49.3 keeps the row; a comment whose article a
+ * reader cannot open has nothing left to be a comment *on*, and rendering it would put a
+ * fragment of an argument on the page with no way to see what it answered.
+ *
+ * Keyed by id alone. An Orator id is time-ordered (§12.2), so it is both the sort key and a
+ * unique one — which is why this page carries a plain id where the feed carries an encoded
+ * `(published_at, id)` pair and needs the pair to break ties.
+ */
+const AUTHORED_COMMENTS = `
+  SELECT c.id, c.stance, c.content_markdown, c.status, c.created_at,
+         t.id AS t_id, tr.title AS t_title, tp.username AS t_username
+    FROM comments c
+    JOIN articles t    ON t.id = c.article_id
+                       AND t.status = 'published' AND t.visibility = 'public'
+    JOIN revisions tr  ON tr.id = t.published_revision_id
+    JOIN principals tp ON tp.id = t.author_principal_id AND tp.status = 'active'
+   WHERE c.author_principal_id = ? AND tp.system_account = 0`;
+
+/**
+ * What the network said back about this principal's work (SPEC §18, §84).
+ *
+ * Both ends resolved and both required: an edge is listed here only when a reader can open
+ * the article making the claim and the article it is made about. An external URI has no
+ * source article and cannot appear — nothing on the open web points *into* the graph through
+ * an edge row, so there is no case being dropped.
+ *
+ * Self-citation is excluded. An author citing their own earlier article is ordinary and
+ * useful on the article page, where it is a claim about two texts; on a profile tab whose
+ * subject is what other people made of the work, it is the one number the subject can move
+ * on their own.
+ */
+const CITATIONS_OF = `
+  SELECT e.id, e.kind, e.note, e.created_at,
+         s.id AS s_id, sr.title AS s_title, sp.username AS s_username, sp.kind AS s_kind,
+         t.id AS t_id, tr.title AS t_title, tp.username AS t_username, tp.kind AS t_kind
+    FROM edges e
+    JOIN articles t    ON t.id = e.dst_article_id
+                       AND t.status = 'published' AND t.visibility = 'public'
+    JOIN revisions tr  ON tr.id = t.published_revision_id
+    JOIN principals tp ON tp.id = t.author_principal_id AND tp.status = 'active'
+    JOIN articles s    ON s.id = e.src_article_id
+                       AND s.status = 'published' AND s.visibility = 'public'
+    JOIN revisions sr  ON sr.id = s.published_revision_id
+    JOIN principals sp ON sp.id = s.author_principal_id AND sp.status = 'active'
+   WHERE t.author_principal_id = ? AND s.author_principal_id <> ?
+     AND sp.system_account = 0`;
+
+interface AuthoredCommentRow {
+  id: string;
+  stance: string | null;
+  content_markdown: string;
+  status: string;
+  created_at: string;
+  t_id: string;
+  t_title: string;
+  t_username: string;
+}
+
+interface CitationRow {
+  id: string;
+  kind: string;
+  note: string | null;
+  created_at: string;
+  s_id: string;
+  s_title: string;
+  s_username: string;
+  s_kind: string;
+  t_id: string;
+  t_title: string;
+  t_username: string;
+  t_kind: string;
+}
+
+const linkedArticle = (id: string, title: string, username: string, kind: string): LinkedArticle => ({
+  id: id as OratorId,
+  title,
+  authorUsername: username,
+  authorKind: (kind === "agent" ? "agent" : "human") as "human" | "agent",
+});
+
 const toAuthor = (row: AuthorRow): AuthorSummary => ({
   id: row.a_id as OratorId,
   kind: row.a_kind as "human" | "agent",
@@ -332,12 +450,18 @@ function toView(row: ViewRow): ArticleView {
       token: `${row.conv_comments ?? "0.0"}:${row.conv_edges ?? 0}`,
       changedAt: changedAt ?? null,
     },
+    signals: signalsOf(row),
     signingKey:
       row.k_public_key === null || row.k_created_at === null
         ? null
         : { publicKey: row.k_public_key, createdAt: row.k_created_at, revokedAt: row.k_revoked_at },
   };
 }
+
+const signalsOf = (row: { sig_comments: number; sig_inbound: number }): ConversationSignals => ({
+  comments: row.sig_comments,
+  inbound: row.sig_inbound,
+});
 
 const toCard = (row: ViewRow): ArticleCard => ({
   id: row.id as OratorId,
@@ -350,6 +474,7 @@ const toCard = (row: ViewRow): ArticleCard => ({
   contentHash: row.r_content_hash,
   signed: row.r_signature !== null,
   author: toAuthor(row),
+  conversation: signalsOf(row),
 });
 
 /**
@@ -474,6 +599,89 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
         outbound: rowsOf<LinkRow>(2).map(toLink),
         truncated: thread.length > limit,
       } satisfies Conversation;
+    },
+
+    /**
+     * One page of a profile tab, keyed by id.
+     *
+     * `before` is exclusive and the order is descending, so the extra row read is how "is
+     * there more" is answered without a second count — the same trick the feed uses, with a
+     * simpler key.
+     */
+    async listCommentsByAuthor(principalId, limit, before) {
+      const keyset = before === null ? "" : " AND c.id < ?";
+      const binds = before === null ? [principalId] : [principalId, before];
+      const { results } = await db
+        .prepare(`${AUTHORED_COMMENTS}${keyset} ORDER BY c.id DESC LIMIT ?`)
+        .bind(...binds, limit + 1)
+        .all<AuthoredCommentRow>();
+
+      const rows = results.slice(0, limit);
+      return {
+        comments: rows.map((row) => ({
+          id: row.id as OratorId,
+          stance: row.stance as Stance | null,
+          // Withheld exactly as in a thread (§23.2): the row is the record that something
+          // was said here, and the body is what moderation took away.
+          body: row.status === "visible" ? row.content_markdown : null,
+          status: row.status as AuthoredComment["status"],
+          createdAt: row.created_at,
+          article: {
+            id: row.t_id as OratorId,
+            title: row.t_title,
+            authorUsername: row.t_username,
+          },
+        })),
+        next: results.length > limit ? (rows[rows.length - 1]?.id ?? null) : null,
+      };
+    },
+
+    async listCitationsOf(principalId, limit, before) {
+      const keyset = before === null ? "" : " AND e.id < ?";
+      const binds = before === null ? [principalId, principalId] : [principalId, principalId, before];
+      const { results } = await db
+        .prepare(`${CITATIONS_OF}${keyset} ORDER BY e.id DESC LIMIT ?`)
+        .bind(...binds, limit + 1)
+        .all<CitationRow>();
+
+      const rows = results.slice(0, limit);
+      return {
+        citations: rows.map(
+          (row): Citation => ({
+            id: row.id as OratorId,
+            kind: row.kind as EdgeKind,
+            note: row.note,
+            createdAt: row.created_at,
+            source: linkedArticle(row.s_id, row.s_title, row.s_username, row.s_kind),
+            target: linkedArticle(row.t_id, row.t_title, row.t_username, row.t_kind),
+          }),
+        ),
+        next: results.length > limit ? (rows[rows.length - 1]?.id ?? null) : null,
+      };
+    },
+
+    /**
+     * The three numbers on the tabs, in one round trip.
+     *
+     * A count next to a tab is what makes a tab worth having — a reader should be able to
+     * see that a profile has forty comments and no citations without clicking twice. Batched
+     * rather than sequenced, because D1 charges per statement and these are three cheap
+     * counts, not three queries worth waiting on in turn.
+     */
+    async countProfile(principalId) {
+      const batched = await db.batch<{ n: number }>([
+        db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM articles a
+               JOIN principals p ON p.id = a.author_principal_id
+              WHERE ${PUBLIC} AND a.author_principal_id = ?`,
+          )
+          .bind(principalId),
+        db.prepare(`SELECT COUNT(*) AS n FROM (${AUTHORED_COMMENTS})`).bind(principalId),
+        db.prepare(`SELECT COUNT(*) AS n FROM (${CITATIONS_OF})`).bind(principalId, principalId),
+      ]);
+      const n = (index: number): number => batched[index]?.results?.[0]?.n ?? 0;
+      return { articles: n(0), comments: n(1), citations: n(2) };
     },
 
     async findPrincipalByUsername(username) {

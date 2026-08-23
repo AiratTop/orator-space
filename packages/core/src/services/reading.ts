@@ -2,7 +2,15 @@ import { SCHEMA_VERSION, type FeedCursor, type OratorId } from "@orator/protocol
 import { canonicalPath } from "../articles/urls.js";
 import { stripInvisible } from "../text/invisible.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
-import type { ArticleView, Conversation, FeedPage, FeedWindow } from "../ports/reading.js";
+import type {
+  ArticleView,
+  AuthoredCommentPage,
+  CitationPage,
+  Conversation,
+  FeedPage,
+  FeedWindow,
+  ProfileCounts,
+} from "../ports/reading.js";
 import { fail, ok, type Ports, type Result } from "./context.js";
 
 /**
@@ -189,25 +197,90 @@ export async function latestFeed(
   return { ...page, total };
 }
 
+/**
+ * A profile, and which of its tabs is open (SPEC §49.2, §7).
+ *
+ * §49.2 lists four tabs — articles, comments, activity, citations. Three are built. The
+ * fourth is deliberately not: an activity tab is a log of what happened, and §49.3 already
+ * settled that question for the article page, where the chain itself replaced the log of it.
+ * "@critic challenged this article" is a fact about the network and, on its own, not worth
+ * the line it occupies; the challenge is. The same reasoning applies to a profile, and the
+ * three tabs here are the three places the substance lives.
+ */
+export type ProfileTab = "articles" | "comments" | "citations";
+
+export const PROFILE_TABS: readonly ProfileTab[] = ["articles", "comments", "citations"];
+
+export const isProfileTab = (value: string): value is ProfileTab =>
+  (PROFILE_TABS as readonly string[]).includes(value);
+
+/**
+ * One tab's page, discriminated by the tab.
+ *
+ * A union rather than three nullable fields, so a page that renders the comments tab cannot
+ * compile while reading the articles one.
+ */
+export type ProfileContent =
+  | { tab: "articles"; page: FeedPage }
+  | { tab: "comments"; page: AuthoredCommentPage }
+  | { tab: "citations"; page: CitationPage };
+
 export interface Profile {
   principal: NonNullable<Awaited<ReturnType<ReadingPorts["reading"]["findPrincipalByUsername"]>>>;
-  page: FeedPage;
+  counts: ProfileCounts;
+  content: ProfileContent;
+}
+
+export interface ProfileQuery {
+  tab?: ProfileTab;
+  limit?: number;
+  /** The articles tab, which pages a feed and therefore needs a cursor in both directions. */
+  window?: { before?: FeedCursor | null; after?: FeedCursor | null };
+  /**
+   * The other two, which page by id.
+   *
+   * Comments and edges are ordered by id alone and an Orator id is time-ordered (§12.2), so
+   * the key is unique without a tiebreaker — which is why these take a plain id where the
+   * feed takes an encoded pair.
+   */
+  before?: string | null;
 }
 
 export async function loadProfile(
   ports: ReadingPorts,
   username: string,
-  options: { limit?: number; before?: FeedCursor | null; after?: FeedCursor | null } = {},
+  options: ProfileQuery = {},
 ): Promise<Result<Profile>> {
   const principal = await ports.reading.findPrincipalByUsername(username);
   if (principal === null) return fail("not-found", "Principal not found");
 
-  const page = await ports.reading.listByAuthor(
-    principal.id as OratorId,
-    pageSize(options.limit),
-    feedWindow(options),
-  );
-  return ok({ principal, page });
+  const id = principal.id as OratorId;
+  const limit = pageSize(options.limit);
+  const tab = options.tab ?? "articles";
+  const before = options.before ?? null;
+
+  /*
+   * The counts and the open tab are read together.
+   *
+   * Two round trips would be one more than the page needs, and the counts are what make the
+   * tabs worth having: a reader should be able to see that a profile has forty comments and
+   * no citations without opening either.
+   */
+  const [counts, content] = await Promise.all([
+    ports.reading.countProfile(id),
+    (async (): Promise<ProfileContent> => {
+      switch (tab) {
+        case "comments":
+          return { tab, page: await ports.reading.listCommentsByAuthor(id, limit, before) };
+        case "citations":
+          return { tab, page: await ports.reading.listCitationsOf(id, limit, before) };
+        case "articles":
+          return { tab, page: await ports.reading.listByAuthor(id, limit, feedWindow(options.window ?? {})) };
+      }
+    })(),
+  ]);
+
+  return ok({ principal, counts, content });
 }
 
 /**

@@ -19,6 +19,20 @@ export interface CommentNode {
 }
 
 /**
+ * One untrusted body, rendered (SPEC §57.1).
+ *
+ * Extracted from `threadOf` so the profile's comments tab reaches the same function rather
+ * than reaching for `renderMarkdown` on its own. That is the whole reason this module is in
+ * the domain: a second rendering path for participant-written markdown is a second place
+ * for an escape to hide, and the second place is always the one nobody audits.
+ */
+export function renderCommentBody(body: string | null, options: { siteHost: string }): string | null {
+  if (body === null) return null;
+  const result = renderMarkdown(body, { siteHost: options.siteHost });
+  return result.ok ? result.html : null;
+}
+
+/**
  * The flat thread becomes a tree.
  *
  * Rows arrive in creation order (§12.2), so a parent is always seen before its replies and
@@ -39,13 +53,11 @@ export function threadOf(
      * a comment is the cheaper thing to post, so it is the likelier vector, and a second
      * rendering path would be a second place for an escape to hide.
      */
-    let html: string | null = null;
-    if (comment.body !== null) {
-      const result = renderMarkdown(comment.body, { siteHost: options.siteHost });
-      html = result.ok ? result.html : null;
-    }
-
-    const node: CommentNode = { comment, html, children: [] };
+    const node: CommentNode = {
+      comment,
+      html: renderCommentBody(comment.body, options),
+      children: [],
+    };
     byId.set(comment.id, node);
 
     const parent = comment.parentCommentId === null ? undefined : byId.get(comment.parentCommentId);

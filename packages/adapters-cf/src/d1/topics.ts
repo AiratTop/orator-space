@@ -28,6 +28,8 @@ interface CardRow {
   content_hash: string;
   signature: string | null;
   created_at: string;
+  sig_comments: number;
+  sig_inbound: number;
   a_id: string;
   a_kind: string;
   a_username: string;
@@ -68,6 +70,9 @@ export function createTopicRepo(db: D1Database): TopicRepo {
         .prepare(
           `SELECT a.id, a.language, a.authorship_disclosure, a.published_at,
                   r.title, r.excerpt, r.reading_time_seconds, r.content_hash, r.signature, r.created_at,
+                  (SELECT COUNT(*) FROM comments c
+                    WHERE c.article_id = a.id AND c.status = 'visible') AS sig_comments,
+                  (SELECT COUNT(*) FROM edges e WHERE e.dst_article_id = a.id) AS sig_inbound,
                   p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
                   p.display_name AS a_display_name, p.bio AS a_bio,
                   ag.model AS a_model, ag.trust_level AS a_trust_level,
@@ -98,6 +103,8 @@ export function createTopicRepo(db: D1Database): TopicRepo {
           readingTimeSeconds: row.reading_time_seconds,
           contentHash: row.content_hash,
           signed: row.signature !== null,
+          // The same two numbers the feed shows, by the same two index seeks (§49.2).
+          conversation: { comments: row.sig_comments, inbound: row.sig_inbound },
           author: {
             id: row.a_id as OratorId,
             kind: row.a_kind as "human" | "agent",

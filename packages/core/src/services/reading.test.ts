@@ -409,15 +409,125 @@ describe("the latest feed (§37.1)", () => {
 });
 
 describe("profiles (§49.2)", () => {
+  /** A second author, so "what other people said" can be told from what this one said. */
+  const OTHER = "AGENT-B";
+  const otherCtx = (): RequestContext => ({ ...ctx(), actor: { ...actor, principalId: OTHER } });
+
+  const asOther = async (title: string): Promise<string> => {
+    const draft = unwrap(await createArticle(otherCtx(), { title, content: BODY }));
+    unwrap(await publishArticle(otherCtx(), draft.id));
+    return draft.id;
+  };
+
+  beforeEach(() => {
+    ports.state.principals.set(
+      OTHER,
+      principal(OTHER, "critic", { kind: "agent", ownerPrincipalId: OWNER, trustLevel: 1 }),
+    );
+  });
+
   it("resolves a principal by username and lists their published work", async () => {
     await publish("Cold start");
     const profile = unwrap(await loadProfile(ports, "researcher"));
     expect(profile.principal.kind).toBe("agent");
-    expect(profile.page.cards).toHaveLength(1);
+    expect(profile.content.tab).toBe("articles");
+    if (profile.content.tab !== "articles") throw new Error("wrong tab");
+    expect(profile.content.page.cards).toHaveLength(1);
   });
 
   it("reports an unknown username as absent", async () => {
     expect((await loadProfile(ports, "nobody")).ok).toBe(false);
+  });
+
+  it("counts all three tabs whichever one is open", async () => {
+    const mine = await publish("Cold start");
+    const theirs = await asOther("A rebuttal");
+    unwrap(await createComment(otherCtx(), mine, { content: "Not on ARM." }));
+    unwrap(await createEdge(otherCtx(), { srcArticleId: theirs, kind: "challenges", dstArticleId: mine }));
+
+    const profile = unwrap(await loadProfile(ports, "researcher", { tab: "comments" }));
+    expect(profile.counts).toEqual({ articles: 1, comments: 0, citations: 1 });
+  });
+
+  it("lists a principal's comments with the article each was left on", async () => {
+    const theirs = await asOther("A rebuttal");
+    unwrap(await createComment(ctx(), theirs, { content: "Measured on what hardware?" }));
+
+    const profile = unwrap(await loadProfile(ports, "researcher", { tab: "comments" }));
+    if (profile.content.tab !== "comments") throw new Error("wrong tab");
+    expect(profile.content.page.comments[0]?.article.title).toBe("A rebuttal");
+  });
+
+  it("withholds a removed comment's body and keeps the row (§23.2)", async () => {
+    const theirs = await asOther("A rebuttal");
+    const comment = unwrap(await createComment(ctx(), theirs, { content: "Measured how?" }));
+    const stored = ports.state.comments.get(comment.id)!;
+    ports.state.comments.set(comment.id, { ...stored, status: "removed" });
+
+    const profile = unwrap(await loadProfile(ports, "researcher", { tab: "comments" }));
+    if (profile.content.tab !== "comments") throw new Error("wrong tab");
+    expect(profile.content.page.comments).toHaveLength(1);
+    expect(profile.content.page.comments[0]?.body).toBeNull();
+  });
+
+  it("lists what other articles claim about this principal's work (§18, §84)", async () => {
+    const mine = await publish("Cold start");
+    const theirs = await asOther("A rebuttal");
+    unwrap(await createEdge(otherCtx(), { srcArticleId: theirs, kind: "challenges", dstArticleId: mine }));
+
+    const profile = unwrap(await loadProfile(ports, "researcher", { tab: "citations" }));
+    if (profile.content.tab !== "citations") throw new Error("wrong tab");
+    expect(profile.content.page.citations).toHaveLength(1);
+    expect(profile.content.page.citations[0]?.source.title).toBe("A rebuttal");
+    expect(profile.content.page.citations[0]?.target.title).toBe("Cold start");
+  });
+
+  it("leaves out a self-citation, which is the one an author can make alone", async () => {
+    const first = await publish("Cold start");
+    const second = await publish("Cold start, revisited");
+    unwrap(await createEdge(ctx(), { srcArticleId: second, kind: "cites", dstArticleId: first }));
+
+    const profile = unwrap(await loadProfile(ports, "researcher", { tab: "citations" }));
+    if (profile.content.tab !== "citations") throw new Error("wrong tab");
+    expect(profile.content.page.citations).toHaveLength(0);
+    expect(profile.counts.citations).toBe(0);
+  });
+
+  it("drops a citation whose source has been withdrawn, because it cannot be read", async () => {
+    const mine = await publish("Cold start");
+    const theirs = await asOther("A rebuttal");
+    unwrap(await createEdge(otherCtx(), { srcArticleId: theirs, kind: "challenges", dstArticleId: mine }));
+    unwrap(await unpublishArticle(otherCtx(), theirs));
+
+    const profile = unwrap(await loadProfile(ports, "researcher", { tab: "citations" }));
+    if (profile.content.tab !== "citations") throw new Error("wrong tab");
+    expect(profile.content.page.citations).toHaveLength(0);
+  });
+});
+
+describe("what a card says about the conversation (§49.2, ADR 0011)", () => {
+  it("counts visible comments and inbound edges, and nothing a reader can click for free", async () => {
+    const id = await publish("Cold start");
+    const other = await publish("A rebuttal");
+    unwrap(await createComment(ctx(), id, { content: "Not on ARM." }));
+    unwrap(await createEdge(ctx(), { srcArticleId: other, kind: "challenges", dstArticleId: id }));
+    unwrap(await createEdge(ctx(), { srcArticleId: id, kind: "cites", dstArticleId: other }));
+
+    const feed = await latestFeed(ports);
+    const card = feed.cards.find((c) => c.id === id)!;
+    expect(card.conversation.comments).toBe(1);
+    // Inbound only: what this article says about others is not a signal about this one.
+    expect(card.conversation.inbound).toBe(1);
+  });
+
+  it("does not count a comment whose body was withheld", async () => {
+    const id = await publish("Cold start");
+    const comment = unwrap(await createComment(ctx(), id, { content: "Not on ARM." }));
+    const stored = ports.state.comments.get(comment.id)!;
+    ports.state.comments.set(comment.id, { ...stored, status: "removed" });
+
+    const feed = await latestFeed(ports);
+    expect(feed.cards.find((c) => c.id === id)!.conversation.comments).toBe(0);
   });
 });
 
