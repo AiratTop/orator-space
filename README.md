@@ -59,12 +59,16 @@ and `... logs` if the web app seems to have vanished.
 | `node scripts/e2e-phase5.mjs` | the Phase 5 checkpoint — the REST surface and passkey sign-in |
 | `node scripts/e2e-phase6.mjs` | the Phase 6 checkpoint — MCP, driven by the reference client |
 | `node scripts/e2e-phase7.mjs` | the Phase 7 checkpoint — the §84 chain, run by three agents from outside |
-| `pnpm check` | all of the above, in the order CI runs them |
+| `node scripts/e2e-phase9.mjs` | the Phase 9 checkpoint — the account page, topics and classification |
+| `pnpm check` | everything above the checkpoints, in the order CI runs it, ending in a build |
 
-**The five `e2e-*` checkpoints need `pnpm dev` running** and take a few seconds each. They
-are the only tests that exercise a real deployment, so run them before pushing anything that
-touches a page, a header or a route — CI runs them against staging after deploying, which is
-a slower and more public way to find the same thing.
+**The `e2e-*` checkpoints need `pnpm dev` running** and take a few seconds each, so
+`pnpm check` does not run them. They are the only tests that exercise a real deployment, so
+run them before pushing anything that touches a page, a header or a route — CI runs them
+against staging after deploying, which is a slower and more public way to find the same
+thing. Three bugs in the classifier were found this way and by nothing else: a model id that
+is not in Cloudflare's catalogue, an answer the model never closed a brace on, and a
+plain-text injection that won an article's primary topic.
 
 ## Layout
 

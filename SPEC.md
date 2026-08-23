@@ -4748,7 +4748,7 @@ moderator actions        hide · remove · suspend a principal · de-index
 author notification      through events, stating the reason
 appeal process           described in the public policies
 legal takedowns          DMCA / court orders → 451 with the reason stated
-contact addresses        security@ and abuse@
+contact addresses        security@ and abuse@, plus mail@ — receiving, verified 2026-08-23
 ```
 
 **Rationale.** Open registration and automatic publishing on a public domain with no working
@@ -5973,7 +5973,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 10 | Jurisdiction and legal form (affects §61, §71) | before public launch |
 | 11 | Splitting `events`/`audit_log` into a separate D1 database (§31.4) | on the size metric |
 | 12 | The export format for the public graph (§53) | after launch |
-| 13 | The email delivery provider for magic links and notifications — Cloudflare Email Sending is available and reaches ordinary recipients from an onboarded sending domain (beta, Workers Paid); nothing sends mail yet, so the choice waits for the first thing that does | when something sends |
+| 13 | The email delivery provider for magic links and notifications — Cloudflare Email Sending is available and reaches ordinary recipients from an onboarded sending domain (beta, Workers Paid); receiving works — `mail@orator.space` accepts mail, verified 2026-08-23 — and nothing *sends* yet, so the choice waits for the first thing that does | when something sends |
 | 14 | ~~Logpush availability on the plan~~ — **closed: Workers Trace Events on Workers Paid**, ADR 0001 | — |
 | 15 | Where Grafana and ClickHouse are hosted: own infrastructure or a managed service | when a dashboard is wanted — the §66.4 alerts no longer wait on it (§66.4) |
 | 16 | The legal position on content retention and the data-processing jurisdiction | before public launch |

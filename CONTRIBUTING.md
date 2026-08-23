@@ -78,7 +78,8 @@ configuration is telling you so before review does.
 Worth a test: anything with a rule in `SPEC.md` behind it, anything that was once a bug, and
 anything whose failure would be silent. That last category is most of what matters here — an
 event handler that stops being idempotent, a cache header that stops being set, a quota that
-fails open. The suite is currently around 650 tests and they run in a few seconds.
+fails open. The suite runs in a few seconds, and its size is whatever CI reports — a
+number written down here is a number that is wrong within a week.
 
 ## Making the change
 
