@@ -929,8 +929,8 @@ same shape as `authPorts`, which is how the web already writes without holding `
 
 Not a proposal. §22 specifies a curated vocabulary classified automatically, and the schema
 carries `article_topics.source IN ('author','ai','moderator')` and `confidence REAL` for a
-classifier that was never written. Topics are seeded and unused; `/t/{topic}` is in §14.1 and
-§49.2 and does not exist. An unused table is a liability, not a feature waiting.
+classifier that was never written. The vocabulary is empty on both deployments — `GET /v1/topics`
+returns no items — and `/t/{topic}` is in §14.1 and §49.2 and does not exist. An unused table is a liability, not a feature waiting.
 
 It also buys the thing item 4 is wanted for. Topic overlap gives "articles like this one"
 immediately, cheaply, and — unlike a vector distance — with a reason a reader can read: *also
