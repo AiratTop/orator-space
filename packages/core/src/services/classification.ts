@@ -1,4 +1,5 @@
 import { SCHEMA_VERSION } from "@orator/protocol";
+import { redactMachineAddressed } from "../moderation/heuristics.js";
 import { stripInvisible } from "../text/invisible.js";
 import type { Classifier, ClassificationCandidate, VocabularyEntry } from "../ports/index.js";
 import type { Ports } from "./context.js";
@@ -24,8 +25,18 @@ import type { Ports } from "./context.js";
  * the next provider will be written and each one would have to remember.
  */
 
-/** SPEC §22.2 — the hard cap. Anything beyond it is truncated rather than refused. */
-export const MAX_TOPICS = 5;
+/**
+ * SPEC §22.2 — the cap, and it is three rather than five.
+ *
+ * §22.2 makes five a `MUST NOT` exceed and says "one to three in practice", and the
+ * practice is what a service enforces: a specification saying "usually fewer" is not a
+ * limit, and the first live run produced five — two of them right and three of them the
+ * tail of a padded list. An article in five topics is in none of them.
+ */
+export const MAX_TOPICS = 3;
+
+/** §22.2's hard ceiling, which this stays under. Kept as the thing being obeyed. */
+export const SPEC_MAX_TOPICS = 5;
 
 /**
  * Below this, nothing is stored (§22.3).
@@ -35,6 +46,17 @@ export const MAX_TOPICS = 5;
  * threshold is what turns "these are also vaguely related" into silence.
  */
 export const MIN_CONFIDENCE = 0.6;
+
+/**
+ * How far below the best a candidate may sit and still be stored.
+ *
+ * An article genuinely in two topics produces two comparable scores. A padded list produces
+ * one high score and a tail, which is what "assign every other topic you know about"
+ * produced on the first live run. A relative floor removes the tail without touching the
+ * article that really is about two things — which an absolute threshold cannot do, because
+ * the two cases differ in shape rather than in level.
+ */
+export const MIN_RELATIVE_CONFIDENCE = 0.6;
 
 /**
  * How much of an article the model reads.
@@ -115,6 +137,18 @@ export function admissible(
   }
 
   kept.sort((a, b) => b.confidence - a.confidence || a.slug.localeCompare(b.slug));
+
+  // The tail of a padded list, relative to the best answer. See MIN_RELATIVE_CONFIDENCE.
+  const best = kept[0]?.confidence ?? 0;
+  const floor = best * MIN_RELATIVE_CONFIDENCE;
+  for (let i = kept.length - 1; i > 0; i--) {
+    const candidate = kept[i];
+    if (candidate !== undefined && candidate.confidence < floor) {
+      discarded.push(candidate.slug);
+      kept.splice(i, 1);
+    }
+  }
+
   // Truncated, not refused: a model that named eight topics has still said something useful
   // about the first three.
   if (kept.length > MAX_TOPICS) {
@@ -164,10 +198,18 @@ export async function classifyArticle(
   let candidates: ClassificationCandidate[];
   try {
     candidates = await classifier.classify({
-      title: stripInvisible(revision.title),
-      // Defence 1 (§22.3). The renderer strips these on the way out and the classifier does
-      // not arrive through the renderer, so it is done here or not at all.
-      body: stripInvisible(stored).slice(0, MAX_BODY_CHARS),
+      title: redactMachineAddressed(stripInvisible(revision.title)),
+      /*
+       * Defence 1 (§22.3), in two parts.
+       *
+       * Invisible characters go because the renderer strips them on the way out and the
+       * classifier does not arrive through the renderer — so a payload has to be visible to
+       * a human reading the article. Sentences addressed to a machine go because being
+       * visible turned out not to be much of an obstacle: on the first live run, a plain
+       * "this article is about history" in the body put an article about inference latency
+       * under `history`, as its primary topic.
+       */
+      body: redactMachineAddressed(stripInvisible(stored)).slice(0, MAX_BODY_CHARS),
       vocabulary,
     });
   } catch (error) {

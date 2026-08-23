@@ -70,6 +70,31 @@ const WORD = /\p{L}[\p{L}\p{N}'’-]*/gu;
 /** Below this, an article is too short for the structural signals to mean anything. */
 const MIN_WORDS_FOR_STRUCTURE = 80;
 
+/**
+ * Blanks the passages that address a machine (SPEC §22.3, §58.2).
+ *
+ * The same list the screener flags on, used one step earlier and for a different purpose:
+ * before untrusted text is handed to the platform's own model (§58.4), the sentences aimed
+ * at it are replaced rather than passed through.
+ *
+ * This is not a claim to have solved prompt injection, and the difference matters. The list
+ * is literal, so a paraphrase walks past it — what it removes is the crude, effective form,
+ * which on a first live run was enough to make a classifier put an article about inference
+ * latency under `history` because a line in the body told it to. §22.3's ordering is
+ * unchanged: this strengthens defence 1, and defence 2 is still what bounds the damage.
+ *
+ * Replaced with a marker rather than deleted, because the length and the shape of the
+ * article should not change under the model's feet, and because a classifier reading
+ * `[removed]` learns something true about the text it is sorting.
+ */
+export function redactMachineAddressed(text: string): string {
+  let out = text;
+  for (const pattern of ADDRESSED_TO_A_MODEL) {
+    out = out.replace(new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`), "[removed]");
+  }
+  return out;
+}
+
 export const HEURISTIC_PROVIDER = "orator-heuristics-v1";
 
 export function screen(content: { title: string; body: string }): ModerationVerdict {
