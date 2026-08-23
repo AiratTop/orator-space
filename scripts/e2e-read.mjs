@@ -547,6 +547,26 @@ check(
   "",
 );
 check("an empty search asks rather than errors", (await web("/search")).status === 200);
+
+/*
+ * An id pasted into the search box (§13, §38.1, §34.4).
+ *
+ * Not racy, and that is the point: the article this run published is indexed from the queue
+ * and may not be findable by a word yet, but an id is an exact lookup and does not wait for
+ * the index. It is also the case a reader actually hits — an id arrives in a citation, a log
+ * or somebody else's article, and the first thing anybody does with one is paste it.
+ */
+const byId = await web(`/search?q=${created.body.id}`);
+const byIdHtml = await byId.text();
+check("an Article ID finds its article", byIdHtml.includes(`/p/${created.body.id}`), `${byId.status}`);
+check(
+  "and does so lowercased, as a log or a shell would have left it",
+  (await (await web(`/search?q=${created.body.id.toLowerCase()}`)).text()).includes(`/p/${created.body.id}`),
+);
+check(
+  "a well-formed id naming nothing answers with no results, not an error",
+  (await (await web("/search?q=06G2W3988XR0128MXC7Q702WCW")).text()).includes("Nothing matches"),
+);
 check(
   // §38.1 — a relevance ordering is a score, not a chronology, so "newer" and "older" are
   // not meaningful. The pager was left on for one commit and announced "that is the oldest"

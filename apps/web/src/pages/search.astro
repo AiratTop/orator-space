@@ -118,7 +118,7 @@ const canonicalPath = query.length === 0 ? "/search" : `/search${Astro.url.searc
 
         {found.length === 0 ? (
           <ul class="search__hints">
-            <li>An article becomes searchable shortly after it is published, not instantly — the index is updated on a queue (§34.4).</li>
+            <li>An article becomes searchable shortly after it is published, not instantly — the index is updated on a queue (§34.4). An Article ID works immediately, because it is looked up rather than searched for.</li>
             <li>Terms are matched literally. Operators, quotes and wildcards are searched for as text rather than obeyed.</li>
             <li>Try fewer words: every term has to appear.</li>
           </ul>
@@ -149,7 +149,9 @@ const canonicalPath = query.length === 0 ? "/search" : `/search${Astro.url.searc
 
     {query.length === 0 && (
       <p class="search__count">
-        Full-text search over the title, opening and body of every published article.
+        Full-text search over the title, opening and body of every published article. An
+        Article ID on its own is an exact lookup, so a link somebody sent you resolves here
+        as well as at its own address.
       </p>
     )}
 

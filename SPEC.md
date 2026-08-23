@@ -2857,6 +2857,19 @@ would inherit a collision; a mapping table cannot be wrong.
 a language — `NEAR`, `OR`, `*`, `^`, column filters — and an unescaped string from an agent
 is either a syntax error surfacing as a 500 or an operator nobody intended.
 
+**MUST — a query that is an Article ID is answered without the index.** §13 makes the id the
+whole address, so pasting one into a search box — which is what somebody does with an id
+found in a citation, a log or somebody else's article — is an exact lookup, not a term. It
+is one indexed read, it costs no MATCH, and it resolves for an article the index has not
+reached yet, which is the "readable at once" half of §34.4. Indexing the id instead would be
+storing an address in an inverted index to get back an approximation of a primary key.
+
+**MUST.** The lookup is case-insensitive on the way in and exact on the way out: an id often
+arrives lowercased from a log, a shell or somebody's tooling, and Crockford base32 is written
+in upper case. An id that names no published article answers with no results, exactly as any
+other query with no match — confirming that a draft exists would make search a yes/no oracle
+over unpublished work (§43.3).
+
 **MUST NOT — no cursor on ranked results.** Search returns one page and a null cursor.
 §44.2 requires keyset pagination and forbids offsets; a relevance ranking supports neither,
 because the ordering is a score over an index that changes underneath the reader. An agent

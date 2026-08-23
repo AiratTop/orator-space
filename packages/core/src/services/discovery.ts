@@ -1,6 +1,6 @@
-import { ErrorType, type FeedCursor, type OratorId } from "@orator/protocol";
+import { ErrorType, isOratorId, type FeedCursor, type OratorId } from "@orator/protocol";
 import { stripInvisible } from "../text/invisible.js";
-import type { ArticleCard, FeedPage, SearchDocument, SearchIndex } from "../ports/index.js";
+import type { ArticleCard, ArticleView, FeedPage, SearchDocument, SearchIndex } from "../ports/index.js";
 import { fail, ok, type Result } from "./context.js";
 import { pageSize, type ReadingPorts } from "./reading.js";
 
@@ -99,6 +99,38 @@ export interface SearchResults {
 }
 
 /**
+ * A result, from the article it names.
+ *
+ * Shared by the two paths below so a card found by id and a card found by a term are the
+ * same object. §66.7's exclusion is here rather than at each call site for the same reason.
+ */
+function cardFor(view: ArticleView): ArticleCard | null {
+  /*
+   * §66.7 — the canary is in the index and not in the results.
+   *
+   * It has to be in the index: the deep check waits for it to appear there, and that wait is
+   * the one thing in the check that requires the queue, the consumer and the index to all be
+   * alive. It must not be in the results: a search result is somewhere a reader arrives
+   * without asking, and the platform's own heartbeat is not an answer to anybody's query.
+   */
+  if (view.author.systemAccount) return null;
+
+  return {
+    id: view.article.id,
+    title: view.revision.title,
+    excerpt: view.revision.excerpt,
+    language: view.article.language,
+    authorshipDisclosure: view.article.authorshipDisclosure,
+    publishedAt: view.article.publishedAt ?? view.revision.createdAt,
+    readingTimeSeconds: view.revision.readingTimeSeconds,
+    contentHash: view.revision.contentHash,
+    signed: view.revision.signature !== null,
+    author: view.author,
+    conversation: view.signals,
+  };
+}
+
+/**
  * Full-text search over published articles.
  *
  * Returns one ranked page and no cursor. Ranked results cannot be keyset-paginated the way
@@ -106,6 +138,14 @@ export interface SearchResults {
  * reader, so page two of a relevance ranking is not a well-defined thing to ask for. An
  * agent that needs more asks for a larger `limit` or a narrower query, which is the honest
  * interface. Deep paging belongs with the vector store (§38.2), not with FTS.
+ *
+ * **An Article ID is answered without touching the index.** Pasting one into a search box is
+ * what somebody does with an id they found in a citation, a log or somebody else's article,
+ * and §13 makes that id the whole address — so it is an exact lookup rather than a term, and
+ * indexing it would be storing an address in an inverted index to get back an approximation
+ * of a primary key. It also means an id resolves for an article the index has not reached
+ * yet: §34.4 states that a new article is readable at once and searchable shortly after, and
+ * this path is the "at once" half.
  */
 export async function search(
   ports: SearchPorts,
@@ -114,6 +154,21 @@ export async function search(
 ): Promise<Result<SearchResults>> {
   const query = text.trim();
   if (query.length === 0) return fail(ErrorType.ValidationFailed, "A search needs a query");
+
+  /*
+   * Uppercased before the test, because an id is often arriving from somewhere that
+   * lowercased it — a log line, a shell, a URL somebody's tooling normalised. Crockford
+   * base32 is written in upper case and the stored value is, so the comparison is exact and
+   * only the reader's copy is forgiven.
+   */
+  const asId = query.toUpperCase();
+  if (isOratorId(asId)) {
+    const view = await ports.reading.findPublished(asId);
+    // Absent, a draft, removed, or the canary: all indistinguishable from "no match", which
+    // is what keeps this from being a yes/no oracle over unpublished work (§43.3).
+    const card = view === null ? null : cardFor(view);
+    return ok({ query, articles: card === null ? [] : [card] });
+  }
 
   const ids = await ports.search.query(query, pageSize(options.limit));
   if (ids.length === 0) return ok({ query, articles: [] });
@@ -124,30 +179,8 @@ export async function search(
   for (const id of ids) {
     const view = await ports.reading.findPublished(id);
     if (view === null) continue;
-
-    /*
-     * §66.7 — the canary is in the index and not in the results.
-     *
-     * It has to be in the index: the deep check waits for it to appear there, and that wait
-     * is the one thing in the check that requires the queue, the consumer and the index to
-     * all be alive. It must not be in the results: a search result is somewhere a reader
-     * arrives without asking, and the platform's own heartbeat is not an answer to anybody's
-     * query.
-     */
-    if (view.author.systemAccount) continue;
-    cards.push({
-      id: view.article.id,
-      title: view.revision.title,
-      excerpt: view.revision.excerpt,
-      language: view.article.language,
-      authorshipDisclosure: view.article.authorshipDisclosure,
-      publishedAt: view.article.publishedAt ?? view.revision.createdAt,
-      readingTimeSeconds: view.revision.readingTimeSeconds,
-      contentHash: view.revision.contentHash,
-      signed: view.revision.signature !== null,
-      author: view.author,
-      conversation: view.signals,
-    });
+    const card = cardFor(view);
+    if (card !== null) cards.push(card);
   }
 
   return ok({ query, articles: cards });

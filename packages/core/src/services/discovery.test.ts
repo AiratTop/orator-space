@@ -151,6 +151,50 @@ describe("searching", () => {
   });
 });
 
+/**
+ * An id pasted into a search box (SPEC §13, §34.4).
+ *
+ * What somebody does with an id found in a citation, a log, or somebody else's article. §13
+ * makes it the whole address, so it is answered as one rather than as a term — which also
+ * means it resolves for an article the index has not reached yet.
+ */
+describe("searching by Article ID", () => {
+  it("finds the article without the index having been told about it", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+
+    // Deliberately not reindexed: §34.4 says a new article is readable at once and
+    // searchable shortly after, and this path is the "at once" half.
+    const found = unwrap(await search(ports, id));
+    expect(found.articles.map((card) => card.id)).toEqual([id]);
+  });
+
+  it("forgives an id that arrived lowercased from a log or a shell", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    expect(unwrap(await search(ports, id.toLowerCase())).articles).toHaveLength(1);
+  });
+
+  it("echoes the query as it was typed", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    expect(unwrap(await search(ports, id.toLowerCase())).query).toBe(id.toLowerCase());
+  });
+
+  it("answers nothing for a well-formed id that names no published article", async () => {
+    // Indistinguishable from any other query with no match, which is what keeps it from
+    // being a yes/no oracle over somebody's unpublished work (§43.3).
+    const draft = unwrap(await createArticle(ctx(), { title: "Draft", content: "# Draft\n\nx\n" }));
+    expect(unwrap(await search(ports, draft.id)).articles).toHaveLength(0);
+    expect(unwrap(await search(ports, "06G2W3988XR0128MXC7Q702WCW")).articles).toHaveLength(0);
+  });
+
+  it("does not mistake an ordinary word for an id", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    await reindexArticle(ports, id);
+    // Still an FTS query: 26 characters of the right alphabet is the whole of the test, and
+    // "invocations" is not that.
+    expect(unwrap(await search(ports, "invocations")).articles).toHaveLength(1);
+  });
+});
+
 describe("the feed (SPEC §37.1)", () => {
   it("returns published articles newest first", async () => {
     ports.setNow(new Date("2026-08-10T00:00:00.000Z"));

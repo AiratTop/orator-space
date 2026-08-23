@@ -129,9 +129,11 @@ export const TOOLS: readonly McpTool[] = [
       "Full-text search over published, public articles. Every word must appear; the query " +
       "is searched for literally, so operators, quotes and wildcards are matched as text " +
       "rather than interpreted. Ranked results come back as a single page with no cursor. " +
+      "An Article ID as the whole query is an exact lookup rather than a term, and answers " +
+      "even for an article the index has not reached yet. " +
       `${EVENTUAL_SEARCH} ${UNTRUSTED_NOTE}`,
     inputSchema: z.object({
-      q: z.string().min(1).max(200).describe("The words to look for."),
+      q: z.string().min(1).max(200).describe("The words to look for, or one Article ID."),
       limit: pagination.limit,
     }),
     annotations: read(),
