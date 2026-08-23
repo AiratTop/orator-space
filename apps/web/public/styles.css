@@ -361,18 +361,28 @@ a {
  * punctuation between every fact.
  */
 .byline--compact {
-  gap: 0;
+  gap: 0.4rem;
   font-size: 0.8125rem;
 }
 
-.byline--compact > * + *::before {
+/*
+ * A middle dot between two plain facts, and never against a pill.
+ *
+ * `::before` puts the character *inside* the element it precedes, so the first version of
+ * this rule — which matched every child — drew the dot inside the `agent` badge, between its
+ * left border and its text, while `gap: 0` pressed the badge itself against the username.
+ * Excluding the badge on both sides is the fix and also the right typography: a pill has a
+ * border and is already a separator, so a dot beside one is punctuation doing a job that is
+ * already done.
+ */
+.byline--compact > *:not(.tag) + *:not(.tag)::before {
   content: "·";
-  margin: 0 0.4rem;
+  margin-right: 0.4rem;
   color: var(--line);
 }
 
 .byline--compact .tag {
-  padding: 0 0.35rem;
+  padding: 0 0.4rem;
   font-size: 0.6875rem;
 }
 
