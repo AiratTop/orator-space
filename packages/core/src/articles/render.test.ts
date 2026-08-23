@@ -91,7 +91,7 @@ describe("sanitisation — URL schemes (§57.1.4)", () => {
   });
 
   it("keeps relative links to our own pages", () => {
-    expect(html(`[a](/p/01K3EXAMPLE/slug)`)).toContain(`href="/p/01K3EXAMPLE/slug"`);
+    expect(html(`[a](/p/01K3EXAMPLE)`)).toContain(`href="/p/01K3EXAMPLE"`);
   });
 });
 

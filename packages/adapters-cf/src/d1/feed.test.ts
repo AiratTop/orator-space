@@ -29,10 +29,10 @@ async function article(id: string, author: string, title: string, publishedAt: s
   const revision = `R${id}`;
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO articles (id, author_principal_id, slug, status, visibility,
+      `INSERT INTO articles (id, author_principal_id, status, visibility,
                              current_revision_id, published_revision_id, authorship_disclosure,
                              created_at, updated_at, published_at)
-       VALUES (?, ?, NULL, 'published', 'public', ?, ?, 'ai_generated', ?, ?, ?)`,
+       VALUES (?, ?, 'published', 'public', ?, ?, 'ai_generated', ?, ?, ?)`,
     ).bind(id, author, revision, revision, AT(1), AT(1), publishedAt),
     env.DB.prepare(
       `INSERT INTO revisions (id, article_id, title, content_ref, content_hash, content_bytes,

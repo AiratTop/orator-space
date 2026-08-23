@@ -73,7 +73,7 @@ const text = (args: Args, key: string): string | undefined =>
 /**
  * Spreads a field only when it has a value.
  *
- * `exactOptionalPropertyTypes` is on, so `{ slug: undefined }` and `{}` are different
+ * `exactOptionalPropertyTypes` is on, so `{ canonicalUrl: undefined }` and `{}` are different
  * types, and the difference matters: the services distinguish "leave it alone" from
  * "set it to nothing". Written once rather than inline per field, where the conditional
  * loses the narrowing and the compiler stops helping.

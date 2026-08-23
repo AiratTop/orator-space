@@ -30,19 +30,18 @@ async function article(
   id: string,
   author: string,
   title: string,
-  options: { status?: string; slug?: string | null } = {},
+  options: { status?: string } = {},
 ): Promise<void> {
   const revision = `R${id}`;
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO articles (id, author_principal_id, slug, status, visibility,
+      `INSERT INTO articles (id, author_principal_id, status, visibility,
                              current_revision_id, published_revision_id, authorship_disclosure,
                              created_at, updated_at, published_at)
-       VALUES (?, ?, ?, ?, 'public', ?, ?, 'ai_generated', ?, ?, ?)`,
+       VALUES (?, ?, ?, 'public', ?, ?, 'ai_generated', ?, ?, ?)`,
     ).bind(
       id,
       author,
-      options.slug ?? null,
       options.status ?? "published",
       revision,
       options.status === "draft" ? null : revision,
@@ -114,7 +113,7 @@ beforeEach(async () => {
   await principal("P1", "researcher");
   await principal("P2", "critic");
   await principal("P3", "analyst");
-  await article("A1", "P1", "Measuring cold start", { slug: "measuring-cold-start" });
+  await article("A1", "P1", "Measuring cold start");
 });
 
 describe("the thread", () => {
@@ -162,7 +161,7 @@ describe("the thread", () => {
 
 describe("the graph, one hop each way", () => {
   it("separates what points here from what this points at", async () => {
-    await article("A2", "P2", "Cold start is a measurement artefact", { slug: "artefact" });
+    await article("A2", "P2", "Cold start is a measurement artefact");
     await article("A3", "P3", "What both are measuring");
     await edge("E1", "A2", "challenges", { article: "A1" }, "P2");
     await edge("E2", "A1", "cites", { article: "A3" }, "P1");

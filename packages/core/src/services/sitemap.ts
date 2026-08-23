@@ -150,9 +150,11 @@ export function renderPages(siteOrigin: string): string {
 /**
  * XML escaping.
  *
- * A slug is derived from a title an untrusted party wrote, and a sitemap is XML that a
- * crawler parses strictly: one unescaped `&` invalidates the document, so every article
- * silently leaves the index because one of them had an ampersand in its title.
+ * A sitemap is XML that a crawler parses strictly: one unescaped `&` invalidates the whole
+ * document, and every article in that shard leaves the index with it. Since ADR 0010 nothing
+ * an author wrote reaches a `<loc>` — an address is an origin and an id — so this is a guard
+ * rather than a load-bearing step, and it stays because the origin is still configuration
+ * and the next thing put in a `<loc>` will not announce itself.
  */
 export function escapeXml(value: string): string {
   return value

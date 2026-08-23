@@ -1097,7 +1097,7 @@ CREATE TABLE articles (
   id                    TEXT PRIMARY KEY,
   author_principal_id   TEXT NOT NULL REFERENCES principals(id),
 
-  -- Dropped in migration 0009 (ADR 0010). No author-written segment appears in an address.
+  -- Dropped in migration 0008 (ADR 0010). No author-written segment appears in an address.
   -- slug               TEXT
   status                TEXT NOT NULL            -- §16.3
                           CHECK (status IN ('draft','published','unpublished','removed')),
