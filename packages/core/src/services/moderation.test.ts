@@ -6,7 +6,16 @@ import type { Actor } from "../identity/authz.js";
 import type { RequestContext } from "./context.js";
 import { createArticle, publishArticle, readArticle } from "./publishing.js";
 import { createComment } from "./social.js";
-import { applyModerationAction, createReport, listReports, reviewReport, screenArticle } from "./moderation.js";
+import {
+  applyModerationAction,
+  createReport,
+  listReports,
+  reviewReport,
+  screenArticle,
+  withFloor,
+  type ModerationProvider,
+} from "./moderation.js";
+import type { ModerationVerdict } from "../moderation/heuristics.js";
 
 /**
  * SPEC §61.1 — the queue, the actions, and the three records each one must leave.
@@ -359,5 +368,75 @@ describe("screening a published article (§61, §58.2)", () => {
   it("does nothing to an article that is not published", async () => {
     const draft = unwrap(await createArticle(ctxFor(actorFor(AUTHOR)), { title: "Draft", content: BODY }));
     expect(await screenArticle(ports, draft.id)).toBe("skipped");
+  });
+});
+
+/**
+ * SPEC §61, §80.19 — the floor plus something that reads.
+ *
+ * The behaviour worth testing is not the merge, which is obvious, but what happens when the
+ * reader is unavailable: whether "the rules matched nothing" is allowed to become "somebody
+ * looked for abuse and found none".
+ */
+describe("a reading provider on top of the floor", () => {
+  const verdict = (over: Partial<ModerationVerdict>): ModerationVerdict => ({
+    action: "allow",
+    categories: [],
+    score: 0,
+    provider: "test",
+    ...over,
+  });
+
+  const provider = (name: string, result: ModerationVerdict | Error): ModerationProvider => ({
+    name,
+    check: async () => {
+      if (result instanceof Error) throw result;
+      return result;
+    },
+  });
+
+  const content = { title: "t", body: "b" };
+  const context = { authorKind: "agent" as const, trustLevel: 1 };
+
+  it("flags when either one does, and keeps the higher score", async () => {
+    const combined = withFloor(
+      provider("floor", verdict({ action: "flag", categories: ["hidden_text"], score: 0.4 })),
+      provider("reader", verdict({ categories: [], score: 0.1 })),
+    );
+
+    const result = await combined.check(content, context);
+    expect(result.action).toBe("flag");
+    expect(result.categories).toEqual(["hidden_text"]);
+    expect(result.score).toBe(0.4);
+  });
+
+  it("unions the categories, with the checkable finding first", async () => {
+    const combined = withFloor(
+      provider("floor", verdict({ action: "flag", categories: ["link_farm"], score: 0.5 })),
+      provider("reader", verdict({ action: "flag", categories: ["spam"], score: 0.9 })),
+    );
+
+    expect((await combined.check(content, context)).categories).toEqual(["link_farm", "spam"]);
+  });
+
+  it("keeps the floor's flag when the reader is unavailable", async () => {
+    const combined = withFloor(
+      provider("floor", verdict({ action: "flag", categories: ["hidden_text"], score: 0.6 })),
+      provider("reader", new Error("upstream")),
+    );
+
+    // A report raised beats a report withheld, and flagged content is not indexable either
+    // way — so there is nothing to gain by discarding a finding somebody could act on.
+    const result = await combined.check(content, context);
+    expect(result.action).toBe("flag");
+    expect(result.categories).toEqual(["hidden_text"]);
+  });
+
+  it("refuses to call a clean floor a pass when the reader never ran", async () => {
+    const combined = withFloor(provider("floor", verdict({})), provider("reader", new Error("upstream")));
+
+    // The throw is what leaves the article `unchecked` (§61). Returning the floor's `allow`
+    // would make an outage read as a clean bill of health for everything published during it.
+    await expect(combined.check(content, context)).rejects.toThrow("upstream");
   });
 });

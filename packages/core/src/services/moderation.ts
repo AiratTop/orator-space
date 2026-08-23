@@ -533,6 +533,50 @@ export interface ModerationProvider {
   ): Promise<ModerationVerdict>;
 }
 
+/**
+ * The floor, plus something that reads (SPEC §61, §80.19).
+ *
+ * Two providers rather than a choice between them, because they see different things. The
+ * heuristic finds what is mechanically visible — hidden text, a forged boundary, link
+ * farming — which a model notices unreliably if at all. A model tells spam and abuse from an
+ * argument somebody dislikes, which no rule can. Neither is a superset of the other, so
+ * running one would be choosing which half of §61 to implement.
+ *
+ * **What happens when the reader is unavailable is the whole design.** If the floor found
+ * something, its flag stands: a report raised is strictly better than a report withheld, and
+ * flagged content is not indexable either way. If the floor found nothing, the failure
+ * propagates and the article is left `unchecked` — because "the rules matched nothing" is not
+ * "somebody looked for abuse", and collapsing those two is exactly how an outage at a
+ * provider becomes a clean bill of health for everything published during it.
+ */
+export function withFloor(floor: ModerationProvider, reader: ModerationProvider): ModerationProvider {
+  return {
+    name: `${floor.name}+${reader.name}`,
+    async check(content, context) {
+      const below = await floor.check(content, context);
+
+      let above: ModerationVerdict;
+      try {
+        above = await reader.check(content, context);
+      } catch (error) {
+        if (below.action === "flag") return below;
+        throw error;
+      }
+
+      return {
+        action: below.action === "flag" || above.action === "flag" ? "flag" : "allow",
+        // Union, and the floor's codes first: a moderator reading the queue wants the
+        // mechanical finding — which is checkable — before the model's judgement, which is not.
+        categories: [...new Set([...below.categories, ...above.categories])],
+        // The higher of the two. A queue read worst-first should not be reordered by the
+        // provider that happened to be less alarmed.
+        score: Math.max(below.score, above.score),
+        provider: `${below.provider}+${above.provider}`,
+      };
+    },
+  };
+}
+
 /** The provider that needs nothing to work, and therefore always does. */
 export const heuristicProvider: ModerationProvider = {
   name: HEURISTIC_PROVIDER,
