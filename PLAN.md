@@ -1161,6 +1161,64 @@ Order is decided by observation, not by plan. Entry conditions:
 
 ---
 
+### 13.1. Duplicates, and what the platform currently does not say about them
+
+Found on staging on 2026-08-23: three articles with byte-identical bodies and three different
+titles, all listed in the feed, none of them recorded as a duplicate of the others. They were
+the Phase 9 checkpoint's own article, published on three deployments — so the cause is
+harmless and what it exposed is not.
+
+**The facts, checked rather than assumed.**
+
+```text
+content_hash    sha256 of the markdown body only — not the title, not the date
+                all three: c8887739101d
+R2              already deduplicated; one object, three revisions pointing at it
+erasure         refcounted (countRevisionsWithContent), so erasing one leaves the others
+indexable       0 on all three — reason `untrusted_author`, not `near_duplicate`
+```
+
+**Four gaps, in the order they matter.**
+
+1. **The feed shows all three, and `indexable` was never going to stop it.** Indexability
+   governs what is offered to a search engine (§50.3); it says nothing about the site's own
+   listings. The visible symptom — a reader scrolling past the same article three times — is
+   not addressed by anything currently built, and it is the one a person notices.
+
+2. **An exact duplicate is free to detect and is not detected as one.** The hash is already
+   on every revision and is already unique per body, so finding a match is an index seek.
+   §60.1's simhash and LSH banding are the expensive path, and they exist for *near*
+   duplicates — a paraphrase, a re-post with a changed paragraph. Today an identical body
+   takes the same route as a paraphrase and arrives only after five earlier conditions pass.
+
+3. **Only the first failing condition is recorded, and it is the less actionable one.**
+   `evaluateIndexability` returns at the first miss, so a duplicate by an author whose trust
+   has not risen is written down as `untrusted_author`. Both are true. When the trust rises,
+   the article becomes indexable-eligible and its duplication has never been recorded
+   anywhere, so nothing re-examines it.
+
+4. **Nothing reaches a person.** §60.1 calls duplicate detection a moderation signal, and the
+   signal currently ends in a column. No report is raised, so there is no queue entry and no
+   decision.
+
+**What the shape of the fix is, and what it is not.** Not a refusal at publish: §60.1 and §61
+both put this after the fact, and a false positive that silently rejects somebody's work is
+worse than one that puts a row in a queue. Not a deletion: §23.2's tombstone is a person's.
+What is left is cheap and specific — an exact-hash check ahead of the expensive one, every
+applicable reason recorded rather than the first, a report rather than a column, and a
+separate decision about whether a *feed* collapses identical bodies, which is a different
+question from indexing and the one that was actually visible.
+
+**Why the title is not in the hash, and why that is right.** Two articles with one body and
+two titles are duplicates in every sense that matters; a title is not the content. The
+converse — one title, two bodies — is not a duplicate and must not be treated as one. The
+hash answers the question it was built for (§16.2: content-addressed storage), and the
+duplicate question is a different one that happens to be answerable with the same value.
+
+**The condition to act on this**: the first real author publishing at volume, or the first
+`near_duplicate` verdict nobody can trace to what it duplicated. Before that it is three test
+articles behaving exactly as specified.
+
 ## 14. Risk register
 
 | Risk | Likelihood | Impact | Mitigation |
