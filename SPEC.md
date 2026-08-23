@@ -4768,6 +4768,19 @@ binding does not provide — Analytics Engine is written through a binding and r
 SQL API. Their absence is a configuration state (`unavailable`), never a failure: the other
 five still answer.
 
+**MUST — `unavailable` says which kind.** Three, and each is a different next step:
+
+```text
+unconfigured   no account id or token here
+query-failed   configured, and the query did not come back with an answer
+no-traffic     configured, answered, and the window held nothing to measure
+```
+
+One sentence for all three is worse than none: an operator who has just set two secrets and
+is told "no metrics backend configured" goes and checks the secrets, which are correct. The
+refusal itself — status and body — is logged, because the difference between a wrong token
+and an unsupported function is not visible from the report and both read as `query-failed`.
+
 ### 66.5. Separating machine from human traffic
 
 **MUST.** Every metric carries a mandatory `audience_class` dimension:

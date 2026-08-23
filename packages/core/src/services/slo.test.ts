@@ -34,10 +34,10 @@ const repo = (over: Partial<SloRepo> = {}): SloRepo => ({
 
 const metrics = (over: Partial<MetricsQuery> = {}): MetricsQuery => ({
   async publishLatencyP95Ms() {
-    return 120;
+    return { value: 120 };
   },
   async serverErrorRate() {
-    return 0.001;
+    return { value: 0.001 };
   },
   ...over,
 });
@@ -144,8 +144,8 @@ describe("the two indicators that need a metrics backend (§80.15)", () => {
     const report = await evaluate(
       repo(),
       metrics({
-        async publishLatencyP95Ms() { return null; },
-        async serverErrorRate() { return null; },
+        async publishLatencyP95Ms() { return { value: null, unavailable: "unconfigured" }; },
+        async serverErrorRate() { return { value: null, unavailable: "unconfigured" }; },
       }),
     );
 
@@ -155,12 +155,30 @@ describe("the two indicators that need a metrics backend (§80.15)", () => {
     expect(report.status).toBe("degraded");
   });
 
+  /**
+   * The three reasons are different next steps, and saying the wrong one sends an operator
+   * to check something that is already correct.
+   */
+  it("says which kind of unavailable, not the same sentence for all three", async () => {
+    const reasonFor = async (unavailable: "unconfigured" | "query-failed" | "no-traffic") => {
+      const report = await evaluate(
+        repo(),
+        metrics({ async publishLatencyP95Ms() { return { value: null, unavailable }; } }),
+      );
+      return find(report, "publish_p95").detail ?? "";
+    };
+
+    expect(await reasonFor("unconfigured")).toContain("CF_ANALYTICS_TOKEN");
+    expect(await reasonFor("query-failed")).toContain("did not answer");
+    expect(await reasonFor("no-traffic")).toContain("nothing in the window");
+  });
+
   it("breaches when they are measured and over the line", async () => {
     const report = await evaluate(
       repo(),
       metrics({
-        async publishLatencyP95Ms() { return THRESHOLDS.publishP95Ms + 1; },
-        async serverErrorRate() { return THRESHOLDS.serverErrorRate * 2; },
+        async publishLatencyP95Ms() { return { value: THRESHOLDS.publishP95Ms + 1 }; },
+        async serverErrorRate() { return { value: THRESHOLDS.serverErrorRate * 2 }; },
       }),
     );
     expect(find(report, "publish_p95").state).toBe("breached");
@@ -171,7 +189,7 @@ describe("the two indicators that need a metrics backend (§80.15)", () => {
   it("does not breach exactly at the threshold, which §66.4 states as `>`", async () => {
     const report = await evaluate(
       repo(),
-      metrics({ async publishLatencyP95Ms() { return THRESHOLDS.publishP95Ms; } }),
+      metrics({ async publishLatencyP95Ms() { return { value: THRESHOLDS.publishP95Ms }; } }),
     );
     expect(find(report, "publish_p95").state).toBe("ok");
   });

@@ -1,4 +1,4 @@
-import type { MetricsQuery, SloRepo } from "../ports/slo.js";
+import type { MetricSample, MetricsQuery, SloRepo } from "../ports/slo.js";
 
 /**
  * The §66.4 indicators, evaluated (SPEC §66.4, §66.7).
@@ -97,8 +97,8 @@ export async function evaluateSlo(ports: SloPorts): Promise<SloReport> {
   ]);
 
   const indicators: Indicator[] = [
-    threshold("publish_p95", publishP95, "ms", `> ${THRESHOLDS.publishP95Ms} ms`, THRESHOLDS.publishP95Ms),
-    threshold(
+    fromSample("publish_p95", publishP95, "ms", `> ${THRESHOLDS.publishP95Ms} ms`, THRESHOLDS.publishP95Ms),
+    fromSample(
       "server_error_rate",
       errorRate,
       "fraction",
@@ -158,14 +158,39 @@ function threshold(
 ): Indicator {
   const base = { name, value, unit, threshold: stated };
   if (value === null) {
-    return {
-      ...base,
-      state: "unavailable",
-      detail: detail ?? "no metrics backend configured (§80.15)",
-    };
+    return { ...base, state: "unavailable", ...(detail === undefined ? {} : { detail }) };
   }
   return { ...base, state: value > limit ? "breached" : "ok", ...(detail === undefined ? {} : { detail }) };
 }
+
+/**
+ * Why a metric has no value, in words an operator can act on (§66.4).
+ *
+ * The distinction earns its place: somebody who has just set two secrets and is told "no
+ * metrics backend configured" will go and check the secrets, which are fine. Each of these
+ * points at a different next step.
+ */
+const WHY: Record<NonNullable<MetricSample["unavailable"]>, string> = {
+  unconfigured: "no metrics backend configured — set CF_ACCOUNT_ID and CF_ANALYTICS_TOKEN (§80.15)",
+  "query-failed": "the metrics query did not answer; the Worker's logs carry the status",
+  "no-traffic": "nothing in the window to measure",
+};
+
+const fromSample = (
+  name: string,
+  sample: MetricSample,
+  unit: Indicator["unit"],
+  stated: string,
+  limit: number,
+): Indicator =>
+  threshold(
+    name,
+    sample.value,
+    unit,
+    stated,
+    limit,
+    sample.value === null && sample.unavailable !== undefined ? WHY[sample.unavailable] : undefined,
+  );
 
 /**
  * The backlog, which §66.4 measures two ways.

@@ -1,4 +1,4 @@
-import type { MetricsQuery } from "@orator/core/ports";
+import type { MetricSample, MetricsQuery, MetricUnavailable } from "@orator/core/ports";
 
 /**
  * Reading back what §66.2 wrote (SPEC §66.4, §66.6).
@@ -28,15 +28,21 @@ export function createMetricsQuery(config: AnalyticsConfig): MetricsQuery {
   const { accountId, token, dataset } = config;
   const configured = Boolean(accountId && token && dataset);
 
+  const absent = (unavailable: MetricUnavailable): MetricSample => ({ value: null, unavailable });
+
   /**
    * One query against the SQL API.
    *
-   * Every failure — unreachable, unauthorised, a schema that has moved — answers null. This
-   * runs inside a health report, and a health check that throws because its own telemetry is
-   * unavailable reports the wrong outage.
+   * Every failure — unreachable, unauthorised, a schema that has moved — answers with no
+   * rows rather than throwing. This runs inside a health report, and a health check that
+   * fails because its own telemetry is unavailable reports the wrong outage.
+   *
+   * The failure is logged with the status and the first of the body, because that is the
+   * difference between "the token is wrong" and "the function is not in the dialect", and
+   * neither is visible from the report itself (§66.3 — a query is not a credential, and the
+   * token is never in what is logged).
    */
-  async function ask<T>(sql: string): Promise<T | null> {
-    if (!configured) return null;
+  async function ask<T>(name: string, sql: string): Promise<T[] | null> {
     try {
       const response = await fetch(
         `https://api.cloudflare.com/client/v4/accounts/${accountId}/analytics_engine/sql`,
@@ -46,10 +52,29 @@ export function createMetricsQuery(config: AnalyticsConfig): MetricsQuery {
           body: sql,
         },
       );
-      if (!response.ok) return null;
+      if (!response.ok) {
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "analytics.query.refused",
+            metric: name,
+            status: response.status,
+            detail: (await response.text()).slice(0, 300),
+          }),
+        );
+        return null;
+      }
       const payload = (await response.json()) as { data?: T[] };
-      return payload.data?.[0] ?? null;
-    } catch {
+      return payload.data ?? [];
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "analytics.query.failed",
+          metric: name,
+          error: String(error).slice(0, 300),
+        }),
+      );
       return null;
     }
   }
@@ -68,15 +93,22 @@ export function createMetricsQuery(config: AnalyticsConfig): MetricsQuery {
      * the traffic.
      */
     async publishLatencyP95Ms(windowMinutes: number) {
-      const row = await ask<{ p95: number | null }>(
+      if (!configured) return absent("unconfigured");
+
+      const rows = await ask<{ p95: number | null }>(
+        "publish_p95",
         `SELECT quantileWeighted(0.95)(double1, _sample_interval) AS p95
            FROM ${dataset}
           WHERE timestamp > NOW() - INTERVAL '${Math.round(windowMinutes)}' MINUTE
             AND blob1 = 'api.request'
-            AND blob3 = '${PUBLISH_ROUTE}'
-         FORMAT JSON`,
+            AND blob3 = '${PUBLISH_ROUTE}'`,
       );
-      return typeof row?.p95 === "number" ? row.p95 : null;
+      if (rows === null) return absent("query-failed");
+
+      // A percentile over nothing is not a number, and nobody published in the window often
+      // enough for that to be the ordinary case rather than an outage.
+      const p95 = rows[0]?.p95;
+      return typeof p95 === "number" ? { value: p95 } : absent("no-traffic");
     },
 
     /**
@@ -91,17 +123,35 @@ export function createMetricsQuery(config: AnalyticsConfig): MetricsQuery {
      * healthiest it has ever been.
      */
     async serverErrorRate(windowMinutes: number) {
-      const row = await ask<{ errors: number; total: number }>(
-        `SELECT
-           sum(if(blob4 = '5xx', _sample_interval, 0)) AS errors,
-           sum(_sample_interval) AS total
+      if (!configured) return absent("unconfigured");
+
+      /*
+       * Grouped, rather than a conditional sum.
+       *
+       * `sum(if(blob4 = '5xx', …))` reads better and assumes `if` is in a dialect this code
+       * cannot test against. `GROUP BY` and `sum` are the two things every SQL has, so the
+       * arithmetic happens here instead — which costs one small object and removes an
+       * assumption that would fail as "unavailable" with no way to tell why.
+       */
+      const rows = await ask<{ class: string; n: number }>(
+        "server_error_rate",
+        `SELECT blob4 AS class, sum(_sample_interval) AS n
            FROM ${dataset}
           WHERE timestamp > NOW() - INTERVAL '${Math.round(windowMinutes)}' MINUTE
             AND blob1 = 'api.request'
-         FORMAT JSON`,
+          GROUP BY class`,
       );
-      if (row === null || typeof row.total !== "number" || row.total === 0) return null;
-      return row.errors / row.total;
+      if (rows === null) return absent("query-failed");
+
+      const total = rows.reduce((sum, row) => sum + (Number(row.n) || 0), 0);
+      // No traffic is not a zero error rate. A deployment that has stopped receiving requests
+      // should not read as the healthiest it has ever been.
+      if (total === 0) return absent("no-traffic");
+
+      const errors = rows
+        .filter((row) => row.class === "5xx")
+        .reduce((sum, row) => sum + (Number(row.n) || 0), 0);
+      return { value: errors / total };
     },
   };
 }

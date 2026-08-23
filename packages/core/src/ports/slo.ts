@@ -52,16 +52,38 @@ export interface SloRepo {
 }
 
 /**
+ * One reading, and why there is not one (SPEC §66.4).
+ *
+ * A bare `number | null` was not enough, and the gap showed the moment the credentials
+ * arrived: the report said "no metrics backend configured" for every absent value, which
+ * stops being true the second one *is* configured and the query fails for some other reason.
+ * An indicator that cannot be measured has to say which kind of cannot, or the operator who
+ * just set two secrets is told their work did not happen.
+ */
+export type MetricUnavailable =
+  /** No account id or token: §80.15 is still open, or nobody has set them here. */
+  | "unconfigured"
+  /** Configured, and the query did not come back with an answer. */
+  | "query-failed"
+  /** Configured, answered, and there was nothing in the window to measure. */
+  | "no-traffic";
+
+export interface MetricSample {
+  value: number | null;
+  /** Present exactly when `value` is null. */
+  unavailable?: MetricUnavailable;
+}
+
+/**
  * The two indicators that live in Analytics Engine (SPEC §66.2, §66.4).
  *
- * Every method may answer null, and null means "no metrics backend is configured" rather
- * than "the value is zero". §80.15 leaves the choice of backend open; until it is taken,
- * these two indicators report as unavailable and the report says so out loud instead of
- * quietly claiming health.
+ * Analytics Engine is written through a binding and read over an HTTP API, which is why
+ * these are a port of their own: the write cannot fail a request (§66.2) and the read can
+ * fail for reasons that have nothing to do with the platform's health.
  */
 export interface MetricsQuery {
   /** p95 of `publishArticle`, in milliseconds, over the window. */
-  publishLatencyP95Ms(windowMinutes: number): Promise<number | null>;
+  publishLatencyP95Ms(windowMinutes: number): Promise<MetricSample>;
   /** Share of responses in the 5xx range over the window, as a fraction of all responses. */
-  serverErrorRate(windowMinutes: number): Promise<number | null>;
+  serverErrorRate(windowMinutes: number): Promise<MetricSample>;
 }
