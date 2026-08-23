@@ -89,6 +89,18 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
   </head>
 
   <body>
+    {/*
+      WCAG 2.2 §2.4.1 — a way past the masthead.
+      
+      Two links is a small block to skip, and the criterion is about repetition rather than
+      size: they are on every page, and a reader tabbing or listening meets them before the
+      article every time. Hidden until focused, which is the whole of its interaction —
+      §49.1 permits no script for it and it needs none.
+
+      `main` is the target, so every page has to have one. They do.
+    */}
+    <a class="skip" href="#main">Skip to the content</a>
+
     <header class="masthead">
       <div class="masthead__inner wrap wrap--wide">
         <a class="masthead__brand" href="/">Orator<span class="masthead__tld">.Space</span></a>

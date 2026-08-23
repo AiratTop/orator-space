@@ -227,6 +227,9 @@ check("and the page loads it rather than inlining it", html.includes('src="/them
 check("the theme control is hidden until that script runs", /data-theme-control[^>]*\shidden/.test(html));
 
 const favicon = await web("/favicon.svg");
+// WCAG 2.2 §2.4.1 — a way past the masthead, and a target for it to reach.
+check("a bypass link is on the page", html.includes('class="skip" href="#main"'));
+check("and the landmark it names exists", html.includes('<main id="main"'));
 check("a favicon is served", favicon.status === 200);
 check("and the page names it", html.includes('href="/favicon.svg"'));
 

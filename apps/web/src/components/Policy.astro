@@ -30,7 +30,7 @@ if (!rendered.ok) throw new Error(`the ${policy.slug} policy did not render: ${r
   indexable={true}
   modifiedAt={`${policy.updated}T00:00:00.000Z`}
 >
-  <main class="wrap">
+  <main id="main" class="wrap">
     <article class="prose">
       <h1>{policy.title}</h1>
       {/*

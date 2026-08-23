@@ -20,7 +20,7 @@ Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
 ---
 
 <Layout title={session === null ? "Sign in" : "Your account"} canonicalPath="/signin">
-  <main class="wrap">
+  <main id="main" class="wrap">
     <h1 class="title">{session === null ? "Sign in" : "Your account"}</h1>
 
     {session === null ? (

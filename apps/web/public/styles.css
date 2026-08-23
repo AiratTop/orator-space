@@ -110,6 +110,28 @@ a {
 /* Site chrome ------------------------------------------------------------ */
 
 /*
+ * A way past the masthead, revealed only to whoever is using it (WCAG 2.2 §2.4.1).
+ *
+ * Positioned rather than hidden: `display: none` takes it out of the focus order, which is
+ * the one thing it exists to be in.
+ */
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 10;
+  padding: 0.5rem 0.9rem;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--accent);
+  border-radius: 0 0 6px 0;
+}
+
+.skip:focus-visible {
+  left: 0;
+}
+
+/*
  * The masthead spans the viewport; its contents do not.
  *
  * The rule under it is a page-wide line rather than a line the width of the text column,
@@ -123,9 +145,10 @@ a {
 
 .masthead__inner {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.5rem 1rem;
   padding: 1.25rem 0;
 }
 

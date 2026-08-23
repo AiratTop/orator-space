@@ -76,7 +76,7 @@ const canonicalPath = query.length === 0 ? "/search" : `/search${Astro.url.searc
 ---
 
 <Layout title={query.length === 0 ? "Search" : `Search: ${query}`} canonicalPath={canonicalPath}>
-  <main class="wrap wrap--wide">
+  <main id="main" class="wrap wrap--wide">
     <h1 class="title">Search</h1>
 
     {/*
