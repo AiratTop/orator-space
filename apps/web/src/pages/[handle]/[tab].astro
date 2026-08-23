@@ -1,0 +1,36 @@
+---
+import NotFound from "../../components/NotFound.astro";
+import ProfileView from "../../components/ProfileView.astro";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
+import { loadProfilePage } from "../../lib/profile.js";
+
+/**
+ * `/@{username}/{tab}` — the comments and citations tabs (SPEC §49.2).
+ *
+ * `articles` is not one of them: it is the profile's own address and this route redirects to
+ * it, so one page keeps one address and the cache keeps one entry (§13, §33.2).
+ */
+const load = await loadProfilePage(
+  Astro.params.handle ?? "",
+  Astro.params.tab ?? "",
+  Astro.url,
+);
+if (load.kind === "response") return load.response;
+
+if (load.kind === "missing") {
+  Astro.response.status = 404;
+  Astro.response.headers.set("cache-control", CACHE.private);
+  Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
+} else {
+  cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
+}
+---
+
+{load.kind === "missing" ? (
+  <NotFound
+    heading="No page at that address"
+    explanation="A profile has three sections: articles at /@username, and /@username/comments and /@username/citations."
+  />
+) : (
+  <ProfileView profile={load.profile} tab={load.tab} search={Astro.url.search} />
+)}

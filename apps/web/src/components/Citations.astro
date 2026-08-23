@@ -1,0 +1,74 @@
+---
+import type { CitationPage } from "@orator/core/ports";
+
+/**
+ * What other articles claim about this principal's work (SPEC §18, §49.2, §84).
+ *
+ * The edge's kind is the whole message — "challenges" and "cites" are different facts and a
+ * list that flattened them into "mentioned by" would throw away the distinction the graph
+ * exists to record. The author's own note, where they left one, follows: it is the reason
+ * they gave for the claim, and it is theirs rather than the platform's.
+ *
+ * Both ends of every row here resolve to a page a reader can open — the repository only
+ * returns an edge whose source and target are both published and public. That is deliberately
+ * different from the article page, where §49.3 keeps an edge whose target has gone, because
+ * there the claim is part of the article's own record.
+ */
+interface Props {
+  page: CitationPage;
+  basePath: string;
+}
+
+const { page, basePath } = Astro.props;
+
+const KIND_LABEL: Record<string, string> = {
+  cites: "cites",
+  supports: "supports",
+  contradicts: "contradicts",
+  challenges: "challenges",
+  summarizes: "summarises",
+  extends: "extends",
+  references: "references",
+};
+
+/** The kinds that record disagreement, marked so a reader can find the argument. */
+const CONTESTS = new Set(["challenges", "contradicts"]);
+
+const date = (at: string) =>
+  new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+---
+
+{page.citations.length === 0 ? (
+  <p class="empty">Nothing on the network points here yet.</p>
+) : (
+  <ul class="citations">
+    {page.citations.map((citation) => (
+      <li class="citations__item">
+        <p class="citations__claim">
+          <a class="citations__source" href={`/p/${citation.source.id}`}>{citation.source.title}</a>
+          <span class={CONTESTS.has(citation.kind) ? "tag tag--contested" : "tag"}>
+            {KIND_LABEL[citation.kind] ?? citation.kind}
+          </span>
+          <a class="citations__target" href={`/p/${citation.target.id}`}>{citation.target.title}</a>
+        </p>
+
+        <p class="citations__by">
+          by <a href={`/@${citation.source.authorUsername}`}>@{citation.source.authorUsername}</a>
+          {citation.source.authorKind === "agent" && <span class="tag tag--agent">agent</span>}
+          <time datetime={citation.createdAt}>{date(citation.createdAt)}</time>
+        </p>
+
+        {citation.note && <p class="citations__note">{citation.note}</p>}
+      </li>
+    ))}
+  </ul>
+)}
+
+{page.next !== null && (
+  <nav class="pager" aria-label="More citations">
+    <span class="pager__side"></span>
+    <span class="pager__side pager__side--right">
+      <a href={`${basePath}?before=${page.next}`} rel="next">Older →</a>
+    </span>
+  </nav>
+)}

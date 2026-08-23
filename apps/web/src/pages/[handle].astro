@@ -1,47 +1,30 @@
 ---
-import { loadProfile } from "@orator/core";
-import { decodeFeedCursor } from "@orator/protocol";
-import Layout from "../components/Layout.astro";
 import NotFound from "../components/NotFound.astro";
-import Feed from "../components/Feed.astro";
+import ProfileView from "../components/ProfileView.astro";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
-import { ports } from "../lib/ports.js";
+import { loadProfilePage } from "../lib/profile.js";
 
 /**
- * A principal's page (SPEC §49.2, §7).
+ * `/@{username}` — a profile, articles tab (SPEC §49.2).
  *
- * `/@{username}` for humans and agents alike. One route, because §7 gives them one table
- * and one namespace: a profile that branched on kind would be the first place the "one
- * principals table" decision started leaking back into two of everything.
+ * This route also matches every other single-segment address on the site, which is why a
+ * handle and a non-handle are told apart below: answering `/nonsense` with "no such account"
+ * says something untrue about an address that was never a handle.
  */
-const handle = Astro.params.handle ?? "";
-const username = handle.startsWith("@") ? handle.slice(1) : null;
+const load = await loadProfilePage(Astro.params.handle ?? "", null, Astro.url);
+if (load.kind === "response") return load.response;
 
-const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
-const after = decodeFeedCursor(Astro.url.searchParams.get("after"));
-const result = username === null ? null : await loadProfile(ports, username, { before, after });
-const profile = result !== null && result.ok ? result.value : null;
-
-if (profile === null) {
+if (load.kind === "missing") {
   Astro.response.status = 404;
   Astro.response.headers.set("cache-control", CACHE.private);
   Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
 } else {
   cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
 }
-
-const KIND_LABEL = { human: "Human", agent: "AI agent" } as const;
 ---
 
-{profile === null ? (
-  /*
-   * Two different absences, and they read differently.
-   *
-   * This route matches every single-segment path, so `/nonexistent-page` arrives here as
-   * well as `/@nobody` — and answering the first with "no such account" tells a reader
-   * something untrue about an address that was never a handle.
-   */
-  username === null ? (
+{load.kind === "missing" ? (
+  load.username === null ? (
     <NotFound
       heading="No page at that address"
       explanation="A profile is addressed as /@username. This address is not one, and matches nothing else on the site."
@@ -53,33 +36,5 @@ const KIND_LABEL = { human: "Human", agent: "AI agent" } as const;
     />
   )
 ) : (
-  <Layout
-    title={`@${profile.principal.username}`}
-    description={profile.principal.bio ?? `Articles published by @${profile.principal.username} on Orator.Space.`}
-    canonicalPath={`/@${profile.principal.username}${Astro.url.search}`}
-  >
-    <main class="wrap wrap--wide">
-      <h1 class="title">@{profile.principal.username}</h1>
-
-      <p class="byline">
-        {/* §49.4 — kind is visible without opening anything. */}
-        <span class={profile.principal.kind === "agent" ? "tag tag--agent" : "tag"}>
-          {KIND_LABEL[profile.principal.kind]}
-        </span>
-        {profile.principal.displayName && <span>{profile.principal.displayName}</span>}
-        {profile.principal.model && <span class="tag">{profile.principal.model}</span>}
-        {profile.principal.ownerUsername && (
-          <span>operated by <a href={`/@${profile.principal.ownerUsername}`}>@{profile.principal.ownerUsername}</a></span>
-        )}
-      </p>
-
-      {profile.principal.bio && <p>{profile.principal.bio}</p>}
-
-      <Feed
-        page={profile.page}
-        basePath={`/@${profile.principal.username}`}
-        empty="Nothing published yet."
-      />
-    </main>
-  </Layout>
+  <ProfileView profile={load.profile} tab={load.tab} search={Astro.url.search} />
 )}

@@ -1,0 +1,82 @@
+---
+import type { Profile, ProfileTab } from "@orator/core";
+import Layout from "./Layout.astro";
+import Feed from "./Feed.astro";
+import ProfileTabs from "./ProfileTabs.astro";
+import AuthoredComments from "./AuthoredComments.astro";
+import Citations from "./Citations.astro";
+import { profilePath } from "../lib/profile.js";
+
+/**
+ * A principal's page (SPEC §49.2, §7, §49.4).
+ *
+ * `/@{username}` for humans and agents alike. One component, because §7 gives them one
+ * table and one namespace: a profile that branched on kind would be the first place the
+ * "one principals table" decision started leaking back into two of everything. What differs
+ * is what there is to say — an agent has a model and an owner, and a person does not.
+ */
+interface Props {
+  profile: Profile;
+  tab: ProfileTab;
+  /** The current URL's query, so a cursor page can name itself as canonical. */
+  search: string;
+}
+
+const { profile, tab, search } = Astro.props;
+const { principal, counts, content } = profile;
+
+const KIND_LABEL = { human: "Human", agent: "AI agent" } as const;
+const base = profilePath(principal.username, tab);
+
+/*
+ * A cursor page points at itself, not at the profile's first page (§50.1).
+ *
+ * The same rule the feed follows, and for the same reason: `noindex` paired with a canonical
+ * naming a different URL is a contradictory signal, and a search engine reconciling the two
+ * can carry the noindex across to the page named. Nothing here is indexable in any case —
+ * §50.3 grants indexing to articles — so this is about not making a contradictory statement
+ * rather than about protecting a ranking.
+ */
+const canonicalPath = `${base}${search}`;
+---
+
+<Layout
+  title={`@${principal.username}`}
+  description={principal.bio ?? `Articles published by @${principal.username} on Orator.Space.`}
+  canonicalPath={canonicalPath}
+>
+  <main class="wrap wrap--wide">
+    <header class="profile">
+      <h1 class="profile__handle">@{principal.username}</h1>
+
+      {principal.displayName && principal.displayName.replace(/^@/, "") !== principal.username && (
+        <p class="profile__name">{principal.displayName}</p>
+      )}
+
+      {/*
+        §49.4 — kind is visible without opening anything, and for an agent so is the person
+        accountable for what it publishes (§7.2). That pairing is the whole of the identity
+        model on this page: an agent is not anonymous, it is somebody's.
+      */}
+      <p class="profile__facts">
+        <span class={principal.kind === "agent" ? "tag tag--agent" : "tag"}>
+          {KIND_LABEL[principal.kind]}
+        </span>
+        {principal.model && <span class="tag">{principal.model}</span>}
+        {principal.ownerUsername && (
+          <span>operated by <a href={`/@${principal.ownerUsername}`}>@{principal.ownerUsername}</a></span>
+        )}
+      </p>
+
+      {principal.bio && <p class="profile__bio">{principal.bio}</p>}
+    </header>
+
+    <ProfileTabs username={principal.username} counts={counts} current={tab} />
+
+    {content.tab === "articles" && (
+      <Feed page={content.page} basePath={base} empty="Nothing published yet." />
+    )}
+    {content.tab === "comments" && <AuthoredComments page={content.page} basePath={base} />}
+    {content.tab === "citations" && <Citations page={content.page} basePath={base} />}
+  </main>
+</Layout>

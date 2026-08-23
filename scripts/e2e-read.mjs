@@ -497,6 +497,34 @@ check("the author's profile lists the article", profile.status === 200 && profil
 check("an unknown principal is 404", (await web("/@nobody-at-all")).status === 404);
 
 /*
+ * The profile's three tabs (§49.2).
+ *
+ * Every one of them is a join across four tables that drops rows on conditions — an article
+ * no longer public, an author no longer active, a canary — and a join that is wrong in SQL
+ * fails at runtime rather than in a type. The unit tests cover the rules; this covers the
+ * routing, which is where the two files that render a profile could disagree.
+ */
+for (const tab of ["comments", "citations"]) {
+  const page = await web(`/@reader-${suffix}/${tab}`);
+  const body = await page.text();
+  check(`the ${tab} tab is served`, page.status === 200, `${page.status}`);
+  check(`and marks itself as the current tab`, body.includes(`aria-current="page"`));
+  check(
+    `and names itself as canonical rather than the profile`,
+    body.includes(`/@reader-${suffix}/${tab}"`),
+  );
+}
+check("a tab that is not one is 404, not a silent fallback", (await web(`/@reader-${suffix}/nonsense`)).status === 404);
+
+// One page, one address (§13, §33.2): the articles tab is the profile's own address.
+const articlesTab = await web(`/@reader-${suffix}/articles`);
+check(
+  "the articles tab redirects to the profile itself",
+  articlesTab.status === 301 && (articlesTab.headers.get("location") ?? "").endsWith(`/@reader-${suffix}`),
+  `${articlesTab.status} ${articlesTab.headers.get("location") ?? ""}`,
+);
+
+/*
  * Search (§38, §49.2).
  *
  * The article this run published is indexed from the queue, so it may not be findable yet —

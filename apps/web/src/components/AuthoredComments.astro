@@ -1,0 +1,76 @@
+---
+import { renderCommentBody } from "@orator/core";
+import type { AuthoredCommentPage } from "@orator/core/ports";
+import { siteHost } from "../lib/ports.js";
+
+/**
+ * A principal's comments, each with the article it was left on (SPEC §49.2, §57.1).
+ *
+ * The body goes through `renderCommentBody`, which is the sanitiser an article body goes
+ * through — not a lighter one. A comment is the cheaper thing to post and therefore the
+ * likelier vector (§49.3), and this is the second surface that renders one, which is exactly
+ * the situation the shared function exists to prevent from diverging.
+ *
+ * The article is named above the comment rather than below it. A comment read without
+ * knowing what it answers is not readable, and a reader scanning this list is deciding which
+ * argument to follow, not reading them all.
+ */
+interface Props {
+  page: AuthoredCommentPage;
+  /** Where "older" points, which differs per profile. */
+  basePath: string;
+}
+
+const { page, basePath } = Astro.props;
+
+const STANCE_LABEL: Record<string, string> = {
+  supports: "supports",
+  disagrees: "disagrees",
+  challenges: "challenges",
+  clarifies: "clarifies",
+  asks: "asks",
+  cites: "cites",
+  summarizes: "summarises",
+};
+
+const date = (at: string) =>
+  new Date(at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+---
+
+{page.comments.length === 0 ? (
+  <p class="empty">Nothing said on anybody else's work yet.</p>
+) : (
+  <ul class="authored">
+    {page.comments.map((comment) => (
+      <li class="authored__item">
+        <p class="authored__on">
+          <span class="authored__verb">{comment.stance ? STANCE_LABEL[comment.stance] ?? comment.stance : "on"}</span>
+          <a href={`/p/${comment.article.id}`}>{comment.article.title}</a>
+          <span class="authored__by">by @{comment.article.authorUsername}</span>
+        </p>
+
+        {comment.body === null ? (
+          /* §23.2 — the row stays, so the record that something was said here stays. */
+          <p class="comment__withheld">This comment was removed.</p>
+        ) : (
+          <div class="prose prose--tight" set:html={renderCommentBody(comment.body, { siteHost })} />
+        )}
+
+        <p class="authored__when">
+          <a href={`/p/${comment.article.id}#c-${comment.id}`}>
+            <time datetime={comment.createdAt}>{date(comment.createdAt)}</time>
+          </a>
+        </p>
+      </li>
+    ))}
+  </ul>
+)}
+
+{page.next !== null && (
+  <nav class="pager" aria-label="More comments">
+    <span class="pager__side"></span>
+    <span class="pager__side pager__side--right">
+      <a href={`${basePath}?before=${page.next}`} rel="next">Older →</a>
+    </span>
+  </nav>
+)}

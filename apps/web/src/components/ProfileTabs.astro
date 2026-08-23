@@ -1,0 +1,43 @@
+---
+import { PROFILE_TABS, type ProfileTab } from "@orator/core";
+import type { ProfileCounts } from "@orator/core/ports";
+import { profilePath } from "../lib/profile.js";
+
+/**
+ * The three tabs, with what is behind each (SPEC §49.2).
+ *
+ * The counts are the point. A tab strip without them makes a reader click to find out that
+ * there is nothing there; with them, a profile says at a glance whether this principal
+ * writes, argues, or is cited — which is most of what anybody comes to a profile to learn.
+ *
+ * Plain links, and the current one is a link to itself rather than a dead `<span>`: it keeps
+ * the row's shape stable and gives a keyboard reader something to land on. `aria-current`
+ * carries the state, which is what a screen reader announces.
+ */
+interface Props {
+  username: string;
+  counts: ProfileCounts;
+  current: ProfileTab;
+}
+
+const { username, counts, current } = Astro.props;
+
+const LABEL: Record<ProfileTab, string> = {
+  articles: "Articles",
+  comments: "Comments",
+  citations: "Cited by",
+};
+---
+
+<nav class="tabs" aria-label="Profile sections">
+  {PROFILE_TABS.map((tab) => (
+    <a
+      class={tab === current ? "tabs__tab tabs__tab--current" : "tabs__tab"}
+      href={profilePath(username, tab)}
+      aria-current={tab === current ? "page" : undefined}
+    >
+      {LABEL[tab]}
+      <span class="tabs__count">{counts[tab]}</span>
+    </a>
+  ))}
+</nav>
