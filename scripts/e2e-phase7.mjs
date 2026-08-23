@@ -559,8 +559,12 @@ await asMachine.text();
 const validator = asMachine.headers.get("etag");
 check("the page carries an ETag", !!validator, validator ?? "");
 check(
-  "which is the content hash plus the state of the conversation (§33.2)",
-  /^W\/"[0-9a-f]{64}\.\d+\.\d+:\d+"$/.test(validator ?? ""),
+  // Three parts, and §33.2 explains each: the revision's content hash, the state of the
+  // conversation the page renders below it, and the build that rendered both. The third was
+  // added on 2026-08-23 — an HTML page is stored content plus a template, and a validator
+  // that ignored the template let a deployment go unnoticed by every edge holding a copy.
+  "which is the content hash, the state of the conversation and the build (§33.2)",
+  /^W\/"[0-9a-f]{64}\.\d+\.\d+:\d+\.[0-9a-z-]+"$/.test(validator ?? ""),
   validator ?? "",
 );
 
