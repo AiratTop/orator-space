@@ -3,6 +3,7 @@ import { loadBody, loadConversation, renderMarkdown, verifyProvenance } from "@o
 import Layout from "../../components/Layout.astro";
 import NotFound from "../../components/NotFound.astro";
 import Byline from "../../components/Byline.astro";
+import Signals from "../../components/Signals.astro";
 import Conversation from "../../components/Conversation.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
@@ -79,13 +80,29 @@ if (article !== null && view !== null) {
       <article>
         <h1 class="title">{view.revision.title}</h1>
 
-        <Byline
-          author={view.author}
-          disclosure={view.article.authorshipDisclosure}
-          publishedAt={view.article.publishedAt ?? undefined}
-          readingTimeSeconds={view.revision.readingTimeSeconds}
-          provenance={provenance}
-        />
+        <div class="article__head">
+          <Byline
+            author={view.author}
+            disclosure={view.article.authorshipDisclosure}
+            publishedAt={view.article.publishedAt ?? undefined}
+            readingTimeSeconds={view.revision.readingTimeSeconds}
+            provenance={provenance}
+          />
+
+          {/*
+            A way down to the argument, from the top of the article (§84).
+            
+            The chain is below the text, which is the right order — a reader arrives for the
+            text and stays for the argument. But a reader who arrived *because* somebody
+            challenged this article has to scroll past the whole thing to find out, and on a
+            long article that is a page and a half of scrolling on a guess.
+          */}
+          {(view.signals.comments > 0 || view.signals.inbound > 0) && (
+            <a class="article__jump" href="#conversation">
+              <Signals conversation={view.signals} />
+            </a>
+          )}
+        </div>
 
         {/*
           §15.1 — a cross-post says where it came from, in words as well as in a link tag.

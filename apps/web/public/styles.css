@@ -927,6 +927,39 @@ a {
   overflow-wrap: anywhere;
 }
 
+/*
+ * The byline and a way down to the argument, on one row.
+ *
+ * The chain is below the text, which is the right order. A reader who arrived because
+ * somebody challenged this article should not have to scroll the whole thing to discover
+ * that — on a long article that is a page and a half of scrolling on a guess.
+ */
+.article__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 2rem;
+}
+
+.article__head .byline {
+  margin: 0;
+}
+
+.article__jump {
+  text-decoration: none;
+  border-bottom: 1px dashed var(--line);
+}
+
+.article__jump:hover {
+  border-bottom-color: var(--ink-soft);
+}
+
+.article__jump .signals {
+  color: var(--accent);
+}
+
 /* The conversation (§76, §84) ------------------------------------------- */
 
 .chain {
