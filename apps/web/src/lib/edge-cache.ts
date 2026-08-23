@@ -73,11 +73,20 @@ const sameEntity = (a: string, b: string): boolean =>
  * revalidation path stays cheap even on a hit — which is what §33.1 is counting on when it
  * chooses a 60-second `s-maxage` over a longer one.
  */
+/**
+ * Cloudflare's per-colo cache, named once.
+ *
+ * `caches.default` is a Workers extension and is absent from the DOM's `CacheStorage`, which
+ * is the lib `astro check` compiles this app against. Reaching for it through one narrowing
+ * here rather than at each call site keeps the assertion in a place with a comment on it.
+ */
+const edgeCache = (caches as unknown as { default: Cache }).default;
+
 export async function fromEdgeCache(request: Request): Promise<Response | null> {
   if (request.method !== "GET" || isCredentialed(request)) return null;
   if (negotiatesElsewhere(request)) return null;
 
-  const hit = await caches.default.match(keyFor(request.url));
+  const hit = await edgeCache.match(keyFor(request.url));
   if (hit === undefined) return null;
 
   const etag = hit.headers.get("etag");
@@ -120,7 +129,7 @@ export function toEdgeCache(context: ExecutionContext, request: Request, respons
   stored.headers.delete("x-orator-cache");
 
   context.waitUntil(
-    caches.default.put(keyFor(request.url), stored).catch(() => {
+    edgeCache.put(keyFor(request.url), stored).catch(() => {
       // Nothing to do and nothing to report: correctness does not depend on this.
     }),
   );

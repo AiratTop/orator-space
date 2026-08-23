@@ -7,7 +7,8 @@
     "dev": "astro dev --port 4321",
     "build": "astro build",
     "deploy:staging": "CLOUDFLARE_ENV=staging astro build && wrangler deploy -c dist/server/wrangler.json",
-    "deploy:production": "CLOUDFLARE_ENV=production astro build && wrangler deploy -c dist/server/wrangler.json"
+    "deploy:production": "CLOUDFLARE_ENV=production astro build && wrangler deploy -c dist/server/wrangler.json",
+    "typecheck": "astro check"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.2.3",
@@ -15,5 +16,8 @@
     "@orator/core": "workspace:*",
     "@orator/protocol": "workspace:*",
     "astro": "^7.2.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10"
   }
 }

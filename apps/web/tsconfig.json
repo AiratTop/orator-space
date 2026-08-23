@@ -1,5 +1,15 @@
 {
   "extends": "astro/tsconfigs/strict",
-  "include": [".astro/types.d.ts", "**/*"],
-  "exclude": ["dist"]
+  "include": [".astro/types.d.ts", "src/**/*"],
+  "exclude": ["dist"],
+  "compilerOptions": {
+    // The runtime types the root config gives the rest of this app (SPEC §28.1).
+    //
+    // `astro check` compiles the `.astro` files against *this* config rather than the root
+    // one, so without them every binding in `ports.ts` reads as an unknown name. `include`
+    // is narrowed to `src` for the same reason in reverse: `astro.config.mjs` runs in Node
+    // at build time and is the one file here that is not Worker code, and the root config
+    // does not check it either.
+    "types": ["@cloudflare/workers-types"]
+  }
 }

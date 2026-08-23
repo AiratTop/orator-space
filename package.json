@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "pnpm --parallel --filter \"./apps/*\" dev",
     "build": "pnpm --filter \"./apps/*\" build",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && pnpm --filter @orator/web typecheck",
     "lint": "eslint .",
     "boundaries": "node scripts/check-boundaries.mjs",
     "skills": "node scripts/check-skills.mjs",
