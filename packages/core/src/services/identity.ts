@@ -1,5 +1,5 @@
 import { ErrorType, idTimestamp, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
-import { ConstraintViolation, type PendingWrite, type PrincipalRecord } from "../ports/index.js";
+import { ConstraintViolation, type PrincipalRecord } from "../ports/index.js";
 import type { Actor, DenialReason } from "../identity/authz.js";
 import { canManageAgent } from "../identity/authz.js";
 import { canonicalizeUsername } from "../identity/username.js";
@@ -14,7 +14,15 @@ import {
 } from "../identity/scopes.js";
 import { generateToken, sha256Hex, isExpired } from "../identity/tokens.js";
 import { fingerprint, keyRegistrationInput, verifySignature } from "../identity/keys.js";
-import { fail, ok, withinQuota, type RequestContext, type Result, type Ports } from "./context.js";
+import {
+  fail,
+  journal,
+  ok,
+  withinQuota,
+  type AccountContext,
+  type Ports,
+  type Result,
+} from "./context.js";
 
 const denialToError = (reason: DenialReason) =>
   reason === "insufficient-scope"
@@ -31,32 +39,8 @@ const DENIAL_DETAIL: Record<DenialReason, string> = {
   "requires-moderator": "This action requires a moderator or administrator.",
 };
 
-/** Audit and outbox rows accompany the change they describe, in one commit (SPEC §35, §62). */
-function journal(
-  ctx: RequestContext,
-  action: string,
-  target: { type: string; id: string },
-  outcome: "success" | "denied",
-  reason: string | null,
-): PendingWrite {
-  return ctx.ports.audit.record({
-    id: ctx.ports.ids.next(),
-    actorPrincipalId: (ctx.actor?.principalId ?? null) as OratorId | null,
-    actorTokenId: ctx.tokenId,
-    action,
-    targetType: target.type,
-    targetId: target.id,
-    outcome,
-    reason,
-    ipHash: ctx.ipHash,
-    userAgent: ctx.userAgent,
-    requestId: ctx.requestId,
-    createdAt: ctx.ports.clock.now().toISOString(),
-  });
-}
-
 async function usernameAvailable(
-  ports: Ports,
+  ports: Pick<Ports, "principals">,
   username: string,
   skeleton: string,
 ): Promise<Result<true>> {
@@ -96,7 +80,7 @@ export interface RegisterHumanInput {
  * (SPEC §59.2, applied in Phase 8).
  */
 export async function registerHuman(
-  ctx: RequestContext,
+  ctx: AccountContext,
   input: RegisterHumanInput,
 ): Promise<Result<{ principalId: OratorId; username: string; token: string; scopes: Scope[] }>> {
   const name = canonicalizeUsername(input.username);
@@ -164,7 +148,7 @@ export interface RegisterAgentInput {
  * and sybil weighting all rest on (§60.3).
  */
 export async function registerAgent(
-  ctx: RequestContext,
+  ctx: AccountContext,
   input: RegisterAgentInput,
 ): Promise<Result<{ principalId: OratorId; username: string }>> {
   const actor = ctx.actor;
@@ -253,7 +237,7 @@ export interface IssueTokenInput {
 }
 
 export async function issueToken(
-  ctx: RequestContext,
+  ctx: AccountContext,
   input: IssueTokenInput,
 ): Promise<Result<{ id: OratorId; token: string; scopes: Scope[]; expiresAt: string | null }>> {
   const actor = ctx.actor;
@@ -318,13 +302,36 @@ export async function issueToken(
   return ok({ id, token: generated.token, scopes: parsed.scopes, expiresAt: input.expiresAt ?? null });
 }
 
-export async function revokeToken(ctx: RequestContext, tokenId: string): Promise<Result<true>> {
+/**
+ * Revokes a token, one's own or one belonging to an agent one owns (SPEC §42.2, §7.2).
+ *
+ * The owned-agent half is not an extension. `issueToken` above mints tokens for an agent
+ * its caller owns, and this only ever looked at the caller's own principal — so a human
+ * could give their agent a credential and then had no way to take it back. An accountability
+ * chain (§7.2) that grants without revoking is not one.
+ *
+ * "Not found" answers a token that exists and is somebody else's. A caller who may not
+ * revoke it has no business learning it exists, and 403 would say so.
+ */
+export async function revokeToken(ctx: AccountContext, tokenId: string): Promise<Result<true>> {
   const actor = ctx.actor;
   if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
 
-  const tokens = await ctx.ports.tokens.listFor(actor.principalId);
-  const owned = tokens.some((token) => token.id === tokenId);
-  if (!owned) return fail(ErrorType.NotFound, "Token not found");
+  const token = await ctx.ports.tokens.findById(tokenId);
+  if (token === null) return fail(ErrorType.NotFound, "Token not found");
+
+  if (token.principalId !== actor.principalId) {
+    const subject = await ctx.ports.principals.findById(token.principalId);
+    if (subject === null || subject.ownerPrincipalId === undefined) {
+      return fail(ErrorType.NotFound, "Token not found");
+    }
+    const decision = canManageAgent(actor, subject.ownerPrincipalId);
+    if (!decision.allowed) return fail(ErrorType.NotFound, "Token not found");
+  }
+
+  // Already revoked is a success, not a conflict: the caller wanted it gone and it is.
+  // A second audit row for a second click would record an action that did not happen.
+  if (token.revokedAt !== null) return ok(true);
 
   const at = ctx.ports.clock.now().toISOString();
   await ctx.ports.db.commit([
@@ -390,7 +397,7 @@ const CHALLENGE_TTL_MS = 5 * 60 * 1000;
  * table is safe here because replay achieves nothing: the challenge is bound to a specific
  * principal, and re-proving possession of a key that is already registered changes nothing.
  */
-export function createKeyChallenge(ctx: RequestContext, agentPrincipalId: string): Result<{
+export function createKeyChallenge(ctx: AccountContext, agentPrincipalId: string): Result<{
   nonce: string;
   message: string;
   expires_at: string;
@@ -414,7 +421,7 @@ export interface RegisterKeyInput {
 }
 
 export async function registerAgentKey(
-  ctx: RequestContext,
+  ctx: AccountContext,
   input: RegisterKeyInput,
 ): Promise<Result<{ id: OratorId; fingerprint: string }>> {
   const actor = ctx.actor;
@@ -481,7 +488,7 @@ export async function registerAgentKey(
 }
 
 export async function revokeAgentKey(
-  ctx: RequestContext,
+  ctx: AccountContext,
   keyId: string,
   reason?: string | null,
 ): Promise<Result<true>> {
@@ -526,7 +533,7 @@ function idTimestampSafe(value: string): number | null {
  * Changing one, if it is ever allowed, is its own operation with its own rules.
  */
 export async function updateProfile(
-  ctx: RequestContext,
+  ctx: AccountContext,
   principalId: string,
   input: { displayName?: string | null; bio?: string | null },
 ): Promise<Result<PrincipalRecord>> {

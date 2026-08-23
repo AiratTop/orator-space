@@ -112,6 +112,15 @@ export interface NewToken {
 export interface TokenRepo {
   /** Looks up by hash: the token itself is never stored (SPEC §42.2). */
   findByHash(tokenHash: string): Promise<TokenRecord | null>;
+  /**
+   * By id, for the one caller that has an id and not a hash: revocation (SPEC §42.2).
+   *
+   * A token is looked up by hash everywhere else, because everywhere else the caller is
+   * presenting one. Revoking is the opposite situation — somebody is naming a token they
+   * can see in a list and cannot read — and answering it by listing every token of every
+   * principal they might own is a scan standing in for a lookup.
+   */
+  findById(id: string): Promise<TokenRecord | null>;
   listFor(principalId: string): Promise<TokenRecord[]>;
   insert(token: NewToken): PendingWrite;
   revoke(id: string, at: string): PendingWrite;

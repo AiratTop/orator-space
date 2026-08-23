@@ -44,7 +44,10 @@ export function createMemoryAuthPorts(options: { now?: Date } = {}): MemoryAuth 
   const base = createMemoryPorts(options.now === undefined ? {} : { now: options.now });
 
   const credentialStore = new Map<string, CredentialRecord>();
-  const sessionStore = new Map<string, SessionRecord & { tokenHash: string }>();
+  const sessionStore = new Map<
+    string,
+    SessionRecord & { tokenHash: string; userAgent: string | null }
+  >();
 
   const asWrite = (apply: () => number | void) => apply as never;
 
@@ -78,6 +81,11 @@ export function createMemoryAuthPorts(options: { now?: Date } = {}): MemoryAuth 
   const sessions: SessionRepo = {
     async findByHash(tokenHash) {
       return [...sessionStore.values()].find((s) => s.tokenHash === tokenHash) ?? null;
+    },
+    async listFor(principalId) {
+      return [...sessionStore.values()].filter(
+        (s) => s.principalId === principalId && s.revokedAt === null,
+      );
     },
     insert: (session) =>
       asWrite(() => {

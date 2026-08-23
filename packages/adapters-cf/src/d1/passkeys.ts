@@ -118,6 +118,31 @@ export function createSessionRepo(db: D1Database): SessionRepo {
           } satisfies SessionRecord);
     },
 
+    async listFor(principalId) {
+      // Unrevoked only. Expiry is left to the caller, which holds the clock — an adapter
+      // reading the wall clock is an adapter no test can move time in (§68).
+      // `id DESC` is newest first, ids being time-ordered (§12.2).
+      const { results } = await db
+        .prepare(
+          `SELECT id, principal_id, user_agent, created_at, last_seen_at, expires_at, revoked_at
+             FROM sessions
+            WHERE principal_id = ? AND revoked_at IS NULL
+            ORDER BY id DESC
+            LIMIT 50`,
+        )
+        .bind(principalId)
+        .all<SessionRow & { user_agent: string | null }>();
+      return results.map((row) => ({
+        id: row.id as OratorId,
+        principalId: row.principal_id as OratorId,
+        userAgent: row.user_agent,
+        createdAt: row.created_at,
+        lastSeenAt: row.last_seen_at,
+        expiresAt: row.expires_at,
+        revokedAt: row.revoked_at,
+      }));
+    },
+
     insert(session) {
       return asWrite(
         db

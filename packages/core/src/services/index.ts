@@ -1,4 +1,5 @@
 export * from "./context.js";
+export * from "./account.js";
 export * from "./identity.js";
 export * from "./idempotency.js";
 export * from "./publishing.js";

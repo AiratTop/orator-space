@@ -98,6 +98,18 @@ export interface SessionRecord {
   revokedAt: string | null;
 }
 
+/**
+ * A session as the person who owns it sees it (SPEC §9.1).
+ *
+ * The user agent is here and the IP hash is not. Somebody ending a session they do not
+ * recognise needs to tell one row from another, and the browser string is the only thing on
+ * the row that says anything to a human. A hashed address tells them nothing they can act
+ * on, and the unhashed one is not stored.
+ */
+export interface OpenSession extends SessionRecord {
+  userAgent: string | null;
+}
+
 export interface CredentialRepo {
   findByCredentialId(credentialId: string): Promise<CredentialRecord | null>;
   listFor(principalId: string): Promise<CredentialRecord[]>;
@@ -117,6 +129,14 @@ export interface CredentialRepo {
 
 export interface SessionRepo {
   findByHash(tokenHash: string): Promise<SessionRecord | null>;
+  /**
+   * SPEC §9.1 — the sessions currently open on an account, newest first.
+   *
+   * Revoked and expired rows are excluded: the question the page asks is "where am I
+   * signed in", and a list that answers it with places somebody is no longer signed in is
+   * a list nobody can act on.
+   */
+  listFor(principalId: string): Promise<OpenSession[]>;
   insert(session: SessionRecord & { tokenHash: string; userAgent: string | null; ipHash: string | null }): PendingWrite;
   touch(id: string, at: string): PendingWrite;
   revoke(id: string, at: string): PendingWrite;

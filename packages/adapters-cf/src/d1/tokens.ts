@@ -37,6 +37,13 @@ export function createTokenRepo(db: D1Database): TokenRepo {
         .first<Row>();
       return row === null ? null : toRecord(row);
     },
+    async findById(id) {
+      const row = await db
+        .prepare(`SELECT ${COLUMNS} FROM api_tokens WHERE id = ?`)
+        .bind(id)
+        .first<Row>();
+      return row === null ? null : toRecord(row);
+    },
     async listFor(principalId) {
       const { results } = await db
         .prepare(`SELECT ${COLUMNS} FROM api_tokens WHERE principal_id = ? ORDER BY id DESC`)

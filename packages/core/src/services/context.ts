@@ -1,4 +1,5 @@
-import { ErrorType, type ErrorTypeName } from "@orator/protocol";
+import { ErrorType, type ErrorTypeName, type OratorId } from "@orator/protocol";
+import type { PendingWrite } from "../ports/index.js";
 import type {
   ArticleRepo,
   AssetStore,
@@ -89,6 +90,49 @@ export interface Ports {
   ids: IdGen;
 }
 
+/**
+ * The slice of `Ports` the account-administration services touch (SPEC §28, §49.2).
+ *
+ * The web surface has to write for `/settings` to exist at all: an agent registered, a
+ * token issued, a session ended. What it must not gain in the process is the ability to
+ * publish. `ports.ts` states the rule — a page reaches a narrowed set, so a write it has no
+ * business making is absent rather than merely discouraged — and this is that rule applied
+ * to the one surface that now writes. There is no `articles`, no `search`, no `media` and
+ * no `sitemap` here, so no page can reach them.
+ */
+export type AccountPorts = Pick<
+  Ports,
+  | "db"
+  | "principals"
+  | "tokens"
+  | "keys"
+  | "audit"
+  | "outbox"
+  | "quota"
+  | "sessions"
+  | "credentials"
+  | "reading"
+  | "clock"
+  | "ids"
+>;
+
+export interface AccountContext extends Omit<RequestContext, "ports"> {
+  ports: AccountPorts;
+}
+
+/**
+ * What a quota check reads, which is two ports and the actor.
+ *
+ * Narrowed so that a surface holding a slice of `Ports` can still be metered. A quota that
+ * only the full-`Ports` surface could check would be a quota the other surface does not
+ * have — which is how an unmetered path appears without anyone deciding to create one.
+ */
+export interface QuotaContext {
+  ports: Pick<Ports, "quota" | "clock">;
+  actor: Actor | null;
+  requestId: string;
+}
+
 export interface RequestContext {
   ports: Ports;
   /**
@@ -106,6 +150,36 @@ export interface RequestContext {
   tokenId: string | null;
   ipHash: string | null;
   userAgent: string | null;
+}
+
+/**
+ * An audit row for the change it accompanies, in the same commit (SPEC §35, §62).
+ *
+ * Here rather than in `identity.ts`, where it was, because `account.ts` needs the identical
+ * row and a second copy would be a second set of field names for the same table — the kind
+ * of duplication that stays consistent right up until one of them gains a field.
+ */
+export function journal(
+  ctx: AccountContext,
+  action: string,
+  target: { type: string; id: string },
+  outcome: "success" | "denied",
+  reason: string | null,
+): PendingWrite {
+  return ctx.ports.audit.record({
+    id: ctx.ports.ids.next(),
+    actorPrincipalId: (ctx.actor?.principalId ?? null) as OratorId | null,
+    actorTokenId: ctx.tokenId,
+    action,
+    targetType: target.type,
+    targetId: target.id,
+    outcome,
+    reason,
+    ipHash: ctx.ipHash,
+    userAgent: ctx.userAgent,
+    requestId: ctx.requestId,
+    createdAt: ctx.ports.clock.now().toISOString(),
+  });
 }
 
 /**
@@ -164,7 +238,7 @@ export const fail = <T = never>(
  * charged; after, and a refusal arrives with the row already created.
  */
 export async function withinQuota(
-  ctx: RequestContext,
+  ctx: QuotaContext,
   action: QuotaAction,
   chargeTo?: string,
 ): Promise<Result<QuotaVerdict>> {

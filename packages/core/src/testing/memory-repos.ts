@@ -90,7 +90,7 @@ export interface MemoryState {
   topics: Map<string, TopicRecord>;
   metrics: MetricEvent[];
   credentials: CredentialRecord[];
-  sessions: (SessionRecord & { tokenHash: string })[];
+  sessions: (SessionRecord & { tokenHash: string; userAgent: string | null })[];
   reports: ReportRecord[];
   moderationActions: ModerationActionRecord[];
   media: Map<string, MediaRecord>;
@@ -311,6 +311,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
     async findByHash(tokenHash) {
       return [...state.tokens.values()].find((t) => t.tokenHash === tokenHash) ?? null;
+    },
+    async findById(id) {
+      return state.tokens.get(id) ?? null;
     },
     async listFor(principalId) {
       return [...state.tokens.values()].filter((t) => t.principalId === principalId);
@@ -1355,8 +1358,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
   };
 
   const sessions: SessionRepo = {
-    async findByHash() {
-      return null;
+    async findByHash(tokenHash) {
+      return state.sessions.find((entry) => entry.tokenHash === tokenHash) ?? null;
+    },
+    async listFor(principalId) {
+      return state.sessions.filter(
+        (entry) => entry.principalId === principalId && entry.revokedAt === null,
+      );
     },
     insert: (session) => asWrite(() => void state.sessions.push(session)),
     touch: () => asWrite(() => 1),
