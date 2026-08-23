@@ -46,10 +46,15 @@ export const shardObjectKey = (shard: ShardKey): string => `sitemaps/articles-${
 /**
  * The site's own pages (SPEC §50.1).
  *
- * A separate shard, and the only one that is not derived from the database. These four are
+ * A separate shard, and the only one that is not derived from the database. These are
  * written in this repository rather than published to the platform, so nothing about them is
  * earned or revoked — §50.3's rule is about articles, and its reason (a domain judged on the
  * pattern of machine-generated content at volume) does not reach a page a person wrote.
+ *
+ * `/topics` belongs here rather than in the topic shard (§51). That shard holds `/t/{slug}`
+ * pages, which are listings and earn submission by holding three indexable articles; this is
+ * the vocabulary itself, written in a migration and explained in prose, and it is a page
+ * whether or not anything has been sorted yet.
  *
  * It is also what keeps the sitemap from being empty. A network whose articles have not yet
  * earned indexing still has a front door and three policies, and an index listing nothing is
@@ -58,7 +63,7 @@ export const shardObjectKey = (shard: ShardKey): string => `sitemaps/articles-${
  * No `lastmod`. It is optional, and the alternative available here is the build time, which
  * would tell a crawler these pages change every five minutes.
  */
-export const STATIC_PAGES = ["/", "/terms", "/privacy", "/content-policy"] as const;
+export const STATIC_PAGES = ["/", "/topics", "/terms", "/privacy", "/content-policy"] as const;
 
 /** `2026-08-22T…` → `2026-08`. The shard key, and the only place it is decided. */
 export const shardOf = (publishedAt: string): ShardKey => publishedAt.slice(0, 7);

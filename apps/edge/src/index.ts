@@ -10,6 +10,7 @@ import {
   createIdGen,
   createMetricsQuery,
   createSloRepo,
+  createWorkersAiClassifier,
   QuotaCounter,
   recordDeadLetter,
   systemClock,
@@ -33,6 +34,7 @@ import {
   evaluateIndexability,
   evaluateSlo,
   markArticleShard,
+  classifyArticle,
   rebuildSitemap,
   reindexArticle,
   runRetention,
@@ -50,6 +52,15 @@ export interface Env {
   EVENTS: Queue;
   /** SPEC §59.1 — one object per principal; the exact half of the two mechanisms. */
   QUOTA: DurableObjectNamespace<QuotaCounter>;
+  /**
+   * SPEC §22.3 — the classifier, and later the reading moderation provider (§61).
+   *
+   * Two callers with different consequences and therefore two calls, never one: merging a
+   * topic and a verdict into one inference would put the weaker discipline in charge of
+   * both, and the closed vocabulary that neuters an injection aimed at a classifier is
+   * exactly what one aimed at a verdict would be choosing from.
+   */
+  AI: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
   /** SPEC §59.1 — the approximate half: per-colo flood protection, per IP and per token. */
   FLOOD: RateLimit;
   /** §59.2 names search separately, and the binding's limit is fixed per binding. */
@@ -434,6 +445,23 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
       const screened = await screenArticle(ports, event.aggregate_id);
 
       /*
+       * §22.3, §38.3 — classification, on the same event and independent of everything else.
+       *
+       * Independent in both directions: a screening provider that is down leaves this
+       * working, and a classifier that is down leaves the article published and untopiced
+       * while screening still reaches a verdict. Neither waits for the other, and neither
+       * failure fails the message — retrying would re-index and re-screen for no reason.
+       *
+       * A redelivery is free rather than merely harmless: the content hash of the body that
+       * was read is recorded, so the same bytes are never sent to a model twice (§22.3).
+       */
+      const classified = await classifyArticle(
+        ports,
+        event.aggregate_id,
+        createWorkersAiClassifier(env.AI),
+      );
+
+      /*
        * §50.3 — after screening, because the verdict is one of its four conditions.
        *
        * Re-evaluated on every article event and not only on the first publish: a trust
@@ -457,6 +485,8 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
 
       log(outcome, {
         moderation: screened,
+        classification: classified.status,
+        topics: classified.topics,
         indexable: indexing.indexable,
         why: indexing.reason,
         sitemap_shard: shard,

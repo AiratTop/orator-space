@@ -1,4 +1,5 @@
 import type { OratorId } from "@orator/protocol";
+import type { PendingWrite } from "./database.js";
 import type { ArticleCard } from "./reading.js";
 
 /**
@@ -73,4 +74,37 @@ export interface TopicRepo {
    * are three the site has told crawlers to ignore.
    */
   indexableCounts(): Promise<Map<string, number>>;
+}
+
+/**
+ * Writing an article's topics (SPEC §22, §22.3).
+ *
+ * Separate from `TopicRepo` and reached only from the queue consumer, which is what keeps
+ * the web's `TopicPorts` read-only: a page renders untrusted content, and the surface that
+ * does it should not be able to write the taxonomy that untrusted content is sorted into.
+ */
+export interface TopicAssignmentRepo {
+  /**
+   * Replaces every `source='ai'` row for this article, and leaves the others alone.
+   *
+   * `author` and `moderator` rows exist for correction (§22), so a classifier that
+   * overwrote them would undo the correction on the next redelivery — which is exactly when
+   * nobody is watching.
+   */
+  replaceAiTopics(
+    articleId: string,
+    topics: readonly { topicId: string; confidence: number }[],
+  ): PendingWrite[];
+
+  /** What has already been read, keyed on the bytes that were read (§22.3). */
+  findClassification(articleId: string): Promise<{ contentHash: string; provider: string } | null>;
+  recordClassification(record: {
+    articleId: string;
+    contentHash: string;
+    provider: string;
+    topicCount: number;
+    classifiedAt: string;
+  }): PendingWrite;
+  /** Resolves the slugs a model returned to ids, dropping anything not in the vocabulary. */
+  idsForSlugs(slugs: readonly string[]): Promise<Map<string, string>>;
 }

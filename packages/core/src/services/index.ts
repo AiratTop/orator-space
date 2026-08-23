@@ -17,4 +17,5 @@ export * from "./retention.js";
 export * from "./closure.js";
 export * from "./health.js";
 export * from "./sitemap.js";
+export * from "./classification.js";
 export * from "./topics.js";

@@ -46,6 +46,7 @@ import {
   type SessionRepo,
   type ReportRecord,
   type TopicRecord,
+  type TopicAssignmentRepo,
   type TopicRepo,
   type TokenRecord,
   type TokenRepo,
@@ -97,6 +98,9 @@ export interface MemoryState {
   /** The bytes, keyed the same way the R2 adapter keys them. */
   mediaBytes: Map<string, Uint8Array>;
   articleTopics: Map<string, Set<string>>;
+  classifications: Map<string, { contentHash: string; provider: string; topicCount: number }>;
+  /** `${articleId}:${topicId}` → source, so a correction can outrank the machine (§22). */
+  topicSources: Map<string, string>;
   /** SPEC §51 — the dirty flags, and the built files keyed as R2 keys them. */
   sitemapShards: Map<string, { dirty: boolean; urlCount: number; builtAt: string | null }>;
   assets: Map<string, string>;
@@ -144,6 +148,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     media: new Map(),
     mediaBytes: new Map(),
     articleTopics: new Map(),
+    classifications: new Map(),
+    topicSources: new Map(),
     edges: new Map(),
     follows: new Set(),
     searchIndexedAt: new Map(),
@@ -196,6 +202,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         media: new Map(state.media),
         mediaBytes: new Map(state.mediaBytes),
         articleTopics: new Map(state.articleTopics),
+        classifications: new Map(state.classifications),
+        topicSources: new Map(state.topicSources),
         edges: new Map(state.edges),
         follows: new Set(state.follows),
       };
@@ -1261,6 +1269,54 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
   };
 
 
+  /** SPEC §22.3 — the classifier's half of the taxonomy, in memory. */
+  const topicAssignments: TopicAssignmentRepo = {
+    replaceAiTopics(articleId, topics) {
+      return [
+        asWrite(() => {
+          for (const [topicId, ids] of state.articleTopics) {
+            if (state.topicSources.get(`${articleId}:${topicId}`) === "ai") {
+              ids.delete(articleId);
+              state.topicSources.delete(`${articleId}:${topicId}`);
+            }
+          }
+          for (const topic of topics) {
+            const existing = state.topicSources.get(`${articleId}:${topic.topicId}`);
+            // An author's or a moderator's row outranks the machine being corrected (§22).
+            if (existing !== undefined && existing !== "ai") continue;
+            const ids = state.articleTopics.get(topic.topicId) ?? new Set<string>();
+            ids.add(articleId);
+            state.articleTopics.set(topic.topicId, ids);
+            state.topicSources.set(`${articleId}:${topic.topicId}`, "ai");
+          }
+          return topics.length;
+        }),
+      ];
+    },
+    async findClassification(articleId) {
+      const record = state.classifications.get(articleId);
+      return record === undefined ? null : { contentHash: record.contentHash, provider: record.provider };
+    },
+    recordClassification(record) {
+      return asWrite(() => {
+        state.classifications.set(record.articleId, {
+          contentHash: record.contentHash,
+          provider: record.provider,
+          topicCount: record.topicCount,
+        });
+        return 1;
+      });
+    },
+    async idsForSlugs(slugs) {
+      const wanted = new Set(slugs);
+      return new Map(
+        [...state.topics.values()]
+          .filter((topic) => wanted.has(topic.slug) && topic.status === "active")
+          .map((topic) => [topic.slug, topic.id as string]),
+      );
+    },
+  };
+
   const media: MediaRepo = {
     async listStalePending(cutoff, limit) {
       return [...state.media.values()]
@@ -1607,6 +1663,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     social,
     search,
     topics,
+    topicAssignments,
     media,
     mediaStore,
     moderation,

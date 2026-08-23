@@ -27,6 +27,7 @@ import type {
   SloRepo,
   SocialRepo,
   TokenRepo,
+  TopicAssignmentRepo,
   TopicRepo,
 } from "../ports/index.js";
 import type { Actor } from "../identity/authz.js";
@@ -49,8 +50,16 @@ export interface Ports {
   social: SocialRepo;
   /** SPEC §38 — derived, rebuildable, and updated outside the write transaction. */
   search: SearchIndex;
-  /** SPEC §22 — a curated vocabulary, read-only in the MVP. */
+  /** SPEC §22 — a curated vocabulary; nothing in a request writes to it. */
   topics: TopicRepo;
+  /**
+   * SPEC §22.3 — where the classifier's output lands.
+   *
+   * Separate from `topics` so that the web's read-only slice stays read-only: a page renders
+   * untrusted content, and the surface that does it should not hold the ability to write the
+   * taxonomy that untrusted content is sorted into.
+   */
+  topicAssignments: TopicAssignmentRepo;
   /** SPEC §21 — the media record; the bytes are `mediaStore`. */
   media: MediaRepo;
   /** SPEC §21.1 — one streamed pass, counted, hashed and sniffed on the way in. */
