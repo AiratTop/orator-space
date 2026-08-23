@@ -1044,6 +1044,9 @@ is a measurement, and neither exists today.
   five per article produces that entropy faster, in fluent variations that are harder to
   collapse. The second taxonomy is embeddings, which have no vocabulary to pollute.
 - **No arbitrary transformation URLs.** A named variant or the original.
+- **No empty topic in the sitemap.** §51's objection to submitting a `noindex` page is the
+  same objection: a listing with nothing on it spends crawl budget to say nothing, and one
+  with a single article says less than that article's own entry already does.
 - **No classifier output that is not already a topic.** An article body is untrusted (§58.1)
   and this is the first place untrusted text reaches a model whose output writes to the
   database. The closed vocabulary is what makes an injection unable to say anything the
@@ -1096,6 +1099,8 @@ work here; the three before them close commitments the specification already mad
     working, and the article published in both cases
 [ ] a flagged article is published, not indexable, and has a report against it — never gone
 [ ] /t/{topic} lists articles, paginated by keyset like everything else (§44.2)
+[ ] a topic page with three indexable articles is in /sitemaps/topics.xml and says index;
+    one with fewer is in neither, and an archived one still resolves (§51, §22.1)
 [ ] an article page suggests articles sharing its topics, with the topic named
 [ ] avatars upload, render at a fixed variant, and fall back when transformation fails
 [ ] og:image is present on every article page and resolves to an image

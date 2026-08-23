@@ -1788,7 +1788,9 @@ never in advance.
 **MUST — an archived topic keeps its page.** `status='archived'` withdraws a topic from the
 classifier's vocabulary and from navigation. It does not make `/t/{slug}` a 404: the URL has
 been public, and §8 does not let an address stop resolving because the vocabulary moved on.
-What ends is the offer to classify into it, not the record that things were.
+What ends is the offer to classify into it, not the record that things were. It leaves
+`/sitemaps/topics.xml` at the next rebuild (§51), which is a different statement from
+disappearing: the site stops asking to have it crawled and keeps answering anyone who asks.
 
 ### 22.2. How many, and why the ceiling is technical
 
@@ -3982,6 +3984,7 @@ the entire table on every crawler request.
 /sitemap.xml                     shard index
 /sitemaps/pages.xml              the site's own pages — always present
 /sitemaps/articles-{YYYY-MM}.xml one month of publications, up to 50,000 URLs
+/sitemaps/topics.xml             topic pages that have earned indexing (below)
 ```
 
 **MUST — the page shard is always listed.** It holds the home page and the public policies
@@ -4003,10 +4006,34 @@ wrote; the escape hatch is a day-level key, which changes the key and nothing ab
 **MUST.** Only articles with `status = 'published'`, `visibility = 'public'` and
 `indexable = 1`, and — from §15.1 — no `canonical_url`, are included.
 
-**MUST NOT.** Nothing enters the sitemap whose page is `noindex`. Profiles, topics and
-cursor pages are therefore absent: a sitemap that submits a page the site then tells the crawler to ignore
+**MUST NOT.** Nothing enters the sitemap whose page is `noindex`. Profiles and cursor pages
+are therefore absent: a sitemap that submits a page the site then tells the crawler to ignore
 spends somebody's crawl budget to say nothing. They enter when their pages are something
 the site vouches for, which is §50.3's rule applied to a different noun.
+
+**MUST — a topic shard, once topics have something to list.**
+
+```text
+/sitemaps/topics.xml             the topic pages that have earned it
+```
+
+A topic enters when its listing holds **at least three indexable articles**, and leaves when
+it does not. The rules that follow from §22.1 and §50.3 rather than being new:
+
+- only the uncursored first page of the listing — `?before=…` has no stable address (§50.3);
+- a section counts its children's articles, de-duplicated, because that is what its page
+  shows (§22.1);
+- an archived topic leaves the shard and keeps its page: the URL still resolves, and §8 is
+  why, but the site stops asking anyone to crawl it;
+- a change of topic membership marks this shard dirty exactly as a publication marks a
+  month, and the same cron rebuilds it.
+
+**Rationale, and why three rather than one.** An empty topic page in a sitemap spends crawl
+budget to say nothing, which is the same objection §51 already makes to a `noindex` page. A
+topic page listing one article says strictly less than that article's own entry does, and
+adds a second URL competing for it (§50.2). Three is the first count at which the topic page
+is a better answer to a broad query than any single article on it. It is a number to revisit
+against real search data rather than a principle — unlike the rule above it, which is.
 
 **MUST.** An `article.published` event does not rebuild the sitemap immediately. It marks a
 shard as needing a rebuild, and cron rebuilds the changed shards in a batch every five
@@ -5838,6 +5865,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 128 | What a platform model call may affect is bounded before the call, not after | §58.4 |
 | 129 | Classification and screening never share one inference | §61, §22.3 |
 | 130 | `flagged` is the strongest automated verdict; removal is a person's | §61, §23.2 |
+| 131 | A topic page enters the sitemap on three indexable articles, and leaves below it | §51, §50.3 |
 
 ## 80. Open decisions
 
