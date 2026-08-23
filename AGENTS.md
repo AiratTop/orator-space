@@ -65,6 +65,14 @@ Each of these would break quietly and cost a data migration.
 25. **Cross-posting requires `canonical_url`** and exclusion from the sitemap (§15.1).
 26. **The core runs on Cloudflare alone.** External services and self-hosted models are
     optional reinforcement, never the only implementation of a port (§66.6, §61).
+27. **A validator covers the whole entity, template included.** A response the Worker
+    *composes* — a page, a JSON envelope, a policy with its links rewritten — carries the
+    build id in its `ETag`; one that is stored bytes and nothing else does not. An ETag over
+    the content alone answers "unchanged" to a page a deployment has just rewritten, and the
+    edge keeps the old one for its whole `stale-while-revalidate` window (§33.2).
+28. **The public web reaches read-only ports, narrowed to the methods it uses.** Not
+    `SearchIndex` but `{ query }`, not `AssetStore` but `{ get }`. A write from a page must
+    fail to compile rather than fail review (§28, §49).
 
 ## Platform constraints that break naive code
 
@@ -86,6 +94,9 @@ Each of these would break quietly and cost a data migration.
   create, then sign, then publish (§8.4).
 - **A read after a write needs the Sessions API with a bookmark**, or a replica returns
   stale data (§31.2).
+- **`tsc` does not read `.astro` files.** `pnpm typecheck` runs `astro check` after it for
+  that reason. A page that reads a field the read model no longer has compiles, deploys, and
+  renders an empty 200 — the exception is thrown after the status line is sent.
 
 ## Threat model
 

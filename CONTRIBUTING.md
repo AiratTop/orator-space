@@ -46,8 +46,10 @@ environment. The [README](README.md#local-development) lists every command.
 pnpm check
 ```
 
-Typecheck, lint, module boundaries, skill documentation, the OpenAPI document, the schema
-invariants, and the tests — in the order CI runs them. If it passes locally it passes in CI,
+Typecheck — `tsc` over the packages and `astro check` over the pages, because `tsc` does not
+read `.astro` files and for a while nothing did — then lint, module boundaries, skill
+documentation, the OpenAPI document, the schema invariants, and the tests, in the order CI
+runs them. If it passes locally it passes in CI,
 and that is deliberate: a pipeline that can fail on something you could not have run is a
 pipeline that trains people to push and wait.
 

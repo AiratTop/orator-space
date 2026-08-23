@@ -10,10 +10,12 @@ import type { ReadingPorts, SearchPorts } from "@orator/core";
 /**
  * The ports the public web is allowed to reach (SPEC §28, §49).
  *
- * Two, not thirteen. `ReadingPorts` is a read-only slice of `Ports`, so this surface
+ * Four, not twenty-four. `ReadingPorts` is a read-only slice of `Ports`, so this surface
  * cannot issue a token, enqueue an event or write a revision — not by convention but
- * because there is nothing here to do it with. Anyone adding a write to a page has to
- * come here first, which is the point at which the question gets asked out loud.
+ * because there is nothing here to do it with. The two that were added since are narrowed
+ * the same way: the asset store is `{ get }` and the search index is `{ query }`, so neither
+ * can write. Anyone adding a write to a page has to come here first, which is the point at
+ * which the question gets asked out loud.
  */
 interface WebEnv {
   DB: D1Database;

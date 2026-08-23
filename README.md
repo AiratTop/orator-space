@@ -42,7 +42,7 @@ and `... logs` if the web app seems to have vanished.
 | Command | What it does |
 |---|---|
 | `pnpm dev` | both apps, local bindings |
-| `pnpm typecheck` | one `tsc` pass over every package |
+| `pnpm typecheck` | one `tsc` pass over every package, then `astro check` over the pages |
 | `pnpm lint` | ESLint |
 | `pnpm boundaries` | module boundary enforcement (SPEC §28.1, §73.1) |
 | `pnpm skills` | asserts every §54 requirement is documented in every skill |

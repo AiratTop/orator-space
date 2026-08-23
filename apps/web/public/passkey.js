@@ -3,8 +3,13 @@
  *
  * An external file rather than an inline script, because the content security policy is
  * `script-src 'self'` with no `unsafe-inline` (§57.2) and that policy is worth more than
- * the convenience of putting eight lines in a page. It is also the only JavaScript on the
- * site: everything else works without it.
+ * the convenience of putting eight lines in a page.
+ *
+ * One of two scripts on the site — the other sets the colour theme — and §49.1 draws the
+ * line they both sit on: a script may carry something the server cannot know about the
+ * reader's own device, and nothing else. A passkey ceremony is that by construction, since
+ * the private half never leaves the device. Everything the site *says* is rendered on the
+ * server, and a reader with scripts off loses the theme control and the sign-in button.
  */
 const b64urlToBytes = (value) => {
   const padded = value.replace(/-/g, "+").replace(/_/g, "/");

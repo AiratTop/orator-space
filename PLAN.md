@@ -195,6 +195,8 @@ from `assets`. That bucket needs no name of its own.
 | 7 | The checkpoint scripts run after every staging deploy | Phase 6 — see below |
 | ~~8~~ | ~~Turn off Cloudflare Web Analytics automatic injection~~ ✅ done — RUM off for `orator.space` and its subdomains | — |
 | ~~9~~ | ~~Stop Cloudflare AI Crawl Control managing `robots.txt`~~ ✅ done — both zones serve ours alone | — |
+| 11 | **A Gatus check on `/health/slo`**, with the canary's token — the §66.4 table, as one status code. The YAML is below | Phase 8 — §66.4 |
+| 12 | **Two secrets on the edge Worker**, if publish p95 and the 5xx rate are wanted: `CF_ACCOUNT_ID` and `CF_ANALYTICS_TOKEN` (Account Analytics: Read). Without them those two report `unavailable` and the other five still answer | Phase 8 — §66.4 |
 
 **On item 3.** Gatus runs outside Cloudflare, on the operator's own host, which is the
 point: a status page served by the infrastructure it reports on says "ok" right up to the
