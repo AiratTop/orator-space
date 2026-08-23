@@ -17,7 +17,9 @@ import {
   renderUrlset,
   shardObjectKey,
   shardOf,
+  TOPICS_KEY,
 } from "./sitemap.js";
+import { INDEXABLE_THRESHOLD } from "./topics.js";
 
 let ports: ReturnType<typeof createMemoryPorts>;
 
@@ -130,7 +132,15 @@ describe("rebuilding (SPEC §51)", () => {
   it("does nothing on a second run, because nothing changed", async () => {
     await rebuildSitemap(ports, SITE);
     const again = await rebuildSitemap(ports, SITE);
-    expect(again).toEqual({ shardsBuilt: 0, urls: 0, remaining: 0, overflowing: [], pagesRewritten: false });
+    expect(again).toEqual({
+      shardsBuilt: 0,
+      urls: 0,
+      remaining: 0,
+      overflowing: [],
+      pagesRewritten: false,
+      topicsRewritten: false,
+      topicUrls: 0,
+    });
   });
 
   it("rewrites the page shard when the list in the code changes", async () => {
@@ -243,5 +253,87 @@ describe("the XML", () => {
     expect(xml).toContain(`<loc>${SITE}/${PAGES_KEY}</loc>`);
     expect(xml).toContain(`<loc>${SITE}/sitemaps/articles-2026-08.xml</loc>`);
     expect(xml).toContain("<lastmod>2026-08-15T10:00:00.000Z</lastmod>");
+  });
+});
+
+/**
+ * SPEC §51, §22.1 — the topic shard.
+ *
+ * The threshold is the whole behaviour, so the tests are written around it rather than
+ * around the file: below it nothing is submitted and the index does not name a shard, at it
+ * the page appears. Written by comparison rather than a dirty flag, so a run that changes
+ * nothing must also write nothing.
+ */
+describe("the topic shard", () => {
+  const topic = (id: string, slug: string) =>
+    ports.state.topics.set(id, {
+      id: id as never,
+      slug,
+      label: slug,
+      description: null,
+      parentSlug: null,
+      status: "active" as const,
+    });
+
+  const classify = (topicId: string, articleIds: string[]) =>
+    ports.state.articleTopics.set(topicId, new Set(articleIds));
+
+  const indexableArticles = (n: number): string[] => {
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) {
+      const id = `ART-${i}`;
+      ports.state.articles.set(id, {
+        id,
+        status: "published",
+        visibility: "public",
+        indexable: true,
+        publishedAt: "2026-08-01T00:00:00.000Z",
+        updatedAt: "2026-08-01T00:00:00.000Z",
+      } as never);
+      ids.push(id);
+    }
+    return ids;
+  };
+
+  it("submits nothing below the threshold, and names no shard for it", async () => {
+    topic("T-LLM", "llm");
+    classify("T-LLM", indexableArticles(INDEXABLE_THRESHOLD - 1));
+
+    const build = await rebuildSitemap(ports, SITE);
+    expect(build.topicUrls).toBe(0);
+    expect(ports.state.assets.get(TOPICS_KEY) ?? "").toBe("");
+    expect(ports.state.assets.get(INDEX_KEY)).not.toContain(TOPICS_KEY);
+  });
+
+  it("submits the page once it holds enough, and names the shard", async () => {
+    topic("T-LLM", "llm");
+    classify("T-LLM", indexableArticles(INDEXABLE_THRESHOLD));
+
+    const build = await rebuildSitemap(ports, SITE);
+    expect(build.topicUrls).toBe(1);
+    expect(build.topicsRewritten).toBe(true);
+    expect(ports.state.assets.get(TOPICS_KEY)).toContain(`${SITE}/t/llm`);
+    expect(ports.state.assets.get(INDEX_KEY)).toContain(`${SITE}/${TOPICS_KEY}`);
+  });
+
+  it("writes nothing on a second run, because the file did not change", async () => {
+    topic("T-LLM", "llm");
+    classify("T-LLM", indexableArticles(INDEXABLE_THRESHOLD));
+
+    await rebuildSitemap(ports, SITE);
+    expect((await rebuildSitemap(ports, SITE)).topicsRewritten).toBe(false);
+  });
+
+  it("counts only what the site vouches for, not everything published", async () => {
+    topic("T-LLM", "llm");
+    const ids = indexableArticles(INDEXABLE_THRESHOLD);
+    // §50.3 — indexing is earned. Three articles the site has told crawlers to ignore are
+    // not three reasons to submit the page listing them.
+    for (const id of ids) {
+      ports.state.articles.set(id, { ...ports.state.articles.get(id)!, indexable: false } as never);
+    }
+    classify("T-LLM", ids);
+
+    expect((await rebuildSitemap(ports, SITE)).topicUrls).toBe(0);
   });
 });

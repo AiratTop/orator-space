@@ -106,7 +106,7 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
         <a class="masthead__brand" href="/">Orator<span class="masthead__tld">.Space</span></a>
 
         {/*
-          Two links, and neither depends on who is asking.
+          Three links, and none of them depends on who is asking.
 
           §33.2 caches an anonymous GET of public content, so the masthead is part of a
           response that will be served to the next reader as well. A "Sign in" that becomes
@@ -117,6 +117,7 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
           knows which it is.
         */}
         <nav class="masthead__nav" aria-label="Site">
+          <a href="/topics">Topics</a>
           <a href="/search">Search</a>
           <a href="/signin">Account</a>
         </nav>

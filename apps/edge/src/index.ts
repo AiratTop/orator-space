@@ -628,7 +628,7 @@ export default {
      */
     if (event.cron === "*/5 * * * *") {
       const build = await rebuildSitemap(ports, `https://${env.SITE_HOST}`);
-      if (build.shardsBuilt > 0) {
+      if (build.shardsBuilt > 0 || build.topicsRewritten) {
         console.log(JSON.stringify({ level: "info", task: "sitemap.rebuild", ...build }));
       }
       if (build.overflowing.length > 0) {

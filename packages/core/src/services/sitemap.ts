@@ -1,5 +1,14 @@
 import { canonicalPath } from "../articles/urls.js";
-import type { ArticleRepo, AssetStore, Clock, ShardKey, SitemapArticle, SitemapRepo } from "../ports/index.js";
+import type {
+  ArticleRepo,
+  AssetStore,
+  Clock,
+  ShardKey,
+  SitemapArticle,
+  SitemapRepo,
+  TopicRepo,
+} from "../ports/index.js";
+import { INDEXABLE_THRESHOLD } from "./topics.js";
 
 /**
  * The sitemap (SPEC §51, ADR 0009).
@@ -18,6 +27,8 @@ export type SitemapPorts = {
   sitemap: SitemapRepo;
   assets: AssetStore;
   articles: ArticleRepo;
+  /** SPEC §51 — which topic pages have earned submission. One query pair per run. */
+  topics: Pick<TopicRepo, "indexableCounts">;
   clock: Clock;
 };
 
@@ -29,6 +40,7 @@ const SHARDS_PER_RUN = 12;
 
 export const INDEX_KEY = "sitemap.xml";
 export const PAGES_KEY = "sitemaps/pages.xml";
+export const TOPICS_KEY = "sitemaps/topics.xml";
 export const shardObjectKey = (shard: ShardKey): string => `sitemaps/articles-${shard}.xml`;
 
 /**
@@ -79,6 +91,10 @@ export interface SitemapBuild {
   overflowing: ShardKey[];
   /** Whether the static page shard changed, which is how a new page reaches the index. */
   pagesRewritten: boolean;
+  /** Whether the topic shard changed. §51's threshold means it changes rarely. */
+  topicsRewritten: boolean;
+  /** How many topic pages are currently submitted. Zero is the ordinary early state. */
+  topicUrls: number;
 }
 
 /**
@@ -89,7 +105,15 @@ export interface SitemapBuild {
  * per month.
  */
 export async function rebuildSitemap(ports: SitemapPorts, siteOrigin: string): Promise<SitemapBuild> {
-  const build: SitemapBuild = { shardsBuilt: 0, urls: 0, remaining: 0, overflowing: [], pagesRewritten: false };
+  const build: SitemapBuild = {
+    shardsBuilt: 0,
+    urls: 0,
+    remaining: 0,
+    overflowing: [],
+    pagesRewritten: false,
+    topicsRewritten: false,
+    topicUrls: 0,
+  };
 
   /*
    * The static shard first, and by comparison rather than on a flag.
@@ -105,9 +129,36 @@ export async function rebuildSitemap(ports: SitemapPorts, siteOrigin: string): P
     build.pagesRewritten = true;
   }
 
+  /*
+   * The topic shard, by comparison rather than on a flag — the same trick as the pages
+   * shard above, for the same reason.
+   *
+   * A dirty flag here would have to be set by the classifier on every article it touches,
+   * and it would be wrong most of the time: §51 submits a topic page at three indexable
+   * articles, so almost every classification changes nothing about this file. Rendering it
+   * costs one indexed group-by pair and one small R2 get, and the comparison decides.
+   */
+  const submitted = [...(await ports.topics.indexableCounts())]
+    .filter(([, count]) => count >= INDEXABLE_THRESHOLD)
+    .map(([slug]) => slug)
+    .sort();
+  build.topicUrls = submitted.length;
+
+  const topics = renderTopics(submitted, siteOrigin);
+  const storedTopics = await ports.assets.get(TOPICS_KEY);
+  // Absent and empty are the same state: nothing to submit, so nothing is written. Writing
+  // an empty urlset would put a file in the index that says a crawler wasted the fetch.
+  if (submitted.length > 0 && storedTopics !== topics) {
+    await ports.assets.put(TOPICS_KEY, topics, "application/xml");
+    build.topicsRewritten = true;
+  } else if (submitted.length === 0 && storedTopics !== null) {
+    await ports.assets.put(TOPICS_KEY, "", "text/plain");
+    build.topicsRewritten = true;
+  }
+
   const dirty = await ports.sitemap.dirtyShards(SHARDS_PER_RUN + 1);
   const indexExists = (await ports.assets.get(INDEX_KEY)) !== null;
-  if (dirty.length === 0 && indexExists && !build.pagesRewritten) return build;
+  if (dirty.length === 0 && indexExists && !build.pagesRewritten && !build.topicsRewritten) return build;
 
   const remaining = dirty.slice(SHARDS_PER_RUN);
   build.remaining = remaining.length;
@@ -131,7 +182,11 @@ export async function rebuildSitemap(ports: SitemapPorts, siteOrigin: string): P
    * after the shards have written their counts.
    */
   const shards = (await ports.sitemap.shards()).filter((state) => state.urlCount > 0);
-  await ports.assets.put(INDEX_KEY, renderIndex(shards, siteOrigin), "application/xml");
+  await ports.assets.put(
+    INDEX_KEY,
+    renderIndex(shards, siteOrigin, { topics: build.topicUrls > 0 }),
+    "application/xml",
+  );
   return build;
 }
 
@@ -183,13 +238,40 @@ export function renderUrlset(articles: SitemapArticle[], siteOrigin: string): st
   ].join("\n");
 }
 
+/**
+ * The topic shard (SPEC §51, §22.1).
+ *
+ * Slugs only, flat, because `/t/{slug}` is flat (§22.1) — a section and a leaf are the same
+ * kind of address here, and both are submitted on the same threshold.
+ *
+ * No `lastmod`. What would go in it is the build time, which would tell a crawler that
+ * every topic page changed five minutes ago; a topic page changes when an article joins it,
+ * and that is not a date this file knows.
+ */
+export function renderTopics(slugs: readonly string[], siteOrigin: string): string {
+  const urls = slugs.map((slug) => `  <url>\n    <loc>${escapeXml(`${siteOrigin}/t/${slug}`)}</loc>\n  </url>`);
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ...urls,
+    "</urlset>",
+    "",
+  ].join("\n");
+}
+
 export function renderIndex(
   shards: { shard: ShardKey; builtAt: string | null }[],
   siteOrigin: string,
+  options: { topics?: boolean } = {},
 ): string {
   // The static shard is always listed and always first: it is the part of the sitemap that
   // does not depend on anybody having published anything.
   const entries = [`  <sitemap>\n    <loc>${escapeXml(`${siteOrigin}/${PAGES_KEY}`)}</loc>\n  </sitemap>`];
+  // Listed only when it holds something. §51's objection to submitting a `noindex` page is
+  // the same objection to listing a shard with no URLs in it.
+  if (options.topics === true) {
+    entries.push(`  <sitemap>\n    <loc>${escapeXml(`${siteOrigin}/${TOPICS_KEY}`)}</loc>\n  </sitemap>`);
+  }
   entries.push(...shards.map((state) => {
     const loc = escapeXml(`${siteOrigin}/${shardObjectKey(state.shard)}`);
     const lastmod = state.builtAt === null ? "" : `\n    <lastmod>${escapeXml(state.builtAt)}</lastmod>`;
