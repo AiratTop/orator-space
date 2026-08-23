@@ -396,7 +396,7 @@ export async function completePasskeyAuthentication(
 export async function resolveSession(
   ports: AuthPorts,
   cookieValue: string,
-): Promise<{ principalId: OratorId; username: string } | null> {
+): Promise<{ principalId: OratorId; username: string; sessionId: OratorId } | null> {
   const session = await ports.sessions.findByHash(await sha256Hex(cookieValue));
   if (session === null || session.revokedAt !== null) return null;
   if (Date.parse(session.expiresAt) <= ports.clock.now().getTime()) return null;
@@ -404,7 +404,10 @@ export async function resolveSession(
   const principal = await ports.principals.findById(session.principalId);
   if (principal === null || principal.status !== "active") return null;
 
-  return { principalId: principal.id, username: principal.username };
+  // The id travels with the session so `/settings` can mark which row the reader is
+  // sitting in. Ending "this browser" and ending "that other one" are different acts, and
+  // a list that cannot tell them apart invites the wrong one.
+  return { principalId: principal.id, username: principal.username, sessionId: session.id };
 }
 
 export async function signOut(ports: AuthPorts, cookieValue: string): Promise<void> {

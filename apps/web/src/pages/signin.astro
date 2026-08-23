@@ -15,118 +15,106 @@ import { CACHE, CDN_CACHE } from "../lib/http.js";
 const cookie = readCookie(Astro.request, SESSION_COOKIE);
 const session = cookie === null ? null : await resolveSession(authPorts, cookie);
 
+/*
+ * Somebody already signed in is sent to the page that has something for them to do.
+ *
+ * The masthead cannot link straight to `/settings`, and §49.1 explains why: it is part of a
+ * cached response, so it must say the same thing to every reader. So the neutral link lands
+ * here and this decides — which keeps one address in the shared cache and still puts a
+ * signed-in reader in front of their agents rather than in front of a sign-in button.
+ */
+if (session !== null) return Astro.redirect("/settings", 303);
+
 Astro.response.headers.set("cache-control", CACHE.private);
 Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
 ---
 
-<Layout title={session === null ? "Sign in" : "Your account"} canonicalPath="/signin">
+<Layout title="Sign in" canonicalPath="/signin">
   <main id="main" class="wrap">
-    <h1 class="title">{session === null ? "Sign in" : "Your account"}</h1>
+    <h1 class="title">Sign in</h1>
 
-    {session === null ? (
-      <>
-        <p class="account__lede">
-          Orator uses passkeys. There is no password to remember, none to reuse, and none for
-          anyone to phish.
-        </p>
+    <p class="account__lede">
+      Orator uses passkeys. There is no password to remember, none to reuse, and none for
+      anyone to phish.
+    </p>
 
-        <div class="account__action">
-          <button class="button" id="signin" type="button">Sign in with a passkey</button>
-        </div>
+    <div class="account__action">
+      <button class="button" id="signin" type="button">Sign in with a passkey</button>
+    </div>
 
-        {/*
-          Two ceremonies, two affordances, and the separation is the fix rather than the
-          decoration. WebAuthn's `get()` looks for a credential that already exists and
-          `create()` makes one; the page offered a single button wired to the first, so a
-          password manager asked for an existing passkey, correctly found none, and there was
-          no way to register at all.
+    {/*
+      Two ceremonies, two affordances, and the separation is the fix rather than the
+      decoration. WebAuthn's `get()` looks for a credential that already exists and
+      `create()` makes one; the page offered a single button wired to the first, so a
+      password manager asked for an existing passkey, correctly found none, and there was
+      no way to register at all.
 
-          On one page because the masthead link says "Account" and a first-time visitor does
-          not know which of the two they need. Separated because only one of them requires
-          typing anything: signing in asks for nothing — the authenticator already knows which
-          passkey belongs to this site — while a username can be taken, or confusable with an
-          existing one (§7.3), and that needs a field and somewhere to put the answer.
-        */}
-        <form class="account__new" id="signup-form">
-          <h2 class="account__new-heading">New here?</h2>
-          <p class="account__new-lede">Pick a name and create a passkey. Nothing else is asked for.</p>
+      On one page because the masthead link says "Account" and a first-time visitor does
+      not know which of the two they need. Separated because only one of them requires
+      typing anything: signing in asks for nothing — the authenticator already knows which
+      passkey belongs to this site — while a username can be taken, or confusable with an
+      existing one (§7.3), and that needs a field and somewhere to put the answer.
+    */}
+    <form class="account__new" id="signup-form">
+      <h2 class="account__new-heading">New here?</h2>
+      <p class="account__new-lede">Pick a name and create a passkey. Nothing else is asked for.</p>
 
-          <div class="field">
-            <label for="username">Username</label>
-            <input
-              id="username"
-              name="username"
-              type="text"
-              autocomplete="username webauthn"
-              autocapitalize="none"
-              spellcheck="false"
-              minlength="3"
-              maxlength="32"
-              pattern="[a-zA-Z0-9_-]+"
-              placeholder="researcher"
-              required
-            />
-            {/* §7.3's rule, said before it is enforced rather than after. */}
-            <p class="field__hint">Three to thirty-two characters: letters, digits, <code>-</code> and <code>_</code>. Permanent, and shown on everything you publish.</p>
-          </div>
+      <div class="field">
+        <label for="username">Username</label>
+        <input
+          id="username"
+          name="username"
+          type="text"
+          autocomplete="username webauthn"
+          autocapitalize="none"
+          spellcheck="false"
+          minlength="3"
+          maxlength="32"
+          pattern="[a-zA-Z0-9_-]+"
+          placeholder="researcher"
+          required
+        />
+        {/* §7.3's rule, said before it is enforced rather than after. */}
+        <p class="field__hint">Three to thirty-two characters: letters, digits, <code>-</code> and <code>_</code>. Permanent, and shown on everything you publish.</p>
+      </div>
 
-          <div class="field">
-            <label for="display-name">Display name <span class="field__optional">optional</span></label>
-            <input id="display-name" name="display-name" type="text" maxlength="80" autocomplete="name" />
-            <p class="field__hint">Changeable at any time. The username is what identifies you (§49.4).</p>
-          </div>
+      <div class="field">
+        <label for="display-name">Display name <span class="field__optional">optional</span></label>
+        <input id="display-name" name="display-name" type="text" maxlength="80" autocomplete="name" />
+        <p class="field__hint">Changeable at any time. The username is what identifies you (§49.4).</p>
+      </div>
 
-          <button class="button" id="signup" type="submit">Create an account</button>
-        </form>
+      <button class="button" id="signup" type="submit">Create an account</button>
+    </form>
 
-        {/*
-          What a passkey is, for a reader who has not met one.
+    {/*
+      What a passkey is, for a reader who has not met one.
 
-          Written out rather than assumed: this is the first thing a new reader is asked to
-          do, and "sign in with a passkey" is a sentence that means nothing to most people.
-          §9.2 chose WebAuthn over a password and over a magic link, and a reader deciding
-          whether to trust it deserves the reasoning rather than a brand name.
-        */}
-        <dl class="account__facts">
-          <dt>What it is</dt>
-          <dd>
-            A key your device holds — unlocked by the same fingerprint, face or PIN that
-            unlocks the device itself. Your browser or password manager prompts you; nothing
-            is typed.
-          </dd>
+      Written out rather than assumed: this is the first thing a new reader is asked to
+      do, and "sign in with a passkey" is a sentence that means nothing to most people.
+      §9.2 chose WebAuthn over a password and over a magic link, and a reader deciding
+      whether to trust it deserves the reasoning rather than a brand name.
+    */}
+    <dl class="account__facts">
+      <dt>What it is</dt>
+      <dd>
+        A key your device holds — unlocked by the same fingerprint, face or PIN that
+        unlocks the device itself. Your browser or password manager prompts you; nothing
+        is typed.
+      </dd>
 
-          <dt>What this site stores</dt>
-          <dd>
-            The public half, which proves a signature and cannot produce one. The private half
-            never leaves your device and is never sent here.
-          </dd>
+      <dt>What this site stores</dt>
+      <dd>
+        The public half, which proves a signature and cannot produce one. The private half
+        never leaves your device and is never sent here.
+      </dd>
 
-          <dt>If you lose the device</dt>
-          <dd>
-            Add a second passkey once you are in — on a phone, a laptop, or a password manager
-            that syncs. An account with one passkey and one device has one way in.
-          </dd>
-        </dl>
-      </>
-    ) : (
-      <>
-        <p class="account__lede">
-          Signed in as <a href={`/@${session.username}`}>@{session.username}</a>.
-        </p>
-
-        <div class="account__action">
-          <button class="button" id="add-passkey" type="button">Add another passkey</button>
-          <form method="post" action="/auth/signout">
-            <button class="button button--quiet" type="submit">Sign out</button>
-          </form>
-        </div>
-
-        <p class="account__note">
-          A second passkey on a different device is the difference between losing a device and
-          losing an account.
-        </p>
-      </>
-    )}
+      <dt>If you lose the device</dt>
+      <dd>
+        Add a second passkey once you are in — on a phone, a laptop, or a password manager
+        that syncs. An account with one passkey and one device has one way in.
+      </dd>
+    </dl>
 
     <p id="status" class="account__status" role="status"></p>
 

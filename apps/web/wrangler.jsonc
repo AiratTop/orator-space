@@ -25,6 +25,21 @@
     { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
   ],
 
+
+  /*
+   * SPEC §59.1, §60.3 — the same counter the API uses, not a second one.
+   *
+   * `/settings` can register an agent, and §60.3's sybil limit is the reason that has to be
+   * metered. A `QuotaCounter` class of this Worker's own would give every account a second
+   * allowance reachable from a browser — the limit would read as global and be per-surface,
+   * which is the worst kind of wrong for a limit. `script_name` points this binding at the
+   * namespace `orator-edge` already owns, so both surfaces decrement one number.
+   *
+   * Absent from the local block deliberately: a cross-Worker Durable Object needs the other
+   * Worker running in the same dev session, and §59.1's degradation already covers a counter
+   * that cannot be reached — the write is allowed and `quota.unavailable` is logged, loudly,
+   * every time. A developer sees it; a deployment has the binding.
+   */
   "vars": { "ENVIRONMENT": "local", "SITE_HOST": "localhost" },
   "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
   "r2_buckets": [
@@ -39,6 +54,9 @@
       "ratelimits": [
         { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
       ],
+      "durable_objects": {
+        "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter", "script_name": "orator-edge-staging" }]
+      },
       "vars": { "ENVIRONMENT": "staging", "SITE_HOST": "staging.orator.space" },
       "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
       "r2_buckets": [
@@ -55,6 +73,9 @@
       "ratelimits": [
         { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
       ],
+      "durable_objects": {
+        "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter", "script_name": "orator-edge" }]
+      },
       "vars": { "ENVIRONMENT": "production", "SITE_HOST": "orator.space" },
       "d1_databases": [{ "binding": "DB", "database_name": "orator-prod", "database_id": "eb98f063-21b0-451d-9372-a2105169ca9b" }],
       "r2_buckets": [

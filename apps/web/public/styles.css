@@ -1374,3 +1374,306 @@ a {
   border-radius: 6px;
   color: var(--warn);
 }
+
+/* ---------------------------------------------------------------------------
+ * The account (SPEC §49.2, §49.5)
+ *
+ * A settings page is a page of lists and small forms, and the temptation is a control
+ * panel — dense rows, icon buttons, a grid. This is written the other way round: every
+ * destructive control is a labelled button with a word on it, and every list row says what
+ * the thing is and when it was last used, because "revoke" is a decision somebody makes
+ * from what the row tells them.
+ * ------------------------------------------------------------------------ */
+
+.settings {
+  /* Wider than the reading measure: these are lists with several columns of fact, and
+     wrapping them into a 38rem column turns each row into a paragraph. */
+  max-width: 52rem;
+}
+
+.settings__lede {
+  color: var(--ink-soft);
+  margin: 0 0 2rem;
+}
+
+.notice--done {
+  border-color: var(--line);
+  color: var(--ink);
+  background: var(--paper-soft);
+}
+
+.notice--failed {
+  border-color: var(--warn);
+  color: var(--warn);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.notice__detail {
+  font-size: 0.9375rem;
+  opacity: 0.9;
+}
+
+/*
+ * The one-time token (§42.2).
+ *
+ * Given the whole width and a border of its own, because everything else on this page can
+ * be found again and this cannot. The warning is above the value rather than below it: a
+ * reader who copies and scrolls past has already read the sentence that matters.
+ */
+.secret {
+  margin: 0 0 2rem;
+  padding: 1.25rem;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--paper-soft);
+}
+
+.secret__heading {
+  margin: 0 0 0.5rem;
+  font-size: 1.0625rem;
+}
+
+.secret__warning {
+  margin: 0 0 0.75rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.secret__value {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.9375rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  /* A token is one long unbroken string; without this it forces the page sideways. */
+  word-break: break-all;
+  user-select: all;
+}
+
+.secret__scopes {
+  margin: 0.75rem 0 0;
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.panel {
+  margin: 0 0 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+
+.panel__heading {
+  margin: 0 0 0.5rem;
+  font-size: 1.25rem;
+}
+
+.panel__lede,
+.panel__note {
+  margin: 0 0 1rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  max-width: var(--measure);
+}
+
+.panel__empty {
+  margin: 0 0 1rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.panel__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.agents,
+.tokens,
+.keys,
+.sessions {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.agent {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+/* A stopped agent is dimmed rather than hidden: its owner is the one person who needs to
+   see it, and it is the row they act on to start it again. */
+.agent--suspended {
+  background: var(--paper-soft);
+}
+
+.agent__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.agent__name {
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--ink);
+}
+
+.agent__name:hover {
+  text-decoration: underline;
+}
+
+.agent__handle {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.agent__facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.125rem 0.75rem;
+  margin: 0.75rem 0 1rem;
+  font-size: 0.875rem;
+}
+
+.agent__facts dt {
+  color: var(--ink-soft);
+}
+
+.agent__facts dd {
+  margin: 0;
+  font-family: var(--mono);
+}
+
+.agent__subheading {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.9375rem;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.agent__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.token,
+.key,
+.session {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9375rem;
+}
+
+.token:last-child,
+.key:last-child,
+.session:last-child {
+  border-bottom: none;
+}
+
+.token__name,
+.session__browser {
+  font-weight: 600;
+}
+
+.token__prefix,
+.key__fingerprint {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.token__scopes,
+.token__used,
+.key__label,
+.key__added,
+.session__seen {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.token__scopes {
+  /* The scopes are the point of the row and the longest thing on it, so they take the
+     remaining space and push the revoke button to the end. */
+  flex: 1 1 12rem;
+  font-family: var(--mono);
+}
+
+.token__revoke {
+  margin-left: auto;
+}
+
+.button--small {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8125rem;
+}
+
+/*
+ * A form behind a summary, and not behind a modal.
+ *
+ * `<details>` is the whole mechanism: no script, nothing to hydrate, and it works before
+ * any JavaScript arrives — which on this site is the difference between a page that works
+ * and a page that does not, since §57.2's CSP leaves no room for an inline handler.
+ */
+.issue {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem 0.875rem;
+}
+
+.issue--wide {
+  margin-top: 1rem;
+}
+
+.issue summary {
+  cursor: pointer;
+  font-size: 0.9375rem;
+  font-weight: 600;
+}
+
+.issue__form {
+  margin-top: 1rem;
+  max-width: 26rem;
+}
+
+.field textarea,
+.field select {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field textarea:focus-visible,
+.field select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tag--warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
