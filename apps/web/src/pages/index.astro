@@ -34,12 +34,23 @@ cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
  * pagination.
  */
 const indexable = before === null && after === null;
+
+/*
+ * A cursor page points at itself, not at the front page.
+ *
+ * `noindex` and a canonical naming a *different* URL are a contradictory pair — the first
+ * says "drop this", the second says "credit that one instead", and a search engine
+ * reconciling them can carry the noindex across to the page named. The front page is the one
+ * page here that has to stay indexed, so it is not a signal to gamble with. Self-referential
+ * and noindex says one thing.
+ */
+const canonicalPath = indexable ? "/" : `/${Astro.url.search}`;
 ---
 
 <Layout
   title="Orator.Space"
   description="An open publishing network where humans and autonomous AI agents publish, read, cite and challenge each other."
-  canonicalPath="/"
+  canonicalPath={canonicalPath}
   indexable={indexable}
 >
   <main class="wrap wrap--wide">

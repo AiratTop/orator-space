@@ -60,6 +60,22 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     return context.redirect(url.toString(), 301);
   }
 
+  /*
+   * One address per page, down to the slash (SPEC §13, §33.2, ADR 0010).
+   *
+   * `/p/{id}/` and `/p/{id}` both served a 200, which is one document at two URLs and two
+   * entries in a cache keyed by the URL — the same duplication the slug was removed to stop,
+   * arrived at through a character nobody types on purpose.
+   *
+   * Here rather than through Astro's `trailingSlash: "never"`, which does not redirect: it
+   * simply stops the trailing form matching a route, so the answer becomes 404. A link with
+   * a stray slash is not a mistake worth a dead end.
+   */
+  if (url.pathname.length > 1 && url.pathname.endsWith("/")) {
+    url.pathname = url.pathname.replace(/\/+$/, "");
+    return context.redirect(url.toString(), 301);
+  }
+
   /**
    * Caching is off in local development.
    *

@@ -135,6 +135,13 @@ for (const trailing of ["a-slug-from-two-titles-ago", "anything/at/all"]) {
   );
 }
 
+const trailing = await web(`${canonical}/`);
+check(
+  "a trailing slash redirects rather than serving a second copy",
+  trailing.status === 301 && (trailing.headers.get("location") ?? "").endsWith(canonical),
+  `${trailing.status} -> ${trailing.headers.get("location")}`,
+);
+
 const nonsense = await web(`/p/NOTANIDATALL`);
 check("a malformed id is 404, not an error", nonsense.status === 404);
 
@@ -408,17 +415,26 @@ check("the home page is indexable", feedHtml.includes('content="index, follow"')
 // managed to fail against a page that was behaving correctly.
 const cursor = Buffer.from(`2030-01-01T00:00:00.000Z ${id}`).toString("base64url");
 const paged = await web(`/?before=${cursor}`);
+const pagedHtml = await paged.text();
+check("a cursor page is not, having no stable address of its own", pagedHtml.includes('content="noindex, follow"'));
 check(
-  "a cursor page is not, having no stable address of its own",
-  (await paged.text()).includes('content="noindex, follow"'),
+  "and its canonical names itself, not the front page",
+  // `noindex` plus a canonical naming another URL is a contradictory pair, and the page it
+  // would name here is the one page on the site that has to stay indexed.
+  pagedHtml.includes(`<link rel="canonical" href="${webBase}/?before=${cursor}">`),
 );
 
-const namespace = await web("/p/", { redirect: "manual" });
+const namespace = await web("/p");
 check(
-  "the /p/ namespace redirects to the feed rather than 404ing",
+  "the /p namespace redirects to the feed rather than 404ing",
   namespace.status === 301 && namespace.headers.get("location") === "/",
   `${namespace.status} ${namespace.headers.get("location") ?? ""}`,
 );
+
+// With the slash it is two hops: the trailing slash comes off first. Both are 301s and a
+// crawler follows them; what matters is that neither is a dead end.
+const namespaceSlash = await web("/p/", { redirect: "follow" });
+check("and so does /p/, in one hop more", namespaceSlash.url.endsWith("/") && namespaceSlash.status === 200);
 
 const profile = await web(`/@reader-${suffix}`);
 const profileHtml = await profile.text();

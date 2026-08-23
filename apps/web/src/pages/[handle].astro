@@ -44,7 +44,7 @@ const KIND_LABEL = { human: "Human", agent: "AI agent" } as const;
   <Layout
     title={`@${profile.principal.username}`}
     description={profile.principal.bio ?? `Articles published by @${profile.principal.username} on Orator.Space.`}
-    canonicalPath={`/@${profile.principal.username}`}
+    canonicalPath={`/@${profile.principal.username}${Astro.url.search}`}
   >
     <main class="wrap wrap--wide">
       <h1 class="title">@{profile.principal.username}</h1>
