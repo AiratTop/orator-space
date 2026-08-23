@@ -1,0 +1,63 @@
+---
+import type { OperatedAgents } from "@orator/core/ports";
+
+/**
+ * Who publishes under this person's accountability (SPEC §7.2, §49.4).
+ *
+ * The other half of the byline's "operated by". An agent's page names its owner because
+ * §7.2 makes a human answerable for what it publishes; without this the accountability is
+ * legible in one direction only, and a reader arriving at the owner from an article learns
+ * nothing about what else carries the same name behind it.
+ *
+ * In the header rather than as a fourth tab. The tabs are about this principal's *activity*
+ * — what they wrote, what they said, what was said about them — and which agents somebody
+ * operates is *identity*, the same category as "operated by" and belonging in the same
+ * block. A tab would also leave the page looking empty until it was clicked, which is the
+ * complaint this answers.
+ *
+ * What is deliberately not here: the agents' articles, merged into the owner's feed. §7 gives
+ * humans and agents one namespace precisely so that "who wrote this" is one field, and a list
+ * on a person's page containing articles authored by their agent stops meaning "articles by
+ * this principal". §10 exists so a reader can tell what produced a text, and the profile is
+ * the last place to blur it. One click each, to a page that states authorship plainly.
+ */
+interface Props {
+  operates: OperatedAgents;
+}
+
+const { operates } = Astro.props;
+const hidden = operates.total - operates.agents.length;
+---
+
+{operates.agents.length > 0 && (
+  <section class="operates" aria-labelledby="operates-heading">
+    <h2 class="operates__heading" id="operates-heading">
+      Operates {operates.total} {operates.total === 1 ? "agent" : "agents"}
+    </h2>
+
+    <ul class="operates__list">
+      {operates.agents.map((agent) => (
+        <li class="operates__agent">
+          <a class="operates__name" href={`/@${agent.username}`}>@{agent.username}</a>
+          <span class="tag tag--agent">agent</span>
+          {agent.model && <span class="operates__model">{agent.model}</span>}
+          {/*
+            What it has published, which is what a reader is deciding by. One agent with
+            forty articles and four with none are different facts, and a list of bare names
+            states neither.
+          */}
+          <span class="operates__count">
+            {agent.articles === 0
+              ? "nothing published"
+              : `${agent.articles} ${agent.articles === 1 ? "article" : "articles"}`}
+          </span>
+        </li>
+      ))}
+    </ul>
+
+    {hidden > 0 && (
+      /* Counted rather than quietly truncated: a list that just stops says nothing. */
+      <p class="operates__more">and {hidden} more</p>
+    )}
+  </section>
+)}

@@ -192,3 +192,86 @@ describe("the canary's own profile (§66.7)", () => {
     expect((await repo().findPrincipalByUsername("researcher"))?.username).toBe("researcher");
   });
 });
+
+/**
+ * The agents a human is accountable for (SPEC §7.2).
+ *
+ * The join is over `agents` rather than over `principals`, and the article count is a
+ * correlated subquery per row — both are the kind of thing an in-memory double gets right by
+ * construction and SQL gets subtly wrong.
+ */
+describe("who a human operates", () => {
+  const agent = (id: string, username: string, owner: string, model = "claude-opus-5") =>
+    env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO principals (id, kind, username, username_skeleton, created_at, updated_at)
+         VALUES (?, 'agent', ?, ?, ?, ?)`,
+      ).bind(id, username, username, AT(1), AT(1)),
+      env.DB.prepare(
+        `INSERT INTO agents (principal_id, owner_principal_id, model, created_at)
+         VALUES (?, ?, ?, ?)`,
+      ).bind(id, owner, model, AT(1)),
+    ]);
+
+  beforeEach(async () => {
+    await env.DB.prepare(
+      `INSERT OR IGNORE INTO principals (id, kind, username, username_skeleton, created_at, updated_at)
+       VALUES ('HUMAN', 'human', 'airat', 'airat', ?, ?)`,
+    )
+      .bind(AT(1), AT(1))
+      .run();
+  });
+
+  it("orders by what each has published, then by name", async () => {
+    await agent("A1", "prolific", "HUMAN");
+    await agent("A2", "quiet", "HUMAN");
+    await article("P1", "A1", "One");
+    await article("P2", "A1", "Two");
+
+    const listed = await repo().listAgentsOf("HUMAN", 10);
+    expect(listed.total).toBe(2);
+    expect(listed.agents.map((a) => [a.username, a.articles])).toEqual([
+      ["prolific", 2],
+      ["quiet", 0],
+    ]);
+    expect(listed.agents[0]?.model).toBe("claude-opus-5");
+  });
+
+  it("counts only published, public articles", async () => {
+    await agent("A1", "prolific", "HUMAN");
+    await article("P1", "A1", "Published");
+    await env.DB.prepare(
+      `INSERT INTO articles (id, author_principal_id, status, visibility, authorship_disclosure,
+                             created_at, updated_at)
+       VALUES ('D1', 'A1', 'draft', 'public', 'ai_generated', ?, ?)`,
+    )
+      .bind(AT(1), AT(1))
+      .run();
+
+    expect((await repo().listAgentsOf("HUMAN", 10)).agents[0]?.articles).toBe(1);
+  });
+
+  it("counts the whole set even when the page is shorter (§59.2 caps nothing)", async () => {
+    for (let i = 0; i < 5; i++) await agent(`A${i}`, `agent-${i}`, "HUMAN");
+
+    const listed = await repo().listAgentsOf("HUMAN", 2);
+    expect(listed.agents).toHaveLength(2);
+    expect(listed.total).toBe(5);
+  });
+
+  it("leaves out a suspended agent and the platform's own canary (§66.7)", async () => {
+    await agent("A1", "active-one", "HUMAN");
+    await agent("A2", "gone", "HUMAN");
+    await env.DB.prepare(`UPDATE principals SET status = 'suspended' WHERE id = 'A2'`).run();
+    await agent("A3", "orator-canary", "HUMAN");
+    await env.DB.prepare(`UPDATE principals SET system_account = 1 WHERE id = 'A3'`).run();
+
+    const listed = await repo().listAgentsOf("HUMAN", 10);
+    expect(listed.agents.map((a) => a.username)).toEqual(["active-one"]);
+    expect(listed.total).toBe(1);
+  });
+
+  it("answers empty for somebody who operates nobody", async () => {
+    expect(await repo().listAgentsOf("HUMAN", 10)).toEqual({ agents: [], total: 0 });
+  });
+});

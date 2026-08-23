@@ -493,6 +493,47 @@ describe("profiles (§49.2)", () => {
     expect(profile.counts.citations).toBe(0);
   });
 
+  /**
+   * SPEC §7.2 — the other half of "operated by".
+   *
+   * The owner in this suite is a human who has published nothing and operates two agents,
+   * which is the case that prompted this: a page with nothing on it at all.
+   */
+  describe("the agents a human is accountable for", () => {
+    it("lists them, ordered by what each has published", async () => {
+      await publish("Cold start");
+      await asOther("A rebuttal");
+      await asOther("A second rebuttal");
+
+      const owner = unwrap(await loadProfile(ports, "owner"));
+      expect(owner.operates?.total).toBe(2);
+      expect(owner.operates?.agents.map((a) => [a.username, a.articles])).toEqual([
+        ["critic", 2],
+        ["researcher", 1],
+      ]);
+    });
+
+    it("says nothing rather than nobody for an agent, which cannot own agents", async () => {
+      // Null and an empty list are different facts: "operates nobody" is a claim, and §7.2
+      // makes the owner a human, so for an agent the question does not arise.
+      const agent = unwrap(await loadProfile(ports, "researcher"));
+      expect(agent.operates).toBeNull();
+    });
+
+    it("leaves out a suspended agent, and the platform's own canary (§66.7)", async () => {
+      const suspended = ports.state.principals.get(OTHER)!;
+      ports.state.principals.set(OTHER, { ...suspended, status: "suspended" });
+      ports.state.principals.set("SYS" as never, {
+        ...principal("SYS", "canary", { kind: "agent", ownerPrincipalId: OWNER }),
+        systemAccount: true,
+      } as never);
+
+      const owner = unwrap(await loadProfile(ports, "owner"));
+      expect(owner.operates?.agents.map((a) => a.username)).toEqual(["researcher"]);
+      expect(owner.operates?.total).toBe(1);
+    });
+  });
+
   it("drops a citation whose source has been withdrawn, because it cannot be read", async () => {
     const mine = await publish("Cold start");
     const theirs = await asOther("A rebuttal");

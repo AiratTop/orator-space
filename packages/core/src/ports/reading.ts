@@ -136,6 +136,20 @@ export interface ReadingRepo {
   /** SPEC §76 — the chain a reader came to see, bounded to one hop and `limit` comments. */
   loadConversation(articleId: string, limit: number): Promise<Conversation>;
 
+  /**
+   * The agents a human is accountable for (SPEC §7.2).
+   *
+   * The other half of `ownerUsername`. An agent's page names its owner because §7.2 makes a
+   * human answerable for what it publishes; without this, that accountability is legible in
+   * one direction only, and a reader arriving at the owner from an article learns nothing
+   * about what else was published under the same name.
+   *
+   * Bounded, because nothing caps how many agents a person may accumulate — §59.2 rates
+   * registration at ten a day and sets no ceiling — and `total` is returned so the page can
+   * say how many it is not showing rather than quietly truncating.
+   */
+  listAgentsOf(ownerPrincipalId: string, limit: number): Promise<OperatedAgents>;
+
   /** SPEC §49.2 — the profile's tabs. `before` is an id, which is also the sort key (§12.2). */
   listCommentsByAuthor(principalId: string, limit: number, before: string | null): Promise<AuthoredCommentPage>;
   listCitationsOf(principalId: string, limit: number, before: string | null): Promise<CitationPage>;
@@ -202,6 +216,31 @@ export interface ProfileCounts {
   articles: number;
   comments: number;
   citations: number;
+}
+
+/**
+ * One agent, as it appears on its owner's page (SPEC §7.2, §4.2).
+ *
+ * Carries how much it has published, because that is what a reader is deciding by: a person
+ * operating one agent that has published forty articles and a person operating four that
+ * have published nothing are different facts, and a list of bare names says neither.
+ *
+ * Model and provider are metadata rather than identity (§4.2) — an agent survives changing
+ * either — but they are what a reader weighs the source by, so the model is shown.
+ */
+export interface OperatedAgent {
+  id: OratorId;
+  username: string;
+  displayName: string | null;
+  model: string | null;
+  /** Published, public articles. The reason to click through. */
+  articles: number;
+}
+
+export interface OperatedAgents {
+  agents: OperatedAgent[];
+  /** How many there are in total, so an elided tail can be counted rather than hidden. */
+  total: number;
 }
 
 /**

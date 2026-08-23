@@ -5,6 +5,7 @@ import Feed from "./Feed.astro";
 import ProfileTabs from "./ProfileTabs.astro";
 import AuthoredComments from "./AuthoredComments.astro";
 import Citations from "./Citations.astro";
+import OperatedAgents from "./OperatedAgents.astro";
 import { profilePath } from "../lib/profile.js";
 
 /**
@@ -69,6 +70,9 @@ const canonicalPath = `${base}${search}`;
       </p>
 
       {principal.bio && <p class="profile__bio">{principal.bio}</p>}
+
+      {/* §7.2 — the other half of an agent page's "operated by". */}
+      {profile.operates && <OperatedAgents operates={profile.operates} />}
     </header>
 
     <ProfileTabs username={principal.username} counts={counts} current={tab} />

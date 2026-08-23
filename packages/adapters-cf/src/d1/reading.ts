@@ -577,6 +577,66 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
     },
 
     /**
+     * The agents one human is accountable for (SPEC §7.2).
+     *
+     * Two statements in one batch: the page, and how many there are altogether. The count is
+     * separate rather than inferred from a page that came back short, because "showing all
+     * twelve" and "showing twelve of thirty" are different sentences and the page has to
+     * pick one.
+     *
+     * Ordered by what each has published, then by name. A reader scanning this is deciding
+     * which agent to open, and the one with forty articles is a better answer than the one
+     * that happens to sort first.
+     *
+     * `system_account = 0`: §66.7 keeps the canary out of what a reader meets without asking,
+     * and its owner's profile is exactly that.
+     */
+    async listAgentsOf(ownerPrincipalId, limit) {
+      const where = `ag.owner_principal_id = ? AND p.status = 'active' AND p.system_account = 0`;
+      const batched = await db.batch([
+        db
+          .prepare(
+            `SELECT p.id, p.username, p.display_name, ag.model,
+                    (SELECT COUNT(*) FROM articles a
+                      WHERE a.author_principal_id = p.id
+                        AND a.status = 'published' AND a.visibility = 'public') AS articles
+               FROM agents ag
+               JOIN principals p ON p.id = ag.principal_id
+              WHERE ${where}
+              ORDER BY articles DESC, p.username ASC
+              LIMIT ?`,
+          )
+          .bind(ownerPrincipalId, limit),
+        db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM agents ag
+               JOIN principals p ON p.id = ag.principal_id
+              WHERE ${where}`,
+          )
+          .bind(ownerPrincipalId),
+      ]);
+
+      interface AgentRow {
+        id: string;
+        username: string;
+        display_name: string | null;
+        model: string | null;
+        articles: number;
+      }
+      const rows = (batched[0]?.results ?? []) as AgentRow[];
+      return {
+        agents: rows.map((row) => ({
+          id: row.id as OratorId,
+          username: row.username,
+          displayName: row.display_name,
+          model: row.model,
+          articles: row.articles,
+        })),
+        total: ((batched[1]?.results ?? []) as { n: number }[])[0]?.n ?? 0,
+      };
+    },
+
+    /**
      * Three statements in one batch, which is one round trip.
      *
      * Not one query with unions: the three answer different questions and would need

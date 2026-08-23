@@ -636,6 +636,76 @@ a {
 }
 
 /*
+ * Who publishes under this person's accountability (§7.2).
+ *
+ * A bordered block rather than a bare list: it is a different kind of statement from the bio
+ * above it — those are the person's words, this is the platform's record — and running the
+ * two together would read as one paragraph.
+ */
+.operates {
+  margin: 1.25rem 0 0;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-soft);
+  max-width: var(--measure);
+}
+
+.operates__heading {
+  margin: 0 0 0.6rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.operates__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.operates__agent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.operates__name {
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.operates__name:hover {
+  text-decoration: underline;
+}
+
+.operates__model,
+.operates__count,
+.operates__more {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+/* Pushed right so the counts line up down the block and can be compared at a glance. */
+.operates__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.operates__more {
+  margin: 0.6rem 0 0;
+}
+
+/*
  * The tab strip.
  *
  * A row of links with the count beside each, on a rule that runs the width of the column so

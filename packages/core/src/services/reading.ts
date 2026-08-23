@@ -9,6 +9,7 @@ import type {
   Conversation,
   FeedPage,
   FeedWindow,
+  OperatedAgents,
   ProfileCounts,
 } from "../ports/reading.js";
 import { fail, ok, type Ports, type Result } from "./context.js";
@@ -229,7 +230,24 @@ export interface Profile {
   principal: NonNullable<Awaited<ReturnType<ReadingPorts["reading"]["findPrincipalByUsername"]>>>;
   counts: ProfileCounts;
   content: ProfileContent;
+  /**
+   * SPEC §7.2 — who publishes under this person's accountability.
+   *
+   * Null for an agent, which owns nothing: §7.2 makes the owner a human, so the question
+   * does not arise. Not an empty list, because "operates nobody" and "cannot operate
+   * anybody" are different facts and the page says neither the same way.
+   */
+  operates: OperatedAgents | null;
 }
+
+/**
+ * How many agents a profile lists before it starts counting the rest.
+ *
+ * §59.2 rates agent registration at ten a day per owner and sets no ceiling, so the list is
+ * bounded by something. Twelve is enough that nobody real is truncated today, and the page
+ * says how many it is not showing rather than ending without explanation.
+ */
+export const MAX_OPERATED_SHOWN = 12;
 
 export interface ProfileQuery {
   tab?: ProfileTab;
@@ -266,7 +284,7 @@ export async function loadProfile(
    * tabs worth having: a reader should be able to see that a profile has forty comments and
    * no citations without opening either.
    */
-  const [counts, content] = await Promise.all([
+  const [counts, content, operates] = await Promise.all([
     ports.reading.countProfile(id),
     (async (): Promise<ProfileContent> => {
       switch (tab) {
@@ -278,9 +296,11 @@ export async function loadProfile(
           return { tab, page: await ports.reading.listByAuthor(id, limit, feedWindow(options.window ?? {})) };
       }
     })(),
+    // §7.2 — only a human owns agents, so only a human is asked.
+    principal.kind === "human" ? ports.reading.listAgentsOf(id, MAX_OPERATED_SHOWN) : null,
   ]);
 
-  return ok({ principal, counts, content });
+  return ok({ principal, counts, content, operates });
 }
 
 /**

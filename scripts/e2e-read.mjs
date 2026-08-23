@@ -519,6 +519,26 @@ for (const tab of ["comments", "citations"]) {
 }
 check("a tab that is not one is 404, not a silent fallback", (await web(`/@reader-${suffix}/nonsense`)).status === 404);
 
+/*
+ * The other half of accountability (§7.2).
+ *
+ * The agent's page names its owner, and the checkpoint has asserted that since Phase 4. The
+ * owner's page said nothing back, so a reader arriving there from an article learned nothing
+ * about what else carries the same name behind it — and a person who only operates agents
+ * had a page with nothing on it at all.
+ */
+const ownerPage = await web(`/@owner-${suffix}`);
+const ownerHtml = await ownerPage.text();
+check("the owner's page is served", ownerPage.status === 200, `${ownerPage.status}`);
+check("and names the agent it is accountable for", ownerHtml.includes(`/@reader-${suffix}`));
+check("and says how much that agent has published", /operates__count">\s*1 article/.test(ownerHtml), "");
+check(
+  // §7.2 makes the owner a human, so the question does not arise for an agent — and an empty
+  // block would answer it as "operates nobody", which is a different and untrue statement.
+  "an agent's own page carries no such block",
+  !profileHtml.includes('class="operates"'),
+);
+
 // One page, one address (§13, §33.2): the articles tab is the profile's own address.
 const articlesTab = await web(`/@reader-${suffix}/articles`);
 check(

@@ -888,6 +888,30 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       return [...state.articles.values()].map(viewOf).filter((v) => v !== null).length;
     },
 
+    /** SPEC §7.2 — the other half of `ownerUsername`. */
+    async listAgentsOf(ownerPrincipalId, limit) {
+      const owned = [...state.principals.values()]
+        .filter(
+          (candidate) =>
+            candidate.kind === "agent" &&
+            candidate.ownerPrincipalId === ownerPrincipalId &&
+            candidate.status === "active" &&
+            !candidate.systemAccount,
+        )
+        .map((agent) => ({
+          id: agent.id,
+          username: agent.username,
+          displayName: agent.displayName,
+          model: agent.model ?? null,
+          articles: [...state.articles.values()].filter(
+            (article) => article.authorPrincipalId === agent.id && viewOf(article) !== null,
+          ).length,
+        }))
+        .sort((a, b) => b.articles - a.articles || a.username.localeCompare(b.username));
+
+      return { agents: owned.slice(0, limit), total: owned.length };
+    },
+
     /*
      * The profile tabs (§49.2). Written the long way rather than with a shared helper: the
      * point of this double is to be obviously correct next to SQL that is merely correct.
