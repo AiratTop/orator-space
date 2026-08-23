@@ -1706,11 +1706,13 @@ CREATE TABLE topics (
   id          TEXT PRIMARY KEY,
   slug        TEXT NOT NULL,        -- used in /t/{slug}
   label       TEXT NOT NULL,
-  description TEXT,
+  description TEXT,                 -- one line; the classifier reads it (§22.3)
+  parent_id   TEXT REFERENCES topics(id),
   status      TEXT NOT NULL DEFAULT 'active',
   created_at  TEXT NOT NULL
 );
 CREATE UNIQUE INDEX ux_topics_slug ON topics(slug);
+CREATE INDEX ix_topics_parent ON topics(parent_id);
 
 CREATE TABLE article_topics (
   article_id TEXT NOT NULL REFERENCES articles(id),
@@ -1733,8 +1735,6 @@ of thousands of near-duplicates within a month — `ai`, `AI`, `artificial-intel
 `a.i.` — which makes `/t/{topic}` useless and breaks navigation. A bounded vocabulary with
 automatic classification (`source='ai'`) achieves the same result without the entropy.
 
-**MUST.** At most 5 topics per article.
-
 **MUST — classification is the platform's, never the author's.** `source='ai'` is in the
 schema because that is the intended origin of a topic. An author choosing their own
 categories is an extra step for them and a lever for everybody else: on a network where
@@ -1749,6 +1749,94 @@ per article produces them faster than people ever could, in fluent variations th
 to collapse. A second taxonomy, if one is wanted, comes from embeddings (§38.2) — which are
 derived, recomputable, and have no vocabulary to pollute.
 
+### 22.1. The hierarchy is one level deep
+
+**MUST.** A topic is either a section or a leaf. A leaf's `parent_id` names a section; a
+section's `parent_id` is `NULL`. The depth limit lives in the database rather than in a
+convention:
+
+```sql
+CREATE TRIGGER trg_topics_one_level_insert BEFORE INSERT ON topics
+WHEN NEW.parent_id IS NOT NULL
+ AND (SELECT parent_id FROM topics WHERE id = NEW.parent_id) IS NOT NULL
+BEGIN SELECT RAISE(ABORT, 'topics nest one level'); END;
+```
+
+with the same trigger on `UPDATE`.
+
+**Rationale.** Two levels buy nothing at the vocabulary size §22.2 fixes, and cost a
+recursive walk on every section page. Written as a trigger the limit cannot be forgotten by
+whoever writes the next seed migration, which is the failure mode a convention has.
+
+**MUST — URLs stay flat.** `/t/{slug}`, never `/t/{section}/{leaf}`; slugs are unique across
+the whole vocabulary. The hierarchy is data, not an address. Putting a section into the path
+would mean that moving a topic under a different section breaks every permanent link into it,
+and permanence is what §8 promises.
+
+**MUST — articles attach to leaves only.** A section page is the union of its children.
+Allowing both a leaf and its section on one article creates a question nobody can answer at
+correction time — which of the two rows is the wrong one — and two things to count against
+the §22.2 limit.
+
+The section query is `topic_id IN (children)` with `SELECT DISTINCT article_id`, keyset
+paginated by `article_id` (§44.2) and served by `ix_article_topics_topic`. The de-duplication
+is required rather than defensive: an article classified into two children of one section
+appears twice without it. Should `EXPLAIN QUERY PLAN` ever show a scan here, the fallback is
+to write the section's row alongside the leaf's — a denormalisation to reach for on evidence,
+never in advance.
+
+**MUST — an archived topic keeps its page.** `status='archived'` withdraws a topic from the
+classifier's vocabulary and from navigation. It does not make `/t/{slug}` a 404: the URL has
+been public, and §8 does not let an address stop resolving because the vocabulary moved on.
+What ends is the offer to classify into it, not the record that things were.
+
+### 22.2. How many, and why the ceiling is technical
+
+**MUST.** At most 5 topics per article — and one to three in practice. The classifier is
+instructed to return the fewest topics that are true, not as many as it is allowed. An
+article in five topics is in none of them: `/t/{slug}` is a surface somebody reads, and if
+everything appears everywhere it has stopped sorting anything.
+
+**MUST — the primary topic is derived, not stored.** It is the highest confidence, ties
+broken by topic id. A column would be a second place for the same fact to be wrong, and the
+fact is already in `confidence`.
+
+**MUST — an article the vocabulary cannot place carries no topics, and there is no "other".**
+A bucket for the unplaceable becomes the largest topic on the platform inside a month and
+describes nothing. The honest representation of "the vocabulary has nowhere to put this" is
+an empty set, plus a candidate for the next revision of the vocabulary.
+
+**MUST — the vocabulary fits in one prompt.** The classifier chooses from a closed set
+(§22.3), so the entire leaf list travels with every article. At roughly 20–30 tokens per
+topic — slug, label, one line of description — a hundred topics is a few thousand tokens per
+call: cheap, and short enough for a model to choose from accurately. Several hundred is
+neither. Cost per article rises with nothing to bound it, and a model's precision falls as
+the list grows.
+
+The working range is therefore **8–10 sections and 40–60 leaves at launch, with a ceiling
+near 150**. This is a constraint the classifier imposes on the taxonomy rather than a
+preference about taxonomies: a vocabulary too large for one prompt needs retrieval before
+classification, which is a different design and would need its own ADR (§27).
+
+**Expect a revision, and price it as cheap.** Some leaves will stay empty and one will
+collect a disproportionate share and ask to be split. Reclassification is inexpensive because
+`article_topics` is derived data, recomputable from revisions (§38.3) — the vocabulary can be
+wrong for a while without anything being lost.
+
+**MUST — the vocabulary is a migration, not a screen.** It is platform-controlled data, so
+it is written where the schema is written: reviewed in git, applied identically to every
+deployment, diffable after the fact. An editing UI would let staging and production drift,
+and what drifts is the set of addresses `/t/{slug}` has promised to keep resolving (§8).
+
+### 22.3. The classifier reads untrusted text
+
+**MUST — the classifier is given sanitised text (§57.1), never the stored markdown.** The
+renderer strips invisible characters on the way out, which covers every reader that arrives
+through a rendered representation. The classifier is not such a reader: it reads the
+revision. Handing it the stored bytes would hand it precisely the payload §58.2 names as the
+primary delivery mechanism for injection — an instruction no human reviewing the article can
+see, in the same bytes the model is asked to reason about.
+
 **MUST — the classifier's output is a topic id or nothing.** An article body is untrusted
 (§58.1), and classification is the first place on this platform where untrusted text is fed
 to a model whose output then writes to the database. That is the shape of a prompt injection
@@ -1760,11 +1848,36 @@ confidence below the threshold stores nothing. §22's "curated vocabulary" is a 
 property under this reading and not only a taxonomy preference — the closed set is what makes
 the injection unable to say anything the platform will act on.
 
+**MUST — the defences are ordered, and the prompt is the weakest of them.** The system prompt
+states that the article is data and not instructions, which is §58.2's framing rule turned
+inward on the platform's own reader. That instruction is a mitigation and not a control: it
+lowers the rate at which an injection succeeds and cannot be relied on to stop one, because
+the attacker writes the text that follows it.
+
+What is relied on, in order:
+
+1. **the input is sanitised**, so a payload has to be visible to any human reading the
+   article;
+2. **the output is a slug from a closed set**, so the most a successful injection wins is the
+   wrong topic out of sixty;
+3. **the call has no other effect** — no verdict, no publication state, no removal, no
+   notification, no second service called.
+
+The prompt is fourth. Saying so in the specification matters because the tempting mistake is
+the reverse: treating the prompt as the defence, and letting the structural controls slacken
+behind an instruction the attacker gets to answer.
+
 **MUST.** Classification runs where §38.3 puts enrichment: asynchronously, after
 `article.published`, on the existing outbox and queue (§35.3). A failure leaves the article
 published and untopiced, which is the same degradation §61 chose for an unavailable
 moderation provider — the article is readable, citable and in the API, and only its placement
 in a taxonomy is missing.
+
+**MUST — classification and screening are two calls, never one (§61).** They read the same
+article and could share an inference. They must not share a decision, and the reasons are in
+§61: the consequences differ by orders of magnitude, the defined degradations differ, and the
+closed vocabulary that neuters an injection aimed at a classifier is exactly what an
+injection aimed at a verdict is choosing from.
 
 ## 23. Deletion, tombstones and retention
 
