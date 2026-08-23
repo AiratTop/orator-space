@@ -569,6 +569,91 @@ a {
   }
 }
 
+/* Search (§38, §49.2) ----------------------------------------------------- */
+
+.search {
+  margin: 0 0 1.5rem;
+  max-width: var(--measure);
+}
+
+.search__label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.search__row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.search__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.search__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+.search__go {
+  flex: none;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--paper);
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.search__go:hover {
+  filter: brightness(1.1);
+}
+
+.search__count {
+  color: var(--ink-soft);
+  margin: 0 0 0.5rem;
+}
+
+.search__hints {
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+  max-width: var(--measure);
+  padding-left: 1.1rem;
+}
+
+.search__hints li {
+  margin-bottom: 0.4rem;
+}
+
+/*
+ * Why there is no second page (§38.1).
+ *
+ * A relevance ranking is a score over an index that changes while it is read, so page two of
+ * one is not a well-defined thing to ask for. Saying so is better than an absent link a
+ * reader has to interpret.
+ */
+.search__ranked {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  max-width: var(--measure);
+}
+
 /* Article ---------------------------------------------------------------- */
 
 .title {

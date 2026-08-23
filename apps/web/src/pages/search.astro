@@ -1,0 +1,156 @@
+---
+import { search } from "@orator/core";
+import Layout from "../components/Layout.astro";
+import Feed from "../components/Feed.astro";
+import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
+import { searchLimiter, searchPorts } from "../lib/ports.js";
+
+/**
+ * Search (SPEC §38, §49.2).
+ *
+ * A form and a list. No JavaScript: a `GET` form puts the query in the URL, which is what
+ * makes a result page shareable, bookmarkable and — for the repeat of a popular query —
+ * cacheable. §49.1 would not permit a script here in any case.
+ *
+ * One page of results and no "next". §38.1 is explicit about why, and it is not a shortcut:
+ * a relevance ranking is a score over an index that changes underneath the reader, so page
+ * two of one is not a well-defined thing to ask for, and §44.2 forbids the offset that
+ * would fake it. The page says so rather than leaving a reader to wonder where the rest is.
+ */
+const query = (Astro.url.searchParams.get("q") ?? "").trim().slice(0, 200);
+
+let results: Awaited<ReturnType<typeof search>> | null = null;
+let limited = false;
+
+if (query.length > 0) {
+  /*
+   * §59.1 — flood protection, ahead of the work rather than around it.
+   *
+   * Keyed by a salted digest of the address, never the address: §62 keeps that out of
+   * everything, a rate limiter's memory included. A caller with no `cf-connecting-ip` — a
+   * local request — shares one bucket, which is correct for a development server and
+   * irrelevant behind Cloudflare, where the header is always present.
+   */
+  const address = Astro.request.headers.get("cf-connecting-ip");
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`search:${address ?? "local"}`),
+  );
+  const key = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+
+  const verdict = await searchLimiter.limit({ key });
+  if (verdict.success) results = await search(searchPorts, query);
+  else limited = true;
+}
+
+/*
+ * §33.2 — a result page is public content and is cached like one, briefly.
+ *
+ * Thirty seconds does nothing for a query nobody repeats and quite a lot for one everybody
+ * does. It is not what protects the origin, though: the cache is keyed on the URL and a
+ * query is arbitrary text, so the limiter above is the thing standing between an FTS scan
+ * and anybody who wants to run a thousand of them.
+ */
+if (limited) {
+  Astro.response.status = 429;
+  Astro.response.headers.set("cache-control", CACHE.private);
+  Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
+} else {
+  cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
+}
+
+/*
+ * Never indexable, and self-canonical (§50.1, §50.3).
+ *
+ * A search result page is generated from somebody's query and says nothing this site is
+ * responsible for; a crawler that indexed one would index an unbounded set of near-identical
+ * pages, which is the pattern §50.2 spends a section on. `robots.txt` disallows the path as
+ * well — belt and braces, because the two mechanisms fail differently.
+ *
+ * Self-canonical rather than pointing at the front page: `noindex` plus a canonical naming a
+ * different URL is a contradictory pair, and the front page is the one page here that must
+ * stay indexed.
+ */
+const found = results !== null && results.ok ? results.value.articles : [];
+const canonicalPath = query.length === 0 ? "/search" : `/search${Astro.url.search}`;
+---
+
+<Layout title={query.length === 0 ? "Search" : `Search: ${query}`} canonicalPath={canonicalPath}>
+  <main class="wrap wrap--wide">
+    <h1 class="title">Search</h1>
+
+    {/*
+      `role="search"` rather than a bare form: it is the landmark a screen reader offers as a
+      shortcut, and this page has exactly one thing on it worth jumping to (§49.5).
+    */}
+    <form class="search" method="get" action="/search" role="search">
+      <label class="search__label" for="q">Search published articles</label>
+      <div class="search__row">
+        <input
+          class="search__input"
+          id="q"
+          name="q"
+          type="search"
+          value={query}
+          maxlength="200"
+          placeholder="cold start latency"
+          autocomplete="off"
+          autofocus
+        />
+        <button class="search__go" type="submit">Search</button>
+      </div>
+    </form>
+
+    {limited && (
+      <p class="notice">
+        Too many searches from this address in the last minute. This limit is a short window
+        and clears on its own.
+      </p>
+    )}
+
+    {!limited && query.length > 0 && (
+      <>
+        <p class="search__count">
+          {found.length === 0
+            ? `Nothing matches “${query}”.`
+            : `${found.length} ${found.length === 1 ? "article" : "articles"} matching “${query}”.`}
+        </p>
+
+        {found.length === 0 ? (
+          <ul class="search__hints">
+            <li>An article becomes searchable shortly after it is published, not instantly — the index is updated on a queue (§34.4).</li>
+            <li>Terms are matched literally. Operators, quotes and wildcards are searched for as text rather than obeyed.</li>
+            <li>Try fewer words: every term has to appear.</li>
+          </ul>
+        ) : (
+          <>
+            <Feed
+              page={{ cards: found, next: null, previous: null }}
+              basePath="/search"
+              empty=""
+            />
+            <p class="search__ranked">
+              Ranked by relevance, and this is the whole of it. A ranking is a score over an
+              index that changes while it is read, so there is no honest second page of one —
+              narrow the query instead.
+            </p>
+          </>
+        )}
+      </>
+    )}
+
+    {query.length === 0 && (
+      <p class="search__count">
+        Full-text search over the title, opening and body of every published article.
+      </p>
+    )}
+
+    <section class="machine">
+      <p>The same search, for a machine:</p>
+      <ul>
+        <li><code>GET /v1/search?q=…</code> on the API</li>
+        <li>the <code>orator_search</code> tool over MCP</li>
+      </ul>
+    </section>
+  </main>
+</Layout>

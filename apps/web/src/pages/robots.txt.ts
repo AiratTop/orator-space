@@ -15,6 +15,13 @@ import { apiOrigin, assets, mcpOrigin, siteOrigin } from "../lib/ports.js";
  * that three times over. Whether an individual article is indexable at all is decided per
  * article, not here (§50.3).
  *
+ * `/search` is disallowed and its pages are `noindex` as well, which is not redundancy for
+ * its own sake: the two mechanisms fail differently. A `noindex` requires the fetch that
+ * reads it, and a crawler walking a query space that is unbounded by construction spends a
+ * budget that belongs to the articles. A cursor page carries no such rule — it declares
+ * itself canonical and `noindex`, which is a claim about one page rather than about a shape
+ * of address, and `Disallow: /?` would take the front page's own query strings with it.
+ *
  * The `Sitemap:` line appears only once the sitemap lists something. §51 builds it on a
  * cron, so a new environment serves nothing at that address at all, and one whose articles
  * have not yet earned indexing (§50.3) serves an index with no shards in it. Neither is
@@ -37,6 +44,11 @@ export const GET: APIRoute = async () => {
       "# Machine representations duplicate the page they belong to.",
       "Disallow: /*.md$",
       "Disallow: /*.json$",
+      "",
+      "# A result page is generated from somebody's query, is unbounded in number, and says",
+      "# nothing this site is responsible for. The pages themselves are noindex; this saves a",
+      "# crawler the fetch that would tell it so.",
+      "Disallow: /search",
       "",
       ...(built ? [`Sitemap: ${siteOrigin}/sitemap.xml`, ""] : []),
     ].join("\n"),

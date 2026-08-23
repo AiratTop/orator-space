@@ -1,6 +1,11 @@
 import { env } from "cloudflare:workers";
-import { createR2AssetStore, createR2ContentStore, createReadingRepo } from "@orator/adapters-cf";
-import type { ReadingPorts } from "@orator/core";
+import {
+  createR2AssetStore,
+  createR2ContentStore,
+  createReadingRepo,
+  createSearchIndex,
+} from "@orator/adapters-cf";
+import type { ReadingPorts, SearchPorts } from "@orator/core";
 
 /**
  * The ports the public web is allowed to reach (SPEC §28, §49).
@@ -16,6 +21,8 @@ interface WebEnv {
   ASSETS_BUCKET: R2Bucket;
   ENVIRONMENT: string;
   SITE_HOST: string;
+  /** SPEC §59.1 — flood protection for the one public read the edge cache cannot absorb. */
+  FLOOD_SEARCH: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
 const web = env as unknown as WebEnv;
@@ -24,6 +31,31 @@ export const ports: ReadingPorts = {
   reading: createReadingRepo(web.DB),
   content: createR2ContentStore(web.CONTENT),
 };
+
+/**
+ * Reading, plus the ability to *ask* the search index a question (SPEC §38, §28).
+ *
+ * `query` and nothing else. `SearchIndex` also has `index` and `remove`, which belong to the
+ * queue consumer that keeps the index in step with the data (§38.1); handing them to the
+ * surface that renders untrusted content and relying on nobody calling them is the kind of
+ * restriction that holds until it does not. `SearchPorts` narrows the parameter instead, so
+ * this object is the whole of what a page can reach.
+ */
+export const searchPorts: SearchPorts = {
+  ...ports,
+  search: { query: createSearchIndex(web.DB).query },
+};
+
+/**
+ * SPEC §59.1 — the one public page that cannot be answered from the edge cache.
+ *
+ * Every other read here is an address a cache can hold: an article, a feed page, a policy.
+ * A search is an arbitrary string, so the cache absorbs a repeat and nothing else, and the
+ * work behind it is an FTS query plus a row read per result. §59.2 already gives the REST
+ * surface a tenth of the general allowance for exactly this; the HTML surface doing the same
+ * work under no limit at all would be an inconsistency with a bill attached.
+ */
+export const searchLimiter = web.FLOOD_SEARCH;
 
 /**
  * The generated files, read-only (SPEC §51).

@@ -8,6 +8,23 @@
   // hostname if a domain were ever detached (SPEC §50, duplicate content).
   "workers_dev": false,
 
+  /*
+   * SPEC §59.1, §59.2 — flood protection for the one public page the cache cannot absorb.
+   *
+   * Every other read on this surface is an address a cache can hold. A search is arbitrary
+   * text, so the edge absorbs a repeat and nothing else, and behind it is an FTS query plus a
+   * row read per result. §59.2 already gives the REST surface a tenth of the general
+   * allowance for exactly this work; the HTML surface doing it under no limit would be an
+   * inconsistency with a bill attached.
+   *
+   * Its own namespace id rather than the edge worker's 1002: the namespace is scoped to the
+   * Worker, and sharing a number across two Workers is a coincidence waiting to be read as a
+   * relationship.
+   */
+  "ratelimits": [
+    { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
+  ],
+
   "vars": { "ENVIRONMENT": "local", "SITE_HOST": "localhost" },
   "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
   "r2_buckets": [
@@ -19,6 +36,9 @@
     "staging": {
       "name": "orator-web-staging",
       "routes": [{ "pattern": "staging.orator.space", "custom_domain": true }],
+      "ratelimits": [
+        { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
+      ],
       "vars": { "ENVIRONMENT": "staging", "SITE_HOST": "staging.orator.space" },
       "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
       "r2_buckets": [
@@ -31,6 +51,9 @@
       "routes": [
         { "pattern": "orator.space", "custom_domain": true },
         { "pattern": "www.orator.space", "custom_domain": true }
+      ],
+      "ratelimits": [
+        { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
       ],
       "vars": { "ENVIRONMENT": "production", "SITE_HOST": "orator.space" },
       "d1_databases": [{ "binding": "DB", "database_name": "orator-prod", "database_id": "eb98f063-21b0-451d-9372-a2105169ca9b" }],

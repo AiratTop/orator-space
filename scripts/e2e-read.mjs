@@ -496,6 +496,40 @@ const profileHtml = await profile.text();
 check("the author's profile lists the article", profile.status === 200 && profileHtml.includes(canonical));
 check("an unknown principal is 404", (await web("/@nobody-at-all")).status === 404);
 
+/*
+ * Search (§38, §49.2).
+ *
+ * The article this run published is indexed from the queue, so it may not be findable yet —
+ * §34.4 states exactly that, and asserting it would make this checkpoint a race. What is
+ * asserted is the page: it answers, it echoes the query, it is never indexable, and
+ * `robots.txt` says so as well.
+ */
+const searchPage = await web("/search?q=rendering");
+const searchHtml = await searchPage.text();
+check("the search page is served", searchPage.status === 200, `${searchPage.status}`);
+check("and carries a form that works without JavaScript", /<form[^>]*method="get"[^>]*action="\/search"/.test(searchHtml));
+check("and repeats the query back", searchHtml.includes("rendering"));
+check("and is never offered for indexing", searchHtml.includes('content="noindex, follow"'));
+check(
+  "and names itself as canonical, not the front page",
+  searchHtml.includes('rel="canonical" href="' + webBase + '/search?q=rendering"'),
+  "",
+);
+check("an empty search asks rather than errors", (await web("/search")).status === 200);
+
+/*
+ * One 404, wherever it is reached from (§49.5).
+ *
+ * An address matching no route used to fall through to whatever the adapter produced, which
+ * is a page with none of the site on it.
+ */
+const missing = await web("/no/such/page/here");
+const missingHtml = await missing.text();
+check("an unrouted address is 404", missing.status === 404, `${missing.status}`);
+check("and is served as this site rather than as a bare page", missingHtml.includes("Orator"));
+check("and offers somewhere to go", missingHtml.includes('href="/search"'));
+check("and is not cached, because that address may become an article", (missing.headers.get("cache-control") ?? "").includes("no-store"));
+
 const robots = await web("/robots.txt");
 const robotsBody = await robots.text();
 check("robots.txt states a policy", robots.status === 200 && robotsBody.includes("User-agent: *"));

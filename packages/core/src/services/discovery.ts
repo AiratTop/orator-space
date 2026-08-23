@@ -17,6 +17,17 @@ import { pageSize, type ReadingPorts } from "./reading.js";
 /** Reading, plus the index. Narrow on purpose: discovery writes nothing (§28). */
 export type DiscoveryPorts = ReadingPorts & { search: SearchIndex };
 
+/**
+ * What *querying* needs, which is less than what indexing needs (§28, §49).
+ *
+ * The public web renders a search page and must not be able to write to the index. Passing
+ * it a whole `SearchIndex` would hand a read-only surface `index()` and `remove()` and rely
+ * on nobody calling them; narrowing the parameter instead makes the restriction the type
+ * system's problem — the web assembles `{ query }` and a write from a page does not
+ * compile, which is the same argument `ReadingPorts` makes for the rest of the read path.
+ */
+export type SearchPorts = ReadingPorts & { search: Pick<SearchIndex, "query"> };
+
 export async function feed(
   ports: ReadingPorts,
   options: { limit?: number; before?: FeedCursor | null } = {},
@@ -97,7 +108,7 @@ export interface SearchResults {
  * interface. Deep paging belongs with the vector store (§38.2), not with FTS.
  */
 export async function search(
-  ports: DiscoveryPorts,
+  ports: SearchPorts,
   text: string,
   options: { limit?: number } = {},
 ): Promise<Result<SearchResults>> {
