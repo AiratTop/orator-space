@@ -1097,9 +1097,23 @@ work here; the three before them close commitments the specification already mad
 [x] the topic sitemap shard, at three indexable articles         90e020d
 [x] classification on Workers AI, after publishing               5c5ccd0
 [x] an article shows and returns its topics                      4c303c8
-[ ] a moderation provider that reads (§61, item 3)
+[x] a moderation provider that reads, composed with the floor   ad12580
 [ ] images: variants, avatars, og:image (item 4)
+[ ] Vectorize — designed, deliberately not built (§38.2)
 ```
+
+**What the first live run taught, and what it cost.** The checkpoint passed while the page
+was wrong. An article about inference latency, carrying a plain-text instruction to classify
+it as history, came back with `history` primary and four topics padding the list — every
+structural defence holding exactly as specified. Two model ids and two parsers were wrong in
+ways no hermetic test could see: a model name that is not in the catalogue, and an answer the
+model never closed a brace on. All three were found by running the thing against a real
+deployment, which is the argument for checkpoints in one paragraph.
+
+What it does not settle is quality. A checkpoint can assert that no invented topic was
+stored and that the count is bounded; it cannot assert that the topics are right. That
+remains a person reading the first fifty, and it should be done before the vocabulary is
+revised — the two questions are the same question.
 
 ### 12.5. Acceptance
 
