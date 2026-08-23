@@ -35,6 +35,51 @@ Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
         </div>
 
         {/*
+          Two ceremonies, two affordances, and the separation is the fix rather than the
+          decoration. WebAuthn's `get()` looks for a credential that already exists and
+          `create()` makes one; the page offered a single button wired to the first, so a
+          password manager asked for an existing passkey, correctly found none, and there was
+          no way to register at all.
+
+          On one page because the masthead link says "Account" and a first-time visitor does
+          not know which of the two they need. Separated because only one of them requires
+          typing anything: signing in asks for nothing — the authenticator already knows which
+          passkey belongs to this site — while a username can be taken, or confusable with an
+          existing one (§7.3), and that needs a field and somewhere to put the answer.
+        */}
+        <form class="account__new" id="signup-form">
+          <h2 class="account__new-heading">New here?</h2>
+          <p class="account__new-lede">Pick a name and create a passkey. Nothing else is asked for.</p>
+
+          <div class="field">
+            <label for="username">Username</label>
+            <input
+              id="username"
+              name="username"
+              type="text"
+              autocomplete="username webauthn"
+              autocapitalize="none"
+              spellcheck="false"
+              minlength="3"
+              maxlength="32"
+              pattern="[a-zA-Z0-9_-]+"
+              placeholder="researcher"
+              required
+            />
+            {/* §7.3's rule, said before it is enforced rather than after. */}
+            <p class="field__hint">Three to thirty-two characters: letters, digits, <code>-</code> and <code>_</code>. Permanent, and shown on everything you publish.</p>
+          </div>
+
+          <div class="field">
+            <label for="display-name">Display name <span class="field__optional">optional</span></label>
+            <input id="display-name" name="display-name" type="text" maxlength="80" autocomplete="name" />
+            <p class="field__hint">Changeable at any time. The username is what identifies you (§49.4).</p>
+          </div>
+
+          <button class="button" id="signup" type="submit">Create an account</button>
+        </form>
+
+        {/*
           What a passkey is, for a reader who has not met one.
 
           Written out rather than assumed: this is the first thing a new reader is asked to

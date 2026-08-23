@@ -623,5 +623,102 @@ if (regOptions.status === 200) {
   check("the revoked session no longer signs anyone in", signInPage.includes("Sign in with a passkey"));
 }
 
+// --- creating an account from a browser ------------------------------------------------
+section("Signing up (§9, §7.3, §42.2)");
+
+/*
+ * The bug this covers: the site had no way to register at all.
+ *
+ * `/signin` offered one button, wired to `navigator.credentials.get`, which asks for a
+ * passkey that already exists — so a password manager was asked to find one, correctly found
+ * none, and there was no second button. Registration existed only on the API, which returns a
+ * token and is the wrong shape for a browser (§9.1).
+ */
+cookies.clear();
+
+/*
+ * A second authenticator, because a new person arrives with their own device.
+ *
+ * The first attempt at this section reused the one above and was refused with "that passkey
+ * already belongs to an account" — which is the duplicate guard working, and is asserted
+ * deliberately further down rather than tripped over.
+ */
+const newDevice = await createVirtualAuthenticator({ rpId, origin: webOrigin });
+
+const claimed = `signup-${suffix}`;
+const abandoned = `abandoned-${suffix}`;
+const profileStatus = async (username) =>
+  (await fetch(`${webBase}/@${username}`, { redirect: "manual" })).status;
+
+const takenName = await web("/auth/passkey/signup-options", { body: { username: `p5-owner-${suffix}` } });
+check("a taken username is refused before any ceremony begins", takenName.status === 409, `${takenName.status}`);
+check(
+  // §45 — a stable type URI per class of error. This answered `validation-failed` until a
+  // conflict became reachable, which would have taught a client to match the wrong one.
+  "and the problem document names the conflict",
+  (takenName.body?.type ?? "").endsWith("/conflict"),
+  takenName.body?.type ?? "",
+);
+
+const tooShort = await web("/auth/passkey/signup-options", { body: { username: "ab" } });
+check("a name that is not a name is refused with a reason (§7.3)", tooShort.status === 400 && tooShort.body?.detail === "too-short");
+
+const started = await web("/auth/passkey/signup-options", { body: { username: claimed } });
+check("options are issued for a free name, to an anonymous caller", started.status === 200, `${started.status}`);
+check("the challenge cookie carries the pending sign-up", cookies.has("orator_challenge"));
+check(
+  "a discoverable credential is requested, so the next sign-in needs no username",
+  started.body?.authenticatorSelection?.residentKey === "required",
+);
+
+/*
+ * The property the whole flow is arranged around (§7.3).
+ *
+ * §7.3 never reassigns a username, so an account created before its passkey exists is a name
+ * lost for good the first time somebody's phone locks mid-ceremony. Nothing is written until
+ * there is a verified credential to write with it.
+ */
+check("no account exists yet, halfway through", (await profileStatus(claimed)) === 404);
+
+if (started.status === 200) {
+  const attestation = await newDevice.register(started.body.challenge);
+  const created = await web("/auth/passkey/signup", { body: { credential: attestation } });
+  check("the account and its passkey are created together", created.status === 200, JSON.stringify(created.body));
+  check("and the caller is signed in already", cookies.has("orator_session"));
+  check("the challenge cookie is cleared afterwards", !cookies.has("orator_challenge"));
+  check("and the profile now resolves", (await profileStatus(claimed)) === 200);
+}
+
+/*
+ * One passkey, one account (§9.1).
+ *
+ * `excludeCredentials` is empty on the way out — there is no account yet to exclude anything
+ * for — so an authenticator holding a passkey for this site will happily mint a second. The
+ * server refuses on the way back, and says the useful thing rather than creating a second
+ * identity behind one credential.
+ */
+const secondAccount = await web("/auth/passkey/signup-options", { body: { username: `second-${suffix}` } });
+if (secondAccount.status === 200) {
+  const reused = await newDevice.register(secondAccount.body.challenge);
+  const refused = await web("/auth/passkey/signup", { body: { credential: reused } });
+  check("a passkey that already has an account cannot open a second", refused.status === 409, `${refused.status}`);
+  check("and the name it tried to claim is still free", (await profileStatus(`second-${suffix}`)) === 404);
+}
+
+// An abandoned ceremony costs nothing — which is the point of committing once at the end.
+cookies.clear();
+await web("/auth/passkey/signup-options", { body: { username: abandoned } });
+check("an abandoned sign-up leaves no account behind", (await profileStatus(abandoned)) === 404);
+const retry = await web("/auth/passkey/signup-options", { body: { username: abandoned } });
+check("and the name is still free to claim", retry.status === 200, `${retry.status}`);
+
+// The two ceremonies share a cookie name and an envelope, and must not complete each other's.
+cookies.clear();
+const crossed = await web("/auth/passkey/login-options");
+if (crossed.status === 200) {
+  const wrongWay = await web("/auth/passkey/signup", { body: { credential: {} } });
+  check("a sign-in challenge cannot finish a sign-up", wrongWay.status === 400, `${wrongWay.status}`);
+}
+
 console.log(`\n${failures === 0 ? "all checks passed" : `${failures} check(s) failed`}\n`);
 process.exit(failures === 0 ? 0 : 1);

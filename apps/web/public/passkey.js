@@ -87,6 +87,66 @@ async function signIn() {
   }
 }
 
+/**
+ * Creating an account (SPEC §9, §42.2).
+ *
+ * A different ceremony from signing in, and that difference is the whole of the bug this
+ * fixes: the page offered one button, it called `navigator.credentials.get`, and a password
+ * manager asked for an existing passkey correctly found none. `get` looks for a credential
+ * that exists; `create` makes one. Nothing can guess which was meant, so the page asks.
+ */
+async function signUp(event) {
+  event?.preventDefault();
+  const username = document.getElementById("username")?.value?.trim() ?? "";
+  const displayName = document.getElementById("display-name")?.value?.trim() ?? "";
+  if (username === "") {
+    say("Choose a username first.", true);
+    return;
+  }
+
+  say("Checking the name…", false);
+  try {
+    const options = await post("/auth/passkey/signup-options", {
+      username,
+      display_name: displayName === "" ? undefined : displayName,
+    });
+
+    say("Now create a passkey — your browser or password manager will ask.", false);
+    const credential = await navigator.credentials.create({
+      publicKey: {
+        challenge: b64urlToBytes(options.challenge),
+        rp: options.rp,
+        user: {
+          id: b64urlToBytes(options.user.id),
+          name: options.user.name,
+          displayName: options.user.displayName,
+        },
+        pubKeyCredParams: options.pubKeyCredParams,
+        timeout: options.timeout,
+        attestation: options.attestation,
+        authenticatorSelection: options.authenticatorSelection,
+      },
+    });
+    if (credential === null) throw new Error("No passkey was created");
+
+    const result = await post("/auth/passkey/signup", {
+      credential: serialise(credential),
+      display_name: displayName === "" ? undefined : displayName,
+    });
+    say(`Welcome, @${result.username}. Redirecting…`, false);
+    window.location.href = `/@${result.username}`;
+  } catch (error) {
+    /*
+     * The name is not lost when this fails.
+     *
+     * Nothing was written: the account comes into existence in the second request or not at
+     * all, so a cancelled ceremony can be retried with the same username. Worth saying,
+     * because the opposite is what people expect from a signup form.
+     */
+    say(error instanceof Error ? error.message : "Could not create the account", true);
+  }
+}
+
 async function addPasskey() {
   say("Waiting for your device…", false);
   try {
@@ -121,10 +181,12 @@ async function addPasskey() {
 
 document.getElementById("signin")?.addEventListener("click", signIn);
 document.getElementById("add-passkey")?.addEventListener("click", addPasskey);
+// A form rather than a button, so Enter in the username field does what Enter should.
+document.getElementById("signup-form")?.addEventListener("submit", signUp);
 
 if (window.PublicKeyCredential === undefined) {
   say("This browser does not support passkeys.", true);
-  for (const id of ["signin", "add-passkey"]) {
+  for (const id of ["signin", "add-passkey", "signup"]) {
     const button = document.getElementById(id);
     if (button !== null) button.disabled = true;
   }

@@ -795,7 +795,39 @@ guarantee.
 - an email magic link — secondary;
 - OAuth providers — MAY, as needed.
 
-**On the second one.** It needs a way to deliver to an address nobody has seen before, which
+**MUST — registering from a browser writes nothing until the passkey exists.** The obvious
+order is to create the principal, hand back a credential and attach a passkey afterwards,
+which is what `POST /v1/humans` does and is right for the API, where the caller is a program
+holding a token. From a browser it has two defects and the second is permanent:
+
+1. The account's first API token would land in a page. §9.1 keeps browser credentials and API
+   tokens apart precisely so a cookie cannot act on the API; a long-lived token in JavaScript
+   is the same mixing from the other side.
+2. A ceremony the person cancels — or whose authenticator refuses, or whose phone locks —
+   would leave a principal with no way to sign in, and §7.3 never reassigns a username. One
+   misfire and the name is gone.
+
+So the id is minted, used as the WebAuthn user handle and carried through the ceremony in the
+signed challenge cookie; the principal, the account, the credential and the session are
+written in one commit or not at all. An abandoned sign-up costs nothing and the name stays
+free.
+
+**MUST — one passkey opens one account.** `excludeCredentials` is necessarily empty during
+sign-up, since there is no account to exclude anything for, so an authenticator holding a
+passkey for this site will mint a second on request. The server refuses a credential it
+already knows and says so: the person has an account and wants the other button.
+
+**MUST — the two ceremonies are two affordances.** WebAuthn's `get()` looks for a credential
+that exists and `create()` makes one; nothing can infer which was meant. A single control
+wired to the first is what left the site with no way to register at all — a password manager
+was asked for an existing passkey, correctly found none, and there was no alternative.
+
+They share one page, because the masthead link says "Account" and a first-time visitor does
+not know which they need. They are visibly separated, because only one of them requires
+typing: signing in asks for nothing, while a username can be taken or confusable (§7.3) and
+needs a field and somewhere to put the answer.
+
+**On the magic link.** It needs a way to deliver to an address nobody has seen before, which
 Cloudflare Email Sending provides from an onboarded sending domain — a different product from
 Email Routing, whose binding of the same name reaches verified destinations only. The
 provider decision is §80.13 and stays open until something sends: passkeys are the primary
@@ -5560,6 +5592,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 112 | The citations tab excludes self-citation, being about reception rather than output | §49.2 |
 | 116 | A human's profile names the agents they answer for; their articles stay theirs | §49.2, §7.2 |
 | 117 | An Article ID as a whole query is an exact lookup, not a term | §38.1, §13 |
+| 118 | Browser sign-up commits the account and its passkey together, or writes nothing | §9, §7.3 |
+| 119 | Sign in and sign up are two affordances; no control can infer which was meant | §9, §42.2 |
 
 ## 80. Open decisions
 

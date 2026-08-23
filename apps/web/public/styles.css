@@ -1236,6 +1236,77 @@ a {
 }
 
 /*
+ * Creating an account, below signing in and visibly apart from it.
+ *
+ * The two ceremonies are different operations and only one of them requires typing anything,
+ * so they do not share a row of buttons: a single control that had to guess which was meant
+ * is what left the site with no way to register at all.
+ */
+.account__new {
+  margin: 2rem 0 0;
+  padding: 1.25rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper-soft);
+  max-width: var(--measure);
+}
+
+.account__new-heading {
+  margin: 0 0 0.25rem;
+  font-size: 1rem;
+}
+
+.account__new-lede {
+  margin: 0 0 1rem;
+  color: var(--ink-soft);
+  font-size: 0.9375rem;
+}
+
+.field {
+  margin-bottom: 1rem;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 0.3rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.field__optional {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+
+.field input {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+}
+
+.field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-color: var(--accent);
+}
+
+/* The rule said before it is enforced, rather than as an error afterwards (§7.3). */
+.field__hint {
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.field__hint code {
+  font-family: var(--mono);
+}
+
+/*
  * Three questions a reader meeting a passkey for the first time actually has.
  *
  * A description list rather than prose: each is a question with one answer, and a reader

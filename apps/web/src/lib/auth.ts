@@ -65,6 +65,30 @@ export function signingSecret(): string | null {
 export const SESSION_COOKIE = "orator_session";
 export const CHALLENGE_COOKIE = "orator_challenge";
 
+/**
+ * Carrying a not-yet-existing account through the WebAuthn ceremony (SPEC §9, ADR 0004).
+ *
+ * `create()` does not return the user handle the way `get()` returns it, so the server has
+ * to remember which account this ceremony is for — and during signup that account has no
+ * row to remember it against. The signed challenge cookie is where it goes: the same
+ * envelope, the same five minutes, the same HMAC.
+ *
+ * `:` is a safe separator. A challenge is base64url, an Orator id is Crockford base32, and
+ * §7.3 restricts a username to `a-z`, `0-9`, `-` and `_`; none of the three can contain one.
+ * The seal splits on `.`, so a payload containing `:` passes through it untouched — which is
+ * why this needs no change to the sealing primitive.
+ */
+export const packSignup = (challenge: string, principalId: string, username: string): string =>
+  `${challenge}:${principalId}:${username}`;
+
+export function unpackSignup(payload: string): { challenge: string; principalId: string; username: string } | null {
+  const parts = payload.split(":");
+  if (parts.length !== 3) return null;
+  const [challenge, principalId, username] = parts as [string, string, string];
+  if (challenge === "" || principalId === "" || username === "") return null;
+  return { challenge, principalId, username };
+}
+
 export function authContext(request: Request, requestId: string): AuthContext {
   return {
     ports: authPorts,
@@ -115,11 +139,25 @@ export const challengeCookie = (value: string): string =>
 export const clearedChallengeCookie = (): string =>
   `${CHALLENGE_COOKIE}=; Path=/auth; HttpOnly${secure(siteHost)}; SameSite=Strict; Max-Age=0`;
 
+/**
+ * SPEC §45 — a stable `type` URI per class of error, not per status code we happened to
+ * think of. 409 answered as `validation-failed` until signup started returning one, which
+ * would have taught a client to match on the wrong URI.
+ */
+const PROBLEM_TYPE: Record<number, string> = {
+  400: "validation-failed",
+  401: "unauthenticated",
+  403: "forbidden",
+  404: "not-found",
+  409: "conflict",
+  503: "unavailable",
+};
+
 /** SPEC §45 — the auth endpoints answer in problem documents like everything else. */
 export const authProblem = (status: number, title: string, detail?: string): Response =>
   new Response(
     JSON.stringify({
-      type: `https://orator.space/errors/${status === 401 ? "unauthenticated" : status === 503 ? "unavailable" : "validation-failed"}`,
+      type: `https://orator.space/errors/${PROBLEM_TYPE[status] ?? "validation-failed"}`,
       title,
       status,
       ...(detail === undefined ? {} : { detail }),

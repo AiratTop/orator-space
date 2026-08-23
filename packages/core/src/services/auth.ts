@@ -1,5 +1,7 @@
 import { ErrorType, type OratorId } from "@orator/protocol";
 import { generateSessionToken, sha256Hex } from "../identity/tokens.js";
+import { canonicalizeUsername } from "../identity/username.js";
+import { ConstraintViolation } from "../ports/index.js";
 import type {
   AuthenticationOptions,
   Clock,
@@ -122,6 +124,182 @@ export async function completePasskeyRegistration(
   ]);
 
   return ok({ id, credentialId: verified.credentialId });
+}
+
+// ---------------------------------------------------------------------------
+// Signing up (SPEC §9, §42.2, §7.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Creating an account from a browser, in two steps that commit once.
+ *
+ * The obvious order is to register the principal, hand back a credential, and let the
+ * browser add a passkey afterwards — which is what `POST /v1/humans` does, and it is right
+ * for the API, where the caller is a program holding a token. From a browser it has two
+ * defects, and the second is permanent:
+ *
+ *   1. The account's first token would land in a page. §9.1 keeps browser credentials and
+ *      API tokens apart precisely so a cookie cannot act on the API; a long-lived token in
+ *      JavaScript is the same mixing from the other side.
+ *   2. A ceremony the person cancels — or their authenticator refuses, or their phone
+ *      locks — would leave a principal with no way to sign in, and §7.3 never reassigns a
+ *      username. One misfire and the name is gone for good.
+ *
+ * So nothing is written until there is a verified passkey to write with it. `beginSignup`
+ * reserves nothing: it checks the name is free, mints an id to use as the WebAuthn user
+ * handle, and returns. `completeSignup` writes the principal, the account, the credential
+ * and the session in one commit, or writes nothing at all.
+ */
+export interface SignupStart {
+  /** Minted here and carried through the ceremony as the user handle. Not yet stored. */
+  principalId: OratorId;
+  username: string;
+  options: RegistrationOptions;
+}
+
+export async function beginSignup(
+  ctx: AuthContext,
+  input: { username: string; displayName?: string | null },
+): Promise<Result<SignupStart>> {
+  const name = canonicalizeUsername(input.username);
+  if ("error" in name) {
+    return fail(ErrorType.ValidationFailed, "That username will not work", name.error, { field: "username" });
+  }
+
+  const taken = await ctx.ports.principals.findByUsername(name.username);
+  if (taken !== null) return fail(ErrorType.Conflict, "Username is taken", undefined, { field: "username" });
+
+  const confusable = await ctx.ports.principals.findBySkeleton(name.skeleton);
+  if (confusable !== null) {
+    // Named explicitly: "taken" would be baffling when the two names look different to the
+    // person typing and identical to everyone reading (§7.3).
+    return fail(
+      ErrorType.Conflict,
+      "Username is too similar to an existing one",
+      `@${confusable.username} already exists and is visually confusable with this name.`,
+      { field: "username", conflicts_with: confusable.username },
+    );
+  }
+
+  const principalId = ctx.ports.ids.next();
+  const displayName = input.displayName?.trim() ?? "";
+
+  const options = await ctx.ports.passkeys.registrationOptions({
+    rpId: ctx.rpId,
+    rpName: ctx.rpName,
+    principalId,
+    username: name.username,
+    displayName: displayName.length > 0 ? displayName : name.username,
+    // Nothing to exclude: this account has no credentials because it does not exist yet.
+    // The duplicate is caught on the way back instead, where the credential id is known.
+    existing: [],
+  });
+
+  return ok({ principalId, username: name.username, options });
+}
+
+export async function completeSignup(
+  ctx: AuthContext,
+  input: {
+    principalId: string;
+    username: string;
+    displayName: string | null;
+    challenge: string;
+    response: unknown;
+  },
+): Promise<Result<SignedIn>> {
+  /*
+   * The name is canonicalised again rather than trusted.
+   *
+   * What arrives here was sealed by this server minutes ago, so it is not a caller's claim —
+   * but it *is* a claim about a moment that has passed, and the check is one string
+   * operation. Somebody may have taken the name in between; the unique index below is what
+   * actually decides, and this turns that race into a sentence rather than a 500.
+   */
+  const name = canonicalizeUsername(input.username);
+  if ("error" in name) return fail(ErrorType.ValidationFailed, "That username will not work", name.error);
+
+  const verified = await ctx.ports.passkeys.verifyRegistration({
+    response: input.response,
+    expectedChallenge: input.challenge,
+    rpId: ctx.rpId,
+    origin: ctx.origin,
+  });
+  if (verified === null) return fail(ErrorType.ValidationFailed, "The passkey could not be verified");
+
+  /*
+   * One passkey, one account.
+   *
+   * `excludeCredentials` was empty on the way out — there was no account to exclude anything
+   * for — so an authenticator holding a passkey for this site will happily mint a second.
+   * Refusing here keeps one credential from unlocking two identities, and says the useful
+   * thing: the person already has an account and wants the other button.
+   */
+  const existing = await ctx.ports.credentials.findByCredentialId(verified.credentialId);
+  if (existing !== null) {
+    return fail(
+      ErrorType.Conflict,
+      "That passkey already belongs to an account",
+      "Sign in with it instead of creating a second account.",
+    );
+  }
+
+  const now = ctx.ports.clock.now();
+  const createdAt = now.toISOString();
+  const principalId = input.principalId as OratorId;
+  const sessionToken = generateSessionToken();
+  const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS).toISOString();
+  const displayName = input.displayName?.trim();
+
+  try {
+    // The whole account, in one commit. A partial one would be an account that exists and
+    // cannot be reached, which is the state §7.3 makes permanent.
+    await ctx.ports.db.commit([
+      ctx.ports.principals.insertPrincipal({
+        id: principalId,
+        kind: "human",
+        username: name.username,
+        usernameSkeleton: name.skeleton,
+        displayName: displayName !== undefined && displayName.length > 0 ? displayName : null,
+        createdAt,
+      }),
+      // No email. §9.2 signs a person in with a passkey and asks for nothing else; an
+      // address collected because a form could is data §23 would then have to protect.
+      ctx.ports.principals.insertHumanAccount(principalId, null, createdAt),
+      ctx.ports.credentials.insert({
+        id: ctx.ports.ids.next(),
+        principalId,
+        credentialId: verified.credentialId,
+        publicKey: verified.publicKey,
+        signCount: verified.signCount,
+        transports: verified.transports === null ? null : verified.transports.join(","),
+        aaguid: verified.aaguid,
+        label: null,
+        backedUp: verified.backedUp,
+        createdAt,
+      }),
+      ctx.ports.sessions.insert({
+        id: ctx.ports.ids.next(),
+        principalId,
+        tokenHash: await sha256Hex(sessionToken),
+        userAgent: ctx.userAgent,
+        ipHash: ctx.ipHash,
+        createdAt,
+        lastSeenAt: createdAt,
+        expiresAt,
+        revokedAt: null,
+      }),
+    ]);
+  } catch (error) {
+    // The check in `beginSignup` narrows the race and cannot close it: uniqueness is the
+    // database's to enforce, and two people typing one name reach it together.
+    if (error instanceof ConstraintViolation && error.constraint === "unique") {
+      return fail(ErrorType.Conflict, "Username is taken", "Somebody registered it while you were deciding.");
+    }
+    throw error;
+  }
+
+  return ok({ principalId, username: name.username, sessionToken, expiresAt });
 }
 
 // ---------------------------------------------------------------------------
