@@ -1,0 +1,170 @@
+import { describe, expect, it } from "vitest";
+import type { MetricsQuery, SloRepo } from "../ports/slo.js";
+import { evaluateSlo, THRESHOLDS, type Indicator, type SloReport } from "./slo.js";
+
+/**
+ * SPEC §66.4 — the seven indicators, and what each of them says.
+ *
+ * The thresholds themselves are the interesting part, and specifically the three states that
+ * are not "ok" or "breached". An indicator nobody can measure must not read as healthy, an
+ * indicator on its way to a limit must not wake anybody, and both are easy to collapse into
+ * a boolean by accident.
+ */
+
+const NOW = new Date("2026-08-23T12:00:00.000Z");
+
+const repo = (over: Partial<SloRepo> = {}): SloRepo => ({
+  async outboxBacklog() {
+    return { pending: 0, oldestPendingAt: null };
+  },
+  async indexingLag() {
+    return { sampled: 10, p95Seconds: 4 };
+  },
+  async deadLettered() {
+    return 0;
+  },
+  async databaseBytes() {
+    return 1_000_000;
+  },
+  async deleteDeadLettersBefore() {
+    return 0;
+  },
+  ...over,
+});
+
+const metrics = (over: Partial<MetricsQuery> = {}): MetricsQuery => ({
+  async publishLatencyP95Ms() {
+    return 120;
+  },
+  async serverErrorRate() {
+    return 0.001;
+  },
+  ...over,
+});
+
+const evaluate = (slo: SloRepo = repo(), query: MetricsQuery = metrics()): Promise<SloReport> =>
+  evaluateSlo({ slo, metrics: query, clock: { now: () => NOW } });
+
+const find = (report: SloReport, name: string): Indicator =>
+  report.indicators.find((indicator) => indicator.name === name)!;
+
+describe("a healthy pipeline", () => {
+  it("reports every indicator it can measure, and one it cannot", async () => {
+    const report = await evaluate();
+
+    // §33.4's purge does not exist, so its indicator says so rather than disappearing.
+    expect(find(report, "purge_failure_rate").state).toBe("not-implemented");
+    expect(report.indicators).toHaveLength(7);
+
+    // And a deliberate, documented absence does not degrade the report. A status that can
+    // never read `ok` is a status nobody reads.
+    expect(report.status).toBe("ok");
+  });
+});
+
+describe("the backlog (§66.4)", () => {
+  it("breaches on depth", async () => {
+    const report = await evaluate(
+      repo({ async outboxBacklog() { return { pending: THRESHOLDS.outboxDepth + 1, oldestPendingAt: NOW.toISOString() }; } }),
+    );
+    expect(find(report, "outbox_pending").state).toBe("breached");
+    expect(report.status).toBe("breached");
+  });
+
+  it("breaches on age even when the depth is one", async () => {
+    // The failure that matters most: a single message retrying forever is a depth of one and
+    // a pipeline that has stopped for that aggregate.
+    const stale = new Date(NOW.getTime() - (THRESHOLDS.outboxAgeSeconds + 60) * 1000).toISOString();
+    const report = await evaluate(
+      repo({ async outboxBacklog() { return { pending: 1, oldestPendingAt: stale }; } }),
+    );
+    expect(find(report, "outbox_pending").state).toBe("breached");
+  });
+
+  it("is content with a deep backlog that is moving", async () => {
+    const report = await evaluate(
+      repo({ async outboxBacklog() { return { pending: THRESHOLDS.outboxDepth, oldestPendingAt: NOW.toISOString() }; } }),
+    );
+    expect(find(report, "outbox_pending").state).toBe("ok");
+  });
+});
+
+describe("indexing lag (§66.4, §34.4)", () => {
+  it("breaches past a minute", async () => {
+    const report = await evaluate(repo({ async indexingLag() { return { sampled: 20, p95Seconds: 61 }; } }));
+    expect(find(report, "indexing_p95").state).toBe("breached");
+  });
+
+  it("says nothing was published rather than claiming health", async () => {
+    const report = await evaluate(repo({ async indexingLag() { return { sampled: 0, p95Seconds: null }; } }));
+    const indicator = find(report, "indexing_p95");
+    expect(indicator.state).toBe("unavailable");
+    expect(indicator.detail).toContain("nothing published");
+  });
+});
+
+describe("the dead-letter queue (§66.4)", () => {
+  it("treats one message as a breach, because five attempts already failed", async () => {
+    const report = await evaluate(repo({ async deadLettered() { return 1; } }));
+    expect(find(report, "dead_lettered").state).toBe("breached");
+  });
+});
+
+describe("the database's size (§31.3, §66.4)", () => {
+  const at = (fraction: number) => Math.round(THRESHOLDS.databaseLimitBytes * fraction);
+
+  it("warns at 60% and does not wake anybody", async () => {
+    const report = await evaluate(repo({ async databaseBytes() { return at(0.65); } }));
+    expect(find(report, "database_bytes").state).toBe("warning");
+    expect(report.status).toBe("degraded");
+  });
+
+  it("breaches at 80%", async () => {
+    const report = await evaluate(repo({ async databaseBytes() { return at(0.85); } }));
+    expect(find(report, "database_bytes").state).toBe("breached");
+  });
+
+  it("reports a platform that does not say as unavailable, not as empty", async () => {
+    const report = await evaluate(repo({ async databaseBytes() { return null; } }));
+    expect(find(report, "database_bytes").state).toBe("unavailable");
+    expect(report.status).toBe("degraded");
+  });
+});
+
+describe("the two indicators that need a metrics backend (§80.15)", () => {
+  it("reports them as unavailable rather than as healthy", async () => {
+    const report = await evaluate(
+      repo(),
+      metrics({
+        async publishLatencyP95Ms() { return null; },
+        async serverErrorRate() { return null; },
+      }),
+    );
+
+    expect(find(report, "publish_p95").state).toBe("unavailable");
+    expect(find(report, "server_error_rate").state).toBe("unavailable");
+    // Unavailable is not an alert: a bell nobody can silence is a bell everybody mutes.
+    expect(report.status).toBe("degraded");
+  });
+
+  it("breaches when they are measured and over the line", async () => {
+    const report = await evaluate(
+      repo(),
+      metrics({
+        async publishLatencyP95Ms() { return THRESHOLDS.publishP95Ms + 1; },
+        async serverErrorRate() { return THRESHOLDS.serverErrorRate * 2; },
+      }),
+    );
+    expect(find(report, "publish_p95").state).toBe("breached");
+    expect(find(report, "server_error_rate").state).toBe("breached");
+    expect(report.status).toBe("breached");
+  });
+
+  it("does not breach exactly at the threshold, which §66.4 states as `>`", async () => {
+    const report = await evaluate(
+      repo(),
+      metrics({ async publishLatencyP95Ms() { return THRESHOLDS.publishP95Ms; } }),
+    );
+    expect(find(report, "publish_p95").state).toBe("ok");
+  });
+});

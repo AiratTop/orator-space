@@ -67,8 +67,13 @@ silently.
 3. alert on any message arriving there — §66.4
 ```
 
-The DLQ has no consumer of its own: messages there are examined by hand. Their arrival
-signals a defect, not load.
+**The DLQ has a consumer, and it does not retry.** It records the arrival in `dead_letters`
+and acknowledges. A message reaches this queue after five failed attempts on the primary one,
+which makes it a handler that cannot succeed rather than a delivery that was unlucky —
+retrying from here is what produced the queue. Item 3 is what the consumer makes possible:
+without one, "anything reaching the dead-letter queue" is an alert nobody can raise, because
+the only way to learn of a message is to open the dashboard. `/health/slo` reads the table
+and a monitor reads its status code.
 
 ### 1.3. Analytics Engine
 
@@ -216,11 +221,35 @@ makes the check report on the pipeline rather than on Gatus's patience.
 Fifteen minutes, not five: each run publishes and removes an article, and the interval is
 the resolution at which a stopped pipeline is noticed, not a measure of anything.
 
-**What Gatus does not cover.** The §66.4 table — p95 publish latency, the 5xx rate, outbox
-depth, published-to-indexed p95, anything reaching the dead-letter queue, D1 size, purge
-failures. Those are thresholds over Analytics Engine, not endpoint checks, and an external
-prober cannot see them. `/health/deep` covers the one that matters most in practice, since a
-stalled pipeline fails its `indexed` step; the rest stays open on the Phase 8 gate.
+**The §66.4 thresholds, as a third endpoint check.** `/health/slo` evaluates all seven and
+answers `503` when one is breached, so the table needs no dashboard and no query language —
+the platform compares its own numbers and Gatus reads a status code, through the alert
+channel that is already there.
+
+```yaml
+  - name: slo
+    group: orator.space
+    url: https://api.orator.space/health/slo
+    interval: 5m
+    conditions: ["[STATUS] == 200"]
+    headers:
+      Authorization: "Bearer <the canary's token>"
+```
+
+The same credential as `/health/deep`, and five minutes rather than fifteen: this one reads
+and writes nothing, so it costs a handful of indexed queries. A `200` may still carry
+`"status": "degraded"` in its body — an indicator on its way to a limit, or one nothing can
+measure — which belongs on a dashboard rather than in an alert.
+
+**Two of the seven need one more thing.** p95 publish latency and the 5xx rate live in
+Analytics Engine, which is written through a binding and read over the SQL API, and the SQL
+API needs an account-scoped token. Set two secrets on the edge Worker and both indicators
+start answering; without them they report `unavailable` and the other five are unaffected.
+
+```text
+wrangler secret put CF_ACCOUNT_ID     --env production   # the account id
+wrangler secret put CF_ANALYTICS_TOKEN --env production   # Account Analytics: Read
+```
 
 **On item 5.** It signs the WebAuthn challenge cookie. Local development falls back to a
 fixed development value; a deployment without it refuses to sign anyone in rather than
@@ -766,8 +795,8 @@ This is where the entire `[L]` level is closed.
 [x] deduplication, and indexability as an earned state (§50.3)
 [x] backups plus a verified restore (§31.5)
 [x] account closure (§23.5)
-[~] the §66.4 alerts; Gatus on /health and /health/deep — the endpoint checks and their
-    alert channel are live (§1.7 item 3); the threshold alerts of the §66.4 table are not
+[x] the §66.4 alerts — /health/slo evaluates all seven and answers 503 on a breach, so
+    Gatus alerts on the table through the channel that already exists (§1.7 item 3)
 [x] a Cloudflare budget alert — 10 USD
 [ ] branch protection re-enabled — `main` deploys to production on every push (§1.5)
 [x] Terms, Content Policy and Privacy published — CC BY 4.0 for content, ADR 0008
@@ -778,20 +807,33 @@ This is where the entire `[L]` level is closed.
 
 **Public registration does not open until this list is closed in full.**
 
-**What is actually left.** Two items, and neither is code.
+**What is actually left.** One item, and it is not code.
 
-1. **Branch protection**, which is a switch (§1.5) and should be flipped last, because until
-   it is, every push to `main` deploys straight to production and that is what makes the
-   remaining work fast.
-2. **The §66.4 alert thresholds.** Seven indicators — publish p95, the 5xx rate, outbox
-   depth, published-to-indexed p95, anything reaching the dead-letter queue, D1 size, purge
-   failures — and none of them is visible to an external prober, so Gatus cannot close this
-   row. They are queries over Analytics Engine, which means a metrics backend (§66.6, open
-   decision §80.15) or a scheduled worker that reads its own numbers and reports.
+**Branch protection**, which is a switch (§1.5) and should be flipped last, because until it
+is, every push to `main` deploys straight to production and that is what makes the remaining
+work fast.
 
-   `/health/deep` covers the one §66.7 calls this architecture's principal failure — the
-   pipeline stopping while every endpoint answers — and the DLQ has no consumer, so a
-   message arriving there is discovered by looking. That is the honest state of it.
+**On the §66.4 row, and what closed it.** The obstacle was never the thresholds. It was that
+none of the seven is visible to an external prober — Gatus can tell whether an endpoint
+answers and nothing about whether the outbox is draining — so the row appeared to need a
+metrics backend (§66.6, open decision §80.15) before anything could alert on it.
+
+It did not. Six of the seven are questions about state, and state is in the database: the
+depth and age of the backlog, `search_docs.indexed_at` against `articles.published_at`, the
+`dead_letters` table, and the size D1 returns in the metadata of every statement. The seventh
+is §33.4's purge, which is not implemented, and the report says so rather than omitting the
+row. `/health/slo` compares all of it with the table and puts the verdict in a status code,
+which is the one thing a monitor can read.
+
+Two indicators — publish p95 and the 5xx rate — are genuinely in Analytics Engine, and they
+answer as soon as the two secrets in §1.7 are set. Until then they report `unavailable`, which
+is neither health nor an alarm.
+
+**Two things that had to exist first.** The dead-letter queue had no consumer, so "anything
+reaching the dead-letter queue" was an alert nobody could raise; it has one now, and it
+records rather than retries. And `dead_letters` is the first table whose rows describe work
+that did not happen, so it is classified as transient in the backup and cleared after thirty
+days by the retention pass.
 
 **The contact address.** Every public document names **mail@orator.space** — the security
 policy, the code of conduct, all three policies. It has to receive mail before registration

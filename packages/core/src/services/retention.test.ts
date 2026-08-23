@@ -201,6 +201,7 @@ describe("bounded passes", () => {
   it("does nothing and says so on an empty database", async () => {
     expect(await runRetention(ports)).toEqual({
       canaryArticlesDeleted: 0,
+      deadLettersDeleted: 0,
       outboxDeleted: 0,
       idempotencyDeleted: 0,
       mediaDeleted: 0,

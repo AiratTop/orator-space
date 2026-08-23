@@ -6,7 +6,14 @@
  * neither owns business logic and neither talks to storage directly (SPEC §28.1).
  */
 import { Hono, type Context, type Next } from "hono";
-import { createIdGen, QuotaCounter } from "@orator/adapters-cf";
+import {
+  createIdGen,
+  createMetricsQuery,
+  createSloRepo,
+  QuotaCounter,
+  recordDeadLetter,
+  systemClock,
+} from "@orator/adapters-cf";
 import { problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
 import type { RequestContext } from "@orator/core";
 import { contextFor } from "./context.js";
@@ -24,6 +31,7 @@ import {
   applyClosureDisposition,
   drainOutbox,
   evaluateIndexability,
+  evaluateSlo,
   markArticleShard,
   rebuildSitemap,
   reindexArticle,
@@ -48,6 +56,17 @@ export interface Env {
   FLOOD_SEARCH: RateLimit;
   /** SPEC §66.2 — metrics and high-cardinality telemetry. Never D1. */
   METRICS?: AnalyticsEngineDataset;
+  /**
+   * SPEC §66.4 — reading back what §66.2 wrote.
+   *
+   * The binding above writes and cannot read; the SQL API reads and needs an account-scoped
+   * credential. All three are optional, and their absence is a state the SLO report names
+   * rather than an error: two of the seven indicators say "unavailable" and the other five
+   * still answer.
+   */
+  METRICS_DATASET?: string;
+  CF_ACCOUNT_ID?: string;
+  CF_ANALYTICS_TOKEN?: string;
 }
 
 type Surface = "api" | "mcp" | "media" | "unknown";
@@ -224,6 +243,58 @@ const floodGuard = async (c: Context<{ Bindings: Env; Variables: Vars }>, next: 
  * Under `/health/` rather than `/v1/` because it is operations rather than product: it is
  * not in the catalogue, it is not versioned with the API, and no client should build on it.
  */
+/**
+ * SPEC §66.4 — the seven indicators, evaluated by the platform about itself.
+ *
+ * None of them is visible from outside: a prober can tell whether this endpoint answers and
+ * nothing about whether the outbox is draining. So the Worker reads its own numbers and puts
+ * the verdict in a status code, and the monitor that already exists (§1.7) turns that into an
+ * alert through a channel that is already configured. That is the whole of what a metrics
+ * backend would have done first, without a metrics backend to run.
+ *
+ * Behind the same credential as `/health/deep`, and for a weaker reason: this endpoint writes
+ * nothing, but it reports the database's size, the depth of the backlog and the error rate,
+ * which is an operational picture rather than a public one.
+ *
+ * 503 only when something is breached. A `degraded` report — an indicator that could not be
+ * measured, or a database on its way to the first mark — answers 200 with the detail in the
+ * body: an alert that cannot be cleared is an alert that gets muted.
+ */
+app.get("/health/slo", resolveContext, async (c) => {
+  const ctx = c.get("ctx");
+  if (ctx.actor === null) {
+    return problemResponse(
+      c,
+      { type: ErrorType.Unauthenticated, title: "Authentication required" },
+      "/health/slo",
+    );
+  }
+  if (!ctx.actor.systemAccount) {
+    return problemResponse(
+      c,
+      {
+        type: ErrorType.Forbidden,
+        title: "The SLO report is read by a system account",
+        detail: "It reports the size of the database and the depth of the pipeline (§66.4).",
+      },
+      "/health/slo",
+    );
+  }
+
+  const report = await evaluateSlo({
+    slo: createSloRepo(c.env.DB),
+    metrics: createMetricsQuery({
+      accountId: c.env.CF_ACCOUNT_ID,
+      token: c.env.CF_ANALYTICS_TOKEN,
+      dataset: c.env.METRICS_DATASET,
+    }),
+    clock: systemClock,
+  });
+
+  c.header("cache-control", "no-store");
+  return c.json(report, report.status === "breached" ? 503 : 200);
+});
+
 app.get("/health/deep", resolveContext, async (c) => {
   const ctx = c.get("ctx");
   const site = c.env.ENVIRONMENT === "production" ? "https://orator.space" : "https://staging.orator.space";
@@ -448,6 +519,63 @@ export default {
    * it forever would block the batch behind a message that will never succeed.
    */
   async queue(batch: MessageBatch<OratorEvent>, env: Env): Promise<void> {
+    /*
+     * SPEC §66.4 — the dead-letter queue has a consumer, and it does not retry.
+     *
+     * A message arrives here after five failed attempts on the primary queue, which makes it
+     * a handler that cannot succeed rather than a delivery that was unlucky. Retrying from
+     * here is what produced the queue in the first place; so the arrival is recorded, the
+     * message is acknowledged, and the SLO report turns the row into an alert (§66.4 makes
+     * *anything* reaching this queue one).
+     *
+     * Until now there was no consumer at all, and a message landing here was discovered by
+     * somebody opening the dashboard.
+     */
+    if (batch.queue.endsWith("-dlq")) {
+      const record = recordDeadLetter(env.DB);
+      const arrivedAt = new Date().toISOString();
+
+      for (const message of batch.messages) {
+        const event = message.body as Partial<OratorEvent> | null;
+        try {
+          await record({
+            // The message's own id when the event has none to give: a payload that could not
+            // be parsed is the failure with the least information attached and the one worth
+            // recording twice rather than losing.
+            id: createIdGen().next(),
+            eventId: event?.id ?? null,
+            eventType: event?.type ?? null,
+            aggregateId: event?.aggregate_id ?? null,
+            error: "the handler failed on every attempt",
+            arrivedAt,
+          });
+        } catch (error) {
+          // Recording the failure failed. Log and acknowledge: holding the message would
+          // fill the dead-letter queue with copies of an event nothing will ever handle.
+          console.error(
+            JSON.stringify({
+              level: "error",
+              event: "queue.deadletter.unrecorded",
+              id: event?.id,
+              error: String(error),
+            }),
+          );
+        }
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "queue.deadletter",
+            type: event?.type,
+            id: event?.id,
+            aggregate_id: event?.aggregate_id,
+            request_id: event?.request_id,
+          }),
+        );
+        message.ack();
+      }
+      return;
+    }
+
     for (const message of batch.messages) {
       const event = message.body;
       try {

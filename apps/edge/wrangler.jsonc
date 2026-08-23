@@ -79,7 +79,9 @@
   "env": {
     "staging": {
       "name": "orator-edge-staging",
-      "vars": { "ENVIRONMENT": "staging", "SITE_HOST": "staging.orator.space" },
+      // METRICS_DATASET names what the METRICS binding writes to. The binding does not
+      // expose the name to code, and §66.4 reads the dataset back over the SQL API.
+      "vars": { "ENVIRONMENT": "staging", "SITE_HOST": "staging.orator.space", "METRICS_DATASET": "orator_metrics_staging" },
       "routes": [
         { "pattern": "api-staging.orator.space", "custom_domain": true },
         { "pattern": "mcp-staging.orator.space", "custom_domain": true },
@@ -107,6 +109,24 @@
             "max_batch_timeout": 10,
             "max_retries": 5,
             "dead_letter_queue": "orator-events-staging-dlq"
+          },
+          {
+            /*
+             * SPEC §66.4 — the dead-letter queue is consumed, and never retried.
+             *
+             * A message reaches it after five failed attempts, which makes it a handler that
+             * cannot succeed. The consumer records the arrival and acknowledges; §66.4 makes
+             * anything arriving here an alert, and until it had a consumer the only way to
+             * learn of one was to open the dashboard.
+             *
+             * `max_retries: 0` states that in the configuration as well as in the code: there
+             * is nothing to retry, and a retry here is how a dead-letter queue fills up with
+             * copies of the same failure.
+             */
+            "queue": "orator-events-staging-dlq",
+            "max_batch_size": 25,
+            "max_batch_timeout": 30,
+            "max_retries": 0
           }
         ]
       },
@@ -117,7 +137,7 @@
 
     "production": {
       "name": "orator-edge",
-      "vars": { "ENVIRONMENT": "production", "SITE_HOST": "orator.space" },
+      "vars": { "ENVIRONMENT": "production", "SITE_HOST": "orator.space", "METRICS_DATASET": "orator_metrics" },
       "routes": [
         { "pattern": "api.orator.space", "custom_domain": true },
         { "pattern": "mcp.orator.space", "custom_domain": true },
@@ -145,6 +165,24 @@
             "max_batch_timeout": 10,
             "max_retries": 5,
             "dead_letter_queue": "orator-events-dlq"
+          },
+          {
+            /*
+             * SPEC §66.4 — the dead-letter queue is consumed, and never retried.
+             *
+             * A message reaches it after five failed attempts, which makes it a handler that
+             * cannot succeed. The consumer records the arrival and acknowledges; §66.4 makes
+             * anything arriving here an alert, and until it had a consumer the only way to
+             * learn of one was to open the dashboard.
+             *
+             * `max_retries: 0` states that in the configuration as well as in the code: there
+             * is nothing to retry, and a retry here is how a dead-letter queue fills up with
+             * copies of the same failure.
+             */
+            "queue": "orator-events-dlq",
+            "max_batch_size": 25,
+            "max_batch_timeout": 30,
+            "max_retries": 0
           }
         ]
       },

@@ -4658,6 +4658,57 @@ raw IPs, or prompt contents.
 **MUST.** A health endpoint checking D1, R2 and Queue availability, behind
 `status.orator.space`.
 
+**MUST — the platform evaluates these about itself, at `/health/slo`.** None of the seven is
+visible to an external prober: a monitor can tell whether an endpoint answers and nothing
+about whether the outbox is draining. So the Worker reads its own numbers, compares them with
+the table above, and puts the verdict in a status code — `503` when an indicator is breached,
+`200` otherwise — which a monitor that already exists turns into an alert through a channel
+that is already configured. That is what a metrics backend (§66.6, §80.15) would have done
+first, without a metrics backend to run.
+
+**MUST.** The endpoint requires a system account, as `/health/deep` does (§66.7). It writes
+nothing; it reports the size of the database, the depth of the backlog and the error rate,
+which is an operational picture rather than a public one.
+
+**MUST — an indicator that cannot be measured says so.** Five states, not two:
+
+```text
+ok               measured, within the threshold
+warning          measured, on the way to it — the D1 size has two marks
+breached         measured, past it. This is the only state that answers 503
+unavailable      not measurable right now: no metrics backend, or nothing to sample
+not-implemented  a deliberate, documented absence
+```
+
+Reporting an unmeasurable indicator as `ok` is a lie that alerts nobody; reporting it as
+breached rings a bell nobody can silence, and a bell nobody can silence gets muted.
+`not-implemented` degrades nothing — a status that can never read `ok` is a status nobody
+reads.
+
+**MUST.** Where each number comes from, because six of the seven need no metrics pipeline:
+
+| Indicator | Source |
+|---|---|
+| p95 `publishArticle` | Analytics Engine, over `api.request` for the publish route |
+| 5xx error rate | Analytics Engine, over `api.request` |
+| `outbox.pending` depth and age | D1, one indexed query |
+| published → indexed | D1, `search_docs.indexed_at` against `articles.published_at` |
+| dead-lettered messages | D1, `dead_letters` — written by the dead-letter consumer |
+| D1 size | the `size_after` field D1 returns in the metadata of any statement |
+| purge failure rate | nothing: §33.4's purge is not implemented (§33.1) |
+
+**MUST — the dead-letter queue has a consumer, and it does not retry.** A message reaches it
+after five failed attempts on the primary queue, which makes it a handler that cannot succeed
+rather than a delivery that was unlucky; retrying from there is what produced the queue.
+The consumer records the arrival in `dead_letters` and acknowledges. Without one, "anything
+reaching the dead-letter queue" is an alert nobody can raise: the only way to learn of a
+message is to open the dashboard.
+
+**MUST.** The two Analytics Engine indicators need an account-scoped credential the write
+binding does not provide — Analytics Engine is written through a binding and read over the
+SQL API. Their absence is a configuration state (`unavailable`), never a failure: the other
+five still answer.
+
 ### 66.5. Separating machine from human traffic
 
 **MUST.** Every metric carries a mandatory `audience_class` dimension:
@@ -5403,6 +5454,9 @@ Everything after it is growth, and its order is decided by observation rather th
 | 107 | A system account is a column, exempt from quotas, feeds, metrics and the sitemap | §66.7 |
 | 108 | `/health/deep` requires the canary's own credential, because it writes | §66.7 |
 | 109 | A page the Worker composes carries the build in its validator; stored bytes do not | §33.2 |
+| 113 | The platform evaluates §66.4 about itself at `/health/slo`; a monitor reads the code | §66.4 |
+| 114 | An indicator that cannot be measured reports `unavailable`, which is not an alert | §66.4 |
+| 115 | The dead-letter queue is consumed and recorded, never retried | §66.4, §35.3 |
 | 110 | No like, bookmark or upvote; a card shows comments and inbound citations | §49.2, §39.2, ADR 0011 |
 | 111 | A profile has three tabs; an activity log is not one of them | §49.2, §49.3 |
 | 112 | The citations tab excludes self-citation, being about reception rather than output | §49.2 |
@@ -5427,7 +5481,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 12 | The export format for the public graph (§53) | after launch |
 | 13 | The email delivery provider for magic links and notifications | Identity phase |
 | 14 | ~~Logpush availability on the plan~~ — **closed: Workers Trace Events on Workers Paid**, ADR 0001 | — |
-| 15 | Where Grafana and ClickHouse are hosted: own infrastructure or a managed service | REST API phase |
+| 15 | Where Grafana and ClickHouse are hosted: own infrastructure or a managed service | when a dashboard is wanted — the §66.4 alerts no longer wait on it (§66.4) |
 | 16 | The legal position on content retention and the data-processing jurisdiction | before public launch |
 | 17 | Whether `packages/sdk` is needed in the MVP, or the types from `protocol` suffice | REST API phase |
 | 18 | ~~FTS5 availability in D1~~ — **closed: available**, ADR 0001 | — |

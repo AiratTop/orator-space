@@ -10,4 +10,5 @@ export * from "./media-store.js";
 export * from "./d1/index.js";
 export * from "./passkeys.js";
 export * from "./metrics.js";
+export * from "./analytics.js";
 export * from "./quota.js";

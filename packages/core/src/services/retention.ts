@@ -31,6 +31,15 @@ export const RETENTION_HOURS = {
    * reason for a tombstone does not apply: nobody cites a canary.
    */
   canaryArticles: 24,
+  /**
+   * SPEC §66.4 — the record of a message the consumer gave up on.
+   *
+   * Thirty days, which is long enough to be looked at during the incident it belongs to and
+   * during the review afterwards, and short enough that a table that only grows when things
+   * break does not grow forever. Nothing reads it back into the system: recovery from a dead
+   * letter is re-emitting the event, never replaying this row.
+   */
+  deadLetters: 30 * 24,
 } as const;
 
 /**
@@ -46,6 +55,7 @@ const BATCH = 500;
 
 export interface RetentionReport {
   canaryArticlesDeleted: number;
+  deadLettersDeleted: number;
   outboxDeleted: number;
   idempotencyDeleted: number;
   mediaDeleted: number;
@@ -69,15 +79,23 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
   );
   const mediaDeleted = await collectStaleMedia(ports, before(RETENTION_HOURS.pendingMedia));
   const canaryArticlesDeleted = await collectCanaryArticles(ports, before(RETENTION_HOURS.canaryArticles));
+  const deadLettersDeleted = await ports.slo.deleteDeadLettersBefore(
+    before(RETENTION_HOURS.deadLetters),
+    BATCH,
+  );
 
   return {
     canaryArticlesDeleted,
+    deadLettersDeleted,
     outboxDeleted,
     idempotencyDeleted,
     mediaDeleted,
     auditPseudonymised,
     moreToDo:
-      outboxDeleted === BATCH || idempotencyDeleted === BATCH || auditPseudonymised === BATCH,
+      outboxDeleted === BATCH ||
+      idempotencyDeleted === BATCH ||
+      auditPseudonymised === BATCH ||
+      deadLettersDeleted === BATCH,
   };
 }
 

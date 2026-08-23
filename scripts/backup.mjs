@@ -96,7 +96,19 @@ const SOURCE = new Set([
  * the queue already delivered. Both are excluded from the dump rather than from the restore,
  * so that nothing has to remember to skip them under pressure.
  */
-const TRANSIENT = new Set(["idempotency_keys", "outbox"]);
+const TRANSIENT = new Set([
+  "idempotency_keys",
+  "outbox",
+  /*
+   * SPEC §66.4 — the record of messages the consumer gave up on.
+   *
+   * Operational telemetry rather than domain state: every row describes work that did not
+   * happen, and recovery from one is re-emitting the event rather than reading the row back.
+   * Carrying it into a restored database would surface the failures of a system that no
+   * longer exists, next to a backlog that has already been re-driven.
+   */
+  "dead_letters",
+]);
 
 function wrangler(argv, { capture = false } = {}) {
   const result = spawnSync("pnpm", ["--filter", "@orator/edge", "exec", "wrangler", ...argv], {

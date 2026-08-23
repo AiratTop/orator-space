@@ -53,6 +53,7 @@ import {
   type MediaRepo,
   type MediaStore,
   type SitemapRepo,
+  type SloRepo,
   type AssetStore,
 } from "../ports/index.js";
 import { SNIFF_BYTES } from "../media/sniff.js";
@@ -101,6 +102,10 @@ export interface MemoryState {
   assets: Map<string, string>;
   edges: Map<string, EdgeRecord>;
   follows: Set<string>;
+  /** SPEC §66.4 — when each article was indexed, which is half of the lag measurement. */
+  searchIndexedAt: Map<string, string>;
+  /** SPEC §66.4 — arrival times of messages the consumer gave up on. */
+  deadLetters: string[];
 }
 
 /** Controls the doubles expose to tests, beyond the ports themselves. */
@@ -141,6 +146,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     articleTopics: new Map(),
     edges: new Map(),
     follows: new Set(),
+    searchIndexedAt: new Map(),
+    deadLetters: [],
   };
 
   let current = options.now ?? new Date("2026-08-21T12:00:00.000Z");
@@ -1144,11 +1151,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
    * only assert that this double behaves like this double.
    */
   const search: SearchIndex = {
-    async index(document, _at) {
+    async index(document, at) {
       state.searchDocs.set(document.articleId, document);
+      state.searchIndexedAt.set(document.articleId, at);
     },
     async remove(articleId) {
       state.searchDocs.delete(articleId);
+      state.searchIndexedAt.delete(articleId);
     },
     async indexedHash(articleId) {
       return state.searchDocs.get(articleId)?.contentHash ?? null;
@@ -1468,6 +1477,48 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+  /**
+   * SPEC §66.4 — the operator's read model, in memory.
+   *
+   * `databaseBytes` answers null, which is what a platform that does not report a size does.
+   * The service turns that into "unavailable" rather than into health, and a test that ran
+   * against a double reporting a comfortable zero would prove the opposite of what it should.
+   */
+  const slo: SloRepo = {
+    async outboxBacklog() {
+      // `sentOutbox` is where this double records delivery, as `listPending` above does.
+      const pending = state.outbox.filter((entry) => !sentOutbox.has(entry.id));
+      const oldest = pending.map((entry) => entry.createdAt).sort()[0];
+      return { pending: pending.length, oldestPendingAt: oldest ?? null };
+    },
+    async indexingLag(sample: number) {
+      const seconds = [...state.searchIndexedAt.entries()]
+        .map(([articleId, indexedAt]) => {
+          const article = state.articles.get(articleId);
+          if (article === undefined || article.publishedAt === null) return null;
+          return (Date.parse(indexedAt) - Date.parse(article.publishedAt)) / 1000;
+        })
+        .filter((value): value is number => value !== null && Number.isFinite(value) && value >= 0)
+        .slice(-sample)
+        .sort((a, b) => a - b);
+
+      if (seconds.length === 0) return { sampled: 0, p95Seconds: null };
+      const rank = Math.max(0, Math.ceil(seconds.length * 0.95) - 1);
+      return { sampled: seconds.length, p95Seconds: seconds[rank] ?? null };
+    },
+    async deadLettered(since: string) {
+      return state.deadLetters.filter((at) => at >= since).length;
+    },
+    async databaseBytes() {
+      return null;
+    },
+    async deleteDeadLettersBefore(cutoff: string, limit: number) {
+      const doomed = state.deadLetters.filter((at) => at < cutoff).slice(0, limit);
+      for (const at of doomed) state.deadLetters.splice(state.deadLetters.indexOf(at), 1);
+      return doomed.length;
+    },
+  };
+
   return {
     db: database,
     principals,
@@ -1492,6 +1543,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     mediaStore,
     moderation,
     sitemap,
+    slo,
     assets,
     events,
     idempotency,

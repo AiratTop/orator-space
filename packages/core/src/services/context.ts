@@ -23,6 +23,7 @@ import type {
   ReadingRepo,
   SearchIndex,
   SitemapRepo,
+  SloRepo,
   SocialRepo,
   TokenRepo,
   TopicRepo,
@@ -57,6 +58,16 @@ export interface Ports {
   moderation: ModerationRepo;
   /** SPEC §51 — which shards need rebuilding, and where the built files go. */
   sitemap: SitemapRepo;
+  /**
+   * SPEC §66.4 — what the pipeline looks like from inside.
+   *
+   * A read model for an operator rather than for a reader: the depth of the backlog, how long
+   * publishing takes to become findable, what the consumer gave up on, how much of D1's
+   * ceiling is used. Here rather than beside `metrics` because none of it is a metric — every
+   * one of these is state the database already holds, which is why six of §66.4's seven rows
+   * need no metrics backend to answer.
+   */
+  slo: SloRepo;
   assets: AssetStore;
   /**
    * SPEC §9.2, §23.5 — browser credentials and sessions.
