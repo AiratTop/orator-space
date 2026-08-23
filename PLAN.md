@@ -195,7 +195,7 @@ from `assets`. That bucket needs no name of its own.
 | 7 | The checkpoint scripts run after every staging deploy | Phase 6 — see below |
 | ~~8~~ | ~~Turn off Cloudflare Web Analytics automatic injection~~ ✅ done — RUM off for `orator.space` and its subdomains | — |
 | ~~9~~ | ~~Stop Cloudflare AI Crawl Control managing `robots.txt`~~ ✅ done — both zones serve ours alone | — |
-| 11 | **A Gatus check on `/health/slo`**, with the canary's token — the §66.4 table, as one status code. The YAML is below | Phase 8 — §66.4 |
+| ~~11~~ | ~~A Gatus check on `/health/slo`~~ ✅ done — configured 2026-08-23, five minutes, alerting to Telegram and email with `send-on-resolved` | — |
 | 12 | **Two secrets on the edge Worker**, if publish p95 and the 5xx rate are wanted: `CF_ACCOUNT_ID` and `CF_ANALYTICS_TOKEN` (Account Analytics: Read). Without them those two report `unavailable` and the other five still answer | Phase 8 — §66.4 |
 
 **On item 3.** Gatus runs outside Cloudflare, on the operator's own host, which is the
@@ -228,20 +228,35 @@ answers `503` when one is breached, so the table needs no dashboard and no query
 the platform compares its own numbers and Gatus reads a status code, through the alert
 channel that is already there.
 
+As configured, alongside the five checks above:
+
 ```yaml
-  - name: slo
+  - name: api.orator.space/slo
     group: orator.space
-    url: https://api.orator.space/health/slo
-    interval: 5m
-    conditions: ["[STATUS] == 200"]
+    enabled: true
+    url: "https://api.orator.space/health/slo"
     headers:
       Authorization: "Bearer <the canary's token>"
+    interval: 5m
+    conditions:
+      - "[STATUS] == 200"
+    alerts:
+      - type: telegram
+        send-on-resolved: true
+      - type: email
+        send-on-resolved: true
 ```
 
-The same credential as `/health/deep`, and five minutes rather than fifteen: this one reads
-and writes nothing, so it costs a handful of indexed queries. A `200` may still carry
+The same credential as `/health/deep`, and five minutes rather than fifteen: this one writes
+nothing, so it costs a handful of indexed queries. A `200` may still carry
 `"status": "degraded"` in its body — an indicator on its way to a limit, or one nothing can
 measure — which belongs on a dashboard rather than in an alert.
+
+**The token stays out of this file.** It is a system account's credential: `/health/deep`
+publishes and removes an article with it, and §66.7 exempts a system account from quotas. The
+repository is public (§82), and a credential in a document is a credential in every clone and
+every fork of its history. `scripts/create-canary.mjs` prints a new one, which is also how it
+is rotated.
 
 **Two of the seven need one more thing.** p95 publish latency and the 5xx rate live in
 Analytics Engine, which is written through a binding and read over the SQL API, and the SQL
@@ -797,8 +812,8 @@ This is where the entire `[L]` level is closed.
 [x] deduplication, and indexability as an earned state (§50.3)
 [x] backups plus a verified restore (§31.5)
 [x] account closure (§23.5)
-[x] the §66.4 alerts — /health/slo evaluates all seven and answers 503 on a breach, so
-    Gatus alerts on the table through the channel that already exists (§1.7 item 3)
+[x] the §66.4 alerts — /health/slo evaluates all seven and answers 503 on a breach; the
+    Gatus check is live as of 2026-08-23, five minutes, Telegram and email (§1.7 item 11)
 [x] a Cloudflare budget alert — 10 USD
 [ ] branch protection re-enabled — `main` deploys to production on every push (§1.5)
 [x] Terms, Content Policy and Privacy published — CC BY 4.0 for content, ADR 0008
