@@ -1,0 +1,81 @@
+---
+import { REASON_CODES } from "@orator/core";
+
+/**
+ * The review actions, on the page being reviewed (SPEC §61.1, §49.2).
+ *
+ * The queue is where reported things are worked through; this is for everything else — a
+ * moderator reading the site and finding something that nobody has reported yet, or checking
+ * the article a queue line named and deciding there rather than going back. §61.1 asks for the
+ * actions to be available to a moderator, not for them to be available in one place, and the
+ * queue-only arrangement meant every decision was made from a line of text about an article
+ * rather than from the article.
+ *
+ * Rendered for a moderator's session and for nobody else. That is safe on a page which is
+ * otherwise publicly cached because the middleware refuses to let any response to a
+ * credentialed request be publicly cacheable (§33.2) — the rule is enforced there, once, so
+ * this component does not have to be trusted to remember it.
+ *
+ * `remove` is here and erasure is not, for the reason §23.2 gives: removing tombstones and is
+ * reversible, erasing bytes is neither, and it is not something to put one click from an
+ * article somebody is reading.
+ */
+interface Props {
+  articleId: string;
+  /** Shown after acting, from the redirect that brought the moderator back. */
+  outcome?: "done" | "failed" | null;
+}
+
+const { articleId, outcome = null } = Astro.props;
+
+/** §61.1's verbs, minus the two that are not about a piece of content. */
+const ACTIONS = [
+  { value: "unindex", label: "de-index" },
+  { value: "hide", label: "hide" },
+  { value: "warn", label: "warn the author" },
+  { value: "remove", label: "remove" },
+] as const;
+---
+
+<aside class="moderate" aria-labelledby="moderate-heading">
+  <h2 class="moderate__heading" id="moderate-heading">Moderation</h2>
+
+  {outcome === "done" && (
+    <p class="notice notice--done" role="status">
+      Applied. The author is told, and it is reversible (§61.2).
+    </p>
+  )}
+  {outcome === "failed" && (
+    <p class="notice notice--failed" role="alert">
+      That action was refused. It may need a reason, or somebody may have acted already.
+    </p>
+  )}
+
+  <form class="moderate__form" method="post" action={`/p/${articleId}/moderate`}>
+    <div class="field">
+      <label for="moderate-kind">Action</label>
+      <select id="moderate-kind" name="kind">
+        {ACTIONS.map((action) => <option value={action.value}>{action.label}</option>)}
+      </select>
+    </div>
+
+    <div class="field">
+      <label for="moderate-reason">Reason</label>
+      {/*
+        A code rather than prose. §61.2 sends it to the author through an event, so it has to
+        mean the same thing every time it is sent; the free-text field that would let a
+        moderator explain in their own words is a different feature and needs to be one.
+      */}
+      <select id="moderate-reason" name="reason">
+        {REASON_CODES.map((code) => <option value={code}>{code.replace(/_/g, " ")}</option>)}
+      </select>
+    </div>
+
+    <button class="button button--small" type="submit">Apply</button>
+  </form>
+
+  <p class="moderate__note">
+    Nothing here erases anything. Removal leaves a tombstone at this address and can be
+    undone; erasing the bytes is a separate decision under §23.3.
+  </p>
+</aside>

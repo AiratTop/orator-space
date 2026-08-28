@@ -2281,3 +2281,46 @@ img.avatar {
   background: var(--paper-soft);
 }
 
+/*
+ * Moderation on the article page (SPEC §61.1, §49.2).
+ *
+ * Deliberately unlike the article around it: a bordered aside in the warning colour, because
+ * the one mistake worth designing against is a moderator taking it for part of the page and
+ * a reader taking a control they cannot use for something they can. It appears for a
+ * moderator's session and for nobody else.
+ */
+.moderate {
+  margin: 1.5rem 0 2rem;
+  padding: 1rem 1.125rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: 6px;
+  background: var(--paper-soft);
+}
+
+.moderate__heading {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.moderate__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.moderate__form .field {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+
+.moderate__note {
+  margin: 0.75rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}

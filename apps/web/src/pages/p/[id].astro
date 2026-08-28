@@ -14,10 +14,12 @@ import Byline from "../../components/Byline.astro";
 import Signals from "../../components/Signals.astro";
 import Feed from "../../components/Feed.astro";
 import Conversation from "../../components/Conversation.astro";
+import ModerationPanel from "../../components/ModerationPanel.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
 import { mediaOrigin, ports, readingListPorts, siteHost, topicPorts } from "../../lib/ports.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../../lib/auth.js";
+import { principalOf } from "../../lib/account.js";
 
 /**
  * The article page (SPEC §49.2, §13, §33, §48).
@@ -46,6 +48,19 @@ const topics = article?.topics ?? [];
 const cookie = readCookie(Astro.request, SESSION_COOKIE);
 const session = cookie === null ? null : await resolveSession(authPorts, cookie);
 const commentOutcome = Astro.url.searchParams.get("comment");
+
+/*
+ * §61.1 — whether this reader may act on what they are reading.
+ *
+ * One principal read, and only for a signed-in reader: an anonymous request never asks, so
+ * the page a cache holds is unchanged by this existing. The role comes from the principal
+ * row rather than from the session, because a role is revoked by editing that row and a
+ * decision made from a copy in a cookie would outlive the revocation.
+ */
+const reader = session === null ? null : await principalOf(session.principalId);
+const moderator =
+  reader !== null && (reader.platformRole === "moderator" || reader.platformRole === "admin");
+const moderationOutcome = Astro.url.searchParams.get("moderation");
 
 /*
  * ADR 0011, §49.2 — whether this reader has saved this article.
@@ -184,6 +199,21 @@ if (article !== null && view !== null) {
             </form>
           )}
         </div>
+
+        {/*
+          §61.1 — the actions, next to the thing they act on.
+
+          Below the byline rather than at the foot of the page: a moderator deciding about an
+          article reads the top of it, and a control that requires scrolling past the whole
+          text is a control that gets used from the queue instead — which is the arrangement
+          this replaces.
+        */}
+        {moderator && (
+          <ModerationPanel
+            articleId={view.article.id}
+            outcome={moderationOutcome === "done" || moderationOutcome === "failed" ? moderationOutcome : null}
+          />
+        )}
 
         {/*
           §15.1 — a cross-post says where it came from, in words as well as in a link tag.

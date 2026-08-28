@@ -770,6 +770,46 @@ check(
   String(reportsByApi.status),
 );
 
+/*
+ * §61.1 — the same two locks on the article page, now that it carries the actions too.
+ *
+ * The panel renders for a moderator's session and the route is a second door into the same
+ * dispatcher, so both are asserted: an ordinary reader is not shown it, and posting to it
+ * anyway changes nothing. The second is the one that matters — a control that is merely
+ * absent from a page is absent from that page.
+ */
+const articleAsReader = await page(`/p/${articleId}`);
+check(
+  "a reader is not offered the moderation panel on an article",
+  !articleAsReader.html.includes("moderate__form"),
+);
+
+const forcedAction = await wire(`${webBase}/p/${articleId}/moderate`, {
+  method: "POST",
+  headers: {
+    "content-type": "application/x-www-form-urlencoded",
+    origin: webOrigin,
+    cookie: cookieHeader(),
+  },
+  body: new URLSearchParams({ kind: "remove", reason: "spam" }).toString(),
+  redirect: "manual",
+});
+check(
+  "and posting to the route anyway is refused",
+  forcedAction.status === 303 && (forcedAction.headers.get("location") ?? "").includes("moderation=failed"),
+  `${forcedAction.status} ${forcedAction.headers.get("location")}`,
+);
+
+/*
+ * Asked with the cookie, so the answer is this request's.
+ *
+ * An anonymous article page is cacheable, and a checkpoint that reads one after a write is
+ * reading whatever the edge had — twice now that mistake has been made here (comments, then
+ * duplicates), and both times the assertion could not fail.
+ */
+const stillThere = await page(`/p/${articleId}`);
+check("and the article is still there afterwards", stillThere.status === 200, String(stillThere.status));
+
 // --- sessions --------------------------------------------------------------------------
 section("Sessions (§9.1)");
 

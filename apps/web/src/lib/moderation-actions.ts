@@ -58,13 +58,21 @@ export async function performModeration(
       if (!isTarget(targetType)) return { kind: "failed", message: "Unknown target" };
       if (!isReason(reason)) return { kind: "failed", message: "Unknown reason code" };
 
+      /*
+       * §61.2 — the source is what actually happened, not where the form was.
+       *
+       * With a report it is `report` and the report is closed by the same action. Without one
+       * this is a moderator who found something themselves, which §61.2 calls `proactive` —
+       * and the distinction is the whole value of the log: "acted on a complaint" and "went
+       * looking" are different facts about how a platform is run.
+       */
       const reportId = text(form, "report");
       const result = await applyModerationAction(ctx, {
         targetType,
         targetId: text(form, "target"),
         action: kind,
         reasonCode: reason,
-        source: "report",
+        source: reportId === "" ? "proactive" : "report",
         ...(reportId === "" ? {} : { reportId }),
       });
       return result.ok
