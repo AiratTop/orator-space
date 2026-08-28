@@ -1442,6 +1442,16 @@ Until then the file is served `max-age=0, must-revalidate` with an ETag, so a re
 costs one 304 and no bytes — the wrong thing to optimise while the first visit was carrying
 41 KB it did not need to.
 
+Asked again on 2026-08-28, from the WordPress convention: should the files be `.min.css` and
+carry `?ver=`. Decided no, for now. The `.min` half does not transfer — WordPress ships the
+source and its minified twin side by side in one public directory, so the name is the switch
+that picks between them; here the source is a build input that never reaches the server, and
+every byte deployed is already minified. The `?ver=` half is real but is a caching question
+rather than a minification one, and the WordPress form of it — a theme or plugin version
+rather than a content hash — is the version that goes wrong in both directions. If it is taken
+later it should be `?v=<content hash>` rather than a hashed filename: a visitor holding HTML
+from before the deploy gets the current file instead of a 404, which a rename cannot promise.
+
 ## 14. Risk register
 
 | Risk | Likelihood | Impact | Mitigation |
