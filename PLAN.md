@@ -1132,6 +1132,20 @@ stored and that the count is bounded; it cannot assert that the topics are right
 remains a person reading the first fifty, and it should be done before the vocabulary is
 revised — the two questions are the same question.
 
+**What the second live run taught: a 200 is not a picture.** The first person to upload a
+real photograph saw nothing, and two independent faults produced that one symptom. The
+adapter's `putDerived` skipped the key prefix every other method applies, so a produced
+variant was written where nothing would look for it: the store answered "not made yet" on
+every request, the transformation ran again, another copy landed at the bucket root, and the
+caller fell back to the original — a billable transformation per view, and a 615 KB JPEG
+served under a name that means 128 pixels. And §57.2's `img-src` named `media.orator.space`
+as a literal, so staging forbade its own pictures; the browser blocked the request and
+rendered the gap, which on the account page is indistinguishable from an upload that failed.
+The checkpoint was green through both, because it asserted a 200 and §21.2's fallback is a
+200. It now reads the format of the variant and compares the page's policy against the origin
+the page points at. The literal is the third one of its kind (`/llms.txt`, `/robots.txt`), and
+the addresses have moved to a module of their own so the middleware can derive one.
+
 ### 12.5. Acceptance
 
 ```
