@@ -2015,6 +2015,7 @@ Without this clarification the platform is not legally operable in the EU.
 | `audit_log` | 12 months, then pseudonymised |
 | request logs (Logpush → R2) | 30 days |
 | `pending` media rows with no bytes | 24 hours |
+| `ready` media nothing references | 24 hours after the last reference goes |
 
 **MUST.** Every table with a bounded retention has a corresponding Cron handler. A table
 with no cleanup handler is a future incident.
@@ -2038,6 +2039,21 @@ guarantee (§35.1).
 **MUST — for media, the object goes before the row.** §32.2 makes an object with no row the
 harmless failure: it is invisible and gets collected. A row with no object promises bytes
 nobody can fetch. A crash between the two steps leaves the row `pending` for the next pass.
+
+**MUST — media that nothing references is collected, with every variant of it, and not at
+once.** §32 has always described "the Cron handler that collects orphaned objects"; for a
+long time only records whose bytes never arrived were swept, so a replaced or removed avatar
+left its original and its derived variants (§21.2) in the bucket forever, referenced by
+nothing. The collection is by key prefix rather than by variant name — a collector that
+deletes the names it knows leaves behind every variant added after it was written — and it
+waits a day, because a picture whose reference was cleared a minute ago is still named by
+pages held in browsers and at the edge (§33.2), and by link previews built while it was
+current. Deleting on the spot turns those into broken images.
+
+**MUST NOT — this is not §23.3's refcount.** That rule governs `content/*`, where an object
+is addressed by its hash and may be referenced by revisions of different articles by
+different authors. A media object is keyed by its own record's id, so "referenced" is exactly
+"a row names this id", and the check is a join rather than a count.
 
 **SHOULD — retention runs on its own schedule.** The outbox drain is a safety net and wants
 to run constantly; retention touches four tables and wants to run rarely, at a time when
@@ -5989,6 +6005,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 150 | The page's `img-src` names this deployment's media origin, derived and never written down | §57.2, §14.3 |
 | 151 | A queue entry names its subject; moderation is reachable from the content itself | §61.1 |
 | 152 | An action with no report behind it is logged as proactive, never attributed to one | §61.1, §61.2 |
+| 153 | A picture can be taken down as well as put up; the mark it had before comes back | §49.4, §21.2 |
+| 154 | Media nothing references is collected with every variant, a day after the last reference | §23.4, §32, §21.2 |
 
 ## 80. Open decisions
 

@@ -1113,6 +1113,7 @@ work here; the three before them close commitments the specification already mad
 [x] /moderation: the queue, the log, an undo and a lookup (§61.1) 17467df
 [x] a reader can answer a comment, not only the article (§17, §84) e2dcaa0
 [x] a person sees the id their account is written in (§49.2)      a8fe1a1
+[x] a picture can be removed, and orphaned media is collected      e28010b
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
 
