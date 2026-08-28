@@ -59,6 +59,23 @@ export interface MediaRepo {
    * that can reach the bucket.
    */
   listStalePending(cutoff: string, limit: number): Promise<string[]>;
+
+  /**
+   * `ready` media that nothing points at any more (SPEC §23.4, §32).
+   *
+   * §32 already assumes "the Cron handler that collects orphaned objects"; there was none.
+   * Only `pending` records were collected, so every replaced or removed avatar left its
+   * original and its variants in the bucket, referenced by nothing and paid for forever.
+   *
+   * The cutoff is a grace period rather than a nicety: an avatar cleared a minute ago is
+   * still named by pages in browsers and at the edge (§33.2), and by any link preview built
+   * while it was current. A day is longer than every one of those.
+   *
+   * The reference check is a join, not a refcount column. §23.3's ordering rule is about
+   * `content/*`, where one object is addressed by hash and may belong to several revisions;
+   * media is keyed by its own id, so "referenced" is exactly "some row names this id".
+   */
+  listOrphaned(cutoff: string, limit: number): Promise<string[]>;
   deleteRecords(ids: readonly string[]): PendingWrite;
 }
 
@@ -98,6 +115,14 @@ export interface MediaStore {
   /** Null when the object is absent. The caller decides whether that is an error. */
   get(key: string): Promise<MediaBody | null>;
   delete(key: string): Promise<void>;
+  /**
+   * Every object belonging to one media record — the original and each produced variant.
+   *
+   * A record's objects share a key prefix (§21.2), so this is a listing and a delete rather
+   * than five guesses at names. Deleting by name would leave behind any variant added after
+   * the collector was written, which is the kind of leak that is invisible until a bill.
+   */
+  deleteAll(idPrefix: string): Promise<number>;
 }
 
 export interface MediaBody {

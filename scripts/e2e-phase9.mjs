@@ -670,6 +670,31 @@ if (typeof avatarSrc === "string") {
   );
 }
 
+/*
+ * §49.4 — and back to the generated mark.
+ *
+ * The pair matters more than either half: an upload with no way back is a decision somebody
+ * cannot revise, and a "remove" that leaves the pointer in place is a button that reports
+ * success and changes nothing.
+ */
+const removed = await wire(`${webBase}/settings?tab=profile`, {
+  method: "POST",
+  headers: {
+    "content-type": "application/x-www-form-urlencoded",
+    origin: webOrigin,
+    cookie: cookieHeader(),
+  },
+  body: new URLSearchParams({ action: "profile.avatar.remove" }).toString(),
+  redirect: "manual",
+});
+const removedHtml = await removed.text();
+check("the picture can be removed again", /Your picture is removed/.test(removedHtml), String(removed.status));
+check(
+  "and the generated mark comes back",
+  !removedHtml.includes('src="' + avatarSrc + '"'),
+  "the page still points at the uploaded picture",
+);
+
 const withPreview = await page_(`/p/${articleId}`);
 check(
   "every article page carries a preview image (§50.1)",

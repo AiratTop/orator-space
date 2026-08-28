@@ -535,7 +535,20 @@ function idTimestampSafe(value: string): number | null {
 export async function updateProfile(
   ctx: AccountContext,
   principalId: string,
-  input: { displayName?: string | null; bio?: string | null },
+  input: {
+    displayName?: string | null;
+    bio?: string | null;
+    /**
+     * SPEC §49.4, §21.2 — clearing the picture, and only clearing it.
+     *
+     * The type admits `null` and nothing else on purpose. Setting an avatar means accepting
+     * bytes and owning them (`setAvatar`); a field here that took an id would let a caller
+     * point their profile at somebody else's media record, which is a different operation
+     * wearing this one's authorisation. Removing is the reverse and needs no bytes: the row
+     * stops naming the picture, and §23.4's collector deals with what nothing names.
+     */
+    avatarMediaId?: null;
+  },
 ): Promise<Result<PrincipalRecord>> {
   const actor = ctx.actor;
   if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
@@ -560,6 +573,7 @@ export async function updateProfile(
   const fields = {
     ...(input.displayName === undefined ? {} : { displayName: input.displayName }),
     ...(input.bio === undefined ? {} : { bio: input.bio }),
+    ...(input.avatarMediaId === undefined ? {} : { avatarMediaId: input.avatarMediaId }),
   };
   if (Object.keys(fields).length === 0) return ok(subject);
 

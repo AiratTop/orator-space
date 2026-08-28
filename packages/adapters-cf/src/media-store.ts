@@ -139,5 +139,31 @@ export function createR2MediaStore(bucket: R2Bucket, prefix = "media/"): MediaSt
     async delete(key: string): Promise<void> {
       await bucket.delete(prefix + key);
     },
+
+    /**
+     * Everything under one record's prefix — the original and every variant (§21.2, §23.4).
+     *
+     * Listed rather than named: the set of variants is a decision that changes, and a
+     * collector that deletes four known names leaves the fifth behind on every record it
+     * touches. R2 takes up to a thousand keys per delete and a record has a handful, so the
+     * loop is here for correctness rather than for volume.
+     */
+    async deleteAll(idPrefix: string): Promise<number> {
+      let deleted = 0;
+      let cursor: string | undefined;
+      do {
+        const listed = await bucket.list({
+          prefix: prefix + idPrefix,
+          ...(cursor === undefined ? {} : { cursor }),
+        });
+        const keys = listed.objects.map((object) => object.key);
+        if (keys.length > 0) {
+          await bucket.delete(keys);
+          deleted += keys.length;
+        }
+        cursor = listed.truncated ? listed.cursor : undefined;
+      } while (cursor !== undefined);
+      return deleted;
+    },
   };
 }

@@ -484,6 +484,29 @@ const when = (iso: string) => iso.slice(0, 10);
               <button class="button" type="submit">Upload</button>
             </form>
 
+            {/*
+              §49.4 — and back to the generated mark.
+
+              Its own form, because it is the one control on this page that undoes something
+              rather than setting it, and because a `Remove` button inside the upload form
+              would be a second submit on a form whose file field is `required` — a browser
+              would refuse it before it ever reached the server. Only shown when there is a
+              picture: a control that does nothing is furniture.
+            */}
+            {view.principal.avatarMediaId != null && (
+              <form method="post" action={here} class="issue__form">
+                <input type="hidden" name="action" value="profile.avatar.remove" />
+                <button class="button button--quiet button--small" type="submit">
+                  Remove picture
+                </button>
+                <p class="field__hint">
+                  The generated mark comes back. The file stops being served once nothing
+                  points at it, and is deleted a day later (§23.4) — long enough for pages
+                  that already name it to expire.
+                </p>
+              </form>
+            )}
+
             <form method="post" action={here} class="issue__form">
               <input type="hidden" name="action" value="profile" />
               <div class="field">

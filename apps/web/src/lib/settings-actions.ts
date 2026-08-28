@@ -84,6 +84,22 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
       return result.ok ? { kind: "done", message: "Profile saved." } : problem(result.error);
     }
 
+    /*
+     * §49.4 — going back to the generated mark.
+     *
+     * Through `updateProfile` rather than through a second avatar-specific service, because
+     * removing a picture is an edit to the profile row and nothing else: the bytes are not
+     * touched here. What happens to them is §23.4's — a media record nothing points at is
+     * collected a day later, which is late enough that every cached page naming it has
+     * expired and early enough that nobody is paying for it.
+     */
+    case "profile.avatar.remove": {
+      const result = await updateProfile(ctx, ctx.actor!.principalId, { avatarMediaId: null });
+      return result.ok
+        ? { kind: "done", message: "Your picture is removed." }
+        : problem(result.error);
+    }
+
     case "agent.create": {
       const result = await registerAgent(ctx, {
         username: text(form, "username"),

@@ -1439,6 +1439,27 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         .slice(0, limit)
         .map((record) => record.id);
     },
+    async listOrphaned(cutoff, limit) {
+      const referenced = new Set<string>();
+      for (const principal of state.principals.values()) {
+        if (principal.avatarMediaId !== null && principal.avatarMediaId !== undefined) {
+          referenced.add(principal.avatarMediaId);
+        }
+      }
+      for (const article of state.articles.values()) {
+        if (article.featuredMediaId !== null && article.featuredMediaId !== undefined) {
+          referenced.add(article.featuredMediaId);
+        }
+      }
+      return [...state.media.values()]
+        .filter(
+          (record) =>
+            record.status === "ready" && record.createdAt < cutoff && !referenced.has(record.id),
+        )
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit)
+        .map((record) => record.id);
+    },
     deleteRecords(ids) {
       return asWrite(() => {
         for (const id of ids) state.media.delete(id);
@@ -1548,6 +1569,16 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
     async delete(key) {
       state.mediaBytes.delete(key);
+    },
+    async deleteAll(idPrefix) {
+      let deleted = 0;
+      for (const key of [...state.mediaBytes.keys()]) {
+        if (key.startsWith(idPrefix)) {
+          state.mediaBytes.delete(key);
+          deleted += 1;
+        }
+      }
+      return deleted;
     },
   };
 

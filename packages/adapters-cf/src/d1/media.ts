@@ -50,6 +50,29 @@ export function createMediaRepo(db: D1Database): MediaRepo {
       return results.map((row) => row.id);
     },
 
+    async listOrphaned(cutoff, limit) {
+      /*
+       * Two `NOT EXISTS`, one per column that can name a media record today.
+       *
+       * Written as subqueries rather than as left joins so that adding a third referencing
+       * column is one more clause in one place. Anything that starts pointing at media and is
+       * not listed here will have its objects collected under it — which is why the list is
+       * short, explicit, and next to the port comment that says so.
+       */
+      const { results } = await db
+        .prepare(
+          `SELECT m.id FROM media m
+            WHERE m.status = 'ready'
+              AND m.created_at < ?
+              AND NOT EXISTS (SELECT 1 FROM principals p WHERE p.avatar_media_id = m.id)
+              AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.featured_media_id = m.id)
+            ORDER BY m.id LIMIT ?`,
+        )
+        .bind(cutoff, limit)
+        .all<{ id: string }>();
+      return results.map((row) => row.id);
+    },
+
     deleteRecords(ids) {
       const placeholders = ids.map(() => "?").join(", ");
       return asWrite(db.prepare(`DELETE FROM media WHERE id IN (${placeholders})`).bind(...ids));

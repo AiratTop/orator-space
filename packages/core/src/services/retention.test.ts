@@ -118,6 +118,39 @@ describe("the audit log (§23.4, twelve months, then pseudonymised)", () => {
   });
 });
 
+/** A `ready` record with bytes, created `hours` ago. The shape both media passes start from. */
+async function ready(id: string, hours: number): Promise<void> {
+  await ports.db.commit([
+    ports.media.insert({
+      id: id as never,
+      ownerPrincipalId: "P1" as never,
+      kind: "image",
+      altText: null,
+      source: "upload",
+      generationMetadata: null,
+      createdAt: hoursAgo(hours),
+    }),
+  ]);
+  await ports.mediaStore.putDerived(`${id}/original`, bytes(10));
+  await ports.db.commit([
+    ports.media.markReady(id, {
+      storageKey: `${id}/original`,
+      contentType: "image/png",
+      byteSize: 10,
+      checksumSha256: "h",
+      finalizedAt: hoursAgo(hours),
+    }),
+  ]);
+}
+
+const bytes = (n: number): ReadableStream<Uint8Array> =>
+  new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(n));
+      controller.close();
+    },
+  });
+
 describe("media whose bytes never arrived (§21.1, §23.4)", () => {
   it("removes the object before the row", async () => {
     const order: string[] = [];
@@ -151,30 +184,52 @@ describe("media whose bytes never arrived (§21.1, §23.4)", () => {
     expect(await ports.media.findById("M-OLD")).toBeNull();
   });
 
-  it("leaves a record whose bytes did arrive", async () => {
-    await ports.db.commit([
-      ports.media.insert({
-        id: "M-READY" as never,
-        ownerPrincipalId: "P1" as never,
-        kind: "image",
-        altText: null,
-        source: "upload",
-        generationMetadata: null,
-        createdAt: hoursAgo(48),
-      }),
-    ]);
-    await ports.db.commit([
-      ports.media.markReady("M-READY", {
-        storageKey: "M-READY/original",
-        contentType: "image/png",
-        byteSize: 10,
-        checksumSha256: "h",
-        finalizedAt: hoursAgo(47),
-      }),
-    ]);
+  it("leaves a record whose bytes did arrive, and something points at", async () => {
+    await ready("M-USED", 48);
+    // The reference is the whole test: the same record with nobody pointing at it is
+    // collected by the pass below, and the difference between those two cases is the only
+    // thing standing between "collect orphans" and "delete somebody's avatar".
+    ports.state.principals.set("P1" as never, {
+      id: "P1" as never,
+      kind: "human",
+      username: "owner",
+      usernameSkeleton: "owner",
+      displayName: null,
+      bio: null,
+      status: "active",
+      platformRole: "user",
+      systemAccount: false,
+      avatarMediaId: "M-USED" as never,
+      createdAt: hoursAgo(100),
+    });
 
-    expect((await runRetention(ports)).mediaDeleted).toBe(0);
-    expect(await ports.media.findById("M-READY")).not.toBeNull();
+    const report = await runRetention(ports);
+    expect(report.mediaDeleted).toBe(0);
+    expect(report.orphanedMediaDeleted).toBe(0);
+    expect(await ports.media.findById("M-USED")).not.toBeNull();
+  });
+
+  it("collects a ready record nothing points at, with every variant of it", async () => {
+    await ready("M-LOOSE", 48);
+    // §21.2 — the objects share a prefix, and a collector that deleted `original` by name
+    // would leave four derived objects behind on every record it touched.
+    await ports.mediaStore.putDerived("M-LOOSE/avatar", bytes(4));
+    await ports.mediaStore.putDerived("M-LOOSE/card", bytes(4));
+
+    const report = await runRetention(ports);
+
+    expect(report.orphanedMediaDeleted).toBe(1);
+    expect(await ports.media.findById("M-LOOSE")).toBeNull();
+    expect(await ports.mediaStore.get("M-LOOSE/avatar")).toBeNull();
+    expect(await ports.mediaStore.get("M-LOOSE/card")).toBeNull();
+  });
+
+  it("leaves an unreferenced record inside its grace period", async () => {
+    // §33.2 — a picture cleared a minute ago is still named by pages held in browsers and at
+    // the edge. Collecting on the spot turns those into broken images.
+    await ready("M-FRESH", 2);
+    expect((await runRetention(ports)).orphanedMediaDeleted).toBe(0);
+    expect(await ports.media.findById("M-FRESH")).not.toBeNull();
   });
 
   it("removes the row even when the bucket refuses the object", async () => {
@@ -205,6 +260,7 @@ describe("bounded passes", () => {
       outboxDeleted: 0,
       idempotencyDeleted: 0,
       mediaDeleted: 0,
+      orphanedMediaDeleted: 0,
       auditPseudonymised: 0,
       moreToDo: false,
     });

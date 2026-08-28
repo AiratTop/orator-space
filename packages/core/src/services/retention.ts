@@ -20,6 +20,16 @@ export const RETENTION_HOURS = {
   idempotency: 24,
   /** §21.1 — a record whose bytes never arrived. */
   pendingMedia: 24,
+  /**
+   * §23.4, §32 — a `ready` record nothing points at any more.
+   *
+   * A day rather than immediately, and the day is the point. An avatar cleared a minute ago
+   * is still named by pages held in browsers and at the edge (§33.2) and by any link preview
+   * built while it was current; collecting on the spot turns those into broken images. It is
+   * also the window in which somebody who removed a picture by accident can put it back by
+   * uploading it again — not the same record, but the same day.
+   */
+  orphanedMedia: 24,
   /** §23.4 — not deleted. Pseudonymised: the action stays, the person does not. */
   auditIdentity: 365 * 24,
   /**
@@ -59,6 +69,8 @@ export interface RetentionReport {
   outboxDeleted: number;
   idempotencyDeleted: number;
   mediaDeleted: number;
+  /** §23.4, §32 — `ready` records nothing referenced, with their objects. */
+  orphanedMediaDeleted: number;
   auditPseudonymised: number;
   /** Rows left over because a batch filled up. Non-zero means "run again sooner". */
   moreToDo: boolean;
@@ -78,6 +90,10 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
     BATCH,
   );
   const mediaDeleted = await collectStaleMedia(ports, before(RETENTION_HOURS.pendingMedia));
+  const orphanedMediaDeleted = await collectOrphanedMedia(
+    ports,
+    before(RETENTION_HOURS.orphanedMedia),
+  );
   const canaryArticlesDeleted = await collectCanaryArticles(ports, before(RETENTION_HOURS.canaryArticles));
   const deadLettersDeleted = await ports.slo.deleteDeadLettersBefore(
     before(RETENTION_HOURS.deadLetters),
@@ -90,6 +106,7 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
     outboxDeleted,
     idempotencyDeleted,
     mediaDeleted,
+    orphanedMediaDeleted,
     auditPseudonymised,
     moreToDo:
       outboxDeleted === BATCH ||
@@ -110,6 +127,41 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
  * An upload that was interrupted mid-stream may have left part of an object behind, which
  * is why the delete is attempted even for records that were never marked ready.
  */
+/**
+ * `ready` media that nothing references any more (SPEC §23.4, §32, §21.2).
+ *
+ * §32 has always spoken of "the Cron handler that collects orphaned objects" and there was
+ * none: only records whose bytes never arrived were collected, so a replaced or removed
+ * avatar left its original and every variant produced from it in the bucket, referenced by
+ * nothing and paid for indefinitely. Nobody noticed because nothing breaks — the leak is
+ * quiet, and it is the exact failure §23.4's rule about "a table with no cleanup handler"
+ * was written to catch, one bucket over.
+ *
+ * The objects go before the row, which is §32.2's ordering and the same one `collectStaleMedia`
+ * follows: an object with no row is invisible and gets collected on a later pass, while a row
+ * with no object promises bytes nobody can fetch.
+ *
+ * The prefix delete covers the variants (§21.2). Deleting `original` alone would leave four
+ * derived objects per record behind — which is what "collected" would have quietly meant.
+ */
+async function collectOrphanedMedia(ports: Ports, cutoff: string): Promise<number> {
+  const orphaned = await ports.media.listOrphaned(cutoff, 100);
+  if (orphaned.length === 0) return 0;
+
+  for (const id of orphaned) {
+    try {
+      await ports.mediaStore.deleteAll(`${id}/`);
+    } catch (error) {
+      console.error(
+        JSON.stringify({ level: "warn", event: "retention.media.unreferenced", id, error: String(error) }),
+      );
+    }
+  }
+
+  await ports.db.commit([ports.media.deleteRecords(orphaned)]);
+  return orphaned.length;
+}
+
 async function collectStaleMedia(ports: Ports, cutoff: string): Promise<number> {
   const stale = await ports.media.listStalePending(cutoff, 100);
   if (stale.length === 0) return 0;
