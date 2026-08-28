@@ -436,8 +436,27 @@ check(
   `${posted.status} ${posted.location}`,
 );
 
-const withComment = await page_(`/p/${articleId}`);
-check("and the comment is on the page", withComment.html.includes(body));
+/*
+ * Read as the commenter, not anonymously — and the difference is the product rather than the
+ * test.
+ *
+ * The anonymous article page is cached for `s-maxage=60` (§33.2), and this checkpoint has
+ * already fetched it once while checking the topics, so the edge holds a copy that predates
+ * the comment. Asserting against that copy asserts something the caching policy deliberately
+ * does not promise: it promises a shared page is at most a minute stale, not that it is
+ * instant.
+ *
+ * What must be instant is the commenter's own view, and it is — their request carries a
+ * cookie, which makes the response `private, no-store`. That is the guarantee worth holding
+ * to, and the first run against a real deployment is what separated the two.
+ */
+const withComment = await page(`/p/${articleId}`);
+check("and the commenter sees it immediately", withComment.html.includes(body));
+check(
+  "on a response no cache may keep",
+  /no-store/.test(withComment.headers.get("cache-control") ?? ""),
+  withComment.headers.get("cache-control") ?? "(none)",
+);
 
 const empty = await comment({ body: "   " });
 check(
