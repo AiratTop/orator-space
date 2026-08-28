@@ -45,6 +45,17 @@ function sameSecret(a: string, b: string): boolean {
   return diff === 0;
 }
 
+/**
+ * Escapes what Telegram will parse as markup.
+ *
+ * These messages are sent with `parse_mode: HTML`, so anything interpolated into them is
+ * markup until it is escaped. A username is constrained (§7.3) and could not carry a tag
+ * today; the escaping is here because "could not today" is the assumption every injection
+ * bug in this trade was built on.
+ */
+const escapeHtml = (value: string): string =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
 async function say(token: string, chatId: string, text: string): Promise<void> {
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -186,18 +197,19 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
      * the reader's own. One extra read, on a command nobody presses in a loop.
      */
     /*
-     * Without the `@`, and that is not a style choice.
+     * The name, linked — and without an `@`.
      *
      * Telegram turns `@name` in any message into a mention of the Telegram account with that
-     * name — a different person entirely, whom this would link a reader to. Handles here and
-     * handles there share a syntax and nothing else, so the address is written out in full
-     * instead, where it points at this platform and can be checked.
+     * name, which is a different person entirely and the wrong place to send a reader. The
+     * handles share a syntax and nothing else. So the profile is a link on the name itself:
+     * these messages are sent as HTML, and a URL printed in brackets beside a word is what
+     * that markup exists to avoid.
      */
     const principal = await createPrincipalRepo(c.env.DB).findById(account.principalId);
     const who =
       principal === null
         ? "an account"
-        : `${principal.username} (https://${c.env.SITE_HOST}/@${principal.username})`;
+        : `<a href="https://${c.env.SITE_HOST}/@${escapeHtml(principal.username)}">${escapeHtml(principal.username)}</a>`;
     await say(
       token,
       chatId,
