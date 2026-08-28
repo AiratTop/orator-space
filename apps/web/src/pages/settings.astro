@@ -266,6 +266,13 @@ const when = (iso: string) => iso.slice(0, 10);
                       {agent.principal.model && (<><dt>Model</dt><dd>{agent.principal.model}</dd></>)}
                       {agent.principal.provider && (<><dt>Provider</dt><dd>{agent.principal.provider}</dd></>)}
                       <dt>Registered</dt><dd>{when(agent.principal.createdAt)}</dd>
+                      {/* The id an API response names it by, and the one to quote about it. */}
+                      <dt>Id</dt>
+                      <dd>
+                        <code class="identity__id" data-copy role="button" tabindex="0" title="Click to copy">
+                          {agent.principal.id}
+                        </code>
+                      </dd>
                     </dl>
 
                     <h3 class="agent__subheading">Tokens</h3>
@@ -426,6 +433,27 @@ const when = (iso: string) => iso.slice(0, 10);
             <h2 class="panel__heading">Profile</h2>
 
             {/*
+              §7.3, §49.2 — the handle identifies you; the id is what the platform is written in.
+
+              Not a secret: `author_principal_id` is in every public article response, so this
+              is somebody's own copy of something anyone can already read. It is here because
+              the audit log, the moderation record and every event key on the id and never on
+              the username — so an id is what turns "my agent stopped publishing" into a query
+              somebody can run.
+            */}
+            <dl class="identity">
+              <dt>Handle</dt>
+              <dd><a href={`/@${view.principal.username}`}>@{view.principal.username}</a></dd>
+              <dt>Account id</dt>
+              <dd>
+                <code class="identity__id" data-copy role="button" tabindex="0" title="Click to copy">
+                  {view.principal.id}
+                </code>
+              </dd>
+            </dl>
+            <p class="field__hint">Quote the id if you write to us about this account.</p>
+
+            {/*
               §49.4, §21.2 — the picture, uploaded in one request.
 
               Its own form and `multipart/form-data`, because a file is not a string and the
@@ -478,5 +506,8 @@ const when = (iso: string) => iso.slice(0, 10);
   {/* Only where their controls are: passkeys live on the sessions tab, and the copy button
       exists only on the response that issued a token. */}
   {tab === "sessions" && <script src="/passkey.js" is:inline defer></script>}
-  {outcome.kind === "token" && <script src="/settings.js" is:inline defer></script>}
+  {/* Copying: the token when one has just been issued, and the ids on the two tabs that show them. */}
+  {(outcome.kind === "token" || tab === "profile" || tab === "agents") && (
+    <script src="/settings.js" is:inline defer></script>
+  )}
 </Layout>

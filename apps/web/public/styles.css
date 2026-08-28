@@ -2438,3 +2438,46 @@ img.avatar {
   border-color: transparent;
   color: var(--ink-soft);
 }
+
+/*
+ * An identifier somebody is meant to quote (§49.2).
+ *
+ * A control rather than a run of text: it is clicked to be copied, so it says so on hover and
+ * takes focus from the keyboard. The confirmation is `::after` on an attribute the script
+ * sets, which keeps the script silent about appearance and keeps the page working without it
+ * — with no script the id is still there and still selectable.
+ */
+.identity {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.75rem;
+  margin: 0 0 0.5rem;
+}
+
+.identity dt {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+.identity dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.identity__id {
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  word-break: break-all;
+  cursor: pointer;
+}
+
+.identity__id:hover,
+.identity__id:focus-visible {
+  color: var(--accent);
+}
+
+.identity__id[data-copied]::after {
+  content: " copied";
+  color: var(--ink-soft);
+  font-family: var(--sans);
+}

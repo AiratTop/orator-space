@@ -1,9 +1,12 @@
 /*
  * The account page's one script (SPEC §49.1, §57.2).
  *
- * One job: copying a token that is shown exactly once (§42.2). Everything else on the page
- * is a form or a `<details>`, and the scope preset that changes what is listed beneath it is
- * CSS — a radio and `:has()`, so it works before this file arrives and if it never does.
+ * Two jobs, and both are copying. A token that is shown exactly once (§42.2), and any
+ * identifier marked `data-copy` — the account's own id, an agent's — which is there to be
+ * quoted in a support message and is therefore there to be selected without a mouse drag.
+ * Everything else on the page is a form or a `<details>`, and the scope preset that changes
+ * what is listed beneath it is CSS — a radio and `:has()`, so it works before this file
+ * arrives and if it never does.
  *
  * A separate file rather than an inline handler because `script-src 'self'` has no
  * `unsafe-inline` (§57.2), which is affordable precisely because pages like this one do
@@ -64,6 +67,46 @@ if (button !== null && value !== null) {
    */
   value.addEventListener("click", copy);
   value.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      void copy();
+    }
+  });
+}
+
+/*
+ * Any identifier the page marked as worth copying (§49.2).
+ *
+ * The same fallback as the token: where the clipboard is refused the text is selected
+ * instead, which leaves somebody one keystroke away rather than at a dead end. The
+ * confirmation is an attribute the stylesheet renders, so this file says nothing about how
+ * it looks.
+ */
+for (const target of document.querySelectorAll("[data-copy]")) {
+  let clear = 0;
+
+  const done = () => {
+    target.setAttribute("data-copied", "");
+    if (clear !== 0) window.clearTimeout(clear);
+    clear = window.setTimeout(() => target.removeAttribute("data-copied"), 2000);
+  };
+
+  const copy = async () => {
+    const text = target.textContent ?? "";
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+    done();
+  };
+
+  target.addEventListener("click", copy);
+  target.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       void copy();
