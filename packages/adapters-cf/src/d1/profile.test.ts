@@ -191,6 +191,23 @@ describe("the canary's own profile (§66.7)", () => {
   it("while an ordinary principal is found by name", async () => {
     expect((await repo().findPrincipalByUsername("researcher"))?.username).toBe("researcher");
   });
+
+  /**
+   * SPEC §49.4 — the column the profile header needs, from the query that answers it.
+   *
+   * The public read model names its columns, so a column nobody named is a field that is
+   * silently undefined — and `Avatar` treats undefined as "no picture uploaded" and draws
+   * the generated mark. That is what happened: the article projection selected
+   * `avatar_media_id` and this query did not, so a person's picture appeared beside their
+   * article and their own page still showed initials. The same shape as `duplicate_of`
+   * before it, which is why the columns now live in one interpolated list.
+   */
+  it("carries the uploaded picture the profile header renders", async () => {
+    await principal("PIC", "pictured");
+    await env.DB.prepare(`UPDATE principals SET avatar_media_id = 'M1' WHERE id = 'PIC'`).run();
+
+    expect((await repo().findPrincipalByUsername("pictured"))?.avatarMediaId).toBe("M1");
+  });
 });
 
 /**

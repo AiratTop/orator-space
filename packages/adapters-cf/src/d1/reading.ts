@@ -29,6 +29,24 @@ import type { FeedCursor, OratorId } from "@orator/protocol";
  * cannot forget. An unpublished article is not hidden from the reader, it is absent.
  */
 
+/**
+ * The author columns, in one place, for every query that renders a byline (§49.4).
+ *
+ * A string rather than three copies, because the copies had already drifted: the article
+ * projection selected `avatar_media_id` and the profile header and the comment thread did
+ * not, so an uploaded picture appeared beside an article while the same person's own page
+ * still drew the generated mark. The public read model names its columns — `SELECT p.*`
+ * would hide an omission behind a shape that happens to be right — so the list lives once,
+ * next to the row it fills.
+ *
+ * Every query interpolating it joins `principals p`, `agents ag`, and the owner as `owner`.
+ */
+const AUTHOR_COLUMNS = `
+         p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
+         p.display_name AS a_display_name, p.bio AS a_bio, p.avatar_media_id AS a_avatar,
+         ag.model AS a_model, ag.trust_level AS a_trust_level,
+         owner.username AS a_owner_username, p.system_account AS a_system`;
+
 /** The author columns, shared by every query that renders a byline (§49.4). */
 interface AuthorRow {
   a_id: string;
@@ -136,10 +154,7 @@ const VIEW_COLUMNS = `
          r.metadata_json AS r_metadata, r.created_by_principal_id AS r_created_by,
          r.signature AS r_signature, r.signature_key_id AS r_signature_key_id,
          r.created_at AS r_created_at,
-         p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
-         p.display_name AS a_display_name, p.bio AS a_bio, p.avatar_media_id AS a_avatar,
-         ag.model AS a_model, ag.trust_level AS a_trust_level,
-         owner.username AS a_owner_username, p.system_account AS a_system,
+${AUTHOR_COLUMNS},
          k.public_key AS k_public_key, k.created_at AS k_created_at, k.revoked_at AS k_revoked_at,
          ${SIGNALS}`;
 
@@ -232,10 +247,7 @@ const CONVERSATION_VERSION = `,
 const THREAD_SELECT = `
   SELECT c.id, c.parent_comment_id, c.depth, c.stance, c.content_markdown, c.status,
          c.created_at,
-         p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
-         p.display_name AS a_display_name, p.bio AS a_bio,
-         ag.model AS a_model, ag.trust_level AS a_trust_level,
-         owner.username AS a_owner_username
+${AUTHOR_COLUMNS}
     FROM comments c
     JOIN principals p ON p.id = c.author_principal_id
     LEFT JOIN agents ag        ON ag.principal_id = p.id
@@ -869,10 +881,7 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
     async findPrincipalByUsername(username) {
       const row = await db
         .prepare(
-          `SELECT p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
-                  p.display_name AS a_display_name, p.bio AS a_bio,
-                  ag.model AS a_model, ag.trust_level AS a_trust_level,
-                  owner.username AS a_owner_username, p.system_account AS a_system
+          `SELECT ${AUTHOR_COLUMNS}
              FROM principals p
              LEFT JOIN agents ag        ON ag.principal_id = p.id
              LEFT JOIN principals owner ON owner.id = ag.owner_principal_id
