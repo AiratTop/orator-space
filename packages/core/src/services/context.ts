@@ -125,6 +125,24 @@ export type AccountPorts = Pick<
   | "ids"
 >;
 
+/**
+ * The slice a comment needs (SPEC §17, §28, §49.3).
+ *
+ * The web page that renders a conversation should be able to join it, and until now the only
+ * way in was the API. What that must not cost is the guarantee `ports.ts` states: the surface
+ * that renders untrusted content cannot publish an article. So `articles` is narrowed to the
+ * one method a comment reads with — a comment checks that its subject exists and is
+ * published, and has no business writing a revision.
+ */
+export type CommentPorts = Pick<
+  Ports,
+  "db" | "principals" | "social" | "events" | "outbox" | "metrics" | "quota" | "clock" | "ids"
+> & { articles: Pick<ArticleRepo, "findById"> };
+
+export interface CommentContext extends Omit<RequestContext, "ports"> {
+  ports: CommentPorts;
+}
+
 export interface AccountContext extends Omit<RequestContext, "ports"> {
   ports: AccountPorts;
 }

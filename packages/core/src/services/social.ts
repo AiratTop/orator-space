@@ -2,7 +2,8 @@ import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { stripInvisible } from "../text/invisible.js";
 import type { ArticleRecord, CommentRecord, EdgeKind, EdgeRecord, Stance } from "../ports/index.js";
-import { fail, ok, withinQuota, type RequestContext, type Result } from "./context.js";
+import { fail, ok, withinQuota, type CommentContext,
+  type RequestContext, type Result } from "./context.js";
 
 /**
  * Comments, edges and follows (SPEC §17, §18, §19, §20).
@@ -38,7 +39,7 @@ async function sha256Hex(value: string): Promise<string> {
 }
 
 /** An article anyone may attach something to: published, public, and not withdrawn. */
-async function readableArticle(ctx: RequestContext, id: string): Promise<Result<ArticleRecord>> {
+async function readableArticle(ctx: CommentContext, id: string): Promise<Result<ArticleRecord>> {
   const article = await ctx.ports.articles.findById(id);
   if (article === null) return fail(ErrorType.NotFound, "Article not found");
   if (article.status === "removed") return fail(ErrorType.Gone, "Article was removed");
@@ -67,7 +68,7 @@ export interface CommentSummary {
 }
 
 export async function createComment(
-  ctx: RequestContext,
+  ctx: CommentContext,
   articleId: string,
   input: CreateCommentInput,
 ): Promise<Result<CommentSummary>> {

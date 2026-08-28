@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import type { QuotaCounter } from "@orator/adapters-cf";
 import {
+  createArticleRepo,
   createAuditRepo,
   createD1Database,
   createIdGen,
@@ -10,11 +11,20 @@ import {
   createQuotaGate,
   createReadingRepo,
   createSessionRepo,
+  createSocialRepo,
+  createEventRepo,
   createTokenRepo,
   createCredentialRepo,
   systemClock,
 } from "@orator/adapters-cf";
-import { sessionActor, type AccountContext, type AccountPorts, type PrincipalRecord } from "@orator/core";
+import {
+  sessionActor,
+  type AccountContext,
+  type AccountPorts,
+  type CommentContext,
+  type CommentPorts,
+  type PrincipalRecord,
+} from "@orator/core";
 import { authPorts } from "./auth.js";
 
 /**
@@ -99,4 +109,34 @@ export function sameOrigin(request: Request, origin: string): boolean {
 /** Who is asking, resolved to the full record the services need. */
 export async function principalOf(principalId: string): Promise<PrincipalRecord | null> {
   return authPorts.principals.findById(principalId);
+}
+
+
+/**
+ * The writes a comment form is allowed to make (SPEC §17, §28, §49.3).
+ *
+ * Separate from `accountPorts` and narrower than it in the direction that matters: `articles`
+ * is `{ findById }` and nothing else, so a page can check that the article it is commenting
+ * on exists and cannot write a revision. The rest is what §17's flow already touches — the
+ * comment, the event, the outbox row and the quota that bounds it.
+ *
+ * Metrics are a no-op here rather than the Analytics Engine binding: §66.2 puts metrics on
+ * the API surface, and a page writing to a dataset the API owns would make one number mean
+ * two things.
+ */
+export const commentPorts: CommentPorts = {
+  db: accountPorts.db,
+  principals: accountPorts.principals,
+  social: createSocialRepo(accountEnv.DB),
+  events: createEventRepo(accountEnv.DB),
+  outbox: accountPorts.outbox,
+  quota: accountPorts.quota,
+  articles: { findById: createArticleRepo(accountEnv.DB).findById },
+  metrics: { write: () => undefined },
+  clock: systemClock,
+  ids,
+};
+
+export function commentContext(request: Request, principal: PrincipalRecord): CommentContext {
+  return { ...accountContext(request, principal), ports: commentPorts };
 }

@@ -12,6 +12,11 @@
  * the session holds, a way to touch somebody else's agent, or a way for a token to survive
  * being revoked. Each of those is a check below rather than a comment.
  *
+ * Run it against a deployment. Locally the Workers AI binding is absent on purpose — it has
+ * no simulator and its presence makes the test pool open a remote proxy session — so
+ * classification is skipped and the one check that waits for topics will fail. Everything
+ * else is meaningful locally.
+ *
  *   node scripts/e2e-phase9.mjs [apiBase] [webBase]
  */
 import { createVirtualAuthenticator } from "./lib/virtual-authenticator.mjs";
@@ -396,6 +401,50 @@ if (classified !== null) {
   const articlePage = await page_(`/p/${articleId}`);
   check("and the article names its topics", articlePage.html.includes(`/t/${primary}`));
 }
+
+// --- joining the conversation ----------------------------------------------------------
+section("Commenting from a browser (§17, §49.3)");
+
+async function comment(fields, { origin = webOrigin } = {}) {
+  const response = await fetch(`${webBase}/p/${articleId}/comment`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      ...(origin === null ? {} : { origin }),
+      ...(cookies.size > 0 ? { cookie: cookieHeader() } : {}),
+    },
+    body: new URLSearchParams(fields).toString(),
+    redirect: "manual",
+  });
+  return { status: response.status, location: response.headers.get("location") ?? "" };
+}
+
+const anonymous_page = await page_(`/p/${articleId}`);
+check(
+  "a signed-out reader is invited rather than given a form that posts nothing",
+  anonymous_page.html.includes('class="join"') && !anonymous_page.html.includes("comment-body"),
+);
+
+const forgedComment = await comment({ body: "from elsewhere" }, { origin: "https://evil.test" });
+check("a comment posted from another origin is refused", forgedComment.status === 403);
+
+const body = `Measured the same thing from the other side: ${suffix}`;
+const posted = await comment({ body, stance: "clarifies" });
+check(
+  "a signed-in reader can answer the article",
+  posted.status === 303 && posted.location.includes("comment=posted"),
+  `${posted.status} ${posted.location}`,
+);
+
+const withComment = await page_(`/p/${articleId}`);
+check("and the comment is on the page", withComment.html.includes(body));
+
+const empty = await comment({ body: "   " });
+check(
+  "an empty comment is refused, and says so on the page rather than as a 500",
+  empty.status === 303 && empty.location.includes("comment=invalid"),
+  empty.location,
+);
 
 // --- what the page must not be ---------------------------------------------------------
 section("What a writing page must not become (§28)");

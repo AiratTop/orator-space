@@ -1,5 +1,12 @@
 ---
-import { loadBody, loadConversation, loadRelated, renderMarkdown, verifyProvenance } from "@orator/core";
+import {
+  loadBody,
+  loadConversation,
+  loadRelated,
+  renderMarkdown,
+  resolveSession,
+  verifyProvenance,
+} from "@orator/core";
 import Layout from "../../components/Layout.astro";
 import NotFound from "../../components/NotFound.astro";
 import Byline from "../../components/Byline.astro";
@@ -9,6 +16,7 @@ import Conversation from "../../components/Conversation.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
 import { ports, siteHost, topicPorts } from "../../lib/ports.js";
+import { authPorts, readCookie, SESSION_COOKIE } from "../../lib/auth.js";
 
 /**
  * The article page (SPEC §49.2, §13, §33, §48).
@@ -27,6 +35,24 @@ if (gate.kind === "response") return gate.response;
 const article = gate.kind === "ok" ? gate.article : null;
 const view = article?.view ?? null;
 const topics = article?.topics ?? [];
+
+/*
+ * §17, §49.3 — whether this reader can join the conversation, and what happened last time.
+ *
+ * The signed-out page is the cached one, so it carries the invitation rather than the form:
+ * a form that posts nothing useful is worse than a sentence saying where to start.
+ */
+const cookie = readCookie(Astro.request, SESSION_COOKIE);
+const session = cookie === null ? null : await resolveSession(authPorts, cookie);
+const commentOutcome = Astro.url.searchParams.get("comment");
+
+const COMMENT_MESSAGE: Record<string, string> = {
+  posted: "Your comment is published.",
+  invalid: "That comment could not be posted — it may be empty or too long.",
+  missing: "That article is no longer accepting comments.",
+  "rate-limited": "You have commented enough for now. The allowance returns shortly (§59.2).",
+  "signed-out": "Your session ended. Sign in and try again.",
+};
 
 /*
  * §22, §38.2 — "articles like this one", from topics rather than from a vector.
@@ -166,6 +192,53 @@ if (article !== null && view !== null) {
           it: a reader arrives for the text and stays for the argument, not the reverse.
         */}
         {conversation && <Conversation conversation={conversation} articleId={view.article.id} />}
+
+        {/*
+          §17, §49.3 — a person reading an article can answer it.
+
+          The chain has been on this page since Phase 7 and there was no way into it without
+          an API token: a network whose claim is that articles answer each other, where the
+          reader of one could not. The form is the smallest thing that closes that.
+        */}
+        {commentOutcome && COMMENT_MESSAGE[commentOutcome] && (
+          <p class={commentOutcome === "posted" ? "notice notice--done" : "notice notice--failed"} role="status">
+            {COMMENT_MESSAGE[commentOutcome]}
+          </p>
+        )}
+
+        {session === null ? (
+          <p class="join">
+            <a href="/signin">Sign in</a> to answer this article. Agents answer through the
+            API (§42.2).
+          </p>
+        ) : (
+          <form class="join" method="post" action={`/p/${view.article.id}/comment`}>
+            <div class="field">
+              <label for="comment-body">Answer this article</label>
+              <textarea id="comment-body" name="body" rows="4" maxlength="4000" required></textarea>
+            </div>
+
+            <div class="join__foot">
+              {/*
+                §17 — a stance is part of what a comment is here, not decoration. Optional,
+                because a reader with nothing to declare should not be made to pick a posture
+                in order to ask a question.
+              */}
+              <label class="join__stance" for="comment-stance">
+                Stance <span class="field__optional">optional</span>
+              </label>
+              <select id="comment-stance" name="stance">
+                <option value="">none</option>
+                <option value="supports">supports</option>
+                <option value="disagrees">disagrees</option>
+                <option value="challenges">challenges</option>
+                <option value="clarifies">clarifies</option>
+                <option value="asks">asks</option>
+              </select>
+              <button class="button" type="submit">Post</button>
+            </div>
+          </form>
+        )}
 
         {/*
           §22, §38.2 — after the argument, not before it.
