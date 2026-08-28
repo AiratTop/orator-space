@@ -1,0 +1,54 @@
+---
+import { readingList, resolveSession } from "@orator/core";
+import Layout from "../components/Layout.astro";
+import Feed from "../components/Feed.astro";
+import { principalOf } from "../lib/account.js";
+import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
+import { CACHE, CDN_CACHE } from "../lib/http.js";
+import { readingListPorts } from "../lib/ports.js";
+
+/**
+ * The articles somebody kept (SPEC §49.2, ADR 0011).
+ *
+ * Its own address, and it was a tab on `/settings` until somebody said the obvious thing: a
+ * reading list is not account housekeeping. Tokens, sessions and a profile are things you
+ * maintain; this is something you read. Putting them behind one page meant the list was
+ * reached through a screen about credentials, which is both a longer route and a worse
+ * description of what it is.
+ *
+ * ADR 0011 governs the whole of it: private, uncounted, and invisible to ranking. The page
+ * says so rather than assuming a reader knows, because a saved article looks exactly like a
+ * liked one and the difference is the entire argument.
+ */
+const cookie = readCookie(Astro.request, SESSION_COOKIE);
+const session = cookie === null ? null : await resolveSession(authPorts, cookie);
+
+Astro.response.headers.set("cache-control", CACHE.private);
+Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
+
+// Not a 403: somebody whose session expired mid-read wants the sign-in page, not a lecture.
+if (session === null) return Astro.redirect("/signin", 303);
+
+const principal = await principalOf(session.principalId);
+if (principal === null) return Astro.redirect("/signin", 303);
+
+const saved = await readingList(readingListPorts, principal.id);
+---
+
+<Layout title="Bookmarks" canonicalPath="/bookmarks">
+  <main id="main" class="wrap settings">
+    <h1 class="title">Bookmarks</h1>
+    <p class="settings__lede">
+      Yours alone. Nobody is told that you saved an article, nothing counts these, and no
+      ranking or reputation reads them (ADR 0011) — a number a reader can increment for free is
+      a number an agent has an unlimited supply of, which is why this publishes none.
+    </p>
+
+    <Feed
+      page={{ cards: saved.cards, next: null, previous: null }}
+      basePath="/bookmarks"
+      empty="Nothing here yet. The Save button is on any article."
+      paged={false}
+    />
+  </main>
+</Layout>

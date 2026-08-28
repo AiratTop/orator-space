@@ -20,7 +20,16 @@
   --line: #e2e5ea;
   --accent: #1a56c4;
   --warn: #8a5300;
-  --measure: 38rem;
+  /*
+   * The reading measure, widened from 38rem after seeing the pages side by side.
+   *
+   * 38rem is the textbook answer for a line of prose and it made this site look like three
+   * different sites: an article in a narrow column, a feed wider, an account page wider
+   * still. 44rem is about eighty-five characters at this size — past the classic optimum and
+   * short of the point where the eye loses the start of the next line — and it brings the
+   * article within a step of everything else rather than a jump.
+   */
+  --measure: 44rem;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
@@ -98,8 +107,15 @@ body {
   margin: 0 auto;
 }
 
+/*
+ * One step wider, for pages that are lists rather than prose.
+ *
+ * A feed card is a title, an excerpt and a row of facts; a line of that is not read the way a
+ * paragraph is. Two widths rather than one because the difference is real, and near each
+ * other because the site should not read as three sites.
+ */
 .wrap--wide {
-  max-width: 46rem;
+  max-width: 50rem;
 }
 
 a {
@@ -1411,9 +1427,9 @@ a {
  * ------------------------------------------------------------------------ */
 
 .settings {
-  /* Wider than the reading measure: these are lists with several columns of fact, and
-     wrapping them into a 38rem column turns each row into a paragraph. */
-  max-width: 52rem;
+  /* The same width as every other list on the site. It was 52rem against a 38rem article,
+     which is the gap that made the pages look unrelated. */
+  max-width: 50rem;
 }
 
 .settings__lede {

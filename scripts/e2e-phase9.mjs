@@ -996,6 +996,16 @@ check(
  * A moderator's bookmark is worth a redirect; whether the destination will have them is a
  * separate question, answered above.
  */
+const movedBookmarks = await page("/settings?tab=saved");
+check(
+  "the reading list has an address of its own, and the old tab redirects (ADR 0011)",
+  movedBookmarks.status === 301 && movedBookmarks.headers.get("location") === "/bookmarks",
+  `${movedBookmarks.status} ${movedBookmarks.headers.get("location")}`,
+);
+
+const bookmarks = await page("/bookmarks");
+check("which a signed-in reader can open", bookmarks.status === 200, String(bookmarks.status));
+
 const movedTab = await page("/settings?tab=moderation");
 check(
   "the old tab address redirects to the section",

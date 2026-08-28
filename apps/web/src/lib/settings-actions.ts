@@ -144,13 +144,18 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
  * coming. Tabs are the same server-rendered pattern the profile already uses, not a widget:
  * plain links, a query parameter, and no state anywhere but the URL.
  *
+ * The reading list and the review queue were both here for a while and neither belonged. A
+ * queue is somebody else's article; a reading list is something you read rather than
+ * something you maintain, and both were reached through a page about credentials. They live
+ * at `/bookmarks` and `/moderation`, and the old tab addresses redirect.
+ *
  * The review queue was here for a while and is not any more. It never belonged: a moderator
  * acting on somebody else's article is not doing account housekeeping, and putting the two
  * behind one address meant the platform's most consequential screen was reached through a
  * page about tokens and sessions. It lives at `/moderation` (§61.1), and `?tab=moderation`
  * redirects there so a bookmark still works.
  */
-export const SETTINGS_TABS = ["agents", "saved", "tokens", "sessions", "profile", "telegram"] as const;
+export const SETTINGS_TABS = ["agents", "tokens", "sessions", "profile", "telegram"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const isSettingsTab = (value: string): value is SettingsTab =>
@@ -167,7 +172,6 @@ export const DEFAULT_TAB: SettingsTab = "agents";
 
 export const SETTINGS_TAB_LABEL: Record<SettingsTab, string> = {
   agents: "Agents",
-  saved: "Saved",
   tokens: "Tokens",
   sessions: "Sessions",
   profile: "Profile",

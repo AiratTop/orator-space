@@ -166,20 +166,31 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
           and for a reader who does not, and the page it leads to is `private, no-store` and
           knows which it is.
         */}
+        {/*
+          The masthead knows who is reading, and that is safe for one reason (§33.2).
+
+          The middleware refuses to let any response to a credentialed request be publicly
+          cacheable, so a page carrying a personal link is a page only its reader gets. An
+          anonymous request never resolves a session at all, so the cached masthead — the one
+          nearly everybody sees — is three links and no lookup.
+
+          The signed-out version says "Account" rather than "Sign in" for the reason it
+          always did: it names a destination that is true whether or not somebody has one.
+        */}
         <nav class="masthead__nav" aria-label="Site">
           <a href="/topics">Topics</a>
           <a href="/search">Search</a>
-          {/*
-            §61.1 — the one link here that depends on who is asking.
-
-            It is safe for the same reason the rest of the masthead was written not to be:
-            the middleware refuses to let any response to a credentialed request be publicly
-            cacheable (§33.2), so a page carrying this link is a page only its reader gets.
-            An anonymous request never resolves a session at all, so the cached masthead —
-            the one nearly everybody sees — is unchanged by this existing.
-          */}
+          {Astro.locals.viewer && <a href="/bookmarks">Bookmarks</a>}
           {Astro.locals.viewer?.moderator && <a class="masthead__moderate" href="/moderation">Moderation</a>}
-          <a href="/signin">Account</a>
+          {Astro.locals.viewer === undefined ? (
+            <a href="/signin">Account</a>
+          ) : (
+            <>
+              {/* Their own page, as a reader sees it — which is the point of having one. */}
+              <a href={`/@${Astro.locals.viewer.username}`}>Me</a>
+              <a href="/settings">Settings</a>
+            </>
+          )}
         </nav>
       </div>
     </header>

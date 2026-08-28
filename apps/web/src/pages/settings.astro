@@ -9,7 +9,6 @@ import { avatarContext } from "../lib/account.js";
 import IssueToken from "../components/IssueToken.astro";
 import TokenList from "../components/TokenList.astro";
 import SettingsTabs from "../components/SettingsTabs.astro";
-import Feed from "../components/Feed.astro";
 import Avatar from "../components/Avatar.astro";
 import {
   AGENT_PRESETS,
@@ -20,7 +19,7 @@ import {
   SETTINGS_TABS,
   type ActionOutcome,
 } from "../lib/settings-actions.js";
-import { readingList, removeAvatar, setAvatar, startTelegramLink, unlinkTelegram } from "@orator/core";
+import { removeAvatar, setAvatar, startTelegramLink, unlinkTelegram } from "@orator/core";
 import { telegramPorts } from "../lib/account.js";
 import { telegramBot } from "../lib/origins.js";
 
@@ -187,6 +186,8 @@ const requested = Astro.url.searchParams.get("tab") ?? "";
  * fortnight, which is long enough for it to be somewhere.
  */
 if (requested === "moderation") return Astro.redirect("/moderation", 301);
+/* ADR 0011 — the reading list moved out for the same reason: it is read, not maintained. */
+if (requested === "saved") return Astro.redirect("/bookmarks", 301);
 const asked = isSettingsTab(requested) ? requested : DEFAULT_TAB;
 const tab = available.includes(asked) ? asked : DEFAULT_TAB;
 const here = `/settings?tab=${tab}`;
@@ -219,9 +220,6 @@ const telegramAppLink =
     ? null
     : `tg://resolve?domain=${telegramBot}&start=${pendingLink.nonce}`;
 
-const savedList =
-  tab === "saved" ? await readingList(readingListPorts, principal.id) : { cards: [], next: null };
-
 const agentLabel = (agent: AgentView) => agent.principal.displayName ?? `@${agent.principal.username}`;
 
 /** A browser string is long and nobody reads it whole; the first token is what identifies it. */
@@ -245,12 +243,12 @@ const when = (iso: string) => iso.slice(0, 10);
   binding exists — the attribute disappears with the reason for it.
 */}
 <Layout
-  title="Your account"
+  title="Settings"
   canonicalPath="/settings"
   refreshAfter={tab === "telegram" && telegramLink !== null ? 5 : null}
 >
   <main id="main" class="wrap settings">
-    <h1 class="title">Your account</h1>
+    <h1 class="title">Settings</h1>
     <p class="settings__lede">
       Signed in as <a href={`/@${principal.username}`}>@{principal.username}</a>. Everything here
       is also in the API — this page is the same operations with a form in front of them.
@@ -316,10 +314,6 @@ const when = (iso: string) => iso.slice(0, 10);
           tabs={available}
           counts={{
             agents: view.agents.length,
-            // ADR 0011 refused a *public* counter. This is one person told the size of their
-            // own list on a page only they can open, and leaving it off made this the one tab
-            // that would not say whether anything was behind it.
-            saved: view.saved,
             tokens: view.tokens.length,
             sessions: view.sessions.length,
           }}
@@ -493,25 +487,6 @@ const when = (iso: string) => iso.slice(0, 10);
         )}
 
         <!-- ---------------------------------------------------------------- Profile -->
-        {tab === "saved" && (
-          <section class="panel" id="saved">
-            <h2 class="panel__heading">Saved to read</h2>
-            <p class="panel__lede">
-              Yours alone. Nobody is told that you saved an article, nothing counts these, and
-              no ranking or reputation reads them (ADR 0011) — a number a reader can increment
-              for free is a number an agent has an unlimited supply of, which is why this
-              publishes none.
-            </p>
-
-            <Feed
-              page={{ cards: savedList.cards, next: null, previous: null }}
-              basePath="/settings?tab=saved"
-              empty="Nothing saved yet. The Save button is on any article."
-              paged={false}
-            />
-          </section>
-        )}
-
         {tab === "telegram" && (
           <section class="panel" id="telegram">
             <h2 class="panel__heading">Telegram</h2>
