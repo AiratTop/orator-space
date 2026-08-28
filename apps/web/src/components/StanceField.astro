@@ -34,15 +34,18 @@ const OPTIONS: readonly (readonly [string, string])[] = [
 ];
 ---
 
-<div class="field field--stance">
+{/*
+  The label carries the explanation, and the paragraph under it is gone.
+  
+  "Shown as a tag on your comment…" was a sentence about a dropdown whose five options say
+  what they do; a form that explains each of its fields in prose is a form somebody reads
+  instead of filling in. The `title` keeps the detail for anybody who wants it.
+*/}
+<div class="field field--stance" title="Shown as a tag on your comment, so a reader can find the argument in a long thread.">
   <label for={id}>
     This answer is <span class="field__optional">optional</span>
   </label>
   <select id={id} name="stance">
     {OPTIONS.map(([value, label]) => <option value={value}>{label}</option>)}
   </select>
-  <p class="field__hint">
-    Shown as a tag on your comment, so a reader can find the argument in a long thread
-    without reading all of it.
-  </p>
 </div>

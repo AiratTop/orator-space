@@ -1098,22 +1098,52 @@ a {
  * somebody challenged this article should not have to scroll the whole thing to discover
  * that — on a long article that is a page and a half of scrolling on a guess.
  */
+/*
+ * The byline, then one row of small facts about the article.
+ *
+ * `space-between` put the version link, the conversation count and the save button wherever
+ * the wrap happened to leave them: three controls of three sizes, one of them centred by
+ * accident. They are the same kind of thing — a way into some part of this article — so they
+ * are one left-aligned row at one size, and only `Save`, which acts rather than points, sits
+ * apart at the end.
+ */
 .article__head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  justify-content: space-between;
   gap: 0.5rem 1rem;
   margin-bottom: 2rem;
+}
+
+.article__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 1.25rem;
+  width: 100%;
+  font-size: 0.8125rem;
+}
+
+/* The one control here that does something rather than leading somewhere. */
+.article__meta .save {
+  margin-left: auto;
 }
 
 .article__head .byline {
   margin: 0;
 }
 
-.article__jump {
+.article__jump,
+.article__versions {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
   text-decoration: none;
   border-bottom: 1px dashed var(--line);
+}
+
+.article__versions:hover,
+.article__jump:hover {
+  color: var(--ink);
 }
 
 .article__jump:hover {
@@ -1121,7 +1151,8 @@ a {
 }
 
 .article__jump .signals {
-  color: var(--accent);
+  color: inherit;
+  font-size: inherit;
 }
 
 /* The conversation (§76, §84) ------------------------------------------- */
@@ -2193,8 +2224,17 @@ a {
 .join__foot {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem 0.75rem;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.join__foot .field {
+  margin: 0;
+}
+
+/* The button ends the row rather than following the select. */
+.join__foot .button {
+  margin-left: auto;
 }
 
 .field--stance select {

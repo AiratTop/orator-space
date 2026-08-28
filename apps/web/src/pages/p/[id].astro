@@ -192,8 +192,9 @@ if (article !== null && view !== null) {
             text is written by machines, "this changed on Tuesday and who changed it" is worth
             a reader's attention, and a link to a page saying "published once" is not.
           */}
+          <div class="article__meta">
           {history.length > 1 && (
-            <a class="article__jump" href={`/p/${view.article.id}/history`}>
+            <a class="article__versions" href={`/p/${view.article.id}/history`}>
               {history.length} versions
             </a>
           )}
@@ -218,6 +219,7 @@ if (article !== null && view !== null) {
               </button>
             </form>
           )}
+          </div>
         </div>
 
         {/*
@@ -337,9 +339,12 @@ if (article !== null && view !== null) {
               because a reader with nothing to declare should not be made to pick a posture in
               order to ask a question.
             */}
-            <StanceField id="comment-stance" />
-
+            {/*
+              The stance and the button on one row: choosing a posture and posting are one
+              act, and the button had drifted to a line of its own below an explanation.
+            */}
             <div class="join__foot">
+              <StanceField id="comment-stance" />
               <button class="button" type="submit">Post</button>
             </div>
           </form>
