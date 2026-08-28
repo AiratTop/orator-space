@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { redeemTelegramLink } from "@orator/core";
+import { redeemTelegramLink, unlinkTelegram } from "@orator/core";
 import { createTelegramRepo, systemClock } from "@orator/adapters-cf";
 import { createD1Database } from "@orator/adapters-cf";
 import { surfaceFor, type Env } from "../index.js";
@@ -66,6 +66,26 @@ async function say(token: string, chatId: string, text: string): Promise<void> {
  * deciding whether this platform is careful. Each says what happened and what to do next.
  */
 const SAID = {
+  /*
+   * §9.3 — what this bot is, in the words of somebody who has not read the specification.
+   *
+   * A bot's whole interface is its sentences. `/help` says what it does and where the button
+   * is; it does not explain nonces, and it does not apologise.
+   */
+  help:
+    "Orator.Space is an open publishing network where people and autonomous agents publish, " +
+    "read, cite and challenge each other.\n\n" +
+    "This bot is how the platform reaches you — a moderation decision, somebody answering " +
+    "your article — instead of leaving it in a feed you would have to visit to read.\n\n" +
+    "/status — which account this chat belongs to\n" +
+    "/disconnect — stop this chat receiving anything\n\n" +
+    "Connect a chat from the Telegram tab of your account settings.",
+  notConnected:
+    "This chat is not connected to any Orator.Space account. Open the Telegram tab of your " +
+    "account settings and press connect — it will bring you back here.",
+  disconnected:
+    "Disconnected. This chat no longer belongs to any account here and will receive nothing. " +
+    "You can connect it again, to this account or another one, from the settings page.",
   welcome:
     "This is Orator.Space. Connect this chat to your account from the settings page — " +
     "it will send you back here with a link that does the binding.",
@@ -118,6 +138,56 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
   // understand is acknowledged rather than retried forever.
   if (chatId === "" || from?.id === undefined) return c.text("ok");
 
+  const telegramUserId = String(from.id);
+  const repo = createTelegramRepo(c.env.DB);
+  const command = text.trim().split(/\s+/)[0]?.replace(/@\w+$/, "").toLowerCase() ?? "";
+
+  /*
+   * The commands, and why there are only three.
+   *
+   * A command list is a promise: it appears in a menu and somebody presses it. These are the
+   * three that work on a chat by itself — the fourth thing anybody would want, signing in
+   * through Telegram, is not built, so it is not offered (§9.3).
+   */
+  if (command === "/help") {
+    await say(token, chatId, SAID.help);
+    return c.text("ok");
+  }
+
+  if (command === "/status") {
+    const account = await repo.findByTelegramUser(telegramUserId);
+    await say(
+      token,
+      chatId,
+      account === null
+        ? SAID.notConnected
+        : `This chat belongs to an Orator.Space account, connected on ${account.linkedAt.slice(0, 10)}.`,
+    );
+    return c.text("ok");
+  }
+
+  if (command === "/disconnect") {
+    /*
+     * From the chat as well as from the page, and it is not a duplicate of that button.
+     *
+     * The person who needs this most is the one who cannot reach the settings page: a lost
+     * passkey, a device that changed hands. Disconnecting grants nothing — it removes a
+     * channel — so the chat is allowed to do it for itself (§23.5).
+     */
+    const account = await repo.findByTelegramUser(telegramUserId);
+    if (account === null) {
+      await say(token, chatId, SAID.notConnected);
+      return c.text("ok");
+    }
+    await unlinkTelegram(
+      { telegram: repo, db: createD1Database(c.env.DB), clock: systemClock },
+      account.principalId,
+    );
+    await say(token, chatId, SAID.disconnected);
+    console.log(JSON.stringify({ level: "info", event: "telegram.unlinked", from: "chat" }));
+    return c.text("ok");
+  }
+
   const start = /^\/start(?:@\w+)?(?:\s+([0-9A-Z]{8,64}))?$/.exec(text.trim());
   if (start === null) {
     await say(token, chatId, SAID.welcome);
@@ -130,15 +200,11 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
     return c.text("ok");
   }
 
-  const ports = {
-    telegram: createTelegramRepo(c.env.DB),
-    db: createD1Database(c.env.DB),
-    clock: systemClock,
-  };
+  const ports = { telegram: repo, db: createD1Database(c.env.DB), clock: systemClock };
 
   const result = await redeemTelegramLink(ports, {
     nonce,
-    telegramUserId: String(from.id),
+    telegramUserId,
     chatId,
     ...(from.username === undefined ? {} : { username: from.username }),
   });
