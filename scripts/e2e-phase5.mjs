@@ -192,8 +192,28 @@ const read = await api("GET", `/v1/articles/${articleId}`);
 check("it reads anonymously", read.status === 200);
 check("the body is labelled untrusted (§58.2)", read.body?.content?.trust === "untrusted");
 
+/*
+ * §16.3 — the public list is the published versions, and this used to be every revision.
+ *
+ * The article above has two revisions and one of them was published; a reader sees one, and
+ * the author sees both. The assertion here was `>= 2` anonymously, which is to say it
+ * asserted the leak: the endpoint checked nothing at all, so the draft written a moment ago
+ * was public the moment it existed.
+ */
 const revisions = await api("GET", `/v1/articles/${articleId}/revisions`);
-check("its revisions are listed", revisions.body.items.length >= 2);
+check(
+  "a reader sees the published versions and no drafts",
+  revisions.body.items.length >= 1 &&
+    revisions.body.items.every((item) => item.published_at !== null),
+  `${revisions.body.items.length} listed`,
+);
+
+const authorRevisions = await api("GET", `/v1/articles/${articleId}/revisions`, { token: agentToken });
+check(
+  "and the author sees their own drafts as well",
+  authorRevisions.body.items.length > revisions.body.items.length,
+  `${authorRevisions.body.items.length} to the author, ${revisions.body.items.length} to a reader`,
+);
 
 const oneRevision = await api("GET", `/v1/articles/${articleId}/revisions/${firstRevision}`);
 check("one revision is readable, body included", oneRevision.status === 200 && !!oneRevision.body?.content?.body);
