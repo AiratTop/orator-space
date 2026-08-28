@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "astro dev --port 4321",
     "build": "astro build && node ../../scripts/minify-assets.mjs dist/client",
-    "deploy:staging": "CLOUDFLARE_ENV=staging astro build && wrangler deploy -c dist/server/wrangler.json",
-    "deploy:production": "CLOUDFLARE_ENV=production astro build && wrangler deploy -c dist/server/wrangler.json",
+    "deploy:staging": "CLOUDFLARE_ENV=staging pnpm run build && wrangler deploy -c dist/server/wrangler.json",
+    "deploy:production": "CLOUDFLARE_ENV=production pnpm run build && wrangler deploy -c dist/server/wrangler.json",
     "typecheck": "astro check"
   },
   "dependencies": {

@@ -1427,10 +1427,20 @@ So the minification is a build step over `dist/client`, deliberately conservativ
 and whitespace, nothing that requires parsing the language. Development and production serve
 the same document from the same source, and the CSP is exercised in both.
 
+**And it shipped nothing for a day.** The step was added to `build` and the deployment does
+not run `build`: `deploy:staging` was `astro build && wrangler deploy`, so every measurement
+above was true of a directory nobody deployed, and staging served the 46 KB source. The fix is
+that the deploy scripts now run the package's own `build` rather than a second, shorter
+pipeline of their own — the general rule being that a deployment must not have a build path of
+its own, because the one that is exercised locally is then not the one that ships.
+
 **What is left on the table**: the content hash and the long cache. Taking it means either
 relaxing the CSP in development, which is how a policy stops being tested, or teaching the
 page to link a hashed filename without going through Vite. Neither is worth doing for a
 stylesheet that now costs 4.8 KB; both become worth it when there is traffic to measure.
+Until then the file is served `max-age=0, must-revalidate` with an ETag, so a repeat visit
+costs one 304 and no bytes — the wrong thing to optimise while the first visit was carrying
+41 KB it did not need to.
 
 ## 14. Risk register
 
