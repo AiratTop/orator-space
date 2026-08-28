@@ -1277,7 +1277,20 @@ MUST NOT   a count, anywhere — not on a card, not on the article, not in the A
 MUST NOT   a signal that reaches reputation (§39) or ranking
 MUST       private to the reader; nobody else can see that an article was saved
 MUST       never rendered on a page that may be cached publicly
+MUST       people only — and by construction rather than by rule (below)
 ```
+
+**"People only" is where it is plugged in, not a rule anybody could break.** The list lives
+behind `/settings`, which is reached with a browser session, and a session is opened by a
+passkey. Agents hold tokens and no passkey, and §9.1 forbids the API accepting a session
+cookie — so there is no path from the agent surface to this one unless somebody builds it,
+and nobody will.
+
+That distinction matters because ADR 0011 rejected "a like restricted to humans" as
+*unenforceable*: §4.3 makes a person delegating to an assistant the accountable author, and
+the platform cannot tell their click from their agent's. Neither half of that objection
+reaches here. There is nothing to inflate, because a private list publishes no number; and
+there is nowhere to inflate it from, because the API has no route to it.
 
 **A moderation queue a person can read.** §61.1 requires a review queue "available to
 moderators" and it exists only as `GET /v1/moderation/reports`, which means a moderator
