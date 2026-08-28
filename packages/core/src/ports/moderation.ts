@@ -105,6 +105,16 @@ export interface ModerationRepo {
   ): PendingWrite;
 
   insertAction(action: NewModerationAction): PendingWrite;
+
+  /**
+   * What has been done lately, across everything (SPEC §61.1).
+   *
+   * `listActions` answers "what happened to this object"; this answers "what has this
+   * platform been doing", which is the question a moderation section has to answer before it
+   * can offer to undo any of it. Newest first, because the thing most likely to need
+   * reversing is the thing just done.
+   */
+  listRecentActions(limit: number, before: string | null): Promise<ModerationActionRecord[]>;
   /** The object's operational history — what was done to it, and whether it was reversed. */
   listActions(targetType: string, targetId: string, limit: number): Promise<ModerationActionRecord[]>;
   /** Marks the most recent unreversed action of this kind as reversed (`restore`). */

@@ -1,0 +1,405 @@
+---
+import {
+  describeTargets,
+  listModerationActions,
+  listReports,
+  recentActions,
+  resolveSession,
+  REASON_CODES,
+  type ModerationActionRecord,
+  type ReportRecord,
+  type TargetSummary,
+} from "@orator/core";
+import Layout from "../components/Layout.astro";
+import NotFound from "../components/NotFound.astro";
+import { moderationContext, principalOf, sameOrigin } from "../lib/account.js";
+import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
+import { CACHE, CDN_CACHE } from "../lib/http.js";
+import { siteOrigin } from "../lib/ports.js";
+import { performModeration } from "../lib/moderation-actions.js";
+import type { ActionOutcome } from "../lib/settings-actions.js";
+
+/**
+ * The moderation section (SPEC §61.1, §43.3, §49.2).
+ *
+ * Its own address, and it used to be a tab on `/settings`. That was wrong twice over: acting
+ * on somebody else's article is not account housekeeping, and a page reached through one's
+ * own tokens and sessions is a page nobody thinks to open when they are reading the site and
+ * find something. §61.1 requires a review queue available to moderators; it does not require
+ * that this be the only thing a moderator can see, and a queue on its own could answer
+ * "what has been asked of us" and not "what did we do about it".
+ *
+ * So three lists and a search. Open reports, closed ones, and the action log — which is where
+ * `restore` lives, because until something lists what was hidden there is nothing to press it
+ * on. The search takes an article id, which is what a moderator has when somebody writes in
+ * about a decision.
+ *
+ * The page is refused rather than emptied for everybody else. `moderatorOnly` in the service
+ * is the access decision and refuses regardless; this is the page being honest about it.
+ */
+const cookie = readCookie(Astro.request, SESSION_COOKIE);
+const session = cookie === null ? null : await resolveSession(authPorts, cookie);
+
+Astro.response.headers.set("cache-control", CACHE.private);
+Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
+
+if (session === null) return Astro.redirect("/signin", 303);
+
+const principal = await principalOf(session.principalId);
+if (principal === null) return Astro.redirect("/signin", 303);
+
+const moderator =
+  principal.platformRole === "moderator" || principal.platformRole === "admin";
+
+const ctx = moderationContext(Astro.request, principal);
+
+const TABS = ["queue", "closed", "actions"] as const;
+type Tab = (typeof TABS)[number];
+const LABEL: Record<Tab, string> = { queue: "Open reports", closed: "Closed", actions: "What we did" };
+
+let outcome: ActionOutcome = { kind: "none" };
+
+if (moderator && Astro.request.method === "POST") {
+  if (!sameOrigin(Astro.request, siteOrigin)) {
+    return new Response("Cross-origin form posts are refused.", {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" },
+    });
+  }
+  outcome = await performModeration(ctx, await Astro.request.formData());
+}
+
+const requested = Astro.url.searchParams.get("tab") ?? "";
+const tab: Tab = (TABS as readonly string[]).includes(requested) ? (requested as Tab) : "queue";
+
+/*
+ * The search is one field and it takes an id.
+ *
+ * Not a text search: a moderator arrives here holding an identifier — from an email, from a
+ * report, from the address bar of the page they were just looking at — and what they need is
+ * that object's history and the controls, not a list of things that resemble it. An address
+ * paste works too, since the id is the last path segment of one.
+ */
+const asked = (Astro.url.searchParams.get("id") ?? "").trim();
+const lookedUp = asked === "" ? null : (asked.split("/").pop() ?? "").toUpperCase();
+
+let reports: ReportRecord[] = [];
+let actions: ModerationActionRecord[] = [];
+let subjects = new Map<string, TargetSummary>();
+let dossier: { id: string; summary: TargetSummary | null; history: ModerationActionRecord[] } | null = null;
+
+const describe = async (targets: readonly { targetType: TargetSummary["targetType"]; targetId: string }[]) => {
+  if (targets.length === 0) return;
+  const described = await describeTargets(ctx, targets);
+  if (!described.ok) return;
+  for (const one of described.value) subjects.set(`${one.targetType}:${one.targetId}`, one);
+};
+
+if (moderator) {
+  if (lookedUp !== null && lookedUp !== "") {
+    /*
+     * Looked up as an article, because that is the id somebody has.
+     *
+     * A comment or a principal reached this way would need its type as well, and asking for
+     * two fields to answer one question is how a tool stops being used. The history is read
+     * for the id whatever its type turns out to be — an action names the type it acted on.
+     */
+    const [described, history] = await Promise.all([
+      describeTargets(ctx, [{ targetType: "article", targetId: lookedUp }]),
+      listModerationActions(ctx, "article", lookedUp),
+    ]);
+    dossier = {
+      id: lookedUp,
+      summary: described.ok ? (described.value[0] ?? null) : null,
+      history: history.ok ? history.value : [],
+    };
+  } else if (tab === "actions") {
+    const recent = await recentActions(ctx, { limit: 50 });
+    actions = recent.ok ? recent.value.items : [];
+    await describe(actions.map((one) => ({ targetType: one.targetType, targetId: one.targetId })));
+  } else {
+    /*
+     * "Closed" is two statuses, and the queue is two as well.
+     *
+     * `reviewing` belongs with `open`: it is a report somebody has claimed and not finished,
+     * which is still work. `actioned` and `rejected` are both decisions, and a moderator
+     * looking back wants them together — "what did we conclude", not "how did we conclude it".
+     */
+    const wanted = tab === "queue" ? (["open", "reviewing"] as const) : (["actioned", "rejected"] as const);
+    const pages = await Promise.all(wanted.map((status) => listReports(ctx, { status, limit: 50 })));
+    reports = pages
+      .flatMap((page) => (page.ok ? page.value.items : []))
+      .sort((a, b) => (tab === "queue" ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id)));
+    await describe(reports.map((one) => ({ targetType: one.targetType, targetId: one.targetId })));
+  }
+}
+
+const here = `/moderation?tab=${tab}`;
+
+/** A queue line's subject and where it points (§61.1). */
+function subjectOf(target: { targetType: string; targetId: string }): { label: string | null; href: string } {
+  const summary = subjects.get(`${target.targetType}:${target.targetId}`) ?? null;
+  const label = summary?.label ?? null;
+  if (target.targetType === "article") return { label, href: `/p/${target.targetId}` };
+  if (target.targetType === "comment" && summary?.articleId != null) {
+    return { label, href: `/p/${summary.articleId}#conversation` };
+  }
+  if (target.targetType === "principal" && label !== null && label.startsWith("@")) {
+    return { label, href: `/${label}` };
+  }
+  return { label, href: `#${target.targetId}` };
+}
+
+const when = (iso: string) => iso.slice(0, 10);
+
+/** Which actions are undone by `restore`, and which were never a state to undo. */
+const REVERSIBLE = new Set(["hide", "remove", "unindex", "suspend"]);
+---
+
+{!moderator ? (
+  <Layout title="Not found" canonicalPath="/moderation">
+    <NotFound
+      heading="No page at that address"
+      explanation="Nothing here is hidden from you as a punishment: this address belongs to the people who act on reports, and the operations behind it refuse anybody else regardless of what a page shows."
+    />
+  </Layout>
+) : (
+  <Layout title="Moderation" canonicalPath="/moderation">
+    <main id="main" class="wrap settings">
+      <h1 class="title">Moderation</h1>
+      <p class="settings__lede">
+        Every action here tells the author, states a reason, and can be undone (§61.2).
+        Erasing bytes is not among them — that is §23.3, and it is deliberate that it is not
+        one click from a queue.
+      </p>
+
+      {outcome.kind === "done" && <p class="notice notice--done" role="status">{outcome.message}</p>}
+      {outcome.kind === "failed" && (
+        <p class="notice notice--failed" role="alert">
+          <strong>{outcome.message}</strong>
+          {outcome.detail && <span class="notice__detail">{outcome.detail}</span>}
+        </p>
+      )}
+
+      {/* One field, and it takes the id a moderator already has. */}
+      <form class="lookup" method="get" action="/moderation">
+        <label class="lookup__label" for="lookup">Find an article</label>
+        <input
+          class="lookup__input"
+          id="lookup"
+          name="id"
+          type="text"
+          value={asked}
+          placeholder="Article id, or a link to it"
+          autocomplete="off"
+        />
+        <button class="button button--small" type="submit">Look up</button>
+      </form>
+
+      {dossier !== null ? (
+        <section class="panel" id="dossier">
+          <h2 class="panel__heading">
+            {dossier.summary?.label ?? "Nothing at that identifier"}
+          </h2>
+          <p class="panel__lede">
+            <code>{dossier.id}</code>
+            {dossier.summary?.label != null && (
+              <> · <a href={`/p/${dossier.id}`}>open the article</a></>
+            )}
+          </p>
+
+          {dossier.history.length === 0 ? (
+            <p class="panel__empty">Nothing has been done to this one.</p>
+          ) : (
+            <ul class="actions">
+              {dossier.history.map((action) => (
+                <li class={`action action--${action.reversedAt === null ? "live" : "reversed"}`}>
+                  <div class="action__head">
+                    <span class="tag tag--warn">{action.action}</span>
+                    <span class="action__reason">{action.reasonCode.replace(/_/g, " ")}</span>
+                    <span class="action__source">{action.source}</span>
+                    {action.reversedAt !== null && <span class="tag">undone</span>}
+                    <span class="report__when">{when(action.createdAt)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {/*
+            §61.1 — the same verbs the queue offers, on the thing that was looked up.
+
+            `restore` is here and not in the select: undoing is a different decision from
+            acting, and a moderator reaching for it should not be able to arrive at it by
+            leaving a dropdown where it was.
+          */}
+          <div class="report__actions">
+            <form method="post" action={here} class="report__form">
+              <input type="hidden" name="action" value="moderation.act" />
+              <input type="hidden" name="target-type" value="article" />
+              <input type="hidden" name="target" value={dossier.id} />
+
+              <label class="report__label" for="dossier-kind">Action</label>
+              <select id="dossier-kind" name="kind">
+                <option value="unindex">de-index</option>
+                <option value="hide">hide</option>
+                <option value="warn">warn</option>
+                <option value="remove">remove</option>
+              </select>
+
+              <label class="report__label" for="dossier-reason">Reason</label>
+              <select id="dossier-reason" name="reason">
+                {REASON_CODES.map((code) => <option value={code}>{code.replace(/_/g, " ")}</option>)}
+              </select>
+
+              <button class="button button--small" type="submit">Apply</button>
+            </form>
+
+            <form method="post" action={here} class="report__form">
+              <input type="hidden" name="action" value="moderation.act" />
+              <input type="hidden" name="target-type" value="article" />
+              <input type="hidden" name="target" value={dossier.id} />
+              <input type="hidden" name="kind" value="restore" />
+              <input type="hidden" name="reason" value="other" />
+              <button class="button button--quiet button--small" type="submit">Restore</button>
+            </form>
+          </div>
+        </section>
+      ) : (
+        <>
+          <nav class="tabs" aria-label="Moderation sections">
+            {TABS.map((one) => (
+              <a
+                class={`tabs__tab${one === tab ? " tabs__tab--current" : ""}`}
+                href={`/moderation?tab=${one}`}
+                aria-current={one === tab ? "page" : undefined}
+              >{LABEL[one]}</a>
+            ))}
+          </nav>
+
+          {tab === "actions" ? (
+            <section class="panel" id="actions">
+              <h2 class="panel__heading">What we did</h2>
+              <p class="panel__lede">
+                Newest first. `proactive` means nobody reported it and a moderator went
+                looking; `report` means this closed somebody's report; `automatic` is the
+                screening provider (§61), which acts before a person sees anything.
+              </p>
+
+              {actions.length === 0 ? (
+                <p class="panel__empty">Nothing has been done yet.</p>
+              ) : (
+                <ul class="actions">
+                  {actions.map((action) => (
+                    <li class={`action action--${action.reversedAt === null ? "live" : "reversed"}`}>
+                      <div class="action__head">
+                        <span class="tag tag--warn">{action.action}</span>
+                        <a class="report__target" href={subjectOf(action).href}>
+                          {subjectOf(action).label ?? `${action.targetType} with no title`}
+                        </a>
+                        <span class="report__when">{when(action.createdAt)}</span>
+                      </div>
+
+                      <div class="action__facts">
+                        <span class="action__reason">{action.reasonCode.replace(/_/g, " ")}</span>
+                        <span class="action__source">{action.source}</span>
+                        {action.reversedAt !== null && <span class="tag">undone</span>}
+                        <code class="report__id">{action.targetId}</code>
+                      </div>
+
+                      {action.reversedAt === null && REVERSIBLE.has(action.action) && (
+                        <form method="post" action={here} class="report__form">
+                          <input type="hidden" name="action" value="moderation.act" />
+                          <input type="hidden" name="target-type" value={action.targetType} />
+                          <input type="hidden" name="target" value={action.targetId} />
+                          <input type="hidden" name="kind" value="restore" />
+                          <input type="hidden" name="reason" value={action.reasonCode} />
+                          <button class="button button--quiet button--small" type="submit">Undo</button>
+                        </form>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          ) : (
+            <section class="panel" id="reports">
+              <h2 class="panel__heading">{LABEL[tab]}</h2>
+              <p class="panel__lede">
+                {tab === "queue"
+                  ? "Oldest first: the report that has waited longest is the one somebody has been waiting longest for an answer about."
+                  : "Decisions already taken. A report closed with no action is as much of a record as one that removed something."}
+              </p>
+
+              {reports.length === 0 ? (
+                <p class="panel__empty">
+                  {tab === "queue" ? "Nothing open. That is the ordinary state." : "Nothing closed yet."}
+                </p>
+              ) : (
+                <ul class="reports">
+                  {reports.map((report) => (
+                    <li class="report">
+                      <div class="report__head">
+                        <span class="tag tag--warn">{report.category}</span>
+                        <a class="report__target" href={subjectOf(report).href}>
+                          {subjectOf(report).label ?? `${report.targetType} with no title`}
+                        </a>
+                        <span class="report__when">{when(report.createdAt)}</span>
+                        <code class="report__id">{report.targetId}</code>
+                      </div>
+
+                      {/*
+                        §58.1 — a report's details are somebody's text, and a moderator is a
+                        reader like any other. Astro escapes it; it is never rendered as markup.
+                      */}
+                      {report.details && <p class="report__details">{report.details}</p>}
+                      {report.resolution && <p class="report__details">Resolved: {report.resolution}</p>}
+
+                      {tab === "queue" && (
+                        <div class="report__actions">
+                          <form method="post" action={here} class="report__form">
+                            <input type="hidden" name="action" value="moderation.act" />
+                            <input type="hidden" name="target-type" value={report.targetType} />
+                            <input type="hidden" name="target" value={report.targetId} />
+                            <input type="hidden" name="report" value={report.id} />
+
+                            <label class="report__label" for={`kind-${report.id}`}>Action</label>
+                            <select id={`kind-${report.id}`} name="kind">
+                              <option value="unindex">de-index</option>
+                              <option value="hide">hide</option>
+                              <option value="warn">warn</option>
+                              <option value="remove">remove</option>
+                            </select>
+
+                            <label class="report__label" for={`reason-${report.id}`}>Reason</label>
+                            <select id={`reason-${report.id}`} name="reason">
+                              {REASON_CODES.map((code) => (
+                                <option value={code} selected={code === report.category}>
+                                  {code.replace(/_/g, " ")}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button class="button button--small" type="submit">Apply</button>
+                          </form>
+
+                          <form method="post" action={here} class="report__form">
+                            <input type="hidden" name="action" value="moderation.reject" />
+                            <input type="hidden" name="report" value={report.id} />
+                            <button class="button button--quiet button--small" type="submit">
+                              No action
+                            </button>
+                          </form>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+        </>
+      )}
+    </main>
+  </Layout>
+)}

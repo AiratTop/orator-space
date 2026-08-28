@@ -16,7 +16,6 @@ import {
   ok,
   type ModerationContext,
   type Ports,
-  type RequestContext,
   type Result,
 } from "./context.js";
 
@@ -375,9 +374,39 @@ export async function applyModerationAction(
   return ok({ id, action: input.action, targetId: input.targetId });
 }
 
-/** The moderation history of one object, to a moderator (SPEC §61.2). */
+/**
+ * What the platform has done lately (SPEC §61.1, §61.2).
+ *
+ * The other half of a review queue. A queue shows what has been asked of moderators; this
+ * shows what they did, which is what makes an action reversible in practice — `restore`
+ * exists in §61.1's verb list, and until there was a page listing what had been hidden there
+ * was nothing to press it on.
+ */
+export async function recentActions(
+  ctx: ModerationContext,
+  options: { limit?: number; before?: string | null } = {},
+): Promise<Result<{ items: ModerationActionRecord[]; nextCursor: string | null }>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+  const items = await ctx.ports.moderation.listRecentActions(limit + 1, options.before ?? null);
+  const page = items.slice(0, limit);
+  return ok({
+    items: page,
+    nextCursor: items.length > limit ? (page[page.length - 1]?.id ?? null) : null,
+  });
+}
+
+/**
+ * The moderation history of one object, to a moderator (SPEC §61.2).
+ *
+ * Takes the narrow context rather than the whole of `Ports`: this is reached from the
+ * moderation section as well as from the API, and §28's argument is that a surface should be
+ * handed the smallest set it can do its work with. A full `RequestContext` still satisfies it.
+ */
 export async function listModerationActions(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   targetType: string,
   targetId: string,
 ): Promise<Result<ModerationActionRecord[]>> {

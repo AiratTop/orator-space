@@ -234,6 +234,18 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
       );
     },
 
+    async listRecentActions(limit, before) {
+      // Keyset on the id, which is time-ordered (§12.2), so paging back through the log costs
+      // an index seek rather than an offset scan.
+      const where = before === null ? "" : " WHERE id < ?";
+      const binds = before === null ? [limit] : [before, limit];
+      const { results } = await db
+        .prepare(`SELECT * FROM moderation_actions${where} ORDER BY id DESC LIMIT ?`)
+        .bind(...binds)
+        .all<ActionRow>();
+      return results.map(toAction);
+    },
+
     async findReport(id) {
       const row = await db.prepare(`SELECT * FROM reports WHERE id = ?`).bind(id).first<ReportRow>();
       return row === null ? null : toReport(row);

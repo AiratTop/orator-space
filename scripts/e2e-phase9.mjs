@@ -745,15 +745,28 @@ section("The review queue (§61.1, §43.3)");
 
 const ordinary = await page("/settings");
 check(
-  "an ordinary account is not offered the queue",
-  !ordinary.html.includes("tab=moderation"),
+  "an ordinary account is not offered the moderation section",
+  !ordinary.html.includes('href="/moderation"'),
 );
 
-const asked = await page("/settings?tab=moderation");
+const asked = await page("/moderation");
 check(
-  "and asking for it by hand lands on the account rather than on somebody's reports",
-  asked.status === 200 && !asked.html.includes("Review queue"),
+  "and asking for it by hand is answered with nothing rather than with somebody's reports",
+  asked.status === 200 && !asked.html.includes("Open reports"),
   String(asked.status),
+);
+
+/*
+ * The queue used to be a tab on this page, and that address is out in bookmarks.
+ *
+ * A moderator's bookmark is worth a redirect; whether the destination will have them is a
+ * separate question, answered above.
+ */
+const movedTab = await page("/settings?tab=moderation");
+check(
+  "the old tab address redirects to the section",
+  movedTab.status === 301 && movedTab.headers.get("location") === "/moderation",
+  `${movedTab.status} ${movedTab.headers.get("location")}`,
 );
 
 /*

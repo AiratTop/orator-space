@@ -17,12 +17,10 @@ import {
   isSettingsTab,
   OWN_PRESETS,
   performAction,
-  tabsFor,
+  SETTINGS_TABS,
   type ActionOutcome,
 } from "../lib/settings-actions.js";
-import { isModerationAction, performModeration } from "../lib/moderation-actions.js";
-import { describeTargets, listReports, readingList, setAvatar } from "@orator/core";
-import { moderationContext } from "../lib/account.js";
+import { readingList, setAvatar } from "@orator/core";
 
 /**
  * The account (SPEC §49.2, §7.2, §42.2, §9.1).
@@ -89,16 +87,14 @@ if (Astro.request.method === "POST") {
     }
   }
   /*
-   * Two dispatchers, and which one is chosen by the verb rather than by the tab.
+   * Everything else is this reader acting on their own things.
    *
-   * The account actions run as this reader on their own things; the moderation ones run as a
-   * moderator on somebody else's, in a context with wider reach. Routing on the verb keeps
-   * the wider authority behind its own door — `moderatorOnly` still refuses, and this makes
-   * it impossible to arrive there by accident.
+   * There used to be a second dispatcher here for the review queue, chosen by the verb. It
+   * went with the queue to `/moderation`: acting as a moderator on somebody else's article
+   * is a wider authority than anything on this page, and it should not be reachable through
+   * the page about tokens and sessions.
    */
-  else if (typeof requestedAction === "string" && isModerationAction(requestedAction)) {
-    outcome = await performModeration(moderationContext(Astro.request, principal), form);
-  } else {
+  else {
     outcome = await performAction(ctx, form);
   }
 
@@ -131,18 +127,19 @@ if (result.ok) view = result.value;
  * mistyped one should show the page rather than deny it exists. The forms post back to the
  * same address, so an action leaves the reader where they were.
  */
-const available = tabsFor(principal.platformRole);
+const available = SETTINGS_TABS;
 const requested = Astro.url.searchParams.get("tab") ?? "";
+/*
+ * §61.1 — the queue moved, and the address it used to be at still works.
+ *
+ * A moderator's bookmark is worth a redirect: the tab was in this page's query string for a
+ * fortnight, which is long enough for it to be somewhere.
+ */
+if (requested === "moderation") return Astro.redirect("/moderation", 301);
 const asked = isSettingsTab(requested) ? requested : DEFAULT_TAB;
 const tab = available.includes(asked) ? asked : DEFAULT_TAB;
 const here = `/settings?tab=${tab}`;
 
-/*
- * §61.1 — the queue, loaded only for the tab that shows it.
- *
- * Open reports, oldest first, which is the order a moderator works in: a report that has
- * waited longest is the one somebody has been waiting longest for an answer about.
- */
 /*
  * ADR 0011 — the list, loaded only for the tab that shows it.
  *
@@ -151,30 +148,6 @@ const here = `/settings?tab=${tab}`;
  */
 const savedList =
   tab === "saved" ? await readingList(readingListPorts, principal.id) : { cards: [], next: null };
-
-const queue =
-  tab === "moderation"
-    ? await listReports(moderationContext(Astro.request, principal), { status: "open", limit: 50 })
-    : null;
-const reports = queue !== null && queue.ok ? queue.value.items : [];
-
-/*
- * §61.1 — what each report is about, in words.
- *
- * The queue used to read `article 06G2G3ZB8N…` fifty times over, which is a list nobody can
- * work: deciding what to do about an article starts with knowing which article it is, and
- * every line cost a tab. One extra query for the page, and none when the queue is empty.
- */
-const described =
-  reports.length === 0
-    ? null
-    : await describeTargets(moderationContext(Astro.request, principal), reports);
-const subjects = new Map(
-  (described !== null && described.ok ? described.value : []).map((one) => [
-    `${one.targetType}:${one.targetId}`,
-    one,
-  ]),
-);
 
 const agentLabel = (agent: AgentView) => agent.principal.displayName ?? `@${agent.principal.username}`;
 
@@ -189,29 +162,6 @@ function browserOf(userAgent: string | null): string {
 
 const when = (iso: string) => iso.slice(0, 10);
 
-/**
- * A queue line's subject and where it points (§61.1).
- *
- * An article goes to its own page — which, for a moderator, now carries the same actions —
- * and a comment goes to the article it is on, because a comment is only readable in the
- * thread it belongs to. A principal goes to their profile. Anything with no address stays on
- * this page rather than offering a link that goes nowhere.
- */
-function subjectOf(report: { targetType: string; targetId: string }): {
-  label: string | null;
-  href: string;
-} {
-  const summary = subjects.get(`${report.targetType}:${report.targetId}`) ?? null;
-  const label = summary?.label ?? null;
-  if (report.targetType === "article") return { label, href: `/p/${report.targetId}` };
-  if (report.targetType === "comment" && summary?.articleId != null) {
-    return { label, href: `/p/${summary.articleId}#conversation` };
-  }
-  if (report.targetType === "principal" && label !== null && label.startsWith("@")) {
-    return { label, href: `/${label}` };
-  }
-  return { label, href: `#${report.targetId}` };
-}
 ---
 
 <Layout title="Your account" canonicalPath="/settings">
@@ -468,89 +418,6 @@ function subjectOf(report: { targetType: string; targetId: string }): {
               empty="Nothing saved yet. The Save button is on any article."
               paged={false}
             />
-          </section>
-        )}
-
-        {tab === "moderation" && (
-          <section class="panel" id="moderation">
-            <h2 class="panel__heading">Review queue</h2>
-            <p class="panel__lede">
-              Open reports, oldest first — the one that has waited longest is the one somebody
-              has been waiting longest for an answer about. Every action here tells the author
-              and is reversible; erasing bytes (§23.3) is not one of them and never will be
-              from a queue somebody is working through quickly.
-            </p>
-
-            {reports.length === 0 ? (
-              <p class="panel__empty">Nothing open. That is the ordinary state.</p>
-            ) : (
-              <ul class="reports">
-                {reports.map((report) => (
-                  <li class="report">
-                    <div class="report__head">
-                      <span class="tag tag--warn">{report.category}</span>
-                      {/*
-                        The subject line, with the id underneath rather than instead of it.
-
-                        A moderator acts on the title and reports on the id, so the page shows
-                        both, in the order somebody reads them: what this is, then which one.
-                        A target that has been erased (§23.3) has no title and says so — that
-                        is a fact about the decision, not a hole in the page.
-                      */}
-                      <a class="report__target" href={subjectOf(report).href}>
-                        {subjectOf(report).label ?? `${report.targetType} with no title`}
-                      </a>
-                      <code class="report__id">{report.targetId}</code>
-                      <span class="report__when">{report.createdAt.slice(0, 10)}</span>
-                    </div>
-
-                    {/*
-                      §58.1 — a report's details are somebody's text, and a moderator is a
-                      reader like any other. Astro escapes it; it is never rendered as markup.
-                    */}
-                    {report.details && <p class="report__details">{report.details}</p>}
-
-                    <div class="report__actions">
-                      <form method="post" action={here} class="report__form">
-                        <input type="hidden" name="action" value="moderation.act" />
-                        <input type="hidden" name="target-type" value={report.targetType} />
-                        <input type="hidden" name="target" value={report.targetId} />
-                        <input type="hidden" name="report" value={report.id} />
-
-                        <label class="report__label" for={`kind-${report.id}`}>Action</label>
-                        <select id={`kind-${report.id}`} name="kind">
-                          <option value="unindex">de-index</option>
-                          <option value="hide">hide</option>
-                          <option value="warn">warn</option>
-                          <option value="remove">remove</option>
-                        </select>
-
-                        <label class="report__label" for={`reason-${report.id}`}>Reason</label>
-                        <select id={`reason-${report.id}`} name="reason">
-                          <option value={report.category === "other" ? "other" : report.category}>{report.category}</option>
-                          <option value="spam">spam</option>
-                          <option value="abuse">abuse</option>
-                          <option value="illegal_content">illegal content</option>
-                          <option value="prompt_injection">prompt injection</option>
-                          <option value="duplicate">duplicate</option>
-                          <option value="other">other</option>
-                        </select>
-
-                        <button class="button button--small" type="submit">Apply</button>
-                      </form>
-
-                      <form method="post" action={here} class="report__form">
-                        <input type="hidden" name="action" value="moderation.reject" />
-                        <input type="hidden" name="report" value={report.id} />
-                        <button class="button button--quiet button--small" type="submit">
-                          No action
-                        </button>
-                      </form>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
           </section>
         )}
 

@@ -139,12 +139,17 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
 /**
  * The sections `/settings` is divided into (SPEC §49.2).
  *
- * One column of stacked panels stopped being navigable at the third, and two more are
- * coming — a reading list and, for a moderator, a review queue. Tabs are the same
- * server-rendered pattern the profile already uses, not a widget: plain links, a query
- * parameter, and no state anywhere but the URL.
+ * One column of stacked panels stopped being navigable at the third, and two more were
+ * coming. Tabs are the same server-rendered pattern the profile already uses, not a widget:
+ * plain links, a query parameter, and no state anywhere but the URL.
+ *
+ * The review queue was here for a while and is not any more. It never belonged: a moderator
+ * acting on somebody else's article is not doing account housekeeping, and putting the two
+ * behind one address meant the platform's most consequential screen was reached through a
+ * page about tokens and sessions. It lives at `/moderation` (§61.1), and `?tab=moderation`
+ * redirects there so a bookmark still works.
  */
-export const SETTINGS_TABS = ["agents", "saved", "tokens", "sessions", "profile", "moderation"] as const;
+export const SETTINGS_TABS = ["agents", "saved", "tokens", "sessions", "profile"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const isSettingsTab = (value: string): value is SettingsTab =>
@@ -165,18 +170,4 @@ export const SETTINGS_TAB_LABEL: Record<SettingsTab, string> = {
   tokens: "Tokens",
   sessions: "Sessions",
   profile: "Profile",
-  moderation: "Queue",
 };
-
-/**
- * The tabs a given reader is shown (SPEC §61.1, §43.3).
- *
- * The queue is a moderator's, and it is absent rather than disabled for everybody else: a
- * tab that exists and refuses is an invitation to find out what is behind it, and the
- * service refuses anyway. Both, because a hidden control is not an access decision — the
- * decision lives in `moderatorOnly`, and this only keeps the page honest about it.
- */
-export const tabsFor = (role: string): readonly SettingsTab[] =>
-  role === "moderator" || role === "admin"
-    ? SETTINGS_TABS
-    : SETTINGS_TABS.filter((tab) => tab !== "moderation");

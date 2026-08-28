@@ -3,6 +3,9 @@ import type { MiddlewareHandler } from "astro";
 import { CACHE, CDN_CACHE } from "./lib/http.js";
 import { fromEdgeCache, mayCache, toEdgeCache } from "./lib/edge-cache.js";
 import { mediaOrigin } from "./lib/origins.js";
+import { resolveSession } from "@orator/core";
+import { authPorts, readCookie, SESSION_COOKIE } from "./lib/auth.js";
+import { principalOf } from "./lib/account.js";
 
 /**
  * Response-wide rules: the canonical host, the security headers, and the one cache rule
@@ -96,6 +99,30 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
   if (cacheable) {
     const hit = await fromEdgeCache(context.request);
     if (hit !== null) return hit;
+  }
+
+  /*
+   * Who is reading, resolved once (SPEC §49.2, §61.1).
+   *
+   * Only when a cookie is present, which is what keeps this off the path that matters: an
+   * anonymous request is answered from the edge cache above and never reaches here. A
+   * signed-in reader pays two indexed reads per page, and the alternative was every page
+   * that wants to know resolving the session for itself.
+   *
+   * The role comes from the principal row rather than from the session, because a role is
+   * revoked by editing that row — a copy carried in a cookie would outlive the revocation.
+   */
+  const sessionCookie = readCookie(context.request, SESSION_COOKIE);
+  if (sessionCookie !== null) {
+    const session = await resolveSession(authPorts, sessionCookie);
+    const principal = session === null ? null : await principalOf(session.principalId);
+    if (principal !== null) {
+      context.locals.viewer = {
+        principalId: principal.id,
+        username: principal.username,
+        moderator: principal.platformRole === "moderator" || principal.platformRole === "admin",
+      };
+    }
   }
 
   const response = await next();

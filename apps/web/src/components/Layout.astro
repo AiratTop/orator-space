@@ -145,6 +145,16 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
         <nav class="masthead__nav" aria-label="Site">
           <a href="/topics">Topics</a>
           <a href="/search">Search</a>
+          {/*
+            §61.1 — the one link here that depends on who is asking.
+
+            It is safe for the same reason the rest of the masthead was written not to be:
+            the middleware refuses to let any response to a credentialed request be publicly
+            cacheable (§33.2), so a page carrying this link is a page only its reader gets.
+            An anonymous request never resolves a session at all, so the cached masthead —
+            the one nearly everybody sees — is unchanged by this existing.
+          */}
+          {Astro.locals.viewer?.moderator && <a class="masthead__moderate" href="/moderation">Moderation</a>}
           <a href="/signin">Account</a>
         </nav>
       </div>

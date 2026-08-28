@@ -1634,6 +1634,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       return state.reports.find((report) => report.id === id) ?? null;
     },
 
+    async listRecentActions(limit, before) {
+      return state.moderationActions
+        .filter((action) => before === null || action.id < before)
+        .sort((a, b) => b.id.localeCompare(a.id))
+        .slice(0, limit);
+    },
+
     /**
      * The subject lines, from whatever this double happens to hold (§61.1).
      *

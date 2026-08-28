@@ -2324,3 +2324,77 @@ img.avatar {
   color: var(--ink-soft);
   font-size: 0.8125rem;
 }
+
+/*
+ * The moderation section (SPEC §61.1).
+ *
+ * Its own address, so it gets its own furniture: a lookup field, and a log where each entry
+ * says what was done, to what, why, and whether it still stands. Nothing here is styled to
+ * be attractive — it is styled to be scannable at fifty rows.
+ */
+.masthead__moderate {
+  color: var(--warn);
+}
+
+.lookup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 2rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper-soft);
+}
+
+.lookup__label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.lookup__input {
+  flex: 1 1 18rem;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 0.875rem;
+}
+
+.actions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.action {
+  padding: 0.875rem 0;
+  border-top: 1px solid var(--line);
+}
+
+/* An undone action is history rather than state, and reads as history. */
+.action--reversed {
+  color: var(--ink-soft);
+}
+
+.action__head,
+.action__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+
+.action__facts {
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--ink-soft);
+}
+
+.action__source {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.action .report__form {
+  margin-top: 0.5rem;
+}

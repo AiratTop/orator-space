@@ -50,7 +50,7 @@ export const GET: APIRoute = async () => {
       "# crawler the fetch that would tell it so.",
       "Disallow: /search",
       "",
-      "# Not listed here: /@handles, /signin, /settings.",
+      "# Not listed here: /@handles, /signin, /settings, /moderation.",
       "#",
       "# They carry `noindex` in their own headers, and that is the mechanism that removes a",
       "# URL from an index. Disallowing them would do the opposite of what it looks like: a",
