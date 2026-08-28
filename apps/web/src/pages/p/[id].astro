@@ -19,7 +19,6 @@ import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../.
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
 import { mediaOrigin, ports, readingListPorts, siteHost, topicPorts } from "../../lib/ports.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../../lib/auth.js";
-import { principalOf } from "../../lib/account.js";
 
 /**
  * The article page (SPEC §49.2, §13, §33, §48).
@@ -52,14 +51,12 @@ const commentOutcome = Astro.url.searchParams.get("comment");
 /*
  * §61.1 — whether this reader may act on what they are reading.
  *
- * One principal read, and only for a signed-in reader: an anonymous request never asks, so
- * the page a cache holds is unchanged by this existing. The role comes from the principal
- * row rather than from the session, because a role is revoked by editing that row and a
- * decision made from a copy in a cookie would outlive the revocation.
+ * From the middleware, which resolved it once for this request: the masthead asks the same
+ * question on every page, and asking it twice here would be a second pair of reads for one
+ * answer. Anonymous requests resolve nothing at all, so the page a cache holds is unchanged
+ * by this existing.
  */
-const reader = session === null ? null : await principalOf(session.principalId);
-const moderator =
-  reader !== null && (reader.platformRole === "moderator" || reader.platformRole === "admin");
+const moderator = Astro.locals.viewer?.moderator === true;
 const moderationOutcome = Astro.url.searchParams.get("moderation");
 
 /*
