@@ -138,8 +138,21 @@ export async function loadRelated(
 
   if (cards.length === 0) return { cards: [], because: null };
 
+  /*
+   * §22, §49.4 — the suggestions carry their own topics, like every other card on the site.
+   *
+   * Without this they were the one list where a card said nothing about where the platform
+   * had put it, which is odd anywhere and worst here: this block exists *because* of the
+   * classification, and an article that also sits in two other topics is telling a reader
+   * where else to go next.
+   */
+  const withTheirTopics = (await withTopics(ports, { cards, next: null, previous: null })).cards;
+
   // The article's own primary topic, which is the one the strongest match shares by
   // construction — `listRelated` orders by how many are shared.
   const primary = topics[0];
-  return { cards, because: primary === undefined ? null : await ports.topics.findBySlug(primary.slug) };
+  return {
+    cards: withTheirTopics,
+    because: primary === undefined ? null : await ports.topics.findBySlug(primary.slug),
+  };
 }

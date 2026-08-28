@@ -107,8 +107,16 @@ const displayName =
     all of it: there the disclosure is one of the facts a reader decides the text by, and
     there is room for it.
   */}
-  {!entailed && <span class={compact ? undefined : "tag"}>{DISCLOSURE_LABEL[disclosure] ?? disclosure}</span>}
-  {provenanceLabel && <span class={provenanceClass}>{provenanceLabel}</span>}
+  {/*
+    Two rows on an article, one on a card, and the split is the point.
+
+    Everything above is *who wrote this*; everything below is *what this text is* — when it
+    was published, how long it takes, how it was made and whether it is signed. Run together
+    they were seven pills and three links wrapping into a grey block where nothing led. The
+    break is a full-width flex item, so the row divides where the meaning does rather than
+    wherever the viewport happens to be narrow.
+  */}
+  {!compact && <span class="byline__break" aria-hidden="true"></span>}
 
   {publishedAt && (
     <time datetime={publishedAt}>
@@ -116,4 +124,6 @@ const displayName =
     </time>
   )}
   {minutes && <span>{minutes} min read</span>}
+  {!entailed && <span class={compact ? undefined : "tag"}>{DISCLOSURE_LABEL[disclosure] ?? disclosure}</span>}
+  {provenanceLabel && <span class={provenanceClass}>{provenanceLabel}</span>}
 </p>
