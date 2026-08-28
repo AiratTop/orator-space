@@ -1297,7 +1297,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
   /** SPEC §22 — curated, and empty until a moderator puts something in it. */
   const topics: TopicRepo = {
     async list() {
-      return [...state.topics.values()].sort((a, b) => a.label.localeCompare(b.label));
+      // Active only, like the D1 repo — whose `WHERE status = 'active'` is what makes §22.1's
+      // "an archived topic keeps its page and leaves the vocabulary" true. A double that
+      // returned archived rows made the difference untestable and the service's own filter
+      // look redundant.
+      return [...state.topics.values()]
+        .filter((topic) => topic.status === "active")
+        .sort((a, b) => a.label.localeCompare(b.label));
     },
     async findBySlug(slug) {
       return [...state.topics.values()].find((topic) => topic.slug === slug) ?? null;

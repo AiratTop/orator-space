@@ -1420,10 +1420,13 @@ which cannot be taken while the answer is fixed at zero.
 
 ### 13.35. What coverage says, and what it cannot
 
-Measured on 2026-08-28, on the domain profile (`pnpm coverage`):
+Measured on 2026-08-28, on the domain profile (`pnpm coverage`), before and after a pass at
+the gaps it named:
 
 ```text
-packages/core            statements 85%   branches 78%   functions 92%   lines 89%
+                         statements   branches   functions   lines
+first measurement            85%         78%        92%        89%
+after the gaps were filled   89%         82%        96%        93%
 ```
 
 **The other two profiles cannot be measured this way, and the combined figure is an
@@ -1432,17 +1435,26 @@ collected from the Node side and sees none of it, so a whole-repo run reports ab
 those 240 tests are executing normally. Quoting that number would understate the suite and,
 worse, would make the honest number look like a regression whenever the balance shifts.
 
-**Where the domain profile is genuinely thin**, in the order worth fixing:
+**What the pass found, which is the part worth recording.** Three of the four thin files were
+worth writing tests for, and two of those tests immediately found something:
 
 ```text
-health.ts        0%   nothing exercises the health service at all
-topics.ts       55%   the tree and the listing are covered by D1 tests instead (workerd)
-auth.ts         62%   the passkey ceremony is covered in workerd, where it belongs
-identity.ts     75%   registration and token issue are covered; closure paths are not
+health.ts     0% → 89%   nothing exercised the deep check at all — the one that exists to
+                         notice that every endpoint answers while the pipeline is stopped
+topics.ts    55% → 100%  and the memory double returned archived topics where D1 returns
+                         only active ones, so §22.1's "an archived topic leaves the
+                         vocabulary" was untestable; the service now filters as well as
+                         the repository, because a rule that holds only through one SQL
+                         clause stops holding when somebody writes a second query
+identity.ts  75% → 85%   profile editing had no test of who may edit whose (§7.2, §43.2)
+auth.ts      62%         left alone: the passkey ceremony is covered in workerd, where it
+                         belongs, and the reporter cannot see those tests
 ```
 
-Two of those four are misleading in the same way as the total: `auth.ts` and `topics.ts` are
-exercised by tests the reporter cannot see. `health.ts` is a real gap, and a small one.
+That is the second in-memory double this week found to be more permissive than the adapter it
+stands for — the first ignored `avatarMediaId` entirely. Both were found by writing a test
+that asserted something the double could not get wrong, which is the argument for §68's rule
+that a double is only worth what the real thing agrees with.
 
 **What the number does not measure is what this week actually cost.** Both defects the audit
 found — a collector whose premise was wrong, and an in-memory double that ignored a field —

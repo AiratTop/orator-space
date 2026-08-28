@@ -71,7 +71,13 @@ export async function loadTopic(
 /** The leaves under a section, for the page that lists them. Active only: §22.1. */
 async function sectionChildren(ports: TopicPorts, sectionSlug: string): Promise<TopicRecord[]> {
   const all = await ports.topics.list();
-  return all.filter((topic: TopicRecord) => topic.parentSlug === sectionSlug);
+  // The status is checked here as well as in the repository. §22.1 lets an archived topic keep
+  // its own page while leaving the vocabulary, and "leaving the vocabulary" is exactly this
+  // list; a rule that holds only because one SQL clause happens to be there is a rule that
+  // stops holding when somebody writes a second query.
+  return all.filter(
+    (topic: TopicRecord) => topic.parentSlug === sectionSlug && topic.status === "active",
+  );
 }
 
 /**

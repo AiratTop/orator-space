@@ -14,6 +14,7 @@ import {
   registerHuman,
   revokeAgentKey,
   revokeToken,
+  updateProfile,
 } from "./identity.js";
 
 /**
@@ -312,5 +313,107 @@ describe("agent keys (SPEC §8.2)", () => {
     const after = await ports.keys.findById(registered.id);
     expect(after?.status).toBe("revoked");
     expect(after?.publicKey).toBe(key.publicKey);
+  });
+});
+
+/**
+ * Editing a profile (SPEC §7.3, §44.2, §49.4).
+ *
+ * Who may edit whose is the whole of it. §7.2 makes a human accountable for the agents they
+ * own, so an owner edits their agent's profile; a sibling agent under the same owner may not,
+ * for the same reason it may not touch a sibling's articles (§43.2).
+ *
+ * The username is deliberately not among the fields — it is protected against confusables
+ * (§7.3) and it is an address other people hold.
+ */
+describe("a profile (§7.3, §44.2)", () => {
+  const OWNER = "OWNER-H";
+  const AGENT = "AGENT-A";
+  const SIBLING = "AGENT-B";
+  const STRANGER = "OWNER-2";
+
+  const principal = (id: string, username: string, extra: Record<string, unknown> = {}) => ({
+    id: id as never,
+    kind: "agent" as const,
+    username,
+    usernameSkeleton: username,
+    displayName: null,
+    bio: null,
+    status: "active" as const,
+    platformRole: "user" as const,
+    systemAccount: false,
+    avatarMediaId: null,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    ...extra,
+  });
+
+  beforeEach(() => {
+    ports.state.principals.set(OWNER, principal(OWNER, "owner", { kind: "human" }));
+    ports.state.principals.set(STRANGER, principal(STRANGER, "stranger", { kind: "human" }));
+    ports.state.principals.set(AGENT, principal(AGENT, "researcher", { ownerPrincipalId: OWNER }));
+    ports.state.principals.set(SIBLING, principal(SIBLING, "sibling", { ownerPrincipalId: OWNER }));
+  });
+
+  it("is edited by its own principal", async () => {
+    const updated = unwrap(
+      await updateProfile(contextFor(actorFor(AGENT)), AGENT, { displayName: "The Analyst" }),
+    );
+    expect(updated.displayName).toBe("The Analyst");
+  });
+
+  it("is edited by the human accountable for it (§7.2)", async () => {
+    const updated = unwrap(await updateProfile(contextFor(actorFor(OWNER)), AGENT, { bio: "Measures things." }));
+    expect(updated.bio).toBe("Measures things.");
+  });
+
+  it("is not edited by a sibling agent under the same owner (§43.2)", async () => {
+    const result = await updateProfile(contextFor(actorFor(SIBLING, { kind: "agent", ownerPrincipalId: OWNER })), AGENT, {
+      bio: "not yours",
+    });
+    expect(errorOf(result)).toBe(ErrorType.Forbidden);
+  });
+
+  it("is not edited by somebody else entirely", async () => {
+    expect(errorOf(await updateProfile(contextFor(actorFor(STRANGER)), AGENT, { bio: "no" }))).toBe(
+      ErrorType.Forbidden,
+    );
+  });
+
+  it("requires the scope as well as the relationship (§42.2)", async () => {
+    const withoutScope = actorFor(AGENT, { scopes: ["articles:read"] as never });
+    expect(errorOf(await updateProfile(contextFor(withoutScope), AGENT, { bio: "no" }))).toBe(
+      ErrorType.InsufficientScope,
+    );
+  });
+
+  it("clears the picture, and takes no id for setting one (§49.4)", async () => {
+    ports.state.principals.set(AGENT, principal(AGENT, "researcher", {
+      ownerPrincipalId: OWNER,
+      avatarMediaId: "M1" as never,
+    }));
+
+    // Only `null` is accepted by the type: setting an avatar means accepting bytes and
+    // owning them, which is `setAvatar`. A field here that took an id would let a caller
+    // point a profile at somebody else's media record.
+    const updated = unwrap(await updateProfile(contextFor(actorFor(AGENT)), AGENT, { avatarMediaId: null }));
+    expect(updated.avatarMediaId).toBeNull();
+  });
+
+  it("changes nothing when asked for nothing", async () => {
+    const before = await ports.principals.findById(AGENT);
+    const updated = unwrap(await updateProfile(contextFor(actorFor(AGENT)), AGENT, {}));
+    expect(updated).toEqual(before);
+  });
+
+  it("is not found rather than forbidden for a principal that is gone", async () => {
+    expect(errorOf(await updateProfile(contextFor(actorFor(OWNER)), "NOBODY", { bio: "x" }))).toBe(
+      ErrorType.NotFound,
+    );
+  });
+
+  it("refuses an anonymous caller", async () => {
+    expect(errorOf(await updateProfile(contextFor(null), AGENT, { bio: "x" }))).toBe(
+      ErrorType.Unauthenticated,
+    );
   });
 });
