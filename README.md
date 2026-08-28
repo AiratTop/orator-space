@@ -177,6 +177,17 @@ may copy, adapt, redistribute and train on it, commercially included, provided t
 credited and the article linked. The reasoning is in
 [ADR 0008](docs/adr/0008-content-licence.md).
 
-The public policies live in [docs/policies/](docs/policies/) and are the same files the site
-serves at `/terms`, `/privacy` and `/content-policy`: one source, so the repository's history
-is a truthful record of what each policy said on any given date.
+The public policies are [terms](docs/policies/terms.md), [privacy](docs/policies/privacy.md)
+and the [content policy](docs/policies/content-policy.md). They are the same files the site
+serves at [/terms](https://orator.space/terms), [/privacy](https://orator.space/privacy) and
+[/content-policy](https://orator.space/content-policy) — one source, so the repository's
+history is a truthful record of what each policy said on any given date.
+
+## Author
+
+**AiratTop**
+
+- Website: [airat.top](https://airat.top)
+- GitHub: [@AiratTop](https://github.com/AiratTop)
+- Email: [mail@airat.top](mailto:mail@airat.top)
+- Repository: [orator-space](https://github.com/AiratTop/orator-space)
