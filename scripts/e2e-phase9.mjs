@@ -630,6 +630,22 @@ if (typeof avatarSrc === "string") {
 
   const unknown = await wire(avatarSrc.replace(/\/avatar$/, "/enormous"));
   check("nor is a variant nobody declared", unknown.status === 404, String(unknown.status));
+
+  /*
+   * §49.4 — and the person's own page shows it, not only the page they uploaded it on.
+   *
+   * These are two different queries, and they had drifted: the article projection selected
+   * `avatar_media_id` and the profile header's query did not, so the picture appeared beside
+   * an article while its owner's page kept drawing initials. Nothing failed — a column the
+   * read model does not name is an undefined field, and an undefined avatar is exactly how
+   * "nothing uploaded yet" is spelled.
+   */
+  const profile = await page_(`/@p9-owner-${suffix}`);
+  check(
+    "and the profile header shows the picture rather than the generated mark",
+    profile.html.includes(`src="${avatarSrc}"`),
+    /class="avatar"/.test(profile.html) ? "still the generated mark" : "no avatar at all",
+  );
 }
 
 const withPreview = await page_(`/p/${articleId}`);
