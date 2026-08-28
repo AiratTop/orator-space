@@ -106,7 +106,9 @@ const SAID = {
     "told when something happens to your work.\n\n" +
     // The person is here and the page they came from is behind this window; on a phone it is
     // behind the whole application. A way back is one line and saves a hunt through tabs.
-    `Back to your account: ${settings}`,
+    // The address on its own line: a long URL wrapped mid-sentence is unreadable on a phone,
+    // and this is the one thing in the message somebody is meant to press.
+    `Back to your account:\n${settings}`,
   expired:
     "That link is no longer usable — it may have expired, or it may already have been used. " +
     "Open the settings page again and start a new one.",
