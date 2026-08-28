@@ -698,6 +698,75 @@ check(
   "the page still points at the uploaded picture",
 );
 
+// --- indexing, where a deployment has any ----------------------------------------------
+section("What indexing looks like where it exists (§50.3, §51, §22.1)");
+
+/*
+ * Conditional, and the condition is the point.
+ *
+ * §60.2 has no implementation, so nothing raises a trust level and no article becomes
+ * indexable by itself (PLAN §13.3). Staging has three indexable articles because one row was
+ * written by hand; production has none. A checkpoint that demanded the state would fail on
+ * production for a reason that is not a regression, and one that skipped the subject entirely
+ * is how these two acceptance criteria stayed open for a fortnight while a real bug sat in
+ * the sitemap route.
+ *
+ * So: assert the rules where the state exists, and say so where it does not.
+ */
+const index = await wire(`${webBase}/sitemap.xml`);
+const indexBody = index.status === 200 ? await index.text() : "";
+const shards = [...indexBody.matchAll(/<loc>[^<]*\/sitemaps\/([a-z0-9-]+)\.xml<\/loc>/g)].map((m) => m[1]);
+check("the sitemap index is built", index.status === 200, String(index.status));
+
+/*
+ * §51 — every shard the index names is fetchable.
+ *
+ * The one assertion that would have caught the bug it did catch: `topics` was absent from
+ * the route's whitelist, so the index pointed at a file that answered 404. An index naming
+ * an address that does not resolve is worse than an index with fewer entries.
+ */
+for (const shard of shards) {
+  const fetched = await wire(`${webBase}/sitemaps/${shard}.xml`);
+  check(`the ${shard} shard the index names is served`, fetched.status === 200, `${fetched.status} /sitemaps/${shard}.xml`);
+}
+
+if (shards.includes("topics")) {
+  const topicsShard = await (await wire(`${webBase}/sitemaps/topics.xml`)).text();
+  const submitted = [...topicsShard.matchAll(/<loc>[^<]*\/t\/([a-z0-9-]+)<\/loc>/g)].map((m) => m[1]);
+  check("the topic shard names at least one topic", submitted.length > 0, submitted.join(", "));
+
+  // §51, §22.1 — a submitted topic page says `index`; the threshold is three articles.
+  const submittedPage = await page_(`/t/${submitted[0]}`);
+  check(
+    "and a submitted topic page says index rather than noindex",
+    /content="index, follow"/.test(submittedPage.html),
+    (submittedPage.html.match(/name="robots" content="[^"]*"/) ?? [])[0] ?? "(none)",
+  );
+} else {
+  check(
+    "no topic has three indexable articles here, and the shard is absent rather than empty",
+    !indexBody.includes("/sitemaps/topics.xml"),
+    "the index names a topic shard that was not built",
+  );
+}
+
+/*
+ * §22.1 — an archived topic keeps its page and leaves the vocabulary.
+ *
+ * Staging has one, put there deliberately; production does not. Both halves are asserted
+ * where it exists, because the rule is the pair: a page that 404s is a broken link in
+ * somebody's citation, and a vocabulary that still offers it is a shelf nothing may go on.
+ */
+const archived = await page_("/t/retired-formats");
+if (archived.status === 200) {
+  const vocabulary = await page_("/topics");
+  check(
+    "an archived topic still resolves, and is gone from the vocabulary",
+    !vocabulary.html.includes("/t/retired-formats"),
+    "the archived topic is still listed",
+  );
+}
+
 // --- history -------------------------------------------------------------------------
 section("Version history (§16.1, §16.3, §49.2)");
 
