@@ -1115,7 +1115,8 @@ work here; the three before them close commitments the specification already mad
 [x] a person sees the id their account is written in (§49.2)      a8fe1a1
 [x] a picture can be removed, and orphaned media is collected      e28010b
 [x] Atom feeds: the site, a topic, an author, with autodiscovery   301acb6
-[x] a Telegram bot: linking, three commands, and notifications (§9.3)
+[x] a Telegram bot: linking, commands, notifications, a login link
+[x] bookmarks at their own address; a sign-out button that was missing
 [x] public version history with a diff, and the leak it uncovered   539d8b0
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
@@ -1445,7 +1446,15 @@ the gaps it named:
                          statements   branches   functions   lines
 first measurement            85%         78%        92%        89%
 after the gaps were filled   89%         82%        96%        93%
+after Telegram (2026-08-28)  89%         82%        95%        93%
 ```
+
+The last row is the interesting one: a whole feature — linking a chat, four bot commands,
+notification delivery and a login link — arrived without moving the number, because it was
+written with its tests. That is what the figure is for. It is not what the figure proves:
+the login link was broken in production the entire time these tests passed, because what
+spent the one-time nonce was Telegram's preview crawler, and no unit test has a preview
+crawler in it.
 
 **The other two profiles cannot be measured this way, and the combined figure is an
 artefact.** `adapters-cf` and `edge` run in `workerd` under the Workers pool; v8 coverage is

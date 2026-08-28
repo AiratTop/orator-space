@@ -6,6 +6,7 @@ import {
   completePasskeyAuthentication,
   completePasskeyRegistration,
   openChallenge,
+  openSessionFor,
   resolveSession,
   sealChallenge,
   signOut,
@@ -293,6 +294,46 @@ describe("sessions", () => {
     await signOut(auth.ports, first);
     expect(await resolveSession(auth.ports, first)).toBeNull();
     expect(await resolveSession(auth.ports, second)).not.toBeNull();
+  });
+});
+
+/**
+ * A session opened for an identity established elsewhere (SPEC §9.3, §9.1).
+ *
+ * The Telegram login link is the only caller, and the point of the tests is that this makes
+ * an *ordinary* session: a second way in must not be a second kind of session, with a
+ * lifetime or a listing somebody has to remember is different.
+ */
+describe("opening a session for a principal (§9.3)", () => {
+  it("makes a session indistinguishable from one a passkey made", async () => {
+    await register();
+    const opened = unwrap(await openSessionFor(ctx(), HUMAN));
+
+    const resolved = await resolveSession(auth.ports, opened.sessionToken);
+    expect(resolved?.principalId).toBe(HUMAN);
+    expect(Date.parse(opened.expiresAt) - Date.parse("2026-08-22T12:00:00.000Z")).toBe(SESSION_LIFETIME_MS);
+  });
+
+  it("is listed and revocable like any other (§9.1)", async () => {
+    await register();
+    const opened = unwrap(await openSessionFor(ctx(), HUMAN));
+
+    expect(auth.sessions.size).toBe(1);
+    await signOut(auth.ports, opened.sessionToken);
+    expect(await resolveSession(auth.ports, opened.sessionToken)).toBeNull();
+  });
+
+  it("refuses an account that is not active", async () => {
+    await register();
+    auth.principals.set(HUMAN, { ...auth.principals.get(HUMAN)!, status: "suspended" });
+    const result = await openSessionFor(ctx(), HUMAN);
+    expect(result.ok).toBe(false);
+  });
+
+  it("refuses a principal that does not exist", async () => {
+    // The caller establishes identity; this refuses to invent one. A principal id that is
+    // not there is a bug upstream, and answering with a session would hide it.
+    expect((await openSessionFor(ctx(), "NOBODY")).ok).toBe(false);
   });
 });
 

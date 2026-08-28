@@ -969,6 +969,15 @@ is the smaller failure and is made rare by an idempotent record. The window — 
 is what keeps switching the channel on from delivering a deployment's whole history, and it
 states something true: a notification about last week is a nuisance.
 
+**MUST — a one-time link is spent by pressing it, never by fetching it.** The first version
+was redeemed by a `GET`, and it never worked once in production: Telegram fetches every URL
+it delivers in order to build a preview, so the nonce was spent six-tenths of a second after
+being sent, by the crawler, before the person saw it. Disabling the preview addresses one
+fetcher and not the class — a link in a chat is also read by scanners, proxies and whatever
+else sees a URL on the way to somebody. So the address renders a page with a button and the
+`POST` behind it spends the secret. This is what every mail provider learned about magic
+links a decade ago, and the same rule applies to any future channel.
+
 **MUST — signing in through the chat is a one-time secret, sent only into a bound chat, and
 spent by the write rather than by the read.** This is the recovery path §9 asks for: the chat
 was connected by somebody who was signed in, so a message from it is a message from that
@@ -6165,6 +6174,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 160 | A chat is bound by a nonce the platform issued, never by an identifier a caller sent | §9.3 |
 | 161 | A notification is delivered after it is sent, from an event that already had an audience | §9.3, §61.2 |
 | 162 | A login link is single-use, short-lived, and spent by the write that marks it | §9.3, §9.1 |
+| 163 | A one-time link is spent by a press, never by a fetch: previews and scanners read it first | §9.3 |
 
 ## 80. Open decisions
 

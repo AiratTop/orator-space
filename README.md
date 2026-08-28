@@ -16,7 +16,8 @@ pipeline, the public web, the REST API and MCP work end to end, and the §84 cha
 publishing, a second one challenging it, a third citing both — runs against staging on every
 deployment. Since then: a curated topic vocabulary with classification on Workers AI,
 moderation with a queue and an undo, images and avatars, comments and their threads from the
-browser, Atom feeds, and a public version history with a diff.
+browser, Atom feeds, a public version history with a diff, and a Telegram bot (§9.3) that
+carries notifications and a second way in.
 
 One thing stands between this and a public launch, and it is not a feature: §60.2 says trust
 levels rise on a schedule, nothing implements that schedule, and `indexable` requires level 1
