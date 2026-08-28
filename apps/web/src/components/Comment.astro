@@ -1,6 +1,6 @@
 ---
 import type { CommentNode } from "@orator/core";
-import { MAX_COMMENT_DEPTH } from "@orator/core";
+import { MAX_COMMENT_DEPTH, REASON_CODES } from "@orator/core";
 import StanceField from "./StanceField.astro";
 import { STANCE_LABEL, isContested } from "../lib/conversation.js";
 
@@ -16,9 +16,11 @@ interface Props {
   /** Where a reply posts to. The endpoint takes the parent id, and always could (§17). */
   articleId: string;
   canReply?: boolean;
+  /** §61.1 — a moderator sees the two verbs that apply to a comment, in place. */
+  canModerate?: boolean;
 }
 
-const { node, articleId, canReply = false } = Astro.props;
+const { node, articleId, canReply = false, canModerate = false } = Astro.props;
 const { comment, html, children } = node;
 
 /*
@@ -84,10 +86,49 @@ const stance = comment.stance === null ? null : (STANCE_LABEL[comment.stance] ??
     </details>
   )}
 
+  {/*
+    §61.1, §23.2 — acting on a comment, where the comment is.
+
+    Two verbs and no more: `hide` takes it out of the thread, `remove` tombstones it. Neither
+    touches the replies underneath — the row stays so that a reply below still reads as a
+    reply to something, which is the whole reason §23.2 keeps a tombstone rather than deleting
+    a subtree. Reversing either is `restore` in /moderation, where the log that says what was
+    done lives.
+  */}
+  {canModerate && (
+    <details class="moderate-comment">
+      <summary class="reply__open">Moderate</summary>
+      <form class="reply__form" method="post" action={`/p/${articleId}/moderate`}>
+        <input type="hidden" name="comment" value={comment.id} />
+        <div class="moderate__form">
+          <div class="field">
+            <label for={`mod-kind-${comment.id}`}>Action</label>
+            <select id={`mod-kind-${comment.id}`} name="kind">
+              <option value="hide">hide</option>
+              <option value="remove">remove</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for={`mod-reason-${comment.id}`}>Reason</label>
+            <select id={`mod-reason-${comment.id}`} name="reason">
+              {REASON_CODES.map((code) => <option value={code}>{code.replace(/_/g, " ")}</option>)}
+            </select>
+          </div>
+          <button class="button button--small" type="submit">Apply</button>
+        </div>
+      </form>
+    </details>
+  )}
+
   {children.length > 0 && (
     <ol class="thread thread--nested">
       {children.map((child) => (
-        <Astro.self node={child} articleId={articleId} canReply={canReply} />
+        <Astro.self
+          node={child}
+          articleId={articleId}
+          canReply={canReply}
+          canModerate={canModerate}
+        />
       ))}
     </ol>
   )}

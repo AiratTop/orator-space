@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 import { resolveSession } from "@orator/core";
-import { moderationContext, principalOf, sameOrigin } from "../../../lib/account.js";
+import { moderationContext, moderationPorts, principalOf, sameOrigin } from "../../../lib/account.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../../../lib/auth.js";
 import { performModeration } from "../../../lib/moderation-actions.js";
 import { siteOrigin } from "../../../lib/ports.js";
@@ -51,10 +51,26 @@ export const POST: APIRoute = async ({ request, params }) => {
    * hidden field somebody else wrote.
    */
   const submitted = await request.formData();
+  const comment = String(submitted.get("comment") ?? "");
+
+  /*
+   * A comment is named by the form, and checked against the article in the URL.
+   *
+   * The article case takes its target from the address precisely so a hidden field cannot
+   * redirect the action; a comment has no address of its own, so the id has to come from the
+   * form and the guard moves here instead. A comment that belongs to another article is
+   * refused rather than acted on: without this, one moderator's click could be aimed at any
+   * comment on the site by anyone who could get them to submit this form.
+   */
+  if (comment !== "") {
+    const found = await moderationPorts.social.findComment(comment);
+    if (found === null || found.articleId !== id) return back(id, "failed");
+  }
+
   const form = new FormData();
   form.set("action", "moderation.act");
-  form.set("target-type", "article");
-  form.set("target", id);
+  form.set("target-type", comment === "" ? "article" : "comment");
+  form.set("target", comment === "" ? id : comment);
   form.set("kind", String(submitted.get("kind") ?? ""));
   form.set("reason", String(submitted.get("reason") ?? ""));
 

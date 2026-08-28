@@ -867,6 +867,33 @@ check(
  * reading whatever the edge had — twice now that mistake has been made here (comments, then
  * duplicates), and both times the assertion could not fail.
  */
+/*
+ * §61.1 — and the comment route is guarded by the article it belongs to.
+ *
+ * A comment has no address of its own, so its id comes from the form; without the check that
+ * it belongs to the article in the URL, one submitted form could aim a moderator's click at
+ * any comment on the site.
+ */
+const foreignComment = await wire(`${webBase}/p/${articleId}/moderate`, {
+  method: "POST",
+  headers: {
+    "content-type": "application/x-www-form-urlencoded",
+    origin: webOrigin,
+    cookie: cookieHeader(),
+  },
+  body: new URLSearchParams({
+    kind: "remove",
+    reason: "spam",
+    comment: "06GXXXXXXXXXXXXXXXXXXXXXXX",
+  }).toString(),
+  redirect: "manual",
+});
+check(
+  "a comment that is not on this article is refused",
+  foreignComment.status === 303 && (foreignComment.headers.get("location") ?? "").includes("moderation=failed"),
+  `${foreignComment.status} ${foreignComment.headers.get("location")}`,
+);
+
 const stillThere = await page(`/p/${articleId}`);
 check("and the article is still there afterwards", stillThere.status === 200, String(stillThere.status));
 

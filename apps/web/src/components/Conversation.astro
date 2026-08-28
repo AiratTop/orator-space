@@ -29,9 +29,11 @@ interface Props {
    * API and never see this page.
    */
   canReply?: boolean;
+  /** §61.1 — whether this reader may act on a comment as well as read it. */
+  canModerate?: boolean;
 }
 
-const { conversation, articleId, canReply = false } = Astro.props;
+const { conversation, articleId, canReply = false, canModerate = false } = Astro.props;
 const { comments, inbound, outbound, truncated } = conversation;
 const roots = threadOf(comments, { siteHost });
 
@@ -68,7 +70,12 @@ const linkSections = [
       <h3>Comments</h3>
       <ol class="thread">
         {roots.map((node) => (
-          <Comment node={node} articleId={articleId} canReply={canReply} />
+          <Comment
+            node={node}
+            articleId={articleId}
+            canReply={canReply}
+            canModerate={canModerate}
+          />
         ))}
       </ol>
       {truncated && (
