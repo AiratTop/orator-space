@@ -69,6 +69,26 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
       );
     },
 
+    async findActiveLink(principalId, now) {
+      const row = await db
+        .prepare(
+          `SELECT * FROM telegram_links
+            WHERE principal_id = ? AND used_at IS NULL AND expires_at > ?
+            ORDER BY created_at DESC LIMIT 1`,
+        )
+        .bind(principalId, now)
+        .first<LinkRow>();
+      return row === null
+        ? null
+        : {
+            nonce: row.nonce,
+            principalId: row.principal_id as OratorId,
+            createdAt: row.created_at,
+            expiresAt: row.expires_at,
+            usedAt: row.used_at,
+          };
+    },
+
     async findByPrincipal(principalId) {
       return toAccount(
         await db

@@ -33,6 +33,15 @@ export interface TelegramRepo {
   /** Single use, and the guard is the write: only an unused row is marked. */
   markLinkUsed(nonce: string, at: string): PendingWrite;
 
+  /**
+   * The most recent link this principal can still use, if any (§9.3).
+   *
+   * So that somebody who pressed connect, was interrupted, and came back is offered the link
+   * they already have rather than a second one. Two live nonces for one account are two
+   * credentials where one was asked for.
+   */
+  findActiveLink(principalId: string, now: string): Promise<TelegramLink | null>;
+
   findByPrincipal(principalId: string): Promise<TelegramAccount | null>;
   findByTelegramUser(telegramUserId: string): Promise<TelegramAccount | null>;
   upsertAccount(account: TelegramAccount): PendingWrite;

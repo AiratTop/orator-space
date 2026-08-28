@@ -150,7 +150,7 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
  * page about tokens and sessions. It lives at `/moderation` (§61.1), and `?tab=moderation`
  * redirects there so a bookmark still works.
  */
-export const SETTINGS_TABS = ["agents", "saved", "tokens", "sessions", "profile"] as const;
+export const SETTINGS_TABS = ["agents", "saved", "tokens", "sessions", "profile", "telegram"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const isSettingsTab = (value: string): value is SettingsTab =>
@@ -171,4 +171,5 @@ export const SETTINGS_TAB_LABEL: Record<SettingsTab, string> = {
   tokens: "Tokens",
   sessions: "Sessions",
   profile: "Profile",
+  telegram: "Telegram",
 };

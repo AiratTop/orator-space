@@ -2715,3 +2715,12 @@ img.avatar {
   padding: 0.125rem 0.75rem;
   white-space: pre;
 }
+
+/* §9.3 — the link somebody comes back to, and the sentence that says how long it lasts. */
+.telegram__link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0;
+}

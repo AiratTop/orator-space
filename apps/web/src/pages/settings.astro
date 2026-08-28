@@ -44,8 +44,6 @@ Astro.response.headers.set("cache-control", CACHE.private);
 Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
 
 let outcome: ActionOutcome = { kind: "none" };
-/** §9.3 — shown once, after the form that asked for it: a link is a credential (§42.2). */
-let telegramLink: string | null = null;
 let view: AccountView | null = null;
 
 if (session === null) {
@@ -97,10 +95,25 @@ if (Astro.request.method === "POST") {
       botUsername: telegramBot,
       random,
     });
-    outcome = started.ok
-      ? { kind: "done", message: "Open the link below within ten minutes to connect the chat." }
-      : { kind: "failed", message: started.error.title };
-    telegramLink = started.ok ? started.value.url : null;
+
+    /*
+     * Straight to Telegram, rather than showing a link to press.
+     *
+     * The first version rendered the deep link and asked somebody to click it, which is two
+     * actions and a decision for one intention: they already pressed "connect". The nonce is
+     * made here and the redirect carries it, so the next thing they see is the chat.
+     *
+     * The link stays available on the page for anybody who comes back — the tab reads the
+     * outstanding one below — because the ordinary interruption is real: the phone is in
+     * another room.
+     */
+    if (started.ok) {
+      return new Response(null, {
+        status: 303,
+        headers: { location: started.value.url, "cache-control": "private, no-store" },
+      });
+    }
+    outcome = { kind: "failed", message: started.error.title };
   } else if (requestedAction === "telegram.unlink") {
     await unlinkTelegram(telegramPorts, principal.id);
     outcome = { kind: "done", message: "Telegram is disconnected." };
@@ -184,8 +197,16 @@ const here = `/settings?tab=${tab}`;
  * Never counted anywhere else. The tab carries no number, unlike agents and tokens, and that
  * is the visible half of the decision: a count on a strip is one step from a count on a card.
  */
-/* §9.3 — whether this account already has a chat, for the panel below. */
+/* §9.3 — whether this account already has a chat, and whether a link is outstanding. */
 const telegram = telegramBot === null ? null : await telegramPorts.telegram.findByPrincipal(principal.id);
+const pendingLink =
+  telegramBot === null || telegram !== null
+    ? null
+    : await telegramPorts.telegram.findActiveLink(principal.id, new Date().toISOString());
+const telegramLink =
+  pendingLink === null || telegramBot === null
+    ? null
+    : `https://t.me/${telegramBot}?start=${pendingLink.nonce}`;
 
 const savedList =
   tab === "saved" ? await readingList(readingListPorts, principal.id) : { cards: [], next: null };
@@ -469,6 +490,67 @@ const when = (iso: string) => iso.slice(0, 10);
           </section>
         )}
 
+        {tab === "telegram" && (
+          <section class="panel" id="telegram">
+            <h2 class="panel__heading">Telegram</h2>
+
+            {telegramBot === null ? (
+              <p class="panel__lede">
+                This deployment has no bot configured. §32.1 keeps one bot to one environment —
+                a bot has a single webhook, so it cannot serve two deployments any more than a
+                database can.
+              </p>
+            ) : telegram === null ? (
+              <>
+                <p class="panel__lede">
+                  Connect a chat with <code>@{telegramBot}</code> and this platform can tell you
+                  when something happens to your work — a moderation decision, somebody
+                  challenging an article — instead of leaving it in a feed you would have to come
+                  here to read.
+                </p>
+
+                <form method="post" action={here} class="issue__form">
+                  <input type="hidden" name="action" value="telegram.link" />
+                  <button class="button" type="submit">Connect Telegram</button>
+                </form>
+
+                {/*
+                  The outstanding link, for somebody who pressed connect and got interrupted.
+                  It is a credential (§42.2): it binds a chat to this account, so it says how
+                  long it lasts and it is not offered once the connection exists.
+                */}
+                {telegramLink !== null && (
+                  <p class="telegram__link">
+                    <a href={telegramLink} rel="noopener" target="_blank">Open the link you started</a>{" "}
+                    <span class="field__hint">Valid for ten minutes, and once.</span>
+                  </p>
+                )}
+
+                <p class="field__hint">
+                  Pressing the button takes you straight to the chat. Nothing is sent until you
+                  press start there, and disconnecting is one press on this page.
+                </p>
+              </>
+            ) : (
+              <>
+                <p class="panel__lede">
+                  Connected{telegram.username === null ? "" : ` as @${telegram.username}`} on{" "}
+                  {when(telegram.linkedAt)}. This is where you will be told when something
+                  happens to your work.
+                </p>
+                <form method="post" action={here} class="issue__form">
+                  <input type="hidden" name="action" value="telegram.unlink" />
+                  <button class="button button--quiet button--small" type="submit">Disconnect</button>
+                </form>
+                <p class="field__hint">
+                  Disconnecting is immediate. One Telegram account belongs to one account here,
+                  so the chat is free to connect elsewhere afterwards (§9.3).
+                </p>
+              </>
+            )}
+          </section>
+        )}
+
         {tab === "profile" && (
           <section class="panel" id="profile">
             <h2 class="panel__heading">Profile</h2>
@@ -546,51 +628,6 @@ const when = (iso: string) => iso.slice(0, 10);
                   that already name it to expire.
                 </p>
               </form>
-            )}
-
-            {/*
-              §9.3 — the second channel.
-
-              On the profile tab because it is a fact about the person rather than about a
-              credential: it is where they are reached, not what they sign in with. The link
-              is shown once and lives ten minutes — it binds a chat to this account, so it is
-              a credential and is treated as one (§42.2).
-            */}
-            {telegramBot !== null && (
-              <section class="telegram">
-                <h3 class="agent__subheading">Telegram</h3>
-                {telegram === null ? (
-                  <>
-                    <p class="field__hint">
-                      Connect a chat with <code>@{telegramBot}</code> and the platform can tell
-                      you when something happens to your work, rather than leaving it in a feed
-                      you would have to come here to read.
-                    </p>
-                    {telegramLink === null ? (
-                      <form method="post" action={here} class="issue__form">
-                        <input type="hidden" name="action" value="telegram.link" />
-                        <button class="button button--small" type="submit">Connect Telegram</button>
-                      </form>
-                    ) : (
-                      <p class="telegram__link">
-                        <a href={telegramLink} rel="noopener" target="_blank">Open Telegram and connect</a>
-                        <span class="field__hint">Valid for ten minutes, and once.</span>
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <p class="field__hint">
-                      Connected{telegram.username === null ? "" : ` as @${telegram.username}`} on{" "}
-                      {when(telegram.linkedAt)}.
-                    </p>
-                    <form method="post" action={here} class="issue__form">
-                      <input type="hidden" name="action" value="telegram.unlink" />
-                      <button class="button button--quiet button--small" type="submit">Disconnect</button>
-                    </form>
-                  </>
-                )}
-              </section>
             )}
 
             <form method="post" action={here} class="issue__form">

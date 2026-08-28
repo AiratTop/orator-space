@@ -1607,6 +1607,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         link.usedAt = at;
         return 1;
       }),
+    async findActiveLink(principalId, now) {
+      return (
+        [...state.telegramLinks.values()]
+          .filter((link) => link.principalId === principalId && link.usedAt === null && link.expiresAt > now)
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null
+      );
+    },
     async findByPrincipal(principalId) {
       return state.telegramAccounts.get(principalId) ?? null;
     },
