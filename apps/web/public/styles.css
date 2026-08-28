@@ -2509,8 +2509,23 @@ img.avatar {
  * often than they join one. `<details>` gives that for nothing: no script, keyboard-reachable,
  * and open by default for anyone whose browser has scripts off and forms expanded.
  */
+/*
+ * The two controls under a comment sit on one line while they are closed.
+ *
+ * `<details>` is a block element, so `Reply` and `Moderate` stacked — two pills on two lines
+ * under every comment, which reads as a list of things to do rather than as two small
+ * affordances. Inline while closed, block once open, so the form inside gets the width it
+ * needs instead of being squeezed beside its neighbour.
+ */
 .reply {
-  margin: 0.5rem 0 0.25rem;
+  display: inline-block;
+  margin: 0.5rem 0.5rem 0.25rem 0;
+}
+
+.reply[open],
+.moderate-comment[open] {
+  display: block;
+  margin-left: 0;
 }
 
 .reply__open {
