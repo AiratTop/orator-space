@@ -1362,6 +1362,18 @@ a {
   gap: 0.35rem;
 }
 
+/*
+ * One rule, not two — the same fault as under the tab strip.
+ *
+ * Every card draws a line under itself, so a list ends with one; `.machine` then draws its
+ * own above, and the two sit a few centimetres apart with nothing between them. The card's
+ * line is the one that goes: it separates cards from each other, and the last card has
+ * nothing below it to be separated from.
+ */
+.feed .card:last-child {
+  border-bottom: none;
+}
+
 /* Machine-readable links and notices ------------------------------------- */
 
 .machine {
