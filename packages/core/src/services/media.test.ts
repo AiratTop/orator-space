@@ -6,6 +6,8 @@ import type { RequestContext } from "./context.js";
 import {
   createMedia,
   loadReadyMedia,
+  removeAvatar,
+  setAvatar,
   MAX_MEDIA_BYTES,
   readMedia,
   storageKeyFor,
@@ -364,5 +366,67 @@ describe("serving a variant", () => {
     const served = await serveVariant({ ...ports, transform }, media, "original");
     expect(transform.produce).not.toHaveBeenCalled();
     expect(served?.contentType).toBe("image/png");
+  });
+});
+
+/**
+ * A person's picture, put up and taken down (SPEC §49.4, §21.2, §23.4).
+ *
+ * The pair is the test: an upload with no way back is a decision somebody cannot revise, and
+ * a removal that leaves the record attached is a button that reports success and changes
+ * nothing. What each does to the *previous* record is the part with a bill attached — a
+ * replaced picture that is never marked stays in the bucket for good.
+ */
+describe("an avatar", () => {
+  const avatarCtx = () => ({ ...ctxFor(actorFor(OWNER, OWNER, { kind: "human" })), ports });
+
+  const put = async () => {
+    const bytes = file(PNG_HEADER, 64);
+    return unwrap(
+      await setAvatar(avatarCtx(), {
+        body: streamOf(bytes),
+        declaredLength: bytes.byteLength,
+        contentType: "image/png",
+      }),
+    );
+  };
+
+  it("lands the bytes before the principal points at them", async () => {
+    const { mediaId } = await put();
+    expect(ports.state.principals.get(OWNER)?.avatarMediaId).toBe(mediaId);
+    expect(unwrap(await readMedia(ctxFor(actorFor(OWNER, OWNER)), mediaId)).status).toBe("ready");
+  });
+
+  it("detaches the one it replaces, so the collector can have it", async () => {
+    const first = await put();
+    const second = await put();
+
+    expect(ports.state.principals.get(OWNER)?.avatarMediaId).toBe(second.mediaId);
+    // Marked rather than deleted: §33.2 leaves pages naming it for as long as a minute, and
+    // §23.4's pass takes it a day later.
+    expect((await ports.media.findById(first.mediaId))?.status).toBe("removed");
+    expect((await ports.media.findById(second.mediaId))?.status).toBe("ready");
+  });
+
+  it("goes back to the generated mark, and marks the record", async () => {
+    const { mediaId } = await put();
+    unwrap(await removeAvatar(avatarCtx()));
+
+    expect(ports.state.principals.get(OWNER)?.avatarMediaId).toBeNull();
+    expect((await ports.media.findById(mediaId))?.status).toBe("removed");
+  });
+
+  it("is a no-op when there is no picture, rather than a failure", async () => {
+    expect(unwrap(await removeAvatar(avatarCtx()))).toBe(true);
+  });
+
+  it("refuses anything that is not an image, before charging the quota", async () => {
+    const bytes = file(PNG_HEADER, 64);
+    const result = await setAvatar(avatarCtx(), {
+      body: streamOf(bytes),
+      declaredLength: bytes.byteLength,
+      contentType: "application/pdf",
+    });
+    expect(errorOf(result)).toBe("validation-failed");
   });
 });

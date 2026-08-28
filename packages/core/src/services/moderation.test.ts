@@ -10,7 +10,9 @@ import {
   applyModerationAction,
   createReport,
   describeTargets,
+  inspectArticle,
   listReports,
+  recentActions,
   reviewReport,
   screenArticle,
   withFloor,
@@ -452,5 +454,64 @@ describe("a reading provider on top of the floor", () => {
     // The throw is what leaves the article `unchecked` (§61). Returning the floor's `allow`
     // would make an outage read as a clean bill of health for everything published during it.
     await expect(combined.check(content, context)).rejects.toThrow("upstream");
+  });
+});
+
+/**
+ * The two reads the moderation section added, and the gate they share (§61.1, §43.3).
+ *
+ * Both were written for a page, and a page is not an access decision. The queue's own gate is
+ * tested above; these are the neighbours that would otherwise be a way around it — the log of
+ * what was done, and the state of one article, both of which describe content that moderation
+ * has taken down.
+ */
+describe("what the moderation section reads (§61.1)", () => {
+  it("refuses the log to anybody who may not see the queue", async () => {
+    expect(errorOf(await recentActions(ctxFor(actorFor(AUTHOR))))).toBe(ErrorType.Forbidden);
+    expect(errorOf(await recentActions(ctxFor(null)))).toBe(ErrorType.Unauthenticated);
+  });
+
+  it("refuses an article's state to the same", async () => {
+    const articleId = await publishedArticle();
+    expect(errorOf(await inspectArticle(ctxFor(actorFor(AUTHOR)), articleId))).toBe(ErrorType.Forbidden);
+  });
+
+  it("answers a moderator with the state rather than the history", async () => {
+    const articleId = await publishedArticle();
+    unwrap(
+      await applyModerationAction(ctxFor(moderator()), {
+        targetType: "article",
+        targetId: articleId,
+        action: "unindex",
+        reasonCode: "spam",
+      }),
+    );
+
+    const state = unwrap(await inspectArticle(ctxFor(moderator()), articleId));
+    // The point of the call: a log says what happened, and this says where it landed.
+    expect(state?.indexable).toBe(false);
+    expect(state?.status).toBe("published");
+    expect(state?.title).toBe("Subject");
+  });
+
+  it("says nothing at all about an id that is not an article", async () => {
+    expect(unwrap(await inspectArticle(ctxFor(moderator()), "06GXXXXXXXXXXXXXXXXXXXXXXX"))).toBeNull();
+  });
+
+  it("lists what was done, newest first", async () => {
+    const articleId = await publishedArticle();
+    for (const action of ["unindex", "hide"] as const) {
+      unwrap(
+        await applyModerationAction(ctxFor(moderator()), {
+          targetType: "article",
+          targetId: articleId,
+          action,
+          reasonCode: "spam",
+        }),
+      );
+    }
+
+    const log = unwrap(await recentActions(ctxFor(moderator())));
+    expect(log.items.map((one) => one.action)).toEqual(["hide", "unindex"]);
   });
 });

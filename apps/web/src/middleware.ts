@@ -112,7 +112,18 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
    * The role comes from the principal row rather than from the session, because a role is
    * revoked by editing that row — a copy carried in a cookie would outlive the revocation.
    */
-  const sessionCookie = readCookie(context.request, SESSION_COOKIE);
+  /*
+   * Documents only. A stylesheet does not have a masthead.
+   *
+   * Every asset a signed-in reader fetches carries the same cookie, so without this the two
+   * reads happen for `styles.css`, `theme.js` and the favicon as well — five times the cost
+   * for one answer, on the one class of request that is otherwise free. The machine
+   * representations of an article (`.md`, `.json`) are excluded for the same reason: nothing
+   * in them depends on who is asking.
+   */
+  const wantsChrome = !/\.[a-z0-9]+$/i.test(url.pathname);
+
+  const sessionCookie = wantsChrome ? readCookie(context.request, SESSION_COOKIE) : null;
   if (sessionCookie !== null) {
     const session = await resolveSession(authPorts, sessionCookie);
     const principal = session === null ? null : await principalOf(session.principalId);

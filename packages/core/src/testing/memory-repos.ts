@@ -280,11 +280,18 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       return asWrite(() => {
         const principal = state.principals.get(principalId);
         if (principal === undefined) return 0;
-        state.principals.set(principalId, {
+        const updated: PrincipalRecord = {
           ...principal,
           ...(fields.displayName === undefined ? {} : { displayName: fields.displayName }),
           ...(fields.bio === undefined ? {} : { bio: fields.bio }),
-        });
+          // Silently absent until now, so every test that set an avatar through this double
+          // was asserting against a field the double never wrote (§68: a double that agrees
+          // with whatever it is told proves nothing).
+          ...(fields.avatarMediaId === undefined
+            ? {}
+            : { avatarMediaId: (fields.avatarMediaId ?? null) as OratorId | null }),
+        };
+        state.principals.set(principalId, updated);
         return 1;
       });
     },
