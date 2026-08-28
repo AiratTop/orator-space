@@ -65,9 +65,9 @@ const escapeHtml = (value: string): string =>
  * longer treats a fetch as use (see `/auth/telegram`), so this is the second lock rather than
  * the only one — but a preview of a one-time link is worthless anyway.
  */
-async function say(token: string, chatId: string, text: string): Promise<void> {
+async function say(token: string, chatId: string, text: string): Promise<string | null> {
   try {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -77,10 +77,19 @@ async function say(token: string, chatId: string, text: string): Promise<void> {
         link_preview_options: { is_disabled: true },
       }),
     });
+
+    // The id, for a message that may have to be taken back (§9.3). Absent for every other
+    // message, which nothing ever deletes.
+    const body = (await response.json().catch(() => null)) as
+      | { result?: { message_id?: number } }
+      | null;
+    const id = body?.result?.message_id;
+    return id === undefined ? null : String(id);
   } catch (error) {
     // A reply that does not arrive is not a reason to answer Telegram with a failure: it
     // would redeliver the update, and the binding above has already happened.
     console.error(JSON.stringify({ level: "warn", event: "telegram.reply.failed", error: String(error) }));
+    return null;
   }
 }
 
@@ -261,11 +270,14 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
       { siteOrigin: `https://${c.env.SITE_HOST}`, random },
     );
 
-    await say(
+    const messageId = await say(
       token,
       chatId,
       login.ok ? SAID.loginSent(login.value.url, 10) : SAID.notConnected,
     );
+    if (login.ok && messageId !== null) {
+      await createD1Database(c.env.DB).commit([repo.recordLoginMessage(login.value.nonce, messageId)]);
+    }
     console.log(JSON.stringify({ level: "info", event: "telegram.login.issued", ok: login.ok }));
     return c.text("ok");
   }

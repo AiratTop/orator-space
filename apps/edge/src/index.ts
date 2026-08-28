@@ -32,6 +32,7 @@ import { moderationRoutes } from "./routes/moderation.js";
 import { portsFor } from "./context.js";
 import {
   applyClosureDisposition,
+  cleanSpentLogins,
   deliverNotifications,
   drainOutbox,
   evaluateIndexability,
@@ -769,6 +770,28 @@ export default {
 
       if (delivery.sent > 0 || delivery.failed > 0) {
         console.log(JSON.stringify({ level: "info", task: "telegram.notify", ...delivery }));
+      }
+
+      /*
+       * §9.3 — and spent login links are taken out of the chats they were sent to.
+       *
+       * Here rather than at the moment of use, because the press happens in a browser and the
+       * browser has no bot token (§57.5). A minute of a dead link remaining is cheaper than
+       * that credential existing in a second Worker.
+       */
+      const cleaned = await cleanSpentLogins(
+        { telegram: ports.telegram, db: ports.db, clock: ports.clock },
+        async (chatId, messageId) => {
+          await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, message_id: Number(messageId) }),
+          });
+        },
+      ).catch(() => 0);
+
+      if (cleaned > 0) {
+        console.log(JSON.stringify({ level: "info", task: "telegram.cleanup", cleaned }));
       }
     }
 

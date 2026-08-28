@@ -230,6 +230,43 @@ export async function redeemTelegramLogin(
   return ok({ principalId: login.principalId });
 }
 
+/**
+ * Takes spent login links out of the chats they were sent to (SPEC §9.3).
+ *
+ * Housekeeping rather than security: the link stopped working when it was pressed. What it
+ * fixes is a message that still says "press this to sign in" long after it will do anything,
+ * which invites a second press and reads, to anybody glancing at the screen, as a live
+ * credential.
+ *
+ * Done from the schedule rather than at the moment of use, and that is not laziness: the
+ * press happens in a browser, and the browser has no bot token — §57.5 keeps that credential
+ * in the one Worker that needs it. So the sign-in records the fact and the minute cron acts
+ * on it, which is a minute of a dead link remaining and no credential in a second place.
+ *
+ * The deletion is asked for once: `cleaned_at` is written whether Telegram accepted or not,
+ * because a message somebody deleted themselves, or one older than Telegram's 48-hour window,
+ * will never be deletable and retrying it forever is a queue that never drains.
+ */
+export async function cleanSpentLogins(
+  ports: TelegramPorts,
+  remove: (chatId: string, messageId: string) => Promise<void>,
+  limit = 20,
+): Promise<number> {
+  const spent = await ports.telegram.listSpentLoginMessages(limit);
+  const now = ports.clock.now().toISOString();
+
+  for (const login of spent) {
+    try {
+      await remove(login.chatId, login.messageId);
+    } catch {
+      // Nothing: the row is marked either way, for the reason above.
+    }
+    await ports.db.commit([ports.telegram.markLoginCleaned(login.nonce, now)]);
+  }
+
+  return spent.length;
+}
+
 /** SPEC §9.3, §23.5 — disconnecting, which is the first thing a person needs when a device changes hands. */
 export async function unlinkTelegram(ports: TelegramPorts, principalId: string): Promise<Result<true>> {
   await ports.db.commit([ports.telegram.deleteAccount(principalId)]);

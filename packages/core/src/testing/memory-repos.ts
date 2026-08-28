@@ -1679,6 +1679,27 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return 1;
       }),
 
+    recordLoginMessage: (nonce, messageId) =>
+      asWrite(() => {
+        const login = state.telegramLogins.get(nonce);
+        if (login === undefined) return 0;
+        login.messageId = messageId;
+        return 1;
+      }),
+    async listSpentLoginMessages(limit) {
+      return [...state.telegramLogins.values()]
+        .filter((login) => login.usedAt !== null && login.cleanedAt == null && login.messageId != null)
+        .slice(0, limit)
+        .map((login) => ({ nonce: login.nonce, chatId: login.chatId, messageId: login.messageId! }));
+    },
+    markLoginCleaned: (nonce, at) =>
+      asWrite(() => {
+        const login = state.telegramLogins.get(nonce);
+        if (login === undefined) return 0;
+        login.cleanedAt = at;
+        return 1;
+      }),
+
     async deleteLinksBefore(cutoff, limit) {
       let deleted = 0;
       for (const [nonce, link] of [...state.telegramLinks.entries()]) {

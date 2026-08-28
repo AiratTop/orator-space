@@ -241,6 +241,30 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
       );
     },
 
+    recordLoginMessage(nonce, messageId) {
+      return asWrite(
+        db.prepare(`UPDATE telegram_logins SET message_id = ? WHERE nonce = ?`).bind(messageId, nonce),
+      );
+    },
+
+    async listSpentLoginMessages(limit) {
+      const { results } = await db
+        .prepare(
+          `SELECT nonce, chat_id, message_id FROM telegram_logins
+            WHERE used_at IS NOT NULL AND cleaned_at IS NULL AND message_id IS NOT NULL
+            ORDER BY used_at LIMIT ?`,
+        )
+        .bind(limit)
+        .all<{ nonce: string; chat_id: string; message_id: string }>();
+      return results.map((row) => ({ nonce: row.nonce, chatId: row.chat_id, messageId: row.message_id }));
+    },
+
+    markLoginCleaned(nonce, at) {
+      return asWrite(
+        db.prepare(`UPDATE telegram_logins SET cleaned_at = ? WHERE nonce = ?`).bind(at, nonce),
+      );
+    },
+
     async deleteLinksBefore(cutoff, limit) {
       const { meta } = await db
         .prepare(

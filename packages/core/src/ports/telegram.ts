@@ -75,6 +75,23 @@ export interface TelegramRepo {
   insertLogin(login: NewTelegramLogin): PendingWrite;
   findLogin(nonce: string): Promise<TelegramLogin | null>;
   markLoginUsed(nonce: string, at: string): PendingWrite;
+
+  /**
+   * Remembers which message carried the link, so it can be taken back (§9.3).
+   *
+   * Written after the send, because that is when Telegram says what the message is. A row
+   * with no message id is one whose delivery failed, and it is simply never cleaned.
+   */
+  recordLoginMessage(nonce: string, messageId: string): PendingWrite;
+  /** Spent links whose message is still in the chat. */
+  listSpentLoginMessages(limit: number): Promise<SpentLogin[]>;
+  markLoginCleaned(nonce: string, at: string): PendingWrite;
+}
+
+export interface SpentLogin {
+  nonce: string;
+  chatId: string;
+  messageId: string;
 }
 
 export interface NewTelegramLogin {
@@ -87,6 +104,9 @@ export interface NewTelegramLogin {
 
 export interface TelegramLogin extends NewTelegramLogin {
   usedAt: string | null;
+  /** The message that carried it, once Telegram has said what that is (§9.3). */
+  messageId?: string | null;
+  cleanedAt?: string | null;
 }
 
 /** One thing to say, and where to say it (§9.3). */

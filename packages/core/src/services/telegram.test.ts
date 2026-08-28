@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { ErrorType } from "@orator/protocol";
 import { createMemoryPorts } from "../testing/memory-repos.js";
 import {
+  cleanSpentLogins,
   LINK_TTL_MS,
   LOGIN_TTL_MS,
   newNonce,
@@ -219,5 +220,60 @@ describe("a login link", () => {
 
     const link = unwrap(await start(OTHER));
     expect(errorOf(await redeemTelegramLogin(ports, link.nonce))).toBe(ErrorType.NotFound);
+  });
+});
+
+/**
+ * Taking a spent link back out of the chat (SPEC §9.3).
+ *
+ * Housekeeping, not security — the link stopped working when it was pressed. What it fixes is
+ * a message that still says "press this to sign in" long after it will do anything.
+ */
+describe("cleaning up after a login", () => {
+  const connect = async () =>
+    unwrap(await redeemTelegramLink(ports, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "77" }));
+
+  const issue = async () => {
+    await connect();
+    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    await ports.db.commit([ports.telegram.recordLoginMessage(login.nonce, "555")]);
+    return login;
+  };
+
+  it("leaves a link that has not been used", async () => {
+    await issue();
+    const removed: string[] = [];
+    expect(await cleanSpentLogins(ports, async (_chat, id) => void removed.push(id))).toBe(0);
+    expect(removed).toEqual([]);
+  });
+
+  it("removes the message once the link is spent", async () => {
+    const login = await issue();
+    unwrap(await redeemTelegramLogin(ports, login.nonce));
+
+    const removed: { chat: string; id: string }[] = [];
+    expect(await cleanSpentLogins(ports, async (chat, id) => void removed.push({ chat, id }))).toBe(1);
+    expect(removed).toEqual([{ chat: "77", id: "555" }]);
+  });
+
+  it("asks once, even when Telegram refuses", async () => {
+    // A message somebody deleted themselves, or one past Telegram's 48-hour window, will
+    // never be deletable; retrying it forever is a queue that never drains.
+    const login = await issue();
+    unwrap(await redeemTelegramLogin(ports, login.nonce));
+
+    await cleanSpentLogins(ports, async () => {
+      throw new Error("message to delete not found");
+    });
+
+    const again: string[] = [];
+    expect(await cleanSpentLogins(ports, async (_chat, id) => void again.push(id))).toBe(0);
+  });
+
+  it("ignores a login whose message was never sent", async () => {
+    await connect();
+    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    unwrap(await redeemTelegramLogin(ports, login.nonce));
+    expect(await cleanSpentLogins(ports, async () => undefined)).toBe(0);
   });
 });
