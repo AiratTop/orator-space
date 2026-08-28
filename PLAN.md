@@ -1619,6 +1619,16 @@ Gatus already answer the availability half, and the rest is a small increment. B
 §61.1's report intake has an endpoint, a queue and a moderator's page, and no form. A reader
 who finds something wrong on an article page has no way to say so.
 
+**And one it half-saw.** It listed "public registration as a separate deliberate switch" among
+the owner's open decisions, which understates it: registration on production is open now. The
+sign-in page offers "Create an account", nothing gates it, and it has been that way since the
+passkey flow was deployed. §0.5 defines the `[L]` level as "before public registration opens"
+and §1.5 says branch protection must be back before the same event — both written as though
+that event were still ahead. It is behind, in fact if not in intent, which means every `[L]`
+commitment is already load-bearing for anybody who finds the address. Either a gate is built
+or the level's condition is restated to something true; leaving the two disagreeing is the one
+option that misleads.
+
 ### 13.4. Static assets are minified at build, and the obvious route was wrong
 
 Asked on 2026-08-28: should the CSS and JS be minified. Measured before answering, because
