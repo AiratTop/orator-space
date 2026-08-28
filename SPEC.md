@@ -6076,6 +6076,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 156 | Every value in a feed is escaped and stripped of what XML forbids | §48.4, §57.1 |
 | 157 | A revision records that it was published; a history shows only those | §16.3, §49.2 |
 | 158 | A version is attributed to the principal who wrote it, not to the article's author | §16.3, §43.2 |
+| 159 | Every shard the sitemap index names is fetchable at the address it names | §51 |
 
 ## 80. Open decisions
 

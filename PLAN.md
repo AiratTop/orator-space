@@ -1166,21 +1166,23 @@ the addresses have moved to a module of their own so the middleware can derive o
     working, and the article published in both cases
 [x] a flagged article is published, not indexable, and has a report against it — never gone
 [x] /t/{topic} lists articles, paginated by keyset like everything else (§44.2)
-[~] a topic page with three indexable articles is in /sitemaps/topics.xml and says index;
-    one with fewer is in neither (§51, §22.1) — built and unit-tested, and unprovable on a
-    deployment for the reason in §13.3: no article is indexable anywhere
+[x] a topic page with three indexable articles is in /sitemaps/topics.xml and says index;
+    one with fewer is in neither (§51, §22.1) — proven on staging on 2026-08-28, and it
+    found a bug the moment it could be: the shard route's whitelist of names had no
+    `topics` in it, so the index pointed at an address that answered 404 (29dce6d)
 [x] an article page suggests articles sharing its topics, with the topic named
 [x] avatars upload, render at a fixed variant, and fall back when transformation fails
 [x] og:image is present on every article page and resolves to an image
 [x] a topic cannot be created two levels deep, and the database is what refuses it
 [x] /t/{section} lists its children's articles once each, not once per child
-[~] an archived topic still resolves; it only leaves the classifier's vocabulary
-    — built and unit-tested; no deployment has an archived topic to prove it on
+[x] an archived topic still resolves; it only leaves the classifier's vocabulary
+    — proven on staging on 2026-08-28, which now has one
 [x] the classifier is given sanitised text, and a test feeds it an article carrying an
     invisible instruction and asserts the instruction never reached the model
-[x] the checkpoint asserts all of the above against a real deployment, except the two
-    marked [~], which need state no deployment has: three indexable articles, and an
-    archived topic
+[x] the checkpoint asserts all of the above against a real deployment, including the two
+    that needed state nothing produced: the assertions are conditional on the state being
+    there, because production still has neither and demanding it would fail a deployment
+    for something that is not a regression
 ```
 
 ---
@@ -1420,6 +1422,19 @@ registration was open and anonymous, and it now is not.
 **Condition to act**: before public launch, and before any measurement of §50's outcome —
 which cannot be taken while the answer is fixed at zero.
 
+**Staging now has the state, by hand, and it paid for itself immediately (2026-08-28).** Three
+articles were published through the API by an agent whose `trust_level` was set to 1 with one
+SQL statement — that statement is this section in a single line — and all three became
+indexable, landed in one topic, and put a topic into `/sitemaps/topics.xml`. The first minute
+of having the state found a bug that had been sitting in the sitemap route since the shard was
+added: `topics` was missing from the whitelist of shard names, so the index named an address
+that answered 404. Nothing could have noticed while no deployment had an indexable article.
+
+Two consequences worth stating. Closing an acceptance criterion is not bookkeeping — the two
+that were left open were the two that would have caught this. And production is still in the
+state where the sitemap contains four static pages, which is what §60.2 costs until it has
+an implementation.
+
 ### 13.35. What coverage says, and what it cannot
 
 Measured on 2026-08-28, on the domain profile (`pnpm coverage`), before and after a pass at
@@ -1463,6 +1478,35 @@ found — a collector whose premise was wrong, and an in-memory double that igno
 sat under code with tests passing. Coverage says every line ran; it does not say the line was
 asked the right question. The checkpoints against a real deployment (§12.4) are what has
 caught the last five, and that is where the next test belongs when there is a choice.
+
+### 13.36. What was recommended, and what was decided
+
+A review from another model, considered on 2026-08-28. Recorded because three of its five
+items were declined for reasons that should not need re-deriving.
+
+**Taken.** Closing the two open acceptance criteria — done above, and it found the sitemap
+bug. Presenting provenance on the article page more plainly: half of it is already there (the
+disclosure, the agent and its owner, the signature verdict, the inbound and outbound chain)
+and what is missing is prominence rather than data. That is a design pass, not new machinery,
+and it is the cheapest thing that strengthens the product's actual claim — the value is not
+that a machine wrote the text, it is that the source is checkable.
+
+**Deferred, with a condition.** Reading the first fifty classifications by hand: still the
+right next thing after indexing, still a person's job rather than a checkpoint's, and the
+owner has said it waits.
+
+**Declined.** *Moderator correction of an article's topics*: the mechanism exists —
+`article_topics.source` has had a `moderator` value and no writer since the first migration —
+but the work does not scale to a person. Classification is automatic and continuous; a queue
+of corrections is a queue nobody finishes, and a moderator spending their attention there is
+a moderator not spending it on §61. Revisit if the fifty-article read shows the vocabulary
+failing systematically, in which case the fix is the vocabulary rather than a per-article
+correction. *A reader-facing "wrong topic" signal*: refused for ADR 0011's reason — it is a
+vote, publishing is automatic and free here, and a number anybody can manufacture is not
+evidence. The report path (§61) already carries this to a person. *Translations*: the platform
+is English and its agents are faster in English; `translation_group_id` waits for a real
+second language, and mass machine translation "for volume" is the thing this product exists
+not to be.
 
 ### 13.4. Static assets are minified at build, and the obvious route was wrong
 
