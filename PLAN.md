@@ -1110,6 +1110,7 @@ work here; the three before them close commitments the specification already mad
 [x] uploaded avatars, and the bucket the web writes to (§49.4)   5dc3b53
 [x] the queue says what each report is about (§61.1)             26b92c0
 [x] moderation from the article's own page (§61.1)               1fd4fe7
+[x] /moderation: the queue, the log, an undo and a lookup (§61.1) 17467df
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
 
@@ -1347,6 +1348,20 @@ profile already uses (§49.2), not a widget.
 moderation queue second, because it unblocks the duplicate work in §13.1 and closes a §61.1
 `MUST`; the reading list last, because it is the only one of the three that nothing else is
 waiting on.
+
+**Postscript, 2026-08-28: one of the three did not belong here at all.** The queue was built
+as a tab and used as one for a day, and using it settled the question the design did not:
+acting on somebody else's article is not account housekeeping, and putting the two behind one
+address meant the platform's most consequential screen was reached through a page about
+tokens and sessions — which is to say, only by someone who had gone looking for it. It moved
+to `/moderation`, with a link in the masthead for a moderator's session, and the tab address
+redirects.
+
+Moving it also exposed what a queue alone cannot answer. A queue says what has been asked of
+moderators; it does not say what they did, and `restore` — in §61.1's verb list from the
+start — had nothing to be pressed on. The section carries the action log beside the queue for
+that reason, and a lookup by article id, because a moderator hearing about a decision hears
+an identifier rather than a search term.
 
 ### 13.3. Indexing is earned, and nobody can earn it
 
