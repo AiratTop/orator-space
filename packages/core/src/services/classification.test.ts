@@ -6,6 +6,7 @@ import type { Classifier, ClassificationInput } from "../ports/index.js";
 import type { RequestContext } from "./context.js";
 import { createArticle, publishArticle } from "./publishing.js";
 import { admissible, classifiableVocabulary, classifyArticle, MAX_TOPICS, MIN_CONFIDENCE } from "./classification.js";
+import { loadRelated, MAX_RELATED } from "./topics.js";
 
 let ports: ReturnType<typeof createMemoryPorts>;
 
@@ -356,5 +357,57 @@ describe("what a plain-text injection achieved, and no longer does", () => {
     );
 
     expect(outcome.topics).toHaveLength(3);
+  });
+});
+
+/**
+ * SPEC §22, §60.1 — "articles like this one" must not offer the same article twice.
+ *
+ * Found on staging: three articles with byte-identical bodies and three different titles.
+ * An identical body is not a related article; it is this article, published again under
+ * another headline, and offering it as a recommendation is offering the reader what they
+ * have just finished.
+ */
+describe("what is offered as related", () => {
+  const BODY_A = "A study of inference latency across quantisation levels, measured here.";
+  const BODY_B = "An unrelated study of retrieval quality, measured somewhere else entirely.";
+
+  async function publishWithTopic(title: string, body: string, topicId: string) {
+    const created = unwrap(await createArticle(ctx(), { title, content: body }));
+    await publishArticle(ctx(), created.id, {});
+    const ids = ports.state.articleTopics.get(topicId) ?? new Set<string>();
+    ids.add(created.id);
+    ports.state.articleTopics.set(topicId, ids);
+    return created.id;
+  }
+
+  it("never offers an article with the same body, whatever its title says", async () => {
+    const first = await publishWithTopic("Inference latency", BODY_A, "T-LLM");
+    await publishWithTopic("Inference latency, again", BODY_A, "T-LLM");
+    await publishWithTopic("A third headline", BODY_A, "T-LLM");
+
+    const related = await loadRelated(ports, first, [{ slug: "llm" }]);
+    // All three share this one's body, so there is nothing to recommend — and saying nothing
+    // is the honest answer rather than filling the block.
+    expect(related.cards).toEqual([]);
+  });
+
+  it("offers the one article that is actually different", async () => {
+    const first = await publishWithTopic("Inference latency", BODY_A, "T-LLM");
+    await publishWithTopic("Inference latency, again", BODY_A, "T-LLM");
+    const other = await publishWithTopic("Retrieval quality", BODY_B, "T-LLM");
+
+    const related = await loadRelated(ports, first, [{ slug: "llm" }]);
+    expect(related.cards.map((card) => card.id)).toEqual([other]);
+    expect(related.because?.slug).toBe("llm");
+  });
+
+  it("stops at three", async () => {
+    const first = await publishWithTopic("Inference latency", BODY_A, "T-LLM");
+    for (let i = 0; i < 5; i++) {
+      await publishWithTopic(`Other ${i}`, `${BODY_B} Variation ${i}.`, "T-LLM");
+    }
+
+    expect((await loadRelated(ports, first, [{ slug: "llm" }])).cards).toHaveLength(MAX_RELATED);
   });
 });

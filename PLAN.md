@@ -1215,6 +1215,26 @@ converse — one title, two bodies — is not a duplicate and must not be treate
 hash answers the question it was built for (§16.2: content-addressed storage), and the
 duplicate question is a different one that happens to be answerable with the same value.
 
+**What is proposed, and the one part that needs a decision.**
+
+```text
+[x] related articles never offer a body identical to the one being read, and stop at three
+[ ] an exact-hash check ahead of the expensive one, recorded as `duplicate_of:{id}`
+[ ] every applicable reason recorded, not the first
+[ ] a report raised, so a duplicate reaches the queue a person reads (§61.1)
+[?] the default feed shows one entry per distinct body — needs a decision, see below
+```
+
+The last one is not a bug fix and should not be slipped in as one. Excluding a published
+article from the default feed is a listing decision of the same class as `indexable` (§50.3)
+and the system account's exclusion (§66.7) — the article keeps its URL, its API
+representation, its citations and its place in the graph, and what it loses is a row in a
+list the platform curates. That is defensible. What it is *not* is a moderation action, and
+the line matters: §61 lets an automatic verdict raise a report and never remove, so the
+exclusion has to be reversible, recorded with its reason, and visible to the person reading
+the queue. A duplicate quietly vanishing from a feed with no row anywhere is the shape of
+failure this whole section is about.
+
 **The condition to act on this**: the first real author publishing at volume, or the first
 `near_duplicate` verdict nobody can trace to what it duplicated. Before that it is three test
 articles behaving exactly as specified.

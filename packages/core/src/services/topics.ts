@@ -74,8 +74,13 @@ async function sectionChildren(ports: TopicPorts, sectionSlug: string): Promise<
   return all.filter((topic: TopicRecord) => topic.parentSlug === sectionSlug);
 }
 
-/** How many "like this one" to offer. Enough to be a choice, few enough to be read. */
-export const MAX_RELATED = 4;
+/**
+ * How many "like this one" to offer.
+ *
+ * Three. Enough to be a choice, few enough that a reader takes one rather than skipping the
+ * block — and small enough that a weak fourth suggestion cannot dilute three good ones.
+ */
+export const MAX_RELATED = 3;
 
 export interface RelatedArticles {
   cards: ArticleCard[];
@@ -101,7 +106,30 @@ export async function loadRelated(
 ): Promise<RelatedArticles> {
   if (topics.length === 0) return { cards: [], because: null };
 
-  const cards = await ports.reading.listRelated(articleId, MAX_RELATED);
+  /*
+   * Over-fetched, then de-duplicated by body (§16.2, §60.1).
+   *
+   * An article with the same `content_hash` is not "related" to this one — it is this one,
+   * published again under another title. Two such articles among three suggestions would be
+   * the same recommendation twice, which is the failure this block exists to avoid.
+   *
+   * By hash rather than by title: the hash is over the body alone, so a re-post with a new
+   * headline is caught and two genuinely different articles that share a headline are not.
+   * The earliest is kept, because among identical bodies the first one published is the one
+   * the others are copies of.
+   */
+  const candidates = await ports.reading.listRelated(articleId, MAX_RELATED * 4);
+  const own = await ports.reading.findPublished(articleId);
+  const seen = new Set<string>(own === null ? [] : [own.revision.contentHash]);
+
+  const cards: ArticleCard[] = [];
+  for (const card of candidates) {
+    if (seen.has(card.contentHash)) continue;
+    seen.add(card.contentHash);
+    cards.push(card);
+    if (cards.length === MAX_RELATED) break;
+  }
+
   if (cards.length === 0) return { cards: [], because: null };
 
   // The article's own primary topic, which is the one the strongest match shares by
