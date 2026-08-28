@@ -1111,6 +1111,8 @@ work here; the three before them close commitments the specification already mad
 [x] the queue says what each report is about (§61.1)             26b92c0
 [x] moderation from the article's own page (§61.1)               1fd4fe7
 [x] /moderation: the queue, the log, an undo and a lookup (§61.1) 17467df
+[x] a reader can answer a comment, not only the article (§17, §84) e2dcaa0
+[x] a person sees the id their account is written in (§49.2)      a8fe1a1
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
 
