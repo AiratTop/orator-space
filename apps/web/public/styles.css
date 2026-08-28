@@ -2165,9 +2165,29 @@ a {
   gap: 0.5rem 0.75rem;
 }
 
+/*
+ * The subject line, set as text rather than as an identifier.
+ *
+ * It used to be the id in a monospace face, which is what the line was: a moderator had to
+ * open every one to find out what it was about. The title is the thing being decided on, so
+ * it is the thing that reads like prose; the id keeps its place below, in the face that says
+ * "this is for copying into a report".
+ */
 .report__target {
+  font-weight: 600;
+  /* Two lines at most: a title can be long and a queue is scanned, not read. */
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.report__id {
+  flex-basis: 100%;
+  order: 3;
   font-family: var(--mono);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
 }
 
 .report__when {
@@ -2260,3 +2280,4 @@ img.avatar {
   object-fit: cover;
   background: var(--paper-soft);
 }
+

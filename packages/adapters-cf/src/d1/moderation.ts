@@ -5,6 +5,7 @@ import type {
   NewReport,
   ReportRecord,
   ReportStatus,
+  TargetSummary,
 } from "@orator/core/ports";
 import type { OratorId } from "@orator/protocol";
 import { asWrite } from "./database.js";
@@ -135,6 +136,102 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
         .bind(...binds, limit)
         .all<ReportRow>();
       return results.map(toReport);
+    },
+
+    /**
+     * SPEC §61.1 — what each queue entry is about, in one query per target type.
+     *
+     * Three queries at most, and usually one: a page of reports is nearly always articles.
+     * Grouped rather than looped because the alternative is fifty round trips on a page a
+     * moderator opens over and over.
+     *
+     * The article title comes from the published revision, falling back to the current one.
+     * A report often names an article that has already been hidden, and a queue that cannot
+     * say which article that was is a queue that has to be worked with two tabs open.
+     */
+    async describeTargets(targets) {
+      const idsOf = (type: string): string[] => [
+        ...new Set(targets.filter((one) => one.targetType === type).map((one) => one.targetId)),
+      ];
+      const holes = (ids: string[]) => ids.map(() => "?").join(", ");
+      const found = new Map<string, TargetSummary>();
+
+      const articles = idsOf("article");
+      if (articles.length > 0) {
+        const { results } = await db
+          .prepare(
+            `SELECT a.id, r.title
+               FROM articles a
+               LEFT JOIN revisions r
+                      ON r.id = COALESCE(a.published_revision_id, a.current_revision_id)
+              WHERE a.id IN (${holes(articles)})`,
+          )
+          .bind(...articles)
+          .all<{ id: string; title: string | null }>();
+        for (const row of results) {
+          found.set(`article:${row.id}`, {
+            targetType: "article",
+            targetId: row.id,
+            label: row.title,
+            articleId: row.id,
+          });
+        }
+      }
+
+      const comments = idsOf("comment");
+      if (comments.length > 0) {
+        const { results } = await db
+          .prepare(
+            // The opening words, cut in SQL rather than in the Worker: a comment may be
+            // §16.2's whole allowance, and none of it past the first line is a subject line.
+            `SELECT id, article_id, substr(content_markdown, 1, 120) AS opening
+               FROM comments WHERE id IN (${holes(comments)})`,
+          )
+          .bind(...comments)
+          .all<{ id: string; article_id: string; opening: string | null }>();
+        for (const row of results) {
+          found.set(`comment:${row.id}`, {
+            targetType: "comment",
+            targetId: row.id,
+            label: row.opening,
+            articleId: row.article_id,
+          });
+        }
+      }
+
+      const principals = idsOf("principal");
+      if (principals.length > 0) {
+        const { results } = await db
+          .prepare(
+            `SELECT id, username, display_name FROM principals WHERE id IN (${holes(principals)})`,
+          )
+          .bind(...principals)
+          .all<{ id: string; username: string; display_name: string | null }>();
+        for (const row of results) {
+          found.set(`principal:${row.id}`, {
+            targetType: "principal",
+            targetId: row.id,
+            label: row.display_name ?? `@${row.username}`,
+            articleId: null,
+          });
+        }
+      }
+
+      /*
+       * Every target asked about comes back, described or not.
+       *
+       * A missing row means the target is gone — erased under §23.3, or a report naming an id
+       * that never existed — and the queue still has to render that line. Dropping it here
+       * would make a report disappear from the page while staying open in the table.
+       */
+      return targets.map(
+        (target) =>
+          found.get(`${target.targetType}:${target.targetId}`) ?? {
+            ...target,
+            label: null,
+            articleId: null,
+          },
+      );
     },
 
     async findReport(id) {

@@ -9,6 +9,7 @@ import { createComment } from "./social.js";
 import {
   applyModerationAction,
   createReport,
+  describeTargets,
   listReports,
   reviewReport,
   screenArticle,
@@ -117,6 +118,19 @@ describe("who may reach the queue (§43.3)", () => {
 
   it("refuses an anonymous caller", async () => {
     expect(errorOf(await listReports(ctxFor(null)))).toBe(ErrorType.Unauthenticated);
+  });
+
+  /*
+   * The subject lines are behind the same gate as the queue itself.
+   *
+   * They are titles of hidden articles and the opening words of removed comments — the
+   * material a report is about — so a second entry point that skipped the check would be a
+   * way to read what moderation took down.
+   */
+  it("refuses the same principals the subject lines", async () => {
+    const targets = [{ targetType: "article" as const, targetId: "06GXXXXXXXXXXXXXXXXXXXXXXX" }];
+    expect(errorOf(await describeTargets(ctxFor(actorFor(AUTHOR)), targets))).toBe(ErrorType.Forbidden);
+    expect(errorOf(await describeTargets(ctxFor(null), targets))).toBe(ErrorType.Unauthenticated);
   });
 });
 

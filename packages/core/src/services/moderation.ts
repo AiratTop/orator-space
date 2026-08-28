@@ -6,6 +6,8 @@ import type {
   ReportCategory,
   ReportRecord,
   ReportStatus,
+  ReportTarget,
+  TargetSummary,
 } from "../ports/index.js";
 import { canModerate } from "../identity/authz.js";
 import { HEURISTIC_PROVIDER, screen, type ModerationVerdict } from "../moderation/heuristics.js";
@@ -202,6 +204,28 @@ export async function listReports(
     items: page,
     nextCursor: items.length > limit ? (page[page.length - 1]?.id ?? null) : null,
   });
+}
+
+/**
+ * What each entry in a page of the queue is about (SPEC §61.1).
+ *
+ * A second call rather than a wider `listReports`, because the REST surface returns the
+ * report as a record and a subject line is not part of that record — it is what a page needs
+ * to be usable. Gated like everything else here: the labels are titles of hidden articles and
+ * the opening words of removed comments, which is exactly the material a report is about.
+ */
+export async function describeTargets(
+  ctx: ModerationContext,
+  reports: readonly ReportTarget[],
+): Promise<Result<TargetSummary[]>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+  if (reports.length === 0) return ok([]);
+  return ok(
+    await ctx.ports.moderation.describeTargets(
+      reports.map((report) => ({ targetType: report.targetType, targetId: report.targetId })),
+    ),
+  );
 }
 
 /** Claims a report for review, or closes it without acting (SPEC §61.1). */

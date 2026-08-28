@@ -21,7 +21,7 @@ import {
   type ActionOutcome,
 } from "../lib/settings-actions.js";
 import { isModerationAction, performModeration } from "../lib/moderation-actions.js";
-import { listReports, readingList, setAvatar } from "@orator/core";
+import { describeTargets, listReports, readingList, setAvatar } from "@orator/core";
 import { moderationContext } from "../lib/account.js";
 
 /**
@@ -158,6 +158,24 @@ const queue =
     : null;
 const reports = queue !== null && queue.ok ? queue.value.items : [];
 
+/*
+ * §61.1 — what each report is about, in words.
+ *
+ * The queue used to read `article 06G2G3ZB8N…` fifty times over, which is a list nobody can
+ * work: deciding what to do about an article starts with knowing which article it is, and
+ * every line cost a tab. One extra query for the page, and none when the queue is empty.
+ */
+const described =
+  reports.length === 0
+    ? null
+    : await describeTargets(moderationContext(Astro.request, principal), reports);
+const subjects = new Map(
+  (described !== null && described.ok ? described.value : []).map((one) => [
+    `${one.targetType}:${one.targetId}`,
+    one,
+  ]),
+);
+
 const agentLabel = (agent: AgentView) => agent.principal.displayName ?? `@${agent.principal.username}`;
 
 /** A browser string is long and nobody reads it whole; the first token is what identifies it. */
@@ -170,6 +188,30 @@ function browserOf(userAgent: string | null): string {
 }
 
 const when = (iso: string) => iso.slice(0, 10);
+
+/**
+ * A queue line's subject and where it points (§61.1).
+ *
+ * An article goes to its own page — which, for a moderator, now carries the same actions —
+ * and a comment goes to the article it is on, because a comment is only readable in the
+ * thread it belongs to. A principal goes to their profile. Anything with no address stays on
+ * this page rather than offering a link that goes nowhere.
+ */
+function subjectOf(report: { targetType: string; targetId: string }): {
+  label: string | null;
+  href: string;
+} {
+  const summary = subjects.get(`${report.targetType}:${report.targetId}`) ?? null;
+  const label = summary?.label ?? null;
+  if (report.targetType === "article") return { label, href: `/p/${report.targetId}` };
+  if (report.targetType === "comment" && summary?.articleId != null) {
+    return { label, href: `/p/${summary.articleId}#conversation` };
+  }
+  if (report.targetType === "principal" && label !== null && label.startsWith("@")) {
+    return { label, href: `/${label}` };
+  }
+  return { label, href: `#${report.targetId}` };
+}
 ---
 
 <Layout title="Your account" canonicalPath="/settings">
@@ -447,9 +489,18 @@ const when = (iso: string) => iso.slice(0, 10);
                   <li class="report">
                     <div class="report__head">
                       <span class="tag tag--warn">{report.category}</span>
-                      <a class="report__target" href={report.targetType === "article" ? `/p/${report.targetId}` : "#"}>
-                        {report.targetType} {report.targetId}
+                      {/*
+                        The subject line, with the id underneath rather than instead of it.
+
+                        A moderator acts on the title and reports on the id, so the page shows
+                        both, in the order somebody reads them: what this is, then which one.
+                        A target that has been erased (§23.3) has no title and says so — that
+                        is a fact about the decision, not a hole in the page.
+                      */}
+                      <a class="report__target" href={subjectOf(report).href}>
+                        {subjectOf(report).label ?? `${report.targetType} with no title`}
                       </a>
+                      <code class="report__id">{report.targetId}</code>
                       <span class="report__when">{report.createdAt.slice(0, 10)}</span>
                     </div>
 

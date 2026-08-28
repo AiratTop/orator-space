@@ -48,8 +48,41 @@ export interface ModerationActionRecord extends NewModerationAction {
   reversedAt: string | null;
 }
 
+/**
+ * What a queue entry is *about*, in words (SPEC §61.1).
+ *
+ * The report row names a type and an id and nothing else, which is right for a record and
+ * useless for a queue: fifty lines reading `article 06G2G3ZB8N…` are fifty lines a moderator
+ * has to open one at a time to find out what they are deciding. The subject line is a display
+ * concern, so it is resolved separately rather than added to `ReportRecord` — the record
+ * mirrors a table, and a title is not in that table.
+ *
+ * Deliberately not "the article view": a report can name an article that is already hidden or
+ * removed, and the queue must still say which one it is. This reads the revision directly for
+ * that reason, and returns `null` rather than failing when the target is gone.
+ */
+export interface ReportTarget {
+  targetType: ReportRecord["targetType"];
+  targetId: string;
+}
+
+export interface TargetSummary extends ReportTarget {
+  /** An article's title, a comment's opening words, a principal's name. Null if it is gone. */
+  label: string | null;
+  /** For a comment, the article it is on, so the queue can link to where it is read. */
+  articleId: string | null;
+}
+
 export interface ModerationRepo {
   insertReport(report: NewReport): PendingWrite;
+
+  /**
+   * The subject lines for a page of the queue, in one round trip per target type.
+   *
+   * Takes the whole page rather than one target at a time: fifty reports is fifty queries
+   * done the obvious way, on a page a moderator opens repeatedly.
+   */
+  describeTargets(targets: readonly ReportTarget[]): Promise<TargetSummary[]>;
   countRecentReports(targetType: string, targetId: string, since: string): Promise<number>;
 
   /** The queue itself: oldest first, because that is the order a moderator works in. */

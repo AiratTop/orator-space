@@ -1633,6 +1633,41 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     async findReport(id) {
       return state.reports.find((report) => report.id === id) ?? null;
     },
+
+    /**
+     * The subject lines, from whatever this double happens to hold (§61.1).
+     *
+     * The article's title comes from its revision, like the real one; a comment reports its
+     * opening words and the article it is on. A target the double does not know is described
+     * as null rather than dropped, which is the contract the page depends on.
+     */
+    async describeTargets(targets) {
+      return targets.map((target) => {
+        if (target.targetType === "article") {
+          const article = state.articles.get(target.targetId);
+          const revisionId = article?.publishedRevisionId ?? article?.currentRevisionId ?? null;
+          const revision = revisionId === null ? undefined : state.revisions.get(revisionId);
+          return { ...target, label: revision?.title ?? null, articleId: article?.id ?? null };
+        }
+        if (target.targetType === "comment") {
+          const comment = state.comments.get(target.targetId);
+          return {
+            ...target,
+            label: comment?.contentMarkdown.slice(0, 120) ?? null,
+            articleId: comment?.articleId ?? null,
+          };
+        }
+        if (target.targetType === "principal") {
+          const principal = state.principals.get(target.targetId);
+          return {
+            ...target,
+            label: principal === undefined ? null : (principal.displayName ?? `@${principal.username}`),
+            articleId: null,
+          };
+        }
+        return { ...target, label: null, articleId: null };
+      });
+    },
     setReportStatus(id, status, expected, reviewedBy, resolution, at) {
       return asWrite(() => {
         const report = state.reports.find((entry) => entry.id === id);
