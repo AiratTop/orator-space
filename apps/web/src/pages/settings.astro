@@ -242,16 +242,16 @@ const when = (iso: string) => iso.slice(0, 10);
   reads as a failure. Five seconds, only on the tab that is waiting, and only until the
   binding exists — the attribute disappears with the reason for it.
 */}
+{/*
+  §9.3 — the Telegram tab watches for a connection made elsewhere.
+
+  While the chat is unconnected, because the connecting happens in another tab now and this
+  one has no other way to learn of it. Ten seconds rather than five: nothing here is urgent,
+  and the attribute disappears the moment there is a connection to show.
+*/}
 <Layout
   title="Settings"
   canonicalPath="/settings"
-  {/*
-    §9.3 — the Telegram tab watches for a connection made elsewhere.
-
-    While the chat is unconnected, because the connecting now happens in another tab and this
-    one has no other way to learn of it. Ten seconds rather than five: nothing here is urgent,
-    and the attribute disappears the moment there is a connection to show.
-  */}
   refreshAfter={tab === "telegram" && telegram === null && telegramBot !== null ? 10 : null}
 >
   <main id="main" class="wrap settings">
