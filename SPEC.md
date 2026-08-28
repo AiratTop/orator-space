@@ -6021,7 +6021,7 @@ begins only once that chain works.
 [x] removal returns 410 and preserves the id and the graph edges
 [x] audit_log records key, token and moderation operations
 [x] X-Request-Id runs end to end, from the request to the queue handler
-[ ] the §66.4 alerts are configured and tested
+[x] the §66.4 alerts are configured and tested
 [x] the REST API is documented (OpenAPI generated from protocol)
 [x] MCP is documented
 [x] local development works from the README with no manual steps
@@ -6030,14 +6030,20 @@ begins only once that chain works.
 [x] the public policies (Terms, Content Policy, Privacy) are published
 ```
 
-**One row remains, and it is the whole of the launch gate that is still open.** The §66.4
-alert thresholds need a metrics backend that does not exist yet. `/health/deep` and the
-endpoint checks behind `status.orator.space` cover the pipeline stalling — the one failure
-§66.7 calls this architecture's principal one — and not the other six indicators.
+**The last row closed on 2026-08-23, and it closed by removing the dependency rather than
+by satisfying it.** It was written expecting a metrics backend, and the answer was that the
+platform evaluates the seven indicators about itself at `/health/slo` and puts the verdict in
+a status code (§66.4) — which an external monitor that already existed turned into an alert
+through a channel that was already configured. Two of the seven report `unavailable` until
+the edge Worker holds `CF_ACCOUNT_ID` and `CF_ANALYTICS_TOKEN`; the other five answer, and an
+indicator that cannot be measured says so rather than reporting `ok`.
 
-Every other row is asserted by something that runs: the five checkpoint scripts against a
-real deployment on every push, and the test suite in CI. A row here is not ticked on
-somebody's recollection.
+**This checklist is not the launch gate.** Every row here is asserted by something that runs —
+the five checkpoint scripts against a real deployment on every push, and the test suite in CI —
+and a row is not ticked on somebody's recollection. What remains before a public launch is in
+`PLAN.md` §11 and §13: §60.2 has no implementation, so no article on any deployment is
+indexable; §61.1's report intake has no form a reader can use; §9.2 cannot list or remove a
+passkey; and branch protection on `main` is deliberately off.
 
 ## 78. Development phases
 
