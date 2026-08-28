@@ -14,6 +14,7 @@ import type {
   KeyRepo,
   MediaRepo,
   MediaStore,
+  MediaTransform,
   Metrics,
   ModerationRepo,
   OutboxRepo,
@@ -67,6 +68,8 @@ export interface Ports {
   media: MediaRepo;
   /** SPEC §21.1 — one streamed pass, counted, hashed and sniffed on the way in. */
   mediaStore: MediaStore;
+  /** SPEC §21.2 — named variants, produced by the platform rather than in a Worker. */
+  transform: MediaTransform;
   /** SPEC §61 — report intake. */
   moderation: ModerationRepo;
   /** SPEC §51 — which shards need rebuilding, and where the built files go. */

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryPorts } from "../testing/memory-repos.js";
 import { AGENT_PRESET } from "../identity/scopes.js";
 import type { Actor } from "../identity/authz.js";
@@ -10,6 +10,7 @@ import {
   readMedia,
   storageKeyFor,
   uploadMediaContent,
+  serveVariant,
 } from "./media.js";
 
 /**
@@ -291,5 +292,77 @@ describe("what the media host may serve", () => {
   it("hands back nothing for a record still waiting for bytes", async () => {
     const record = unwrap(await createMedia(ctxFor(actorFor(AUTHOR, OWNER)), { kind: "image" }));
     expect(await loadReadyMedia(ports, record.id)).toBeNull();
+  });
+});
+
+/**
+ * SPEC §21.2 — named variants, produced once and stored.
+ *
+ * The two properties that matter are not "it resizes": they are that a transformation happens
+ * once per image rather than once per request, because §21.2 says the platform bills per
+ * unique transformation — and that a platform having a bad minute serves a correct picture at
+ * the wrong size rather than no page at all.
+ */
+describe("serving a variant", () => {
+  const transforming = () => {
+    const produce = vi.fn(
+      async (): Promise<{ body: ReadableStream<Uint8Array>; contentType: string }> => ({
+        body: new Response("resized").body as ReadableStream<Uint8Array>,
+        contentType: "image/webp",
+      }),
+    );
+    return { produce };
+  };
+
+  const stored = async (id: string) => {
+    await ports.mediaStore.put(`${id}/original`, new Response("original").body!, 8);
+    return { id, storageKey: `${id}/original`, contentType: "image/png" };
+  };
+
+  it("produces a variant once and reads it back after that", async () => {
+    const media = await stored("M1");
+    const transform = transforming();
+    const withTransform = { ...ports, transform };
+
+    await serveVariant(withTransform, media, "card");
+    await serveVariant(withTransform, media, "card");
+
+    // The whole billing argument: five names times the number of images, not times traffic.
+    expect(transform.produce).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores it beside the original rather than in place of it", async () => {
+    const media = await stored("M2");
+    await serveVariant({ ...ports, transform: transforming() }, media, "card");
+
+    expect(await ports.mediaStore.get("M2/card")).not.toBeNull();
+    expect(await ports.mediaStore.get("M2/original")).not.toBeNull();
+  });
+
+  it("falls back to the original when the platform will not produce one", async () => {
+    const media = await stored("M3");
+    // The memory ports' transform returns null, which is §21.2's unavailable platform.
+    const served = await serveVariant(ports, media, "hero");
+
+    expect(served?.fellBack).toBe(true);
+    expect(served?.contentType).toBe("image/png");
+  });
+
+  it("remembers nothing about a failure, so the next request tries again", async () => {
+    const media = await stored("M4");
+    await serveVariant(ports, media, "hero");
+
+    // A negative cache would turn one bad minute into a permanently unresized image, and the
+    // symptom — a correct picture at the wrong size — is one nobody reports.
+    expect(await ports.mediaStore.get("M4/hero")).toBeNull();
+  });
+
+  it("serves the original untouched, which is the one variant that is not a transformation", async () => {
+    const media = await stored("M5");
+    const transform = transforming();
+
+    const served = await serveVariant({ ...ports, transform }, media, "original");
+    expect(transform.produce).not.toHaveBeenCalled();
+    expect(served?.contentType).toBe("image/png");
   });
 });

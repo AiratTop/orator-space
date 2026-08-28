@@ -84,6 +84,17 @@ export interface MediaStore {
     body: ReadableStream<Uint8Array>,
     declaredLength: number,
   ): Promise<UploadOutcome>;
+  /**
+   * Writes a derived object — a variant (§21.2) — with no declared length.
+   *
+   * Separate from `put` because the check `put` makes does not apply here. That check exists
+   * because an upload is untrusted: §21.1 counts the bytes as they stream and refuses a body
+   * that disagrees with what its sender promised. A variant has no sender and no promise —
+   * it is produced by the platform from bytes this system already accepted — so there is
+   * nothing to hold to a declaration, and demanding one would mean buffering the result
+   * purely to measure it.
+   */
+  putDerived(key: string, body: ReadableStream<Uint8Array>): Promise<void>;
   /** Null when the object is absent. The caller decides whether that is an error. */
   get(key: string): Promise<MediaBody | null>;
   delete(key: string): Promise<void>;

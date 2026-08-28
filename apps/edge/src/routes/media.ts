@@ -1,3 +1,4 @@
+import { isVariant } from "@orator/core/ports";
 import { Hono } from "hono";
 import {
   createMedia,
@@ -6,6 +7,7 @@ import {
   readMedia,
   uploadMediaContent,
   type RequestContext,
+  serveVariant,
 } from "@orator/core";
 import { ErrorType, problem, schemas } from "@orator/protocol";
 import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
@@ -121,9 +123,20 @@ mediaRoutes.get("/:id/:variant", async (c) => {
    */
   const surface = surfaceFor(new URL(c.req.url).hostname);
   if (surface === "api" || surface === "mcp") return c.notFound();
-  if (c.req.param("variant") !== "original") return c.notFound();
 
-  const found = await loadReadyMedia(portsFor(c.env), c.req.param("id"));
+  /*
+   * §21.2 — a name, never a size.
+   *
+   * The closed set is checked here and nowhere else, which is what makes the billing argument
+   * hold: an address that accepted arbitrary numbers would let any caller mint unlimited
+   * billable transformations of one image. Five names exist; everything else is 404 before a
+   * database is touched.
+   */
+  const requested = c.req.param("variant");
+  if (!isVariant(requested)) return c.notFound();
+
+  const ports = portsFor(c.env);
+  const found = await loadReadyMedia(ports, c.req.param("id"));
   if (found === null) {
     return c.json(
       problem(ErrorType.NotFound, "No such media", { request_id: c.get("requestId") }),
@@ -132,8 +145,18 @@ mediaRoutes.get("/:id/:variant", async (c) => {
     );
   }
 
-  const { media, body } = found;
-  const contentType = media.contentType ?? "application/octet-stream";
+  const { media } = found;
+
+  const served = await serveVariant(ports, media, requested);
+  if (served === null) {
+    return c.json(
+      problem(ErrorType.NotFound, "No such media", { request_id: c.get("requestId") }),
+      404,
+      { "content-type": "application/problem+json" },
+    );
+  }
+
+  const { body, contentType } = served;
   return new Response(body.body, {
     headers: {
       "content-type": contentType,

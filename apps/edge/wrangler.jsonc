@@ -108,6 +108,7 @@
         { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" }
       ],
       "ai": { "binding": "AI" },
+      "images": { "binding": "IMAGES" },
       "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
       "ratelimits": [
@@ -165,6 +166,7 @@
         { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets" }
       ],
       "ai": { "binding": "AI" },
+      "images": { "binding": "IMAGES" },
       "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
       "ratelimits": [

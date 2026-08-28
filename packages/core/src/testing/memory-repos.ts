@@ -1512,6 +1512,23 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         leading: bytes.subarray(0, SNIFF_BYTES),
       };
     },
+    async putDerived(key, body) {
+      const chunks: Uint8Array[] = [];
+      const reader = body.getReader();
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value !== undefined) chunks.push(value);
+      }
+      const bytes = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+      let at = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, at);
+        at += chunk.length;
+      }
+      state.mediaBytes.set(key, bytes);
+    },
+
     async get(key) {
       const bytes = state.mediaBytes.get(key);
       if (bytes === undefined) return null;
@@ -1778,6 +1795,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     readingList,
     media,
     mediaStore,
+    /** No platform here: §21.2's fallback is the behaviour a domain test should see. */
+    transform: { produce: async () => null },
     moderation,
     sitemap,
     slo,

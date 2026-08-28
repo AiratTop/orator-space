@@ -20,6 +20,17 @@ const hex = (buffer: ArrayBuffer): string =>
 
 export function createR2MediaStore(bucket: R2Bucket, prefix = "media/"): MediaStore {
   return {
+    /**
+     * SPEC §21.2 — a derived variant, written without the counted-upload machinery.
+     *
+     * No digest and no length check: those exist in `put` because an upload is untrusted and
+     * its sender made a claim about it. This body came from the transformation of an object
+     * this system already accepted, so there is no claim to check and nothing to hash for.
+     */
+    async putDerived(key: string, body: ReadableStream<Uint8Array>): Promise<void> {
+      await bucket.put(key, body);
+    },
+
     async put(
       key: string,
       body: ReadableStream<Uint8Array>,

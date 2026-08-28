@@ -64,6 +64,20 @@ export interface Env {
    * exactly what one aimed at a verdict would be choosing from.
    */
   AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  /**
+   * SPEC §21.2 — named image variants, produced outside this Worker's budget.
+   *
+   * Optional for the same reason `AI` is: Images has no local simulator, so the dev server and
+   * the `workerd` tests run without it — and §21.2's rule already covers a variant that cannot
+   * be produced, which is to serve the original.
+   */
+  IMAGES?: {
+    input(stream: ReadableStream<Uint8Array>): {
+      transform(options: Record<string, unknown>): {
+        output(options: Record<string, unknown>): Promise<{ image(): ReadableStream<Uint8Array> }>;
+      };
+    };
+  };
   /** SPEC §59.1 — the approximate half: per-colo flood protection, per IP and per token. */
   FLOOD: RateLimit;
   /** §59.2 names search separately, and the binding's limit is fixed per binding. */

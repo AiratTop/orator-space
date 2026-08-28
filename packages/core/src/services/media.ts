@@ -1,7 +1,7 @@
 import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { looksLikeXml, sniff, type MediaKind } from "../media/sniff.js";
-import type { MediaBody, MediaRecord, MediaSource } from "../ports/index.js";
+import type { MediaBody, MediaRecord, MediaSource, Variant } from "../ports/index.js";
 import { fail, ok, withinQuota, type Ports, type RequestContext, type Result } from "./context.js";
 
 /**
@@ -295,3 +295,92 @@ export async function loadReadyMedia(
   const body = await ports.mediaStore.get(media.storageKey);
   return body === null ? null : { media, body };
 }
+
+/**
+ * The key a derived variant is stored under (SPEC §21.2).
+ *
+ * Beside the original, which is what `storageKeyFor`'s prefix was for. A variant is a
+ * derived object with a name, not a query on the original, so it has an address.
+ */
+export const variantKeyFor = (id: string, variant: Exclude<Variant, "original">): string =>
+  `${id}/${variant}`;
+
+export interface VariantPorts {
+  media: Ports["media"];
+  mediaStore: Ports["mediaStore"];
+  transform: Ports["transform"];
+}
+
+export interface ServedVariant {
+  body: MediaBody;
+  contentType: string;
+  /** True when the transformation was unavailable and the original is being served (§21.2). */
+  fellBack: boolean;
+}
+
+/**
+ * Serves a named variant, producing it once and storing it (SPEC §21.2, §33.2).
+ *
+ * **Stored rather than transformed per request, and the reason is the bill.** §21.2 says
+ * transformations are billed per unique transformation; it does not say per *request*, and a
+ * variant regenerated on every cache miss would turn a bounded set — five names times the
+ * number of images — into a number that grows with traffic. Generated once and written to R2,
+ * the cost is a property of the library rather than of the audience.
+ *
+ * The fallback is §21.2's `MUST`: a variant that cannot be produced serves the original. An
+ * image is decoration on a page whose subject is text (§2), and a resize service having a bad
+ * minute is not a reason for an article not to render.
+ */
+export async function serveVariant(
+  ports: VariantPorts,
+  media: { id: string; storageKey: string | null; contentType: string | null },
+  variant: Variant,
+): Promise<ServedVariant | null> {
+  const originalKey = media.storageKey ?? storageKeyFor(media.id);
+  const contentType = media.contentType ?? "application/octet-stream";
+
+  if (variant === "original") {
+    const body = await ports.mediaStore.get(originalKey);
+    return body === null ? null : { body, contentType, fellBack: false };
+  }
+
+  // Already produced. The common path by a wide margin: a variant is generated once per
+  // image and read for as long as the image exists.
+  const stored = await ports.mediaStore.get(variantKeyFor(media.id, variant));
+  if (stored !== null) return { body: stored, contentType: VARIANT_CONTENT_TYPE, fellBack: false };
+
+  const source = await ports.mediaStore.get(originalKey);
+  if (source === null) return null;
+
+  const produced = await ports.transform.produce(source.body, variant, contentType);
+  if (produced === null) {
+    /*
+     * §21.2 — fall back to the original rather than failing, and do not remember the failure.
+     *
+     * Nothing is written, so the next request tries again. A negative cache here would turn
+     * one bad minute at the platform into a permanently unresized image, and the symptom —
+     * a correct picture at the wrong size — is one nobody reports.
+     */
+    const again = await ports.mediaStore.get(originalKey);
+    return again === null ? null : { body: again, contentType, fellBack: true };
+  }
+
+  /*
+   * Written before it is served, and read back rather than tee'd.
+   *
+   * A stream can be consumed once. Teeing it would let the response start sooner and would
+   * make the stored copy depend on the client finishing the download — a reader who cancels
+   * would leave a truncated variant in the bucket, and the next reader would get it.
+   */
+  const key = variantKeyFor(media.id, variant);
+  await ports.mediaStore.putDerived(key, produced.body);
+  const written = await ports.mediaStore.get(key);
+  if (written === null) {
+    const again = await ports.mediaStore.get(originalKey);
+    return again === null ? null : { body: again, contentType, fellBack: true };
+  }
+  return { body: written, contentType: produced.contentType, fellBack: false };
+}
+
+/** Every variant but `original` is produced in one format; see the adapter for why. */
+const VARIANT_CONTENT_TYPE = "image/webp";

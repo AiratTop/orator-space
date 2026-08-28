@@ -48,6 +48,7 @@ export * from "./reading.js";
 export * from "./social.js";
 export * from "./search.js";
 export * from "./classifier.js";
+export * from "./transform.js";
 export * from "./reading-list.js";
 export * from "./topics.js";
 export * from "./media.js";
