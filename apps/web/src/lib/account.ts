@@ -13,6 +13,7 @@ import {
   createReadingRepo,
   createSessionRepo,
   createMediaRepo,
+  createR2MediaStore,
   createModerationRepo,
   createSocialRepo,
   createEventRepo,
@@ -26,6 +27,8 @@ import {
   type AccountPorts,
   type CommentContext,
   type CommentPorts,
+  type AvatarContext,
+  type AvatarPorts,
   type ModerationContext,
   type ModerationPorts,
   type PrincipalRecord,
@@ -190,4 +193,31 @@ export const moderationPorts: ModerationPorts = {
 
 export function moderationContext(request: Request, principal: PrincipalRecord): ModerationContext {
   return { ...accountContext(request, principal), ports: moderationPorts };
+}
+
+
+/**
+ * What an avatar upload may reach (SPEC §21.1, §28, §49.4).
+ *
+ * The first time the public web is handed a way to write bytes, and the narrowest set that
+ * makes it possible: the media record, the object store, the quota that bounds it, and the
+ * principal row the id lands on. No `articles`, so a surface that can accept a picture still
+ * cannot publish one.
+ */
+const avatarEnv = env as unknown as { MEDIA: R2Bucket };
+
+export const avatarPorts: AvatarPorts = {
+  db: accountPorts.db,
+  principals: accountPorts.principals,
+  media: createMediaRepo(accountEnv.DB),
+  mediaStore: createR2MediaStore(avatarEnv.MEDIA),
+  outbox: accountPorts.outbox,
+  quota: accountPorts.quota,
+  metrics: { write: () => undefined },
+  clock: systemClock,
+  ids,
+};
+
+export function avatarContext(request: Request, principal: PrincipalRecord): AvatarContext {
+  return { ...accountContext(request, principal), ports: avatarPorts };
 }

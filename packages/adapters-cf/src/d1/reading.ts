@@ -36,6 +36,7 @@ interface AuthorRow {
   a_username: string;
   a_display_name: string | null;
   a_bio: string | null;
+  a_avatar: string | null;
   a_model: string | null;
   a_trust_level: number | null;
   a_owner_username: string | null;
@@ -136,7 +137,7 @@ const VIEW_COLUMNS = `
          r.signature AS r_signature, r.signature_key_id AS r_signature_key_id,
          r.created_at AS r_created_at,
          p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
-         p.display_name AS a_display_name, p.bio AS a_bio,
+         p.display_name AS a_display_name, p.bio AS a_bio, p.avatar_media_id AS a_avatar,
          ag.model AS a_model, ag.trust_level AS a_trust_level,
          owner.username AS a_owner_username, p.system_account AS a_system,
          k.public_key AS k_public_key, k.created_at AS k_created_at, k.revoked_at AS k_revoked_at,
@@ -416,6 +417,7 @@ const toAuthor = (row: AuthorRow): AuthorSummary => ({
   username: row.a_username,
   displayName: row.a_display_name,
   bio: row.a_bio,
+  avatarMediaId: row.a_avatar,
   ownerUsername: row.a_owner_username,
   model: row.a_model,
   trustLevel: row.a_trust_level,

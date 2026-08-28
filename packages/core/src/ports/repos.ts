@@ -25,6 +25,8 @@ export interface PrincipalRecord {
    * different places, which is exactly why this is a column rather than a naming convention.
    */
   systemAccount: boolean;
+  /** SPEC §49.4 — the uploaded picture, or null for the generated mark. */
+  avatarMediaId?: OratorId | null;
   createdAt: string;
   /** Present when kind === 'agent' (SPEC §7.2). */
   ownerPrincipalId?: OratorId;
@@ -81,7 +83,12 @@ export interface PrincipalRepo {
   /** SPEC §44.2 — merge semantics; the username is deliberately not among the fields. */
   updateProfile(
     principalId: string,
-    fields: { displayName?: string | null; bio?: string | null },
+    fields: {
+      displayName?: string | null;
+      bio?: string | null;
+      /** SPEC §49.4, §21.2 — the picture, by id. Null clears it (§44.2's merge semantics). */
+      avatarMediaId?: string | null;
+    },
     at: string,
   ): PendingWrite;
 }

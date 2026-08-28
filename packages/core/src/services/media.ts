@@ -2,7 +2,15 @@ import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { looksLikeXml, sniff, type MediaKind } from "../media/sniff.js";
 import type { MediaBody, MediaRecord, MediaSource, Variant } from "../ports/index.js";
-import { fail, ok, withinQuota, type Ports, type RequestContext, type Result } from "./context.js";
+import {
+  fail,
+  ok,
+  withinQuota,
+  type AvatarContext,
+  type Ports,
+  type RequestContext,
+  type Result,
+} from "./context.js";
 
 /**
  * Media upload (SPEC §21.1, ADR 0005).
@@ -384,3 +392,93 @@ export async function serveVariant(
 
 /** Every variant but `original` is produced in one format; see the adapter for why. */
 const VARIANT_CONTENT_TYPE = "image/webp";
+
+/**
+ * Sets a person's picture, in one step (SPEC §49.4, §21.1, §21.2).
+ *
+ * The API's two-phase path — reserve a record, then stream the bytes — exists because an agent
+ * uploading a video needs to know the address before it starts, and because §21.1 counts the
+ * bytes as they arrive against what was declared. A browser form has neither problem: it sends
+ * one request, and the browser has already told us the length.
+ *
+ * So this is one call that does both, and the ordering is the interesting part. The bytes land
+ * first and the principal is updated only if they did — the reverse would point somebody's
+ * profile at a record whose upload then failed, and the symptom is a broken image on the one
+ * page they will look at.
+ */
+export async function setAvatar(
+  ctx: AvatarContext,
+  input: { body: ReadableStream<Uint8Array>; declaredLength: number; contentType: string },
+): Promise<Result<{ mediaId: OratorId }>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  if (!input.contentType.startsWith("image/")) {
+    return fail(ErrorType.ValidationFailed, "An avatar has to be an image", input.contentType);
+  }
+  if (input.declaredLength > MAX_AVATAR_BYTES) {
+    return fail(
+      ErrorType.ValidationFailed,
+      "That image is too large",
+      `The limit is ${MAX_AVATAR_BYTES / 1024} KB. It is smaller than §59.2's media allowance on purpose: an avatar renders at 128 pixels.`,
+    );
+  }
+
+  // §59.2 — the same allowance every upload is charged against. An avatar is a small file and
+  // a person changes one rarely, so this is not a limit anybody honest meets; it is here
+  // because an unmetered path is an unmetered path.
+  const allowance = await withinQuota(ctx, "media");
+  if (!allowance.ok) return allowance;
+
+  const id = ctx.ports.ids.next();
+  const now = ctx.ports.clock.now().toISOString();
+
+  await ctx.ports.db.commit([
+    ctx.ports.media.insert({
+      id,
+      ownerPrincipalId: actor.principalId as OratorId,
+      kind: "image",
+      altText: null,
+      source: "upload",
+      generationMetadata: null,
+      createdAt: now,
+    }),
+  ]);
+
+  /*
+   * §21.1 — the adapter writes through a fixed-length stream, so a body that disagrees with
+   * what the browser declared fails here rather than being stored. A throw is the honest
+   * outcome: the record exists and has no bytes, which is the `pending` state retention
+   * already sweeps (§23.4).
+   */
+  let stored;
+  try {
+    stored = await ctx.ports.mediaStore.put(storageKeyFor(id), input.body, input.declaredLength);
+  } catch (error) {
+    return fail(ErrorType.ValidationFailed, "That upload could not be stored", String(error));
+  }
+
+  await ctx.ports.db.commit([
+    ctx.ports.media.markReady(id, {
+      storageKey: storageKeyFor(id),
+      contentType: input.contentType,
+      byteSize: stored.byteSize,
+      checksumSha256: stored.sha256,
+      finalizedAt: now,
+    }),
+    /*
+     * The old picture is not deleted here.
+     *
+     * §23.3 refcounts before removing bytes, and an avatar may be referenced by a cached page,
+     * an article's preview or nothing at all — deciding that on the spot, on a request a person
+     * is waiting on, is how the wrong object gets removed. Retention already sweeps media that
+     * nothing points at.
+     */
+    ctx.ports.principals.updateProfile(actor.principalId, { avatarMediaId: id }, now),
+  ]);
+
+  return ok({ mediaId: id });
+}
+
+/** Small on purpose: it renders at 128 pixels (§21.2), and anything larger is waste in transit. */
+export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;

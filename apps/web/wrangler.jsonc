@@ -42,9 +42,18 @@
    */
   "vars": { "ENVIRONMENT": "local", "SITE_HOST": "localhost" },
   "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
+    /*
+     * SPEC §21.1, §57.4 — the bucket an avatar lands in.
+     *
+     * The web writes here and never serves from here: the bytes are read back through
+     * `media.orator.space`, which is the edge Worker's route, because §57.4 keeps user
+     * content on an origin that holds no credentials. Writing and serving being two
+     * different Workers is the isolation, not an accident of layout.
+     */
   "r2_buckets": [
     { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
-    { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" }
+    { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" },
+    { "binding": "MEDIA", "bucket_name": "orator-media-staging" }
   ],
 
   "env": {
@@ -61,7 +70,8 @@
       "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
       "r2_buckets": [
         { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
-        { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" }
+        { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets-staging" },
+        { "binding": "MEDIA", "bucket_name": "orator-media-staging" }
       ]
     },
     "production": {
@@ -80,7 +90,8 @@
       "d1_databases": [{ "binding": "DB", "database_name": "orator-prod", "database_id": "eb98f063-21b0-451d-9372-a2105169ca9b" }],
       "r2_buckets": [
         { "binding": "CONTENT", "bucket_name": "orator-content" },
-        { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets" }
+        { "binding": "ASSETS_BUCKET", "bucket_name": "orator-assets" },
+        { "binding": "MEDIA", "bucket_name": "orator-media" }
       ]
     }
   }

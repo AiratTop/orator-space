@@ -28,6 +28,8 @@ export default tseslint.config(
         Buffer: "readonly",
         URL: "readonly",
         URLSearchParams: "readonly",
+        FormData: "readonly",
+        Blob: "readonly",
         ReadableStream: "readonly",
         AbortSignal: "readonly",
         performance: "readonly",

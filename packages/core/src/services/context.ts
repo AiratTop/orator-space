@@ -175,6 +175,25 @@ export interface ModerationContext extends Omit<RequestContext, "ports"> {
   ports: ModerationPorts;
 }
 
+/**
+ * The slice an avatar upload needs (SPEC §21.1, §28, §49.4).
+ *
+ * `principals.avatar_media_id` has been in the schema since the first migration with nothing
+ * writing it, and the reason is that writing it means accepting bytes — which the web surface
+ * could not do. This is the narrowest set that can: the two-phase media path (§21.1), the
+ * quota that bounds it (§59.2), and the principal row it lands on.
+ *
+ * No `articles` at all. A surface that can accept a picture still cannot publish.
+ */
+export type AvatarPorts = Pick<
+  Ports,
+  "db" | "principals" | "media" | "mediaStore" | "outbox" | "quota" | "metrics" | "clock" | "ids"
+>;
+
+export interface AvatarContext extends Omit<RequestContext, "ports"> {
+  ports: AvatarPorts;
+}
+
 export interface AccountContext extends Omit<RequestContext, "ports"> {
   ports: AccountPorts;
 }

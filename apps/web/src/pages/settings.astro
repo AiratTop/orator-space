@@ -5,10 +5,12 @@ import { accountContext, principalOf, sameOrigin } from "../lib/account.js";
 import { authPorts, clearedSessionCookie, readCookie, SESSION_COOKIE } from "../lib/auth.js";
 import { CACHE, CDN_CACHE } from "../lib/http.js";
 import { readingListPorts, siteOrigin } from "../lib/ports.js";
+import { avatarContext } from "../lib/account.js";
 import IssueToken from "../components/IssueToken.astro";
 import TokenList from "../components/TokenList.astro";
 import SettingsTabs from "../components/SettingsTabs.astro";
 import Feed from "../components/Feed.astro";
+import Avatar from "../components/Avatar.astro";
 import {
   AGENT_PRESETS,
   DEFAULT_TAB,
@@ -19,7 +21,7 @@ import {
   type ActionOutcome,
 } from "../lib/settings-actions.js";
 import { isModerationAction, performModeration } from "../lib/moderation-actions.js";
-import { listReports, readingList } from "@orator/core";
+import { listReports, readingList, setAvatar } from "@orator/core";
 import { moderationContext } from "../lib/account.js";
 
 /**
@@ -63,6 +65,29 @@ if (Astro.request.method === "POST") {
   }
   const form = await Astro.request.formData();
   const requestedAction = form.get("action");
+
+  /*
+   * §21.1, §49.4 — the avatar arrives as a file and is handled before the dispatchers.
+   *
+   * A `File` is not a string, and the two dispatchers take a form of strings on purpose: it
+   * keeps every other action unable to accept bytes. This is the one that can, so it is the
+   * one written out here rather than hidden behind a name in a switch.
+   */
+  if (requestedAction === "profile.avatar") {
+    const file = form.get("avatar");
+    if (file instanceof File && file.size > 0) {
+      const result = await setAvatar(avatarContext(Astro.request, principal), {
+        body: file.stream() as ReadableStream<Uint8Array>,
+        declaredLength: file.size,
+        contentType: file.type,
+      });
+      outcome = result.ok
+        ? { kind: "done", message: "Your picture is set." }
+        : { kind: "failed", message: result.error.title, ...(result.error.detail === undefined ? {} : { detail: result.error.detail }) };
+    } else {
+      outcome = { kind: "failed", message: "Choose an image first" };
+    }
+  }
   /*
    * Two dispatchers, and which one is chosen by the verb rather than by the tab.
    *
@@ -71,10 +96,11 @@ if (Astro.request.method === "POST") {
    * the wider authority behind its own door — `moderatorOnly` still refuses, and this makes
    * it impossible to arrive there by accident.
    */
-  outcome =
-    typeof requestedAction === "string" && isModerationAction(requestedAction)
-      ? await performModeration(moderationContext(Astro.request, principal), form)
-      : await performAction(ctx, form);
+  else if (typeof requestedAction === "string" && isModerationAction(requestedAction)) {
+    outcome = await performModeration(moderationContext(Astro.request, principal), form);
+  } else {
+    outcome = await performAction(ctx, form);
+  }
 
   /*
    * Ending the current session is signing out, and has to clear the cookie as well.
@@ -480,6 +506,38 @@ const when = (iso: string) => iso.slice(0, 10);
         {tab === "profile" && (
           <section class="panel" id="profile">
             <h2 class="panel__heading">Profile</h2>
+
+            {/*
+              §49.4, §21.2 — the picture, uploaded in one request.
+
+              Its own form and `multipart/form-data`, because a file is not a string and the
+              action dispatchers take strings on purpose: everything else this page can do is
+              unable to accept bytes, and stays that way by construction rather than by care.
+            */}
+            <form method="post" action={here} class="issue__form" enctype="multipart/form-data">
+              <input type="hidden" name="action" value="profile.avatar" />
+              <div class="field">
+                <label for="avatar">Picture</label>
+                <div class="avatar__row">
+                  <Avatar
+                    author={{
+                      username: view.principal.username,
+                      displayName: view.principal.displayName,
+                      kind: view.principal.kind,
+                      avatarMediaId: view.principal.avatarMediaId ?? null,
+                    }}
+                    size={48}
+                  />
+                  <input id="avatar" name="avatar" type="file" accept="image/*" required />
+                </div>
+                <p class="field__hint">
+                  Square works best: it is cropped to one and rendered at 128 pixels (§21.2).
+                  Under 2 MB.
+                </p>
+              </div>
+              <button class="button" type="submit">Upload</button>
+            </form>
+
             <form method="post" action={here} class="issue__form">
               <input type="hidden" name="action" value="profile" />
               <div class="field">

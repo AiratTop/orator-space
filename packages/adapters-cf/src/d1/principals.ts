@@ -12,6 +12,7 @@ interface Row {
   status: string;
   platform_role: string;
   system_account: number;
+  avatar_media_id: string | null;
   created_at: string;
   owner_principal_id: string | null;
   model: string | null;
@@ -22,7 +23,7 @@ interface Row {
 /** Agent columns come from a LEFT JOIN so one query answers "who is this". */
 const SELECT = `
   SELECT p.id, p.kind, p.username, p.username_skeleton, p.display_name, p.bio,
-         p.status, p.platform_role, p.system_account, p.created_at,
+         p.status, p.platform_role, p.system_account, p.avatar_media_id, p.created_at,
          a.owner_principal_id, a.model, a.provider, a.trust_level
     FROM principals p
     LEFT JOIN agents a ON a.principal_id = p.id`;
@@ -39,6 +40,7 @@ function toRecord(row: Row | null): PrincipalRecord | null {
     status: row.status as PrincipalRecord["status"],
     platformRole: row.platform_role as PrincipalRecord["platformRole"],
     systemAccount: row.system_account === 1,
+    avatarMediaId: (row.avatar_media_id ?? null) as OratorId | null,
     createdAt: row.created_at,
   };
   if (row.owner_principal_id !== null) {
@@ -137,6 +139,10 @@ export function createPrincipalRepo(db: D1Database): PrincipalRepo {
       if (fields.bio !== undefined) {
         assignments.push("bio = ?");
         binds.push(fields.bio);
+      }
+      if (fields.avatarMediaId !== undefined) {
+        assignments.push("avatar_media_id = ?");
+        binds.push(fields.avatarMediaId);
       }
       assignments.push("updated_at = ?");
       binds.push(at, principalId);

@@ -1,5 +1,6 @@
 ---
 import type { AuthorSummary } from "@orator/core/ports";
+import { mediaOrigin } from "../lib/ports.js";
 
 /**
  * A placeholder avatar (SPEC §21.2, §49.4).
@@ -18,11 +19,26 @@ import type { AuthorSummary } from "@orator/core/ports";
  * accounts could otherwise wear the same mark on purpose.
  */
 interface Props {
-  author: Pick<AuthorSummary, "username" | "displayName" | "kind">;
+  author: Pick<AuthorSummary, "username" | "displayName" | "kind"> & {
+    /** SPEC §49.4 — the uploaded picture, when there is one. */
+    avatarMediaId?: string | null;
+  };
   size?: number;
 }
 
 const { author, size = 28 } = Astro.props;
+
+/**
+ * SPEC §21.2 — the uploaded picture at the `avatar` variant, or the generated mark.
+ *
+ * A name and never a size, which is why this can be built from an id without asking anything:
+ * the variant means 128 square, the platform produced it once, and R2 serves it from then on.
+ * From the media origin, because §57.4 keeps user bytes off the origin that holds credentials.
+ */
+const uploaded =
+  author.avatarMediaId === undefined || author.avatarMediaId === null
+    ? null
+    : `${mediaOrigin}/${author.avatarMediaId}/avatar`;
 
 /**
  * A stable hue from the username.
@@ -62,6 +78,7 @@ const fill = author.kind === "agent" ? `hsl(${hue} 22% 62%)` : `hsl(${hue} 52% 5
 const initials = initialsOf(author.displayName, author.username);
 ---
 
+{uploaded === null ? (
 <svg
   class="avatar"
   width={size}
@@ -82,3 +99,14 @@ const initials = initialsOf(author.displayName, author.username);
     dominant-baseline="central"
   >{initials}</text>
 </svg>
+) : (
+  <img
+    class="avatar"
+    src={uploaded}
+    width={size}
+    height={size}
+    alt={`@${author.username}`}
+    loading="lazy"
+    decoding="async"
+  />
+)}

@@ -518,6 +518,68 @@ check(
   empty.location,
 );
 
+// --- images --------------------------------------------------------------------------
+section("Images (§21.2, §50.1, §49.4)");
+
+/*
+ * A one-pixel PNG, written out rather than fetched.
+ *
+ * A checkpoint that downloaded a picture to test picture handling would fail when somebody
+ * else's server was down, and report it as this platform's problem.
+ */
+const PIXEL = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+const upload = new FormData();
+upload.set("action", "profile.avatar");
+upload.set("avatar", new Blob([PIXEL], { type: "image/png" }), "avatar.png");
+
+const uploaded = await fetch(`${webBase}/settings?tab=profile`, {
+  method: "POST",
+  headers: { origin: webOrigin, cookie: cookieHeader() },
+  body: upload,
+  redirect: "manual",
+});
+const uploadedHtml = await uploaded.text();
+check("a picture uploads from the account page", /Your picture is set/.test(uploadedHtml), String(uploaded.status));
+
+const avatarSrc = (uploadedHtml.match(/src="([^"]*\/avatar)"/) ?? [])[1];
+check("and the page then points at its avatar variant", typeof avatarSrc === "string", String(avatarSrc));
+
+if (typeof avatarSrc === "string") {
+  const served = await fetch(avatarSrc);
+  check("which is served from the media origin", served.status === 200, `${served.status} ${avatarSrc}`);
+  check(
+    "with a long cache, since a variant of an immutable record cannot change",
+    /immutable/.test(served.headers.get("cache-control") ?? ""),
+    served.headers.get("cache-control") ?? "(none)",
+  );
+
+  /*
+   * §21.2 — a name, never a size.
+   *
+   * The whole billing argument rests on this: an address that accepted arbitrary numbers
+   * would let any caller mint unlimited billable transformations of one picture.
+   */
+  const sized = await fetch(avatarSrc.replace(/\/avatar$/, "/w=800"));
+  check("and a size in the URL is not an address", sized.status === 404, String(sized.status));
+
+  const unknown = await fetch(avatarSrc.replace(/\/avatar$/, "/enormous"));
+  check("nor is a variant nobody declared", unknown.status === 404, String(unknown.status));
+}
+
+const withPreview = await page_(`/p/${articleId}`);
+check(
+  "every article page carries a preview image (§50.1)",
+  /property="og:image" content="http/.test(withPreview.html),
+);
+check(
+  "and asks for the large card, since it always has one to show",
+  withPreview.html.includes('name="twitter:card" content="summary_large_image"'),
+);
+
 // --- the reading list ------------------------------------------------------------------
 section("A private reading list (ADR 0011, §49.2)");
 

@@ -2243,3 +2243,20 @@ a {
   color: var(--accent);
   background: var(--paper-soft);
 }
+
+/* The current picture beside the file input, so "replace" is visibly a replacement. */
+.avatar__row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.avatar__row input[type="file"] {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+img.avatar {
+  object-fit: cover;
+  background: var(--paper-soft);
+}

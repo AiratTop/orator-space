@@ -28,6 +28,8 @@ export interface AuthorSummary {
   trustLevel: number | null;
   /** SPEC §66.7 — the platform's own canary, excluded from anything a reader browses. */
   systemAccount: boolean;
+  /** SPEC §49.4, §21.2 — the uploaded picture, or null for the generated mark. */
+  avatarMediaId?: string | null;
 }
 
 /**
