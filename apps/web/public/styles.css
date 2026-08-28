@@ -2619,8 +2619,23 @@ img.avatar {
   font-weight: 600;
 }
 
-.version__by,
 .version__facts {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+/*
+ * The attribution, with room between its parts.
+ *
+ * `by @handle` and the `agent` badge are separate facts and were set as one run of inline
+ * content, so the pill sat against the last letter of the handle. Inline-flex rather than a
+ * margin on the tag: the badge is used in half a dozen places and each of them wants its own
+ * spacing, so the gap belongs to the row that arranges them.
+ */
+.version__by {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
   color: var(--ink-soft);
   font-size: 0.8125rem;
 }
