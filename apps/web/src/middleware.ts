@@ -40,7 +40,20 @@ const CSP = [
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'none'",
-  "form-action 'self'",
+  /*
+   * §57.3, §9.3 — `self`, plus the one destination a form is allowed to leave for.
+   *
+   * `form-action` governs where a submission may navigate, redirects included, so the
+   * connect button — a POST that answers 303 into the chat — was blocked by this policy with
+   * no error anywhere the person could see: the browser simply did nothing. That is the
+   * failure mode this directive is for, and the answer is to name the exception rather than
+   * to drop the rule or to make the button a link, because a link is a GET and creating a
+   * credential is not a safe method.
+   *
+   * `https://t.me` and nothing else. The address is built from configuration and a nonce
+   * this platform issued; no part of it comes from a request.
+   */
+  "form-action 'self' https://t.me",
 ].join("; ");
 
 /** SPEC §57.3. */

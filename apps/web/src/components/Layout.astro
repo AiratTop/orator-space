@@ -39,6 +39,15 @@ interface Props {
   /** Serialised JSON-LD (§52). Already stringified by the caller. */
   jsonLd?: string;
   /**
+   * Seconds after which this page reloads itself, for a page waiting on something that
+   * happens elsewhere (§9.3).
+   *
+   * A `<meta>` rather than a script: §49.1 admits no script for this and none is needed. Set
+   * only while there is something to wait for — a page that reloads forever is a page that
+   * loses somebody's scroll position and their place in a form for no reason.
+   */
+  refreshAfter?: number | null;
+  /**
    * SPEC §48 — the Atom feed this page has, if it has one.
    *
    * Autodiscovery is the whole mechanism: a reader pastes the page's address into their
@@ -61,6 +70,7 @@ const {
   authorName,
   jsonLd,
   feedPath = null,
+  refreshAfter = null,
 } = Astro.props;
 
 /* §50.1 — the caller's image, or the site's. Resolved once so the two tags cannot disagree. */
@@ -91,6 +101,8 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
       reason to widen it.
     */}
     <script src="/theme.js" is:inline></script>
+
+    {refreshAfter !== null && <meta http-equiv="refresh" content={String(refreshAfter)} />}
 
     {/* §50.3 — noindex until the conditions are met, never the other way round. */}
     <meta name="robots" content={indexable ? "index, follow" : "noindex, follow"} />

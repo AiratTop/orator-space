@@ -207,6 +207,17 @@ const telegramLink =
   pendingLink === null || telegramBot === null
     ? null
     : `https://t.me/${telegramBot}?start=${pendingLink.nonce}`;
+/*
+ * §9.3 — the same link addressed to the application rather than to the web.
+ *
+ * `tg://` opens the installed client directly and shows nothing at all when there is none,
+ * which is why it is the second option and never the only one: `https://t.me/…` works on a
+ * machine that has never seen Telegram, and explains itself there.
+ */
+const telegramAppLink =
+  pendingLink === null || telegramBot === null
+    ? null
+    : `tg://resolve?domain=${telegramBot}&start=${pendingLink.nonce}`;
 
 const savedList =
   tab === "saved" ? await readingList(readingListPorts, principal.id) : { cards: [], next: null };
@@ -226,7 +237,18 @@ const when = (iso: string) => iso.slice(0, 10);
 
 ---
 
-<Layout title="Your account" canonicalPath="/settings">
+{/*
+  §9.3 — while a connection is outstanding, this page checks for it.
+
+  The person is in Telegram, not here, and coming back to a page that still says "connect"
+  reads as a failure. Five seconds, only on the tab that is waiting, and only until the
+  binding exists — the attribute disappears with the reason for it.
+*/}
+<Layout
+  title="Your account"
+  canonicalPath="/settings"
+  refreshAfter={tab === "telegram" && telegramLink !== null ? 5 : null}
+>
   <main id="main" class="wrap settings">
     <h1 class="title">Your account</h1>
     <p class="settings__lede">
@@ -522,7 +544,13 @@ const when = (iso: string) => iso.slice(0, 10);
                 {telegramLink !== null && (
                   <p class="telegram__link">
                     <a href={telegramLink} rel="noopener" target="_blank">Open the link you started</a>{" "}
-                    <span class="field__hint">Valid for ten minutes, and once.</span>
+                    {telegramAppLink !== null && (
+                      <a class="field__hint" href={telegramAppLink}>or in the app</a>
+                    )}
+                    <span class="field__hint">
+                      Valid for ten minutes, and once. This page is watching for the connection
+                      and will say so by itself — <a href={here}>or check now</a>.
+                    </span>
                   </p>
                 )}
 
