@@ -183,8 +183,19 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
      * reaches exactly one chat — the one the account is bound to — so the handle it prints is
      * the reader's own. One extra read, on a command nobody presses in a loop.
      */
+    /*
+     * Without the `@`, and that is not a style choice.
+     *
+     * Telegram turns `@name` in any message into a mention of the Telegram account with that
+     * name — a different person entirely, whom this would link a reader to. Handles here and
+     * handles there share a syntax and nothing else, so the address is written out in full
+     * instead, where it points at this platform and can be checked.
+     */
     const principal = await createPrincipalRepo(c.env.DB).findById(account.principalId);
-    const who = principal === null ? "an account" : `@${principal.username}`;
+    const who =
+      principal === null
+        ? "an account"
+        : `${principal.username} (https://${c.env.SITE_HOST}/@${principal.username})`;
     await say(
       token,
       chatId,
