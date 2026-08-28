@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import type { MiddlewareHandler } from "astro";
 import { CACHE, CDN_CACHE } from "./lib/http.js";
 import { fromEdgeCache, mayCache, toEdgeCache } from "./lib/edge-cache.js";
+import { mediaOrigin } from "./lib/origins.js";
 
 /**
  * Response-wide rules: the canonical host, the security headers, and the one cache rule
@@ -19,13 +20,20 @@ import { fromEdgeCache, mayCache, toEdgeCache } from "./lib/edge-cache.js";
  *
  * `img-src` includes `data:` because the sanitiser strips data URLs from content (§57.1.4);
  * what remains is our own inline SVG, and the media origin for user images.
+ *
+ * **The media origin is derived, not written down.** It was a literal, and the literal was
+ * production's: staging served an avatar from `media-staging.orator.space` against a policy
+ * that only admitted `media.orator.space`, so the browser blocked every uploaded picture on
+ * the deployment where uploads are tested. A blocked image renders as nothing, which from the
+ * account page is indistinguishable from an upload that did not work. Third time this literal
+ * has cost something — `/llms.txt` and `/robots.txt` were the first two (§14.3).
  */
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self' https://media.orator.space data:",
-  "media-src 'self' https://media.orator.space",
+  `img-src 'self' ${mediaOrigin} data:`,
+  `media-src 'self' ${mediaOrigin}`,
   "frame-ancestors 'none'",
   "object-src 'none'",
   "base-uri 'none'",

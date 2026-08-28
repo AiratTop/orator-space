@@ -102,61 +102,14 @@ export const readingListPorts: ReadingListPorts = {
  */
 export const assets = { get: createR2AssetStore(web.ASSETS_BUCKET).get };
 
-/** The canonical hostname, from the environment rather than from the request (§14.1). */
-export const siteHost = web.SITE_HOST;
+/**
+ * The addresses, re-exported from where they are defined (§14.1, §14.3, §57.4).
+ *
+ * They moved to `origins.ts` when the middleware needed one: a request for a static file
+ * should not construct a database adapter to learn the media origin. Re-exported here rather
+ * than left for every caller to re-import, because "where the site lives" and "what the site
+ * may reach" are asked together on nearly every page.
+ */
+export { apiOrigin, defaultCard, mcpOrigin, mediaOrigin, siteHost, siteOrigin } from "./origins.js";
+
 export const environment = web.ENVIRONMENT;
-
-/**
- * The origin used in absolute URLs — canonical links, Open Graph, JSON-LD.
- *
- * Built from configuration and never from the `Host` header. A header-derived origin is
- * how an attacker turns a canonical tag into a link to their own copy of the page.
- */
-export const siteOrigin =
-  siteHost === "localhost" ? "http://localhost:4321" : `https://${siteHost}`;
-
-/**
- * The sibling surfaces, derived from this one (SPEC §14.3, ADR 0003).
- *
- * Derived rather than configured, and derived rather than written down. `/llms.txt` and
- * `/robots.txt` named `api.orator.space` and `mcp.orator.space` as literals, so staging
- * published the production addresses — telling every model that read it to go and act on
- * the live system while looking at test data.
- *
- * The shape is ADR 0003's: staging is `api-staging.orator.space` rather than
- * `api.staging.orator.space`, because Universal SSL covers the apex and one level of
- * subdomain and a second level would attach as a route and then fail TLS. So an environment
- * label in front becomes a suffix behind: `staging.orator.space` → `api-staging.orator.space`,
- * and a bare apex stays a bare prefix.
- */
-function siblingOrigin(label: "api" | "mcp" | "media"): string {
-  // In development both surfaces are the same Worker on one port, routed by nothing.
-  if (siteHost === "localhost") return "http://localhost:8787";
-  const parts = siteHost.split(".");
-  // More than two labels means the first one names the environment.
-  const [environment, ...apex] = parts.length > 2 ? parts : [null, ...parts];
-  return environment === null
-    ? `https://${label}.${apex.join(".")}`
-    : `https://${label}-${environment}.${apex.join(".")}`;
-}
-
-export const apiOrigin = siblingOrigin("api");
-export const mcpOrigin = siblingOrigin("mcp");
-
-/**
- * SPEC §57.4 — where user bytes are served from, and never from here.
- *
- * Derived like its siblings rather than written down, for the reason `/llms.txt` learned the
- * hard way: a literal in the code makes staging publish production's addresses.
- */
-export const mediaOrigin = siblingOrigin("media");
-
-/**
- * SPEC §50.1 — the preview shown for a page with no image of its own.
- *
- * A static asset rather than a generated one. Every social client crops to 1200×630 and
- * caches what it fetched, so this is read far more often than anything on the site and never
- * changes; generating it per request would be work done for a picture that is the same
- * picture. It lives in `public/` and is checked in, which also means a review sees it.
- */
-export const defaultCard = `${siteOrigin}/card.png`;
