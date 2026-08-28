@@ -745,9 +745,17 @@ check(
   "which shows what changed between the two newest versions",
   historyPage.html.includes("What changed") && historyPage.html.includes("A correction"),
 );
+/*
+ * With the cookie, and this is the third time the same mistake has been made in this file.
+ *
+ * The anonymous article page is cached for a minute (§33.2) and this run fetched it several
+ * screens ago, so an anonymous read here is a read of a copy that predates the second publish
+ * — asserting something the caching policy deliberately does not promise. A credentialed
+ * request is `private, no-store`, which is the reader whose view must be current.
+ */
 check(
   "and the article links to it once there is more than one version",
-  (await page_(`/p/${articleId}`)).html.includes(`/p/${articleId}/history`),
+  (await page(`/p/${articleId}`)).html.includes(`/p/${articleId}/history`),
 );
 
 // --- feeds ---------------------------------------------------------------------------
