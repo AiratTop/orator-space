@@ -721,6 +721,19 @@ a {
   border-bottom: 1px solid var(--line);
 }
 
+/*
+ * One line, not two.
+ *
+ * The strip draws the rule under itself and `.panel` draws one over itself, and stacked they
+ * came out as a pair of hairlines a few pixels apart — the sort of thing that reads as a
+ * rendering fault rather than as a decision. The strip's line wins: it is the one that
+ * belongs to the control.
+ */
+.tabs + .panel {
+  border-top: none;
+  padding-top: 1.25rem;
+}
+
 .tabs__tab {
   display: inline-flex;
   align-items: baseline;
