@@ -20,3 +20,4 @@ export * from "./sitemap.js";
 export * from "./classification.js";
 export * from "./reading-list.js";
 export * from "./topics.js";
+export * from "./telegram.js";

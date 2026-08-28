@@ -66,7 +66,7 @@
       "durable_objects": {
         "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter", "script_name": "orator-edge-staging" }]
       },
-      "vars": { "ENVIRONMENT": "staging", "SITE_HOST": "staging.orator.space" },
+      "vars": { "ENVIRONMENT": "staging", "SITE_HOST": "staging.orator.space", "TELEGRAM_BOT": "orator_space_bot" },
       "d1_databases": [{ "binding": "DB", "database_name": "orator-staging", "database_id": "125c0049-a2ad-4814-a2fa-59d6ea7d86a9" }],
       "r2_buckets": [
         { "binding": "CONTENT", "bucket_name": "orator-content-staging" },
@@ -86,6 +86,10 @@
       "durable_objects": {
         "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter", "script_name": "orator-edge" }]
       },
+      // §9.3, §32.1 — no bot on production yet. A bot has exactly one webhook, so one bot cannot
+      // serve two environments any more than one database can; production gets its own before
+      // launch, and until then this page offers nothing rather than a link that binds a chat
+      // to the wrong deployment.
       "vars": { "ENVIRONMENT": "production", "SITE_HOST": "orator.space" },
       "d1_databases": [{ "binding": "DB", "database_name": "orator-prod", "database_id": "eb98f063-21b0-451d-9372-a2105169ca9b" }],
       "r2_buckets": [

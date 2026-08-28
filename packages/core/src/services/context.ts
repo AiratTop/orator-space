@@ -17,6 +17,7 @@ import type {
   MediaTransform,
   Metrics,
   ModerationRepo,
+  TelegramRepo,
   OutboxRepo,
   CredentialRepo,
   PrincipalRepo,
@@ -72,6 +73,8 @@ export interface Ports {
   transform: MediaTransform;
   /** SPEC §61 — report intake. */
   moderation: ModerationRepo;
+  /** SPEC §9.3 — the second channel: a Telegram account bound to a principal. */
+  telegram: TelegramRepo;
   /** SPEC §51 — which shards need rebuilding, and where the built files go. */
   sitemap: SitemapRepo;
   /**

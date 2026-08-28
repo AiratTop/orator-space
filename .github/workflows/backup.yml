@@ -8,12 +8,14 @@ name: backup
 # copy, not a backup. It also keeps the account-wide API token out of the request path of
 # every article.
 #
-# **Production only, and §32.1 is the reason.** This job ran over both environments while
-# declaring `environment: production`, so either the staging export was using a
-# production-scoped token or that token reached further than production — and §32.1 forbids
-# sharing anything between the two precisely because erasure tests and orphan collection
-# delete data. Staging is reproducible: it is seeded, and losing it costs a re-seed. The
-# thing worth the machinery is the data nobody can recreate.
+# **Both environments, one GitHub environment each — which is the bug this once had.** The
+# job ran over the two while declaring `environment: production`, so either staging was
+# exporting with a production-scoped token or that token reached further than production, and
+# §32.1 forbids sharing anything between them precisely because erasure tests and orphan
+# collection delete data. Dropping staging was the wrong fix: the drill is worth more against
+# two databases of different size and shape than against one, and staging is where a restore
+# is allowed to go wrong. Each run now takes its credential from the environment it names, so
+# a narrower token can be scoped to staging without touching production.
 on:
   schedule:
     # Weekly, Sunday 04:40 UTC. Offset from the hour because everybody else's cron is on it.
@@ -31,7 +33,13 @@ jobs:
   export:
     name: export and verify
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ matrix.environment }}
+    strategy:
+      # Sequential, not parallel: the drill creates a database and both environments would
+      # otherwise be doing that at once for no gain.
+      max-parallel: 1
+      matrix:
+        environment: [staging, production]
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -41,15 +49,15 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: export production
-        run: node scripts/backup.mjs --env production
+      - name: export ${{ matrix.environment }}
+        run: node scripts/backup.mjs --env ${{ matrix.environment }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
       # §31.5 — "a backup nobody has restored from is not a backup". Quarterly is the
       # minimum the specification asks for; every week costs one temporary database and
       # answers the question that matters before somebody needs the answer.
-      - name: restore drill — production
-        run: node scripts/restore-drill.mjs --env production
+      - name: restore drill — ${{ matrix.environment }}
+        run: node scripts/restore-drill.mjs --env ${{ matrix.environment }}
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

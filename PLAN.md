@@ -1479,6 +1479,32 @@ sat under code with tests passing. Coverage says every line ran; it does not say
 asked the right question. The checkpoints against a real deployment (§12.4) are what has
 caught the last five, and that is where the next test belongs when there is a choice.
 
+### 13.355. The names this project holds
+
+Registered on 2026-08-28, before they could be taken by somebody else. Recorded here because
+a handle nobody has written down is a handle that gets re-registered under a different spelling
+by the next person who needs one.
+
+```text
+github.com/AiratTop/orator-space     the repository, today
+github.com/orator-space              the organisation, empty — the repository moves when
+                                     there is more than one person to move it for
+npmjs.com/org/orator-space           the package scope, for @orator/* if anything is ever
+                                     published outside this workspace (§80.17)
+x.com/orator_space                   announcements
+t.me/orator_space                    channel
+t.me/orator_space_bot                the bot (§9.3) — staging's webhook today
+t.me/OratorSpaceBot                  reserved, unused: a second bot is what production needs,
+                                     since a bot has one webhook and §32.1 does not share
+youtube.com/@orator_space            reserved, unused
+```
+
+**The two bots are not redundancy, they are §32.1.** A Telegram bot has exactly one webhook
+URL, so one bot cannot serve staging and production any more than one database can. The
+reserved handle is production's, and until it is configured the production settings page
+offers no Telegram at all — a link that bound somebody's chat to the wrong deployment would be
+worse than the absence.
+
 ### 13.36. What was recommended, and what was decided
 
 A review from another model, considered on 2026-08-28. Recorded because three of its five

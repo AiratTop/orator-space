@@ -26,6 +26,7 @@ import { articleRoutes } from "./routes/articles.js";
 import { socialRoutes } from "./routes/social.js";
 import { discoveryRoutes } from "./routes/discovery.js";
 import { mediaRoutes } from "./routes/media.js";
+import { telegramRoutes } from "./routes/telegram.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { moderationRoutes } from "./routes/moderation.js";
 import { portsFor } from "./context.js";
@@ -48,6 +49,15 @@ export interface Env {
   ENVIRONMENT: string;
   /** The public site's hostname (ADR 0003). The sitemap is a list of its URLs (§51). */
   SITE_HOST: string;
+  /**
+   * SPEC §9.3 — the bot's credential and the secret Telegram presents on the webhook.
+   *
+   * Both are Worker secrets and both are optional in the type: a deployment without them has
+   * no bot, and the route answers 404 rather than half-working. Never in the repository
+   * (§57.5), and never in a variable block a review would print.
+   */
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_WEBHOOK_SECRET?: string;
   DB: D1Database;
   CONTENT: R2Bucket;
   MEDIA: R2Bucket;
@@ -380,6 +390,7 @@ app.route("/", discoveryRoutes);
 app.route("/", moderationRoutes);
 app.route("/", mcpRoutes);
 app.route("/", mediaRoutes);
+app.route("/", telegramRoutes);
 
 app.notFound((c) =>
   c.json(

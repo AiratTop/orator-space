@@ -16,3 +16,4 @@ export * from "./moderation.js";
 export * from "./passkeys.js";
 export * from "./sitemap.js";
 export * from "./slo.js";
+export * from "./telegram.js";

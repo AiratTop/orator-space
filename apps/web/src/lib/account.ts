@@ -13,6 +13,7 @@ import {
   createReadingRepo,
   createSessionRepo,
   createMediaRepo,
+  createTelegramRepo,
   createR2MediaStore,
   createModerationRepo,
   createSocialRepo,
@@ -216,6 +217,19 @@ export const avatarPorts: AvatarPorts = {
   metrics: { write: () => undefined },
   clock: systemClock,
   ids,
+};
+
+/**
+ * What the Telegram link needs, and nothing else (SPEC §9.3, §28).
+ *
+ * Three things: the nonce table, a transaction and a clock. No principals repository — the
+ * binding names the principal from the session, and a surface that could look one up could
+ * issue a link for somebody else.
+ */
+export const telegramPorts = {
+  telegram: createTelegramRepo(accountEnv.DB),
+  db: accountPorts.db,
+  clock: systemClock,
 };
 
 export function avatarContext(request: Request, principal: PrincipalRecord): AvatarContext {

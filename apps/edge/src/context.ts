@@ -27,6 +27,7 @@ import {
   createReadingListRepo,
   createTopicAssignmentRepo,
   createTopicRepo,
+  createTelegramRepo,
   createTokenRepo,
   systemClock,
 } from "@orator/adapters-cf";
@@ -63,6 +64,7 @@ export function portsFor(env: Env): Ports {
     mediaStore: createR2MediaStore(env.MEDIA),
     transform: createImageTransform(env.IMAGES),
     moderation: createModerationRepo(env.DB),
+    telegram: createTelegramRepo(env.DB),
     sitemap: createSitemapRepo(env.DB),
     slo: createSloRepo(env.DB),
     assets: createR2AssetStore(env.ASSETS_BUCKET),

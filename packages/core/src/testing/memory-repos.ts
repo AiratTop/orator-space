@@ -24,6 +24,9 @@ import {
   type OutboxRepo,
   type PendingWrite,
   type PrincipalRecord,
+  type TelegramAccount,
+  type TelegramLink,
+  type TelegramRepo,
   type PrincipalRepo,
   type ArticleCard,
   type LinkedArticle,
@@ -95,6 +98,8 @@ export interface MemoryState {
   sessions: (SessionRecord & { tokenHash: string; userAgent: string | null })[];
   reports: ReportRecord[];
   moderationActions: ModerationActionRecord[];
+  telegramAccounts: Map<string, TelegramAccount>;
+  telegramLinks: Map<string, TelegramLink>;
   media: Map<string, MediaRecord>;
   /** The bytes, keyed the same way the R2 adapter keys them. */
   mediaBytes: Map<string, Uint8Array>;
@@ -145,6 +150,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     sessions: [],
     reports: [],
     moderationActions: [],
+    telegramAccounts: new Map(),
+    telegramLinks: new Map(),
     sitemapShards: new Map(),
     assets: new Map(),
     media: new Map(),
@@ -202,6 +209,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         sessions: [...state.sessions],
         reports: [...state.reports],
         moderationActions: [...state.moderationActions],
+        telegramAccounts: new Map(state.telegramAccounts),
+        telegramLinks: new Map(state.telegramLinks),
         media: new Map(state.media),
         mediaBytes: new Map(state.mediaBytes),
         articleTopics: new Map(state.articleTopics),
@@ -1583,6 +1592,44 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
    * its declared length is refused rather than stored, because that is the contract the
    * service handles a failure from.
    */
+  /** SPEC §9.3 — the second channel, in memory. */
+  const telegram: TelegramRepo = {
+    insertLink: (link) => asWrite(() => void state.telegramLinks.set(link.nonce, { ...link, usedAt: null })),
+    async findLink(nonce) {
+      return state.telegramLinks.get(nonce) ?? null;
+    },
+    markLinkUsed: (nonce, at) =>
+      asWrite(() => {
+        const link = state.telegramLinks.get(nonce);
+        // The guard the D1 statement carries in its WHERE: only an unused row is marked, so
+        // two redemptions race and one of them writes nothing.
+        if (link === undefined || link.usedAt !== null) return 0;
+        link.usedAt = at;
+        return 1;
+      }),
+    async findByPrincipal(principalId) {
+      return state.telegramAccounts.get(principalId) ?? null;
+    },
+    async findByTelegramUser(telegramUserId) {
+      return (
+        [...state.telegramAccounts.values()].find((one) => one.telegramUserId === telegramUserId) ?? null
+      );
+    },
+    upsertAccount: (account) => asWrite(() => void state.telegramAccounts.set(account.principalId, account)),
+    deleteAccount: (principalId) => asWrite(() => void state.telegramAccounts.delete(principalId)),
+    async deleteLinksBefore(cutoff, limit) {
+      let deleted = 0;
+      for (const [nonce, link] of [...state.telegramLinks.entries()]) {
+        if (deleted >= limit) break;
+        if (link.expiresAt < cutoff) {
+          state.telegramLinks.delete(nonce);
+          deleted += 1;
+        }
+      }
+      return deleted;
+    },
+  };
+
   const mediaStore: MediaStore = {
     async put(key, body, declaredLength) {
       const chunks: Uint8Array[] = [];
@@ -1949,6 +1996,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     /** No platform here: §21.2's fallback is the behaviour a domain test should see. */
     transform: { produce: async () => null },
     moderation,
+    telegram,
     sitemap,
     slo,
     assets,

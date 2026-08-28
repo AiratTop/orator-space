@@ -10,6 +10,14 @@ import { env } from "cloudflare:workers";
  */
 interface HostEnv {
   SITE_HOST: string;
+  /**
+   * SPEC §9.3 — the bot a deep link points at.
+   *
+   * A variable rather than a secret: the name is public, it is in every link the page shows,
+   * and it differs between a staging bot and a production one. Absent means this deployment
+   * has no bot, and the page offers nothing rather than a link to `t.me/undefined`.
+   */
+  TELEGRAM_BOT?: string;
 }
 
 /** The canonical hostname, from the environment rather than from the request (§14.1). */
@@ -72,3 +80,6 @@ export const mediaOrigin = siblingOrigin("media");
  * picture. It lives in `public/` and is checked in, which also means a review sees it.
  */
 export const defaultCard = `${siteOrigin}/card.png`;
+
+/** SPEC §9.3 — the bot's public name, or null where this deployment has none. */
+export const telegramBot: string | null = (env as unknown as HostEnv).TELEGRAM_BOT ?? null;
