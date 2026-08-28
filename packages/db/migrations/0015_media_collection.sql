@@ -1,0 +1,11 @@
+-- SPEC §23.4, §32 — the index the orphan collector reads.
+--
+-- The collector asks for `ready` media older than a cutoff that nothing references. Without
+-- this it is a full scan of `media` on every retention pass, and the table only grows: every
+-- picture anybody has ever uploaded, plus the ones that have been replaced and not yet
+-- collected. `ix_media_pending` is the same shape for the other pass and was written on the
+-- same reasoning; this is the half that was missing because the pass did not exist.
+--
+-- Partial, like its sibling: `rejected` and `removed` rows are not candidates, and an index
+-- that carried them would be larger for no reader.
+CREATE INDEX ix_media_ready ON media (created_at) WHERE status = 'ready';
