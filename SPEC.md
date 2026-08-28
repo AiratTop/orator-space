@@ -6016,8 +6016,8 @@ Everything after it is growth, and its order is decided by observation rather th
 |---|---|---|
 | 1 | ~~EmDash: dependency / fork / independent core~~ — **closed: option C** (§81) | — |
 | 2 | ~~Content licence~~ — **closed: MIT for the code, CC BY 4.0 for published content**, ADR 0008 | — |
-| 3 | WebAuthn provider: our own implementation or a library | Identity phase |
-| 4 | The threshold and algorithm for near-duplicate detection | Launch gate |
+| 3 | ~~WebAuthn provider~~ — **closed: a library**, `@simplewebauthn/server`. The ceremony is a specification with sharp edges (attestation formats, COSE key parsing, the counter check) and getting one of them subtly wrong is a silent authentication weakness rather than a visible bug | — |
+| 4 | ~~The threshold and algorithm for near-duplicate detection~~ — **closed: SimHash over shingles, distance ≤ 7, eight LSH bands** (§60.1). Seven rather than the literature's three because that figure is derived from long documents: measured on articles this size, two changed words in ninety move six bits, while a genuinely different article on the same subject sits at thirty-six. The band count follows from the threshold by the pigeonhole argument, so they are one decision. To be re-measured on a real corpus, which is a calibration rather than an open question | — |
 | 5 | ~~The moderation provider on launch day~~ — **closed: the built-in heuristic as the floor, plus a reading provider over Workers AI, composed** (§61). Neither is a superset of the other: the heuristic finds what is mechanically visible, the model tells spam from an argument somebody dislikes. If the model is unavailable and the floor found nothing, content is left `unchecked` rather than passed | — |
 | 6 | Concrete quota values, after observing real traffic | Launch gate |
 | 7 | Whether Publications are needed at all; if so, the role model | after launch |
