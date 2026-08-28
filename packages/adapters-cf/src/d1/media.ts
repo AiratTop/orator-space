@@ -17,6 +17,7 @@ interface Row {
   generation_metadata: string | null;
   created_at: string;
   finalized_at: string | null;
+  removed_at: string | null;
 }
 
 const toRecord = (row: Row): MediaRecord => ({
@@ -36,6 +37,7 @@ const toRecord = (row: Row): MediaRecord => ({
       : (JSON.parse(row.generation_metadata) as Record<string, unknown>),
   createdAt: row.created_at,
   finalizedAt: row.finalized_at,
+  removedAt: row.removed_at,
 });
 
 export function createMediaRepo(db: D1Database): MediaRepo {
@@ -50,27 +52,36 @@ export function createMediaRepo(db: D1Database): MediaRepo {
       return results.map((row) => row.id);
     },
 
-    async listOrphaned(cutoff, limit) {
+    async listCollectable(cutoff, limit) {
       /*
-       * Two `NOT EXISTS`, one per column that can name a media record today.
+       * Marked `removed`, past its grace period — and still checked against every column that
+       * can name it.
        *
-       * Written as subqueries rather than as left joins so that adding a third referencing
-       * column is one more clause in one place. Anything that starts pointing at media and is
-       * not listed here will have its objects collected under it — which is why the list is
-       * short, explicit, and next to the port comment that says so.
+       * The second half is belt and braces: nothing should be able to detach a record and
+       * point at it at the same time, and if something ever does, the bytes stay. The cost is
+       * two index-assisted subqueries over a list that is empty on almost every pass.
        */
       const { results } = await db
         .prepare(
           `SELECT m.id FROM media m
-            WHERE m.status = 'ready'
-              AND m.created_at < ?
+            WHERE m.status = 'removed'
+              AND m.removed_at IS NOT NULL
+              AND m.removed_at < ?
               AND NOT EXISTS (SELECT 1 FROM principals p WHERE p.avatar_media_id = m.id)
               AND NOT EXISTS (SELECT 1 FROM articles a WHERE a.featured_media_id = m.id)
-            ORDER BY m.id LIMIT ?`,
+            ORDER BY m.removed_at LIMIT ?`,
         )
         .bind(cutoff, limit)
         .all<{ id: string }>();
       return results.map((row) => row.id);
+    },
+
+    markDetached(id, at) {
+      return asWrite(
+        db
+          .prepare(`UPDATE media SET status = 'removed', removed_at = ? WHERE id = ? AND status = 'ready'`)
+          .bind(at, id),
+      );
     },
 
     deleteRecords(ids) {

@@ -209,8 +209,9 @@ describe("media whose bytes never arrived (§21.1, §23.4)", () => {
     expect(await ports.media.findById("M-USED")).not.toBeNull();
   });
 
-  it("collects a ready record nothing points at, with every variant of it", async () => {
+  it("collects a record the platform detached, with every variant of it", async () => {
     await ready("M-LOOSE", 48);
+    await ports.db.commit([ports.media.markDetached("M-LOOSE", hoursAgo(30))]);
     // §21.2 — the objects share a prefix, and a collector that deleted `original` by name
     // would leave four derived objects behind on every record it touched.
     await ports.mediaStore.putDerived("M-LOOSE/avatar", bytes(4));
@@ -224,10 +225,21 @@ describe("media whose bytes never arrived (§21.1, §23.4)", () => {
     expect(await ports.mediaStore.get("M-LOOSE/card")).toBeNull();
   });
 
-  it("leaves an unreferenced record inside its grace period", async () => {
+  it("leaves a ready record nobody attached, however old", async () => {
+    // The rule that replaced "collect what nothing references". An article body renders
+    // images (§57.1), so a picture can be named in Markdown where no column names it, and
+    // inferring "unused" from the absence of a reference would delete it out of a published
+    // article. An upload nobody attached is the owner's, and stays.
+    await ready("M-UNATTACHED", 500);
+    expect((await runRetention(ports)).orphanedMediaDeleted).toBe(0);
+    expect(await ports.media.findById("M-UNATTACHED")).not.toBeNull();
+  });
+
+  it("leaves a detached record inside its grace period", async () => {
     // §33.2 — a picture cleared a minute ago is still named by pages held in browsers and at
     // the edge. Collecting on the spot turns those into broken images.
     await ready("M-FRESH", 2);
+    await ports.db.commit([ports.media.markDetached("M-FRESH", hoursAgo(1))]);
     expect((await runRetention(ports)).orphanedMediaDeleted).toBe(0);
     expect(await ports.media.findById("M-FRESH")).not.toBeNull();
   });

@@ -20,7 +20,7 @@ import {
   SETTINGS_TABS,
   type ActionOutcome,
 } from "../lib/settings-actions.js";
-import { readingList, setAvatar } from "@orator/core";
+import { readingList, removeAvatar, setAvatar } from "@orator/core";
 
 /**
  * The account (SPEC §49.2, §7.2, §42.2, §9.1).
@@ -71,7 +71,19 @@ if (Astro.request.method === "POST") {
    * keeps every other action unable to accept bytes. This is the one that can, so it is the
    * one written out here rather than hidden behind a name in a switch.
    */
-  if (requestedAction === "profile.avatar") {
+  /*
+   * §49.4, §23.4 — taking the picture down, beside the form that puts one up.
+   *
+   * Here rather than in the action dispatcher because it needs the same narrow port slice the
+   * upload does: it clears the pointer and marks the record detached in one transaction, and
+   * the dispatcher's context has no media repo — deliberately (§28).
+   */
+  if (requestedAction === "profile.avatar.remove") {
+    const result = await removeAvatar(avatarContext(Astro.request, principal));
+    outcome = result.ok
+      ? { kind: "done", message: "Your picture is removed." }
+      : { kind: "failed", message: result.error.title };
+  } else if (requestedAction === "profile.avatar") {
     const file = form.get("avatar");
     if (file instanceof File && file.size > 0) {
       const result = await setAvatar(avatarContext(Astro.request, principal), {

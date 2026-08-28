@@ -1439,7 +1439,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         .slice(0, limit)
         .map((record) => record.id);
     },
-    async listOrphaned(cutoff, limit) {
+    async listCollectable(cutoff, limit) {
       const referenced = new Set<string>();
       for (const principal of state.principals.values()) {
         if (principal.avatarMediaId !== null && principal.avatarMediaId !== undefined) {
@@ -1454,12 +1454,27 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       return [...state.media.values()]
         .filter(
           (record) =>
-            record.status === "ready" && record.createdAt < cutoff && !referenced.has(record.id),
+            record.status === "removed" &&
+            record.removedAt !== null &&
+            record.removedAt !== undefined &&
+            record.removedAt < cutoff &&
+            !referenced.has(record.id),
         )
         .sort((a, b) => a.id.localeCompare(b.id))
         .slice(0, limit)
         .map((record) => record.id);
     },
+
+    markDetached(id, at) {
+      return asWrite(() => {
+        const record = state.media.get(id);
+        if (record === undefined || record.status !== "ready") return 0;
+        record.status = "removed";
+        record.removedAt = at;
+        return 1;
+      });
+    },
+
     deleteRecords(ids) {
       return asWrite(() => {
         for (const id of ids) state.media.delete(id);

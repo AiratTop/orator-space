@@ -21,7 +21,7 @@ export const RETENTION_HOURS = {
   /** §21.1 — a record whose bytes never arrived. */
   pendingMedia: 24,
   /**
-   * §23.4, §32 — a `ready` record nothing points at any more.
+   * §23.4, §32 — a record the platform detached.
    *
    * A day rather than immediately, and the day is the point. An avatar cleared a minute ago
    * is still named by pages held in browsers and at the edge (§33.2) and by any link preview
@@ -128,14 +128,20 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
  * is why the delete is attempted even for records that were never marked ready.
  */
 /**
- * `ready` media that nothing references any more (SPEC §23.4, §32, §21.2).
+ * Media the platform detached, past its grace period (SPEC §23.4, §32, §21.2).
  *
  * §32 has always spoken of "the Cron handler that collects orphaned objects" and there was
  * none: only records whose bytes never arrived were collected, so a replaced or removed
- * avatar left its original and every variant produced from it in the bucket, referenced by
- * nothing and paid for indefinitely. Nobody noticed because nothing breaks — the leak is
- * quiet, and it is the exact failure §23.4's rule about "a table with no cleanup handler"
- * was written to catch, one bucket over.
+ * avatar left its original and every variant produced from it in the bucket, paid for
+ * indefinitely. Nobody noticed because nothing breaks — the leak is quiet, and it is the
+ * exact failure §23.4's rule about "a table with no cleanup handler" was written to catch,
+ * one bucket over.
+ *
+ * **It collects what was detached, never what merely looks unused.** The first version asked
+ * for `ready` media that no column referenced, and that would have deleted pictures out of
+ * published articles: a body renders images (§57.1), so an author can embed a media address
+ * in Markdown, where no column names it. An inference from absence is the wrong instrument
+ * for deciding whether bytes are still wanted.
  *
  * The objects go before the row, which is §32.2's ordering and the same one `collectStaleMedia`
  * follows: an object with no row is invisible and gets collected on a later pass, while a row
@@ -145,7 +151,7 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
  * derived objects per record behind — which is what "collected" would have quietly meant.
  */
 async function collectOrphanedMedia(ports: Ports, cutoff: string): Promise<number> {
-  const orphaned = await ports.media.listOrphaned(cutoff, 100);
+  const orphaned = await ports.media.listCollectable(cutoff, 100);
   if (orphaned.length === 0) return 0;
 
   for (const id of orphaned) {

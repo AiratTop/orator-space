@@ -433,6 +433,10 @@ export async function setAvatar(
   const id = ctx.ports.ids.next();
   const now = ctx.ports.clock.now().toISOString();
 
+  /* The one it replaces, read before anything is written: after the update it is unfindable. */
+  const existing = await ctx.ports.principals.findById(actor.principalId);
+  const previous = existing?.avatarMediaId ?? null;
+
   await ctx.ports.db.commit([
     ctx.ports.media.insert({
       id,
@@ -467,17 +471,45 @@ export async function setAvatar(
       finalizedAt: now,
     }),
     /*
-     * The old picture is not deleted here.
+     * The old picture is detached here and deleted later (§23.4).
      *
-     * §23.3 refcounts before removing bytes, and an avatar may be referenced by a cached page,
-     * an article's preview or nothing at all — deciding that on the spot, on a request a person
-     * is waiting on, is how the wrong object gets removed. Retention already sweeps media that
-     * nothing points at.
+     * Not deleted on the spot: a picture that stopped being somebody's a moment ago is still
+     * named by pages held in browsers and at the edge (§33.2), and by any link preview built
+     * while it was current. Marking it is what makes it collectable at all — the collector
+     * acts on records the platform detached rather than on records it cannot see a reference
+     * to, because an article body can name a picture in Markdown where no column does.
      */
+    ...(previous === null ? [] : [ctx.ports.media.markDetached(previous, now)]),
     ctx.ports.principals.updateProfile(actor.principalId, { avatarMediaId: id }, now),
   ]);
 
   return ok({ mediaId: id });
+}
+
+/**
+ * Takes the picture down, and puts the generated mark back (SPEC §49.4, §23.4).
+ *
+ * Two writes in one transaction: the profile stops naming the record, and the record is
+ * marked detached so the collector can have it a day later. Splitting them is how a bucket
+ * ends up holding bytes nobody can reach, or — worse in the other order — a profile pointing
+ * at a record that has been marked for collection.
+ */
+export async function removeAvatar(ctx: AvatarContext): Promise<Result<true>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  const principal = await ctx.ports.principals.findById(actor.principalId);
+  if (principal === null) return fail(ErrorType.NotFound, "Principal not found");
+
+  const current = principal.avatarMediaId ?? null;
+  if (current === null) return ok(true);
+
+  const now = ctx.ports.clock.now().toISOString();
+  await ctx.ports.db.commit([
+    ctx.ports.principals.updateProfile(actor.principalId, { avatarMediaId: null }, now),
+    ctx.ports.media.markDetached(current, now),
+  ]);
+  return ok(true);
 }
 
 /** Small on purpose: it renders at 128 pixels (§21.2), and anything larger is waste in transit. */

@@ -21,6 +21,8 @@ export interface MediaRecord {
   generationMetadata: Record<string, unknown> | null;
   createdAt: string;
   finalizedAt: string | null;
+  /** SPEC §23.4 — when the platform detached it, and the grace period started. */
+  removedAt?: string | null;
 }
 
 export interface NewMedia {
@@ -61,21 +63,31 @@ export interface MediaRepo {
   listStalePending(cutoff: string, limit: number): Promise<string[]>;
 
   /**
-   * `ready` media that nothing points at any more (SPEC §23.4, §32).
+   * Media the platform has detached, ready to be collected (SPEC §23.4, §32).
    *
-   * §32 already assumes "the Cron handler that collects orphaned objects"; there was none.
-   * Only `pending` records were collected, so every replaced or removed avatar left its
-   * original and its variants in the bucket, referenced by nothing and paid for forever.
+   * Not "media nothing references". That was the first version and it was unsafe: an article
+   * body renders images (§57.1), so an author can embed a media address in Markdown where no
+   * column names it, and inferring "unused" from the absence of a reference would have
+   * deleted the picture out of a published article a day later.
    *
-   * The cutoff is a grace period rather than a nicety: an avatar cleared a minute ago is
-   * still named by pages in browsers and at the edge (§33.2), and by any link preview built
-   * while it was current. A day is longer than every one of those.
+   * Collection follows an act instead. Something detached this record — an avatar replaced or
+   * removed — and said so by marking it. An upload nobody ever attached is not collected: it
+   * is the owner's, it is charged against their quota, and it may be about to be used.
    *
-   * The reference check is a join, not a refcount column. §23.3's ordering rule is about
-   * `content/*`, where one object is addressed by hash and may belong to several revisions;
-   * media is keyed by its own id, so "referenced" is exactly "some row names this id".
+   * The cutoff is measured from the detachment, not the upload, and is a grace period rather
+   * than a nicety: a picture detached a minute ago is still named by pages held in browsers
+   * and at the edge (§33.2).
    */
-  listOrphaned(cutoff: string, limit: number): Promise<string[]>;
+  listCollectable(cutoff: string, limit: number): Promise<string[]>;
+
+  /**
+   * Marks a record as no longer anybody's (§23.4).
+   *
+   * Written in the same transaction as whatever stopped pointing at it, so a record cannot be
+   * detached without the pointer going, or the reverse.
+   */
+  markDetached(id: string, at: string): PendingWrite;
+
   deleteRecords(ids: readonly string[]): PendingWrite;
 }
 
