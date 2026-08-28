@@ -1656,6 +1656,15 @@ transcoding and §59.2 already caps a file at 50 MB, so nothing that was reachab
 unreachable. If large media ever matters, a presigned path is added as a second door, with
 its own ADR — it does not have to be the only door now.
 
+**MUST NOT — media is not deduplicated by content hash, unlike article bodies.** A revision's
+bytes live under their own hash (§16.2) and are shared; a media record's objects live under
+that record's id and are not. Asked and decided on 2026-08-28. Sharing one object between two
+records would recreate §23.3's refcount problem where it does not exist today — the collector
+(§23.4) is a join, not a count — and would mean one person's erasure could destroy another
+person's picture. The checksum is recorded on every record, so the option stays open: if
+storage ever justifies it, the safe form is deduplication *within one owner*, which is the
+case that actually occurs and creates none of the above.
+
 ### 21.2. Transformations are a platform concern, not Orator's
 
 **MUST NOT.** No in-house resize or transcode pipeline is implemented in Workers.
