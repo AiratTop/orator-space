@@ -245,7 +245,14 @@ const when = (iso: string) => iso.slice(0, 10);
 <Layout
   title="Settings"
   canonicalPath="/settings"
-  refreshAfter={tab === "telegram" && telegramLink !== null ? 5 : null}
+  {/*
+    §9.3 — the Telegram tab watches for a connection made elsewhere.
+
+    While the chat is unconnected, because the connecting now happens in another tab and this
+    one has no other way to learn of it. Ten seconds rather than five: nothing here is urgent,
+    and the attribute disappears the moment there is a connection to show.
+  */}
+  refreshAfter={tab === "telegram" && telegram === null && telegramBot !== null ? 10 : null}
 >
   <main id="main" class="wrap settings">
     <h1 class="title">Settings</h1>
@@ -518,7 +525,16 @@ const when = (iso: string) => iso.slice(0, 10);
                   here to read.
                 </p>
 
-                <form method="post" action={here} class="issue__form">
+                {/*
+                  Into a new tab, so this page survives the trip (§9.3).
+                  
+                  The button answers with a redirect into the chat, and in the same tab that
+                  replaced the settings page with Telegram — somebody who then wanted to check
+                  the result had to navigate back to find it. `target` on the form sends the
+                  redirect somewhere else and leaves this page where it was; the tab below
+                  watches for the connection while it waits.
+                */}
+                <form method="post" action={here} class="issue__form" target="_blank">
                   <input type="hidden" name="action" value="telegram.link" />
                   <button class="button" type="submit">Connect Telegram</button>
                 </form>
