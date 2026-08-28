@@ -35,6 +35,12 @@ jobs:
         run: pnpm boundaries
       - name: skills
         run: pnpm skills
+      # §53 — the published description of the API, checked against the schemas it is
+      # generated from. `pnpm check` has run this since it existed and this workflow lists
+      # its steps by hand, so a stale docs/openapi.json passed CI for as long as both have
+      # been true.
+      - name: openapi
+        run: pnpm openapi:check
       - name: schema
         run: pnpm schema
       - name: test

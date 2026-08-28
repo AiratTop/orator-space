@@ -792,8 +792,19 @@ guarantee.
 **MUST** be supported:
 
 - Passkeys / WebAuthn — the primary method;
-- an email magic link — secondary;
+- a second channel, for recovery and for reaching a person who is not at the site — **a
+  Telegram bot** (§9.3), with email as a later addition through Cloudflare Email Sending
+  (§80.13);
 - OAuth providers — MAY, as needed.
+
+**A correction, 2026-08-28.** This said "an email magic link — secondary" and nothing
+implemented it, which made it the second `MUST` in this document with no code behind it —
+the first, §60.2, silently emptied the entire sitemap. The requirement is now the *channel*
+rather than the *transport*: what a person needs is a way back into an account whose passkey
+is on a lost device, and a way to be told that something happened to their work (§61.2). A
+Telegram bot reaches both without a mail provider, without deliverability, and without the
+recovery path that phishing has spent twenty years learning to imitate. Email is not refused;
+it is second in line, and §80.13 already says the provider is chosen when something sends.
 
 **MUST — registering from a browser writes nothing until the passkey exists.** The obvious
 order is to create the principal, hand back a credential and attach a passkey afterwards,
@@ -901,6 +912,44 @@ POST   /v1/auth/logout
 GET    /v1/auth/credentials
 DELETE /v1/auth/credentials/{id}
 ```
+
+### 9.3. The Telegram bot
+
+**MUST.** The second channel is a Telegram bot (`@orator_space_bot`), running as a webhook on
+a Worker. It does three things, in the order they are worth building:
+
+```text
+link      a signed-in person connects their Telegram account to their principal
+notify    what §61.2 and §20.5 already say, delivered to a person who is not at the site
+sign in   a one-time link, sent into a chat this platform has already authenticated
+```
+
+**Rationale.** A platform that removes somebody's article and tells them through an event
+feed has told nobody. A platform whose only credential is a passkey on one device has no
+answer when that device is lost. Both need a channel; email needs a provider, a domain
+reputation and a recovery flow shaped exactly like the one phishing imitates. Telegram
+authenticates the person on its side, delivers instantly, and costs a webhook.
+
+**MUST — the webhook verifies `X-Telegram-Bot-Api-Secret-Token` before reading the body.**
+The endpoint is public by necessity, and an update is a statement about who somebody is. An
+unverified webhook lets anybody claim any Telegram identity, which is the whole of the
+security of this feature.
+
+**MUST — linking is a nonce the platform issues, never an identifier the caller supplies.**
+The signed-in page issues a single-use, short-lived nonce and shows a deep link carrying it;
+the bot receives `/start {nonce}` together with the Telegram user id, and the binding is made
+only if the nonce is unused and unexpired. Nothing accepts a Telegram id from a browser: a
+client-supplied identity is a claim, and this one would be a claim to somebody's account.
+
+**MUST — one Telegram account links to one principal.** Otherwise a chat receives the
+notifications of several accounts and can act for any of them, which is an account-sharing
+mechanism nobody asked for.
+
+**MUST NOT — the bot token in the repository.** A Worker secret, like every other credential
+(§57.5). The webhook is registered out of band by an operator.
+
+**MUST — unlinking is available and immediate**, and it is the first thing a person needs
+when a device or an account changes hands (§23.5).
 
 ## 10. Authorship and disclosure of origin
 
