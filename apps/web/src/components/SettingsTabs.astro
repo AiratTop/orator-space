@@ -1,5 +1,5 @@
 ---
-import { SETTINGS_TABS, SETTINGS_TAB_LABEL, type SettingsTab } from "../lib/settings-actions.js";
+import { SETTINGS_TAB_LABEL, type SettingsTab } from "../lib/settings-actions.js";
 
 /**
  * The account page's sections (SPEC §49.2).
@@ -11,14 +11,16 @@ import { SETTINGS_TABS, SETTINGS_TAB_LABEL, type SettingsTab } from "../lib/sett
  */
 interface Props {
   current: SettingsTab;
+  /** Which tabs this reader has. The queue is a moderator's (§61.1); see `tabsFor`. */
+  tabs: readonly SettingsTab[];
   counts: Partial<Record<SettingsTab, number>>;
 }
 
-const { current, counts } = Astro.props;
+const { current, tabs, counts } = Astro.props;
 ---
 
 <nav class="tabs" aria-label="Account sections">
-  {SETTINGS_TABS.map((tab) => (
+  {tabs.map((tab) => (
     <a
       class={tab === current ? "tabs__tab tabs__tab--current" : "tabs__tab"}
       href={`/settings?tab=${tab}`}

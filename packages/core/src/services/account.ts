@@ -55,20 +55,35 @@ export interface AccountView {
 }
 
 /**
- * The actor a browser session stands for (SPEC §9.1, §42.2).
+ * The actor a browser session stands for (SPEC §9.1, §42.2, §61.1).
  *
- * `OWNER_PRESET`, which is what the account's own first token carries — a session can do
- * what its owner can do and nothing more. Deliberately not the admin scopes: `issueToken`
- * refuses to mint a scope its issuer lacks, so this is also the ceiling on every token a
- * page can create, and an admin scope reachable from a cookie would be an admin scope
- * reachable from a link somebody clicked.
+ * `OWNER_PRESET` — what the account's own first token carries, so a session can do what its
+ * owner can do and nothing more.
+ *
+ * **Plus `admin:moderate` for a moderator, which reverses an earlier decision here.** This
+ * withheld every admin scope from a session on the reasoning that "an admin scope reachable
+ * from a cookie is an admin scope reachable from a link somebody clicked". That reasoning
+ * was about CSRF and it is answered elsewhere and better: the session cookie is
+ * `SameSite=Lax` and every write from a page is refused without a matching `Origin` (§57.3).
+ * What it actually achieved was a moderator who could sign in, see §61.1's queue, and be
+ * refused by it — an obligation with a surface that does not work, which is worse than one
+ * with no surface at all.
+ *
+ * The escalation guard it was standing in for is real and stays where it belongs:
+ * `issueToken` refuses to mint an admin scope unless the issuer is an administrator, so a
+ * moderator's session still cannot produce an admin-scoped token. That check does the work,
+ * and it does it in one place rather than by leaving the actor quietly incomplete.
+ *
+ * `admin:manage` is not granted. Whatever it comes to gate, it is not §61.1's queue, and a
+ * scope handed out because it was adjacent is how a role stops meaning anything.
  */
 export function sessionActor(principal: PrincipalRecord): Actor {
+  const moderating = principal.platformRole === "moderator" || principal.platformRole === "admin";
   return {
     principalId: principal.id,
     kind: principal.kind,
     platformRole: principal.platformRole,
-    scopes: OWNER_PRESET as readonly Scope[],
+    scopes: (moderating ? [...OWNER_PRESET, "admin:moderate"] : OWNER_PRESET) as readonly Scope[],
     status: principal.status,
     trustLevel: principal.trustLevel ?? 1,
     systemAccount: principal.systemAccount,

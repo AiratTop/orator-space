@@ -143,6 +143,31 @@ export interface CommentContext extends Omit<RequestContext, "ports"> {
   ports: CommentPorts;
 }
 
+/**
+ * The slice moderation needs (SPEC §61.1, §28).
+ *
+ * §61.1 requires a review queue "available to moderators", and until now it existed only as
+ * a REST endpoint — a moderator worked by hand with curl, which is an obligation with no
+ * surface and therefore an obligation nobody meets.
+ *
+ * The narrowing is the interesting part. `articles` is four methods and none of them writes
+ * a revision: a moderator may unpublish, tombstone or de-index somebody's article, and may
+ * not rewrite it. That is exactly the authority §61.1 grants, expressed as what the surface
+ * can reach rather than as a rule it is asked to follow.
+ */
+export type ModerationPorts = Pick<
+  Ports,
+  "db" | "principals" | "moderation" | "audit" | "outbox" | "events" | "clock" | "ids"
+> & {
+  articles: Pick<ArticleRepo, "findById" | "setStatus" | "unpublish" | "updateMetadata">;
+  social: Pick<SocialRepo, "findComment" | "setCommentStatus">;
+  media: Pick<MediaRepo, "findById" | "markRejected">;
+};
+
+export interface ModerationContext extends Omit<RequestContext, "ports"> {
+  ports: ModerationPorts;
+}
+
 export interface AccountContext extends Omit<RequestContext, "ports"> {
   ports: AccountPorts;
 }

@@ -11,6 +11,8 @@ import {
   createQuotaGate,
   createReadingRepo,
   createSessionRepo,
+  createMediaRepo,
+  createModerationRepo,
   createSocialRepo,
   createEventRepo,
   createTokenRepo,
@@ -23,6 +25,8 @@ import {
   type AccountPorts,
   type CommentContext,
   type CommentPorts,
+  type ModerationContext,
+  type ModerationPorts,
   type PrincipalRecord,
 } from "@orator/core";
 import { authPorts } from "./auth.js";
@@ -139,4 +143,49 @@ export const commentPorts: CommentPorts = {
 
 export function commentContext(request: Request, principal: PrincipalRecord): CommentContext {
   return { ...accountContext(request, principal), ports: commentPorts };
+}
+
+
+/**
+ * What a moderator may reach from a browser (SPEC §61.1, §28).
+ *
+ * §61.1 requires a review queue available to moderators, and it has existed only as a REST
+ * endpoint — which means the obligation was met by a person willing to use curl. This is the
+ * same set of operations behind a page.
+ *
+ * `articles` is four methods, and none of them writes a revision. A moderator may unpublish,
+ * tombstone or de-index somebody's article and may not rewrite it, which is exactly the
+ * authority §61.1 grants — expressed as what this surface can reach rather than as a rule it
+ * is trusted to follow.
+ */
+export const moderationPorts: ModerationPorts = {
+  db: accountPorts.db,
+  principals: accountPorts.principals,
+  moderation: createModerationRepo(accountEnv.DB),
+  audit: accountPorts.audit,
+  outbox: accountPorts.outbox,
+  events: createEventRepo(accountEnv.DB),
+  articles: (() => {
+    const repo = createArticleRepo(accountEnv.DB);
+    return {
+      findById: repo.findById,
+      setStatus: repo.setStatus,
+      unpublish: repo.unpublish,
+      updateMetadata: repo.updateMetadata,
+    };
+  })(),
+  social: (() => {
+    const repo = createSocialRepo(accountEnv.DB);
+    return { findComment: repo.findComment, setCommentStatus: repo.setCommentStatus };
+  })(),
+  media: (() => {
+    const repo = createMediaRepo(accountEnv.DB);
+    return { findById: repo.findById, markRejected: repo.markRejected };
+  })(),
+  clock: systemClock,
+  ids,
+};
+
+export function moderationContext(request: Request, principal: PrincipalRecord): ModerationContext {
+  return { ...accountContext(request, principal), ports: moderationPorts };
 }

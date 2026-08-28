@@ -144,7 +144,7 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
  * server-rendered pattern the profile already uses, not a widget: plain links, a query
  * parameter, and no state anywhere but the URL.
  */
-export const SETTINGS_TABS = ["agents", "tokens", "sessions", "profile"] as const;
+export const SETTINGS_TABS = ["agents", "tokens", "sessions", "profile", "moderation"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const isSettingsTab = (value: string): value is SettingsTab =>
@@ -164,4 +164,18 @@ export const SETTINGS_TAB_LABEL: Record<SettingsTab, string> = {
   tokens: "Tokens",
   sessions: "Sessions",
   profile: "Profile",
+  moderation: "Queue",
 };
+
+/**
+ * The tabs a given reader is shown (SPEC §61.1, §43.3).
+ *
+ * The queue is a moderator's, and it is absent rather than disabled for everybody else: a
+ * tab that exists and refuses is an invitation to find out what is behind it, and the
+ * service refuses anyway. Both, because a hidden control is not an access decision — the
+ * decision lives in `moderatorOnly`, and this only keeps the page honest about it.
+ */
+export const tabsFor = (role: string): readonly SettingsTab[] =>
+  role === "moderator" || role === "admin"
+    ? SETTINGS_TABS
+    : SETTINGS_TABS.filter((tab) => tab !== "moderation");

@@ -229,3 +229,48 @@ describe("sessions", () => {
     expect(unwrap(await accountView(ctx, null)).sessions).toEqual([]);
   });
 });
+
+/**
+ * SPEC §61.1, §42.2 — what a moderator's session may and may not do.
+ *
+ * Found by opening the page: a moderator could sign in, reach §61.1's queue and be refused
+ * by it, because `canModerate` wants `admin:moderate` and a session carried none. An
+ * obligation with a surface that does not work is worse than one with no surface.
+ */
+describe("a moderator's session", () => {
+  const asRole = async (role: "user" | "moderator" | "admin") => {
+    const registered = unwrap(await registerHuman(contextFor(null), { username: `who-${role}` }));
+    const principal = (await ports.principals.findById(registered.principalId))!;
+    return sessionActor({ ...principal, platformRole: role });
+  };
+
+  it("carries admin:moderate, so the queue it is shown actually answers", async () => {
+    expect((await asRole("moderator")).scopes).toContain("admin:moderate");
+    expect((await asRole("admin")).scopes).toContain("admin:moderate");
+  });
+
+  it("and an ordinary account's does not", async () => {
+    expect((await asRole("user")).scopes).not.toContain("admin:moderate");
+  });
+
+  it("but never admin:manage, which §61.1's queue does not need", async () => {
+    // A scope handed out because it was adjacent is how a role stops meaning anything.
+    expect((await asRole("admin")).scopes).not.toContain("admin:manage");
+  });
+
+  it("and cannot mint an admin-scoped token, because that guard is elsewhere", async () => {
+    const registered = unwrap(await registerHuman(contextFor(null), { username: "mod-issuer" }));
+    const principal = (await ports.principals.findById(registered.principalId))!;
+    const ctx = contextFor(sessionActor({ ...principal, platformRole: "moderator" }));
+
+    const issued = await issueToken(ctx, {
+      principalId: registered.principalId,
+      name: "wide",
+      scopes: ["admin:moderate"],
+    });
+
+    // §42.2 — only an administrator may grant an admin scope. That check does the work the
+    // incomplete actor was standing in for, and does it in one place.
+    expect(errorOf(issued)).toBe(ErrorType.Forbidden);
+  });
+});

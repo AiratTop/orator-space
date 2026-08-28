@@ -481,6 +481,36 @@ const publish = await fetch(`${webBase}/settings`, {
 const publishBody = await publish.text();
 check("an action the dispatcher does not know is refused", /Unknown action/.test(publishBody));
 
+// --- the queue somebody else's account may not reach ------------------------------------
+section("The review queue (§61.1, §43.3)");
+
+const ordinary = await page("/settings");
+check(
+  "an ordinary account is not offered the queue",
+  !ordinary.html.includes("tab=moderation"),
+);
+
+const asked = await page("/settings?tab=moderation");
+check(
+  "and asking for it by hand lands on the account rather than on somebody's reports",
+  asked.status === 200 && !asked.html.includes("Review queue"),
+  String(asked.status),
+);
+
+/*
+ * The page hiding a tab is not the access decision, and the checkpoint says so.
+ *
+ * §61.1's `moderatorOnly` refuses in the service, which is where it has to be — a control
+ * that is merely absent from a page is absent from that page. This asserts the second lock
+ * by asking the API the same question with the same account.
+ */
+const reportsByApi = await api("GET", "/v1/moderation/reports", { token: workingToken });
+check(
+  "and the API refuses the same account, which is where the rule lives",
+  reportsByApi.status === 403 || reportsByApi.status === 401,
+  String(reportsByApi.status),
+);
+
 // --- sessions --------------------------------------------------------------------------
 section("Sessions (§9.1)");
 

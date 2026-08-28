@@ -9,7 +9,14 @@ import type {
 } from "../ports/index.js";
 import { canModerate } from "../identity/authz.js";
 import { HEURISTIC_PROVIDER, screen, type ModerationVerdict } from "../moderation/heuristics.js";
-import { fail, ok, type Ports, type RequestContext, type Result } from "./context.js";
+import {
+  fail,
+  ok,
+  type ModerationContext,
+  type Ports,
+  type RequestContext,
+  type Result,
+} from "./context.js";
 
 /**
  * Report intake (SPEC §61).
@@ -33,7 +40,7 @@ const FLOOD_WINDOW_MS = 60 * 60 * 1000;
 const FLOOD_LIMIT = 20;
 
 export async function createReport(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   input: CreateReportInput,
 ): Promise<Result<{ id: OratorId; status: "open"; createdAt: string }>> {
   /**
@@ -115,7 +122,7 @@ export async function createReport(
  * write arbitrary data into the database from an unauthenticated endpoint.
  */
 async function targetExists(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   targetType: CreateReportInput["targetType"],
   targetId: string,
 ): Promise<boolean> {
@@ -178,7 +185,7 @@ export interface ActionInput {
 
 /** SPEC §61.1 — the queue, to a moderator and to nobody else. */
 export async function listReports(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   options: { status?: ReportStatus | null; limit?: number; after?: string | null } = {},
 ): Promise<Result<{ items: ReportRecord[]; nextCursor: string | null }>> {
   const gate = moderatorOnly(ctx);
@@ -199,7 +206,7 @@ export async function listReports(
 
 /** Claims a report for review, or closes it without acting (SPEC §61.1). */
 export async function reviewReport(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   input: ReviewInput,
 ): Promise<Result<{ id: string; status: ReportStatus }>> {
   const gate = moderatorOnly(ctx);
@@ -246,7 +253,7 @@ export async function reviewReport(
  * sites that each remembered two of them is how one gets forgotten.
  */
 export async function applyModerationAction(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   input: ActionInput,
 ): Promise<Result<{ id: OratorId; action: ModerationActionKind; targetId: string }>> {
   const gate = moderatorOnly(ctx);
@@ -357,7 +364,7 @@ export async function listModerationActions(
 
 // --- the parts the three above share ----------------------------------------
 
-function moderatorOnly(ctx: RequestContext): Result<true> {
+function moderatorOnly(ctx: ModerationContext): Result<true> {
   const actor = ctx.actor;
   if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
   const decision = canModerate(actor);
@@ -374,7 +381,7 @@ function moderatorOnly(ctx: RequestContext): Result<true> {
 }
 
 const journalAction = (
-  ctx: RequestContext,
+  ctx: ModerationContext,
   action: string,
   targetType: string,
   targetId: string,
@@ -403,7 +410,7 @@ interface Subject {
 }
 
 async function resolveTarget(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   targetType: ActionInput["targetType"],
   targetId: string,
 ): Promise<Subject | null> {
@@ -437,7 +444,7 @@ async function resolveTarget(
  * that a warning is on the record before an escalation is.
  */
 async function stateChange(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   input: ActionInput,
   now: string,
 ): Promise<Result<PendingWrite[]>> {
@@ -494,7 +501,7 @@ async function stateChange(
 
 /** The inverse of an action, for `restore`. */
 async function undo(
-  ctx: RequestContext,
+  ctx: ModerationContext,
   last: ModerationActionRecord,
   targetType: string,
   targetId: string,
