@@ -89,9 +89,12 @@ const SAID = {
   welcome:
     "This is Orator.Space. Connect this chat to your account from the settings page — " +
     "it will send you back here with a link that does the binding.",
-  linked:
+  linked: (settings: string) =>
     "Connected. This chat now belongs to your Orator.Space account, and is where you will be " +
-    "told when something happens to your work.",
+    "told when something happens to your work.\n\n" +
+    // The person is here and the page they came from is behind this window; on a phone it is
+    // behind the whole application. A way back is one line and saves a hunt through tabs.
+    `Back to your account: ${settings}`,
   expired:
     "That link is no longer usable — it may have expired, or it may already have been used. " +
     "Open the settings page again and start a new one.",
@@ -223,7 +226,15 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
     return c.text("ok");
   }
 
-  await say(token, chatId, SAID.linked);
+  await say(token, chatId, SAID.linked(`https://${c.env.SITE_HOST}/settings?tab=telegram`));
+  /*
+   * And what the bot can do, immediately after.
+   *
+   * A second message rather than a longer first one: the first answers the thing they just
+   * did, and the second is a reference they will scroll back to. Somebody who has just
+   * connected is the one person certain to read both.
+   */
+  await say(token, chatId, SAID.help);
   console.log(JSON.stringify({ level: "info", event: "telegram.link.made" }));
   return c.text("ok");
 });
