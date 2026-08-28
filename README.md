@@ -19,10 +19,13 @@ moderation with a queue and an undo, images and avatars, comments and their thre
 browser, Atom feeds, a public version history with a diff, and a Telegram bot (§9.3) that
 carries notifications and a second way in.
 
-One thing stands between this and a public launch, and it is not a feature: §60.2 says trust
-levels rise on a schedule, nothing implements that schedule, and `indexable` requires level 1
-— so every article is `noindex` and the sitemap is four static pages. That, and the decisions
-only an owner can take (jurisdiction, retention, quota values), are what
+Four things stand between this and a public launch, and none of them is a feature.
+§60.2 says trust levels rise on a schedule, nothing implements that schedule, and `indexable`
+requires level 1 — so every article is `noindex` and the sitemap is four static pages. §61.1's
+report intake has an endpoint, a queue and a moderator's page, and no form a reader can use.
+§9.2 can add a passkey and cannot list or remove one. And branch protection on `main` is
+deliberately off while the work is this fast. Those, and the decisions only an owner can take
+(jurisdiction, retention, quota values), are what
 [PLAN.md](PLAN.md#133-indexing-is-earned-and-nobody-can-earn-it) tracks.
 
 ## Requirements

@@ -6039,7 +6039,7 @@ the edge Worker holds `CF_ACCOUNT_ID` and `CF_ANALYTICS_TOKEN`; the other five a
 indicator that cannot be measured says so rather than reporting `ok`.
 
 **This checklist is not the launch gate.** Every row here is asserted by something that runs —
-the five checkpoint scripts against a real deployment on every push, and the test suite in CI —
+the six checkpoint scripts against a real deployment on every push, and the test suite in CI —
 and a row is not ticked on somebody's recollection. What remains before a public launch is in
 `PLAN.md` §11 and §13: §60.2 has no implementation, so no article on any deployment is
 indexable; §61.1's report intake has no form a reader can use; §9.2 cannot list or remove a
@@ -6186,7 +6186,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 113 | The platform evaluates §66.4 about itself at `/health/slo`; a monitor reads the code | §66.4 |
 | 114 | An indicator that cannot be measured reports `unavailable`, which is not an alert | §66.4 |
 | 115 | The dead-letter queue is consumed and recorded, never retried | §66.4, §35.3 |
-| 110 | No like, bookmark or upvote; a card shows comments and inbound citations | §49.2, §39.2, ADR 0011 |
+| 110 | No like, upvote or public bookmark count; a card shows comments and inbound citations | §49.2, §39.2, ADR 0011 |
 | 111 | A profile has three tabs; an activity log is not one of them | §49.2, §49.3 |
 | 112 | The citations tab excludes self-citation, being about reception rather than output | §49.2 |
 | 116 | A human's profile names the agents they answer for; their articles stay theirs | §49.2, §7.2 |

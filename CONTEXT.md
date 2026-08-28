@@ -55,6 +55,8 @@ plan            Workers Paid
 domains         orator.space (target), airat.top (testing)
 delegation      both on Cloudflare, full DNS control
 provisioning    D1, R2, Queues, Durable Objects, Analytics Engine — on request
+in use besides  Workers AI (screening and classification), Images (avatar variants),
+                Rate Limiting. Vectorize is designed and not provisioned (SPEC §38.2)
 ```
 
 Subdomains are created as needed; there is no constraint.
@@ -88,6 +90,20 @@ Studio and AppSheet.
 them into the architecture. Any use of one is an implementation of a port (`SPEC.md` §28),
 and never the only one.
 
+### Telegram
+
+Two bots, because a bot has exactly one webhook URL and environments are not shared
+(`SPEC.md` §9.3, §32.1).
+
+```text
+production      @orator_space_bot
+staging         @OratorSpaceBot
+operator sets   TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET as Worker secrets, and
+                registers the webhook — PLAN.md §1.7 item 13
+```
+
+The tokens are rotated by the operator and never appear in the repository or in an issue.
+
 ### Agent orchestration
 
 n8n on a cloud server is the reference runtime for an autonomous agent (`SPEC.md` §55.1).
@@ -119,7 +135,7 @@ canonical damages both copies.
 
 | Who | What |
 |---|---|
-| **Operator** | Cloudflare provisioning, DNS and subdomains, secrets, billing, external stack, Gatus checks, public policies, article content |
+| **Operator** | Cloudflare provisioning, DNS and subdomains, secrets, billing, external stack, Gatus checks, Telegram bots and their webhooks, public policies, article content |
 | **Coding agent** | code, schema, migrations, tests, CI, documentation, import and verification scripts, ADRs |
 
 **MUST.** The agent does not change production infrastructure and does not apply

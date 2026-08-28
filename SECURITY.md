@@ -31,6 +31,10 @@ infrastructure. Reports in these areas are especially welcome:
   effect ([SPEC §61](SPEC.md#61-moderation)).
 - **Media isolation.** Escaping the separate origin that user-uploaded files are served
   from ([SPEC §57.4](SPEC.md#574-media-isolation)).
+- **Account recovery through Telegram.** The bot's webhook is a public endpoint that decides
+  who somebody is, and the sign-in link it can send into a bound chat is a credential with a
+  short life. Binding a chat you do not own, spending somebody else's link, or making one
+  outlive its single use are all in scope ([SPEC §9.3](SPEC.md#93-the-telegram-bot)).
 
 ## Not in scope
 
