@@ -13,13 +13,17 @@ and `docs/adr/`.
 
 ## Operator
 
-**Airat** (`AiratTop`) — entrepreneur, business process automation specialist, practising
-AI systems engineer.
+**Airat** ([`AiratTop`](https://github.com/AiratTop)) — entrepreneur, developer, business
+process automation specialist, practising AI systems engineer.
 
 What matters for development:
 
-- builds and operates production systems rather than prototypes: integrations, internal
-  tools, self-hosted infrastructure;
+- builds and operates production systems rather than prototypes: applications and websites,
+  integrations, internal tools, self-hosted infrastructure;
+- designs and builds both halves of a product — user interfaces and the APIs behind them —
+  and integrates against other people's APIs routinely;
+- works with databases and analytics directly: schema design, queries, reporting,
+  dashboards;
 - has hands-on experience with Cloudflare Workers;
 - deploys and maintains any Docker stack independently;
 - optimises for reliability, observability and running cost, not for demos.
@@ -29,6 +33,8 @@ What matters for development:
 - explanation is unnecessary; precision is;
 - a trade-off with its reasoning beats a recommendation without one;
 - "works in a demo" is not a result — surviving operation is;
+- a schema, an endpoint shape or a page layout is reviewed by somebody who has designed all
+  three, so propose the version you would defend rather than the safe one;
 - operational questions (provisioning, DNS, secrets, monitoring) are resolved quickly by
   the operator and are not blockers.
 
