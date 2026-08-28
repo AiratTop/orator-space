@@ -49,4 +49,31 @@ export interface TelegramRepo {
 
   /** §23.4 — nonces are swept rather than deleted on use, so a second attempt can be told. */
   deleteLinksBefore(cutoff: string, limit: number): Promise<number>;
+
+  /**
+   * Private events with a chat to deliver them to, not yet delivered (§61.2, §20.5).
+   *
+   * The audience of an event may be an agent, and an agent has no Telegram — §9.1 opens a
+   * session with a passkey and agents hold tokens. The recipient is therefore the agent's
+   * owner, which is not a workaround: §7.2 makes that person accountable for what the agent
+   * publishes, so they are exactly who should hear that it was answered or acted on.
+   *
+   * Bounded by a cutoff as well as a limit. A notification about something from last week is
+   * noise, and without the window switching this on would deliver the whole history at once.
+   */
+  listPendingNotifications(cutoff: string, limit: number): Promise<PendingNotification[]>;
+  markDelivered(eventId: string, at: string): PendingWrite;
+}
+
+/** One thing to say, and where to say it (§9.3). */
+export interface PendingNotification {
+  eventId: OratorId;
+  type: string;
+  chatId: string;
+  /** The principal the chat belongs to — the audience, or the audience's owner. */
+  recipientPrincipalId: OratorId;
+  subjectType: string;
+  subjectId: string;
+  payload: Record<string, unknown> | null;
+  createdAt: string;
 }

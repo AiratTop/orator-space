@@ -21,3 +21,4 @@ export * from "./classification.js";
 export * from "./reading-list.js";
 export * from "./topics.js";
 export * from "./telegram.js";
+export * from "./notifications.js";

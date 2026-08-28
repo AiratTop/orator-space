@@ -100,6 +100,7 @@ export interface MemoryState {
   moderationActions: ModerationActionRecord[];
   telegramAccounts: Map<string, TelegramAccount>;
   telegramLinks: Map<string, TelegramLink>;
+  telegramDeliveries: Map<string, string>;
   media: Map<string, MediaRecord>;
   /** The bytes, keyed the same way the R2 adapter keys them. */
   mediaBytes: Map<string, Uint8Array>;
@@ -152,6 +153,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     moderationActions: [],
     telegramAccounts: new Map(),
     telegramLinks: new Map(),
+    telegramDeliveries: new Map(),
     sitemapShards: new Map(),
     assets: new Map(),
     media: new Map(),
@@ -211,6 +213,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         moderationActions: [...state.moderationActions],
         telegramAccounts: new Map(state.telegramAccounts),
         telegramLinks: new Map(state.telegramLinks),
+        telegramDeliveries: new Map(state.telegramDeliveries),
         media: new Map(state.media),
         mediaBytes: new Map(state.mediaBytes),
         articleTopics: new Map(state.articleTopics),
@@ -1624,6 +1627,42 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
     upsertAccount: (account) => asWrite(() => void state.telegramAccounts.set(account.principalId, account)),
     deleteAccount: (principalId) => asWrite(() => void state.telegramAccounts.delete(principalId)),
+    async listPendingNotifications(cutoff, limit) {
+      const delivered = state.telegramDeliveries;
+      return state.events
+        .filter(
+          (event) =>
+            event.visibility === "private" &&
+            event.audiencePrincipalId !== null &&
+            event.audiencePrincipalId !== undefined &&
+            event.createdAt > cutoff &&
+            !delivered.has(event.id),
+        )
+        .flatMap((event) => {
+          // §7.2 — an agent has no Telegram; its owner is the person accountable for it.
+          const audience = state.principals.get(event.audiencePrincipalId!);
+          const recipientId = audience?.ownerPrincipalId ?? audience?.id;
+          const account = recipientId === undefined ? undefined : state.telegramAccounts.get(recipientId);
+          return account === undefined
+            ? []
+            : [
+                {
+                  eventId: event.id,
+                  type: event.type,
+                  chatId: account.chatId,
+                  recipientPrincipalId: account.principalId,
+                  subjectType: event.subjectType,
+                  subjectId: event.subjectId,
+                  payload: (event.payload ?? null) as Record<string, unknown> | null,
+                  createdAt: event.createdAt,
+                },
+              ];
+        })
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .slice(0, limit);
+    },
+    markDelivered: (eventId, at) => asWrite(() => void state.telegramDeliveries.set(eventId, at)),
+
     async deleteLinksBefore(cutoff, limit) {
       let deleted = 0;
       for (const [nonce, link] of [...state.telegramLinks.entries()]) {

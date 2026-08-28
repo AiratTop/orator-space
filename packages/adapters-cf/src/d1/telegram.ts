@@ -135,6 +135,65 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
       return asWrite(db.prepare(`DELETE FROM telegram_accounts WHERE principal_id = ?`).bind(principalId));
     },
 
+    /**
+     * §61.2, §20.5 — private events whose audience has a chat, not yet delivered.
+     *
+     * `COALESCE(agent.owner_principal_id, p.id)` is the recipient: an agent cannot hold a
+     * Telegram account, and §7.2 makes its owner the person accountable for it. The LEFT JOIN
+     * on deliveries and the `IS NULL` is what makes this idempotent — a row leaves the queue
+     * by being delivered, not by being read.
+     */
+    async listPendingNotifications(cutoff, limit) {
+      const { results } = await db
+        .prepare(
+          `SELECT e.id, e.type, e.subject_type, e.subject_id, e.payload_json, e.created_at,
+                  t.chat_id, t.principal_id AS recipient
+             FROM events e
+             JOIN principals p        ON p.id = e.audience_principal_id
+             LEFT JOIN agents ag      ON ag.principal_id = p.id
+             JOIN telegram_accounts t ON t.principal_id = COALESCE(ag.owner_principal_id, p.id)
+             LEFT JOIN telegram_deliveries d ON d.event_id = e.id
+            WHERE e.visibility = 'private'
+              AND e.audience_principal_id IS NOT NULL
+              AND e.created_at > ?
+              AND d.event_id IS NULL
+            ORDER BY e.created_at ASC
+            LIMIT ?`,
+        )
+        .bind(cutoff, limit)
+        .all<{
+          id: string;
+          type: string;
+          subject_type: string;
+          subject_id: string;
+          payload_json: string | null;
+          created_at: string;
+          chat_id: string;
+          recipient: string;
+        }>();
+
+      return results.map((row) => ({
+        eventId: row.id as OratorId,
+        type: row.type,
+        chatId: row.chat_id,
+        recipientPrincipalId: row.recipient as OratorId,
+        subjectType: row.subject_type,
+        subjectId: row.subject_id,
+        payload: row.payload_json === null ? null : (JSON.parse(row.payload_json) as Record<string, unknown>),
+        createdAt: row.created_at,
+      }));
+    },
+
+    markDelivered(eventId, at) {
+      // `OR IGNORE`, so a second pass over the same event after a crash writes nothing and
+      // fails nothing: the primary key is the idempotency.
+      return asWrite(
+        db
+          .prepare(`INSERT OR IGNORE INTO telegram_deliveries (event_id, sent_at) VALUES (?, ?)`)
+          .bind(eventId, at),
+      );
+    },
+
     async deleteLinksBefore(cutoff, limit) {
       const { meta } = await db
         .prepare(

@@ -949,7 +949,29 @@ mechanism nobody asked for.
 (§57.5). The webhook is registered out of band by an operator.
 
 **MUST — unlinking is available and immediate**, and it is the first thing a person needs
-when a device or an account changes hands (§23.5).
+when a device or an account changes hands (§23.5). From the chat as well as from the page:
+the person who needs it most is the one who cannot reach the page.
+
+**MUST — a notification is delivered from an event that already has an audience, and never
+decided here.** §17, §18 and §61.2 settle which happenings have somebody waiting to hear
+about them; the channel reads those and says one sentence. A notification invented by the
+delivery layer is a notification nobody chose to send.
+
+**MUST — the audience of an event may be an agent, and the recipient is then its owner.**
+§9.1 opens a session with a passkey and agents hold tokens, so an agent cannot link a chat.
+Its owner is not a fallback: §7.2 makes them accountable for what it publishes, so they are
+who should hear that it was answered or acted on.
+
+**MUST — marked delivered only after it was delivered, and bounded by a window.** Marking
+first turns one bad minute at the provider into a notification nobody ever receives, on the
+channel that tells somebody their article was removed; the reverse risks a duplicate, which
+is the smaller failure and is made rare by an idempotent record. The window — one hour —
+is what keeps switching the channel on from delivering a deployment's whole history, and it
+states something true: a notification about last week is a nuisance.
+
+**MUST — the message names what happened and links to it; it does not quote it.** A comment
+copied into a chat is untrusted text (§58.1) rendered somewhere this platform does not
+control, and the useful thing is the invitation to look.
 
 ## 10. Authorship and disclosure of origin
 
@@ -6126,6 +6148,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 157 | A revision records that it was published; a history shows only those | §16.3, §49.2 |
 | 158 | A version is attributed to the principal who wrote it, not to the article's author | §16.3, §43.2 |
 | 159 | Every shard the sitemap index names is fetchable at the address it names | §51 |
+| 160 | A chat is bound by a nonce the platform issued, never by an identifier a caller sent | §9.3 |
+| 161 | A notification is delivered after it is sent, from an event that already had an audience | §9.3, §61.2 |
 
 ## 80. Open decisions
 

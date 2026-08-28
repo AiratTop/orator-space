@@ -32,6 +32,7 @@ import { moderationRoutes } from "./routes/moderation.js";
 import { portsFor } from "./context.js";
 import {
   applyClosureDisposition,
+  deliverNotifications,
   drainOutbox,
   evaluateIndexability,
   evaluateSlo,
@@ -722,6 +723,53 @@ export default {
       const report = await runRetention(ports);
       console.log(JSON.stringify({ level: "info", task: "retention", ...report }));
       return;
+    }
+
+    /*
+     * §9.3, §61.2 — the minute cron also says out loud what the last minute wrote down.
+     *
+     * Beside the outbox drain rather than inside it: the outbox moves the platform's own
+     * events between its parts, and this reads a different question — which of them has a
+     * person at the other end who is not here. A failure in one must not stop the other, so
+     * it is a separate call with its own error handling.
+     */
+    if (env.TELEGRAM_BOT_TOKEN !== undefined) {
+      const token = env.TELEGRAM_BOT_TOKEN;
+      const delivery = await deliverNotifications(
+        { telegram: ports.telegram, db: ports.db, clock: ports.clock },
+        {
+          async send(chatId, text) {
+            try {
+              const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: false }),
+              });
+              /*
+               * 403 is somebody who blocked the bot, and it is not a failure to retry: they
+               * have said what they want. It counts as delivered so the queue does not carry
+               * their events for an hour.
+               */
+              return response.ok || response.status === 403;
+            } catch (error) {
+              console.error(
+                JSON.stringify({ level: "warn", event: "telegram.notify.failed", error: String(error) }),
+              );
+              return false;
+            }
+          },
+        },
+        { siteOrigin: `https://${env.SITE_HOST}` },
+      ).catch((error: unknown) => {
+        console.error(
+          JSON.stringify({ level: "error", event: "telegram.notify.crashed", error: String(error) }),
+        );
+        return { sent: 0, failed: 0 };
+      });
+
+      if (delivery.sent > 0 || delivery.failed > 0) {
+        console.log(JSON.stringify({ level: "info", task: "telegram.notify", ...delivery }));
+      }
     }
 
     const result = await drainOutbox(ports, 25);
