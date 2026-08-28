@@ -1222,10 +1222,25 @@ duplicate question is a different one that happens to be answerable with the sam
 [ ] an exact-hash check ahead of the expensive one, recorded as `duplicate_of:{id}`
 [ ] every applicable reason recorded, not the first
 [ ] a report raised, so a duplicate reaches the queue a person reads (§61.1)
-[?] the default feed shows one entry per distinct body — needs a decision, see below
+[x] decided: a duplicate leaves the platform's discovery surfaces and keeps its address
 ```
 
-The last one is not a bug fix and should not be slipped in as one. Excluding a published
+**What "hidden" means, precisely.** A duplicate leaves the surfaces the platform curates and
+keeps everything that is somebody's:
+
+```text
+leaves     the feed, topic listings, search results, the sitemap
+keeps      /p/{id}, GET /v1/articles/{id}, its citations and its place in the graph,
+           and its row on its author's own profile
+gains      a line on its own page naming what it duplicates, and a report in the queue
+```
+
+The author's profile is the exception on purpose. That listing is a record of what a person
+published rather than a recommendation the platform is making, and it is where they would go
+to fix it — a duplicate that vanished from there too would be a platform hiding somebody's
+work from them.
+
+This is not a bug fix and should not be slipped in as one. Excluding a published
 article from the default feed is a listing decision of the same class as `indexable` (§50.3)
 and the system account's exclusion (§66.7) — the article keeps its URL, its API
 representation, its citations and its place in the graph, and what it loses is a row in a
@@ -1238,6 +1253,48 @@ failure this whole section is about.
 **The condition to act on this**: the first real author publishing at volume, or the first
 `near_duplicate` verdict nobody can trace to what it duplicated. Before that it is three test
 articles behaving exactly as specified.
+
+### 13.2. The three things `/settings` grew into
+
+Asked for on 2026-08-23, after the account page existed and the moderation queue did not.
+
+**A reading list, and ADR 0011 already left the door open for it.** That ADR declined likes,
+bookmarks and saves — and named this exact exception: *"A reading list under `/settings`,
+never rendered on a cached page. This survives every objection here, and it is deliberately
+not decided by this ADR… It belongs to whichever phase takes up `/settings`, if a reader ever
+asks for it."* A reader has asked. So nothing is reversed: the condition the ADR wrote down
+has been met.
+
+The constraint it set is the whole design. What ADR 0011 refused was a *counter* — a number
+on a card that costs a click to manufacture and reads as a measure of worth. A private
+reading list publishes no number, so the sybil objection does not reach it, and the cache
+objection is already answered elsewhere: §33.2 makes any response carrying a cookie
+`private, no-store`, so a signed-in reader's article page is uncached today. A save control
+on it therefore costs nothing that is not already spent.
+
+```text
+MUST NOT   a count, anywhere — not on a card, not on the article, not in the API
+MUST NOT   a signal that reaches reputation (§39) or ranking
+MUST       private to the reader; nobody else can see that an article was saved
+MUST       never rendered on a page that may be cached publicly
+```
+
+**A moderation queue a person can read.** §61.1 requires a review queue "available to
+moderators" and it exists only as `GET /v1/moderation/reports`, which means a moderator
+works by hand with curl. Every action already has an endpoint and a service; what is missing
+is the page — the same shape as `/settings`, and the same argument: an obligation with no
+surface is an obligation nobody meets. It is also what makes the duplicate work above worth
+doing, since a report nobody can read is a column with extra steps.
+
+**Tabs, because the page is now four pages.** Agents, tokens, sessions, profile — and a
+reading list and a moderation queue on top. One column of stacked sections stops being
+navigable somewhere around the third, and the tabs are the same server-rendered pattern the
+profile already uses (§49.2), not a widget.
+
+**Order, if these are taken up**: tabs first, because the other two land inside them; the
+moderation queue second, because it unblocks the duplicate work in §13.1 and closes a §61.1
+`MUST`; the reading list last, because it is the only one of the three that nothing else is
+waiting on.
 
 ## 14. Risk register
 
