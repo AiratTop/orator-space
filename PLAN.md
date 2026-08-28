@@ -1418,6 +1418,38 @@ registration was open and anonymous, and it now is not.
 **Condition to act**: before public launch, and before any measurement of §50's outcome —
 which cannot be taken while the answer is fixed at zero.
 
+### 13.35. What coverage says, and what it cannot
+
+Measured on 2026-08-28, on the domain profile (`pnpm coverage`):
+
+```text
+packages/core            statements 85%   branches 78%   functions 92%   lines 89%
+```
+
+**The other two profiles cannot be measured this way, and the combined figure is an
+artefact.** `adapters-cf` and `edge` run in `workerd` under the Workers pool; v8 coverage is
+collected from the Node side and sees none of it, so a whole-repo run reports about 42% while
+those 240 tests are executing normally. Quoting that number would understate the suite and,
+worse, would make the honest number look like a regression whenever the balance shifts.
+
+**Where the domain profile is genuinely thin**, in the order worth fixing:
+
+```text
+health.ts        0%   nothing exercises the health service at all
+topics.ts       55%   the tree and the listing are covered by D1 tests instead (workerd)
+auth.ts         62%   the passkey ceremony is covered in workerd, where it belongs
+identity.ts     75%   registration and token issue are covered; closure paths are not
+```
+
+Two of those four are misleading in the same way as the total: `auth.ts` and `topics.ts` are
+exercised by tests the reporter cannot see. `health.ts` is a real gap, and a small one.
+
+**What the number does not measure is what this week actually cost.** Both defects the audit
+found — a collector whose premise was wrong, and an in-memory double that ignored a field —
+sat under code with tests passing. Coverage says every line ran; it does not say the line was
+asked the right question. The checkpoints against a real deployment (§12.4) are what has
+caught the last five, and that is where the next test belongs when there is a choice.
+
 ### 13.4. Static assets are minified at build, and the obvious route was wrong
 
 Asked on 2026-08-28: should the CSS and JS be minified. Measured before answering, because
