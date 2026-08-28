@@ -1,0 +1,84 @@
+---
+import type { AuthorSummary } from "@orator/core/ports";
+
+/**
+ * A placeholder avatar (SPEC §21.2, §49.4).
+ *
+ * `principals.avatar_media_id` has been in the schema since the first migration and nothing
+ * writes it; uploads and variants are Phase 9's image work. This is the part that does not
+ * need them — a generated mark, derived from the username, so the interface has the shape it
+ * will keep and a reader gets something to recognise an author by in the meantime.
+ *
+ * Inline SVG rather than an image: there is nothing to fetch, nothing to cache, nothing to
+ * transform and no request. The colour is a `fill` attribute rather than a `style`, because
+ * §57.2's `style-src 'self'` forbids inline style and a presentation attribute is not one.
+ *
+ * Derived from the username and not from the display name. A username is unique and
+ * protected against confusables (§7.3); a display name is an arbitrary string, so two
+ * accounts could otherwise wear the same mark on purpose.
+ */
+interface Props {
+  author: Pick<AuthorSummary, "username" | "displayName" | "kind">;
+  size?: number;
+}
+
+const { author, size = 28 } = Astro.props;
+
+/**
+ * A stable hue from the username.
+ *
+ * FNV-1a, because it is four lines and the requirement is "the same name gives the same
+ * colour", not "an attacker cannot find a collision". Two accounts sharing a hue is a
+ * cosmetic coincidence, which is what the initials and the name beside them are for.
+ */
+function hueOf(name: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < name.length; i++) {
+    hash ^= name.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash) % 360;
+}
+
+/**
+ * One or two characters, from the name a reader sees.
+ *
+ * The display name where there is one, because that is what the initials of a person look
+ * like; the username otherwise. Uppercased, and non-letters dropped — a handle like
+ * `p9-agent` should read `PA` rather than `P-`.
+ */
+function initialsOf(displayName: string | null, username: string): string {
+  const source = (displayName ?? username).replace(/^@/, "");
+  const words = source.split(/[\s_-]+/).filter((word) => /\p{L}|\p{N}/u.test(word));
+  const letters = words.slice(0, 2).map((word) => [...word][0] ?? "");
+  return (letters.join("") || source.slice(0, 1)).toUpperCase();
+}
+
+const hue = hueOf(author.username);
+/* An agent's mark is desaturated. The `agent` badge is what states it; this only has to
+   avoid contradicting it, and a wall of equally bright circles would flatten the one
+   distinction §49.4 asks a reader to be able to make. */
+const fill = author.kind === "agent" ? `hsl(${hue} 22% 62%)` : `hsl(${hue} 52% 58%)`;
+const initials = initialsOf(author.displayName, author.username);
+---
+
+<svg
+  class="avatar"
+  width={size}
+  height={size}
+  viewBox="0 0 40 40"
+  role="img"
+  aria-label={`@${author.username}`}
+>
+  <circle cx="20" cy="20" r="20" fill={fill} />
+  <text
+    x="20"
+    y="20"
+    fill="#ffffff"
+    font-size={initials.length > 1 ? 16 : 20}
+    font-family="ui-sans-serif, system-ui, sans-serif"
+    font-weight="600"
+    text-anchor="middle"
+    dominant-baseline="central"
+  >{initials}</text>
+</svg>

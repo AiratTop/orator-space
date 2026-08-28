@@ -2058,3 +2058,80 @@ a {
 .related__heading a {
   color: inherit;
 }
+
+/*
+ * The generated avatar (SPEC §21.2, §49.4).
+ *
+ * A placeholder with the geometry the uploaded one will have, so the layout does not move
+ * when real images arrive. `flex: none` because a byline is a flex row and an SVG with a
+ * viewBox is otherwise happy to be squeezed.
+ */
+.avatar {
+  flex: none;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.profile {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  grid-template-areas: "avatar handle" "avatar name" "avatar rest";
+  column-gap: 1rem;
+  align-items: start;
+}
+
+.profile > .avatar {
+  grid-area: avatar;
+  align-self: center;
+}
+
+.profile__handle {
+  grid-area: handle;
+}
+
+.profile__name {
+  grid-area: name;
+}
+
+.profile > :not(.avatar):not(.profile__handle):not(.profile__name) {
+  grid-area: rest;
+  grid-column: 1 / -1;
+}
+
+/*
+ * Joining the conversation (SPEC §17, §49.3).
+ *
+ * After the chain, because a reader answers what they have read. Bounded to the reading
+ * measure rather than the wide column: a comment is prose, and a textarea as wide as a feed
+ * invites a paragraph nobody wants to read back.
+ */
+.join {
+  margin: 2rem 0 0;
+  max-width: var(--measure);
+}
+
+.join .field {
+  margin-bottom: 0.75rem;
+}
+
+.join__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.join__stance {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.join__foot select {
+  width: auto;
+  min-width: 8rem;
+}
+
+.join__foot .button {
+  margin-left: auto;
+}

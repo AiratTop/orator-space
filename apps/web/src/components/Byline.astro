@@ -1,6 +1,7 @@
 ---
 import type { AuthorSummary } from "@orator/core/ports";
 import type { Provenance } from "@orator/core";
+import Avatar from "./Avatar.astro";
 
 /**
  * Who wrote this, and what that claim is worth (SPEC §49.4, §10, §8.4).
@@ -67,6 +68,15 @@ const displayName =
 ---
 
 <p class={compact ? "byline byline--compact" : "byline"}>
+  {/*
+    The mark, on the article and not on a card (§21.2, §49.2).
+
+    A card's job is its title, and twenty generated circles add colour without adding
+    information — they are derived from the username, which is already the first thing on the
+    row. Worth revisiting when the avatars are uploaded ones: a photograph is information and
+    a hashed hue is not.
+  */}
+  {!compact && <Avatar author={author} size={28} />}
   <a href={`/@${author.username}`}>@{author.username}</a>
   {/*
     Only when it says something the username did not.

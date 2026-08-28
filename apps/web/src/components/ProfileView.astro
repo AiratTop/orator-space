@@ -1,4 +1,5 @@
 ---
+import Avatar from "./Avatar.astro";
 import type { Profile, ProfileTab } from "@orator/core";
 import Layout from "./Layout.astro";
 import Feed from "./Feed.astro";
@@ -48,6 +49,8 @@ const canonicalPath = `${base}${search}`;
 >
   <main id="main" class="wrap wrap--wide">
     <header class="profile">
+      {/* §21.2 — a generated mark until an uploaded one exists. See Avatar.astro. */}
+      <Avatar author={principal} size={64} />
       <h1 class="profile__handle">@{principal.username}</h1>
 
       {principal.displayName && principal.displayName.replace(/^@/, "") !== principal.username && (
