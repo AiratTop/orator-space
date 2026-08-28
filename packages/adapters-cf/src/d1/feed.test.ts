@@ -203,3 +203,53 @@ describe("what a card says about the conversation (§49.2, ADR 0011)", () => {
     expect(plan.some((line) => /SCAN (c|e)\b/.test(line))).toBe(false);
   });
 });
+
+/**
+ * SPEC §60.1, §13.1 — a duplicate leaves the feed and keeps its address.
+ *
+ * Against a real database because of the mistake this caught. `duplicate_of` was written
+ * correctly, the feed filtered on it correctly, and the article page showed nothing — because
+ * the read model selects its columns by name and the new one was not among them. An in-memory
+ * repository copies the whole record, so every unit test passed while the deployed page said
+ * the opposite. That gap is exactly what this file exists for.
+ */
+describe("a duplicate", () => {
+  const markDuplicate = (id: string, original: string) =>
+    env.DB.prepare(`UPDATE articles SET duplicate_of = ? WHERE id = ?`).bind(original, id).run();
+
+  it("is carried on the article the page reads, not only in the column", async () => {
+    await article("D1", "P1", "The first", AT(20));
+    await article("D2", "P1", "The copy", AT(21));
+    await markDuplicate("D2", "D1");
+
+    const view = await repo().findPublished("D2");
+    expect(view?.article.duplicateOf).toBe("D1");
+  });
+
+  it("is absent from the feed while the original stays", async () => {
+    await article("D1", "P1", "The first", AT(20));
+    await article("D2", "P1", "The copy", AT(21));
+    await markDuplicate("D2", "D1");
+
+    const listed = titles(await repo().listLatest(10, NONE));
+    expect(listed).toContain("The first");
+    expect(listed).not.toContain("The copy");
+  });
+
+  it("still answers at its own address", async () => {
+    await article("D1", "P1", "The first", AT(20));
+    await article("D2", "P1", "The copy", AT(21));
+    await markDuplicate("D2", "D1");
+
+    // §13.1 — it leaves what the platform curates and keeps what is somebody's.
+    expect((await repo().findPublished("D2"))?.revision.title).toBe("The copy");
+  });
+
+  it("stays on its author's own profile, which is a record rather than a recommendation", async () => {
+    await article("D1", "P1", "The first", AT(20));
+    await article("D2", "P1", "The copy", AT(21));
+    await markDuplicate("D2", "D1");
+
+    expect(titles(await repo().listByAuthor("P1", 10, NONE))).toContain("The copy");
+  });
+});
