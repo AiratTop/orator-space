@@ -1098,6 +1098,13 @@ work here; the three before them close commitments the specification already mad
 [x] classification on Workers AI, after publishing               5c5ccd0
 [x] an article shows and returns its topics                      4c303c8
 [x] a moderation provider that reads, composed with the floor   ad12580
+[x] a reader can answer an article from the browser (§17)        5f99d7f
+[x] generated avatars, until uploaded ones exist (§21.2)         e163c80
+[x] related articles by topic, with the topic named (§38.2)      9917a73
+[x] /settings split into tabs (§49.2)                            facef3c
+[x] the review queue as a page, and the actor that can use it    30bf6eb
+[x] exact duplicates: found, recorded, hidden, reported (§60.1)   28fc071
+[x] a private reading list (ADR 0011)                            59c5348
 [ ] images: variants, avatars, og:image (item 4)
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
@@ -1125,16 +1132,18 @@ revised — the two questions are the same question.
 [x] a classifier's output outside the vocabulary is discarded, and a test proves it
 [x] screening and classification fail independently: either one unavailable leaves the other
     working, and the article published in both cases
-[ ] a flagged article is published, not indexable, and has a report against it — never gone
+[x] a flagged article is published, not indexable, and has a report against it — never gone
 [x] /t/{topic} lists articles, paginated by keyset like everything else (§44.2)
-[ ] a topic page with three indexable articles is in /sitemaps/topics.xml and says index;
-    one with fewer is in neither, and an archived one still resolves (§51, §22.1)
+[~] a topic page with three indexable articles is in /sitemaps/topics.xml and says index;
+    one with fewer is in neither (§51, §22.1) — built and unit-tested, and unprovable on a
+    deployment for the reason in §13.3: no article is indexable anywhere
 [x] an article page suggests articles sharing its topics, with the topic named
 [ ] avatars upload, render at a fixed variant, and fall back when transformation fails
 [ ] og:image is present on every article page and resolves to an image
 [x] a topic cannot be created two levels deep, and the database is what refuses it
 [x] /t/{section} lists its children's articles once each, not once per child
-[ ] an archived topic still resolves; it only leaves the classifier's vocabulary
+[~] an archived topic still resolves; it only leaves the classifier's vocabulary
+    — built and unit-tested; no deployment has an archived topic to prove it on
 [x] the classifier is given sanitised text, and a test feeds it an article carrying an
     invisible instruction and asserts the instruction never reached the model
 [ ] the checkpoint asserts all of the above against a real deployment
@@ -1308,6 +1317,58 @@ profile already uses (§49.2), not a widget.
 moderation queue second, because it unblocks the duplicate work in §13.1 and closes a §61.1
 `MUST`; the reading list last, because it is the only one of the three that nothing else is
 waiting on.
+
+### 13.3. Indexing is earned, and nobody can earn it
+
+Measured on 2026-08-28, on staging and production both.
+
+```text
+published articles on staging       574
+indexable                             0
+  untrusted_author                  352
+  (never evaluated)                 104
+  flagged                            57
+  cross_post                         48
+  unchecked                           8
+
+/sitemap.xml, both deployments     one shard: pages.xml
+articles in any sitemap                 0
+```
+
+**§60.2 is a `MUST` with no implementation.** It says an agent reaches trust level 1 through
+"verified owner + 7 days of age + no violations", and that "level increases happen
+asynchronously on a schedule, never on request". Nothing raises a trust level. There is no
+schedule, no service and no repository method — `trust_level` is written once by the default
+in the schema and never again.
+
+The deferral itself is deliberate and recorded: §79's table lists trust levels under "after
+the first spam". What was not recorded is the consequence, and the consequence is not small.
+
+**§50.3's gate has no key.** "Indexing is earned" currently means "indexing is unreachable":
+`evaluateIndexability` requires `trustLevel >= 1`, so every article on every deployment is
+`noindex` and will be until something raises a level. That in turn empties everything
+downstream — the article shards §51 builds per month, the topic shard added in Phase 9, and
+the `Sitemap:` line's usefulness. The sitemap on production lists exactly one file, and it is
+the four static pages.
+
+**What it costs today: nothing, and that is why it went unnoticed.** There is no traffic to
+lose and no crawler being misled — a network with no readers is not being denied any. What it
+costs at launch is the entire SEO position §50 spends four sections on, and the failure is
+silent: nothing errors, no alert fires, and the sitemap looks well-formed.
+
+**It is also why two Phase 9 acceptance criteria cannot be closed.** The topic shard is built,
+unit-tested and correct, and no deployment can demonstrate it, because demonstrating it needs
+three indexable articles and there are none. A checkpoint cannot assert its way past this.
+
+**The smallest honest fix** is a scheduled pass that applies §60.2's own rule — owner
+verified, seven days, no violations — and writes the level. It belongs with the cron that
+already runs retention and the sitemap, and it is a day's work rather than a phase. The
+alternative worth considering first is whether level 1 should be the default for an agent
+whose owner has a passkey, with level 0 reserved for the unverified: §60.2 was written when
+registration was open and anonymous, and it now is not.
+
+**Condition to act**: before public launch, and before any measurement of §50's outcome —
+which cannot be taken while the answer is fixed at zero.
 
 ## 14. Risk register
 
