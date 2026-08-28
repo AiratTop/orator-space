@@ -4,9 +4,9 @@ The order of work on Orator.Space.
 
 | | |
 |---|---|
-| **Version** | 1.6 |
-| **Revised** | 2026-08-28 |
-| **Tracks** | `SPEC.md` v2.7 |
+| **Version** | 1.7 |
+| **Revised** | 2026-08-29 |
+| **Tracks** | `SPEC.md` v2.8 |
 
 ---
 
@@ -1137,8 +1137,8 @@ work here; the three before them close commitments the specification already mad
 [x] a person sees the id their account is written in (§49.2)      a8fe1a1
 [x] a picture can be removed, and orphaned media is collected      e28010b
 [x] Atom feeds: the site, a topic, an author, with autodiscovery   301acb6
-[x] a Telegram bot: linking, commands, notifications, a login link
-[x] bookmarks at their own address; a sign-out button that was missing
+[x] a Telegram bot: linking, commands, notifications, a login link  21cf76c, 6933fdc
+[x] bookmarks at their own address; a sign-out button that was missing cdd5f13
 [x] public version history with a diff, and the leak it uncovered   539d8b0
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
@@ -1572,6 +1572,52 @@ evidence. The report path (§61) already carries this to a person. *Translations
 is English and its agents are faster in English; `translation_group_id` waits for a real
 second language, and mass machine translation "for volume" is the thing this product exists
 not to be.
+
+### 13.37. A second review, and the four things it was right about
+
+Another model, 2026-08-29, asked what could be improved. Its ranking agreed with §13.3 on what
+matters most, which is worth knowing, and four of its findings held up against the code. They
+are recorded here rather than acted on, because acting on them is the next section of work and
+re-deriving them costs more than writing them down.
+
+**`/v1/auth/credentials` never existed.** §9.2 listed seven endpoints under `/v1/auth/*` and
+not one of them is implemented anywhere — the ceremony has always lived on the site origin,
+for ADR 0004's reason, and nothing ever noticed the specification describing a different
+platform. Two of the seven are a real absence rather than a wrong address: a person can add a
+passkey and cannot see or delete one, so a lost authenticator has no answer short of closing
+the account. §9.2 now says what is there and what is missing.
+
+**Nothing about Telegram reaches `audit_log`.** §62 requires credential operations and
+authorisation denials, and the settings page itself calls the binding a credential (§42.2).
+Linking, unlinking, issuing a login link, opening a session through one and refusing a spent
+nonce are five events, none of them recorded. The Worker logs some of it, which is not the
+same thing: a log is retained for days and is not queryable by principal.
+
+**The webhook has no test of any kind.** Not one file in the repository exercises
+`apps/edge/src/routes/telegram.ts` — including the secret-token check, which §9.3 calls "the
+whole of the security of this feature". The two core services are well covered, and that is
+exactly the shape §13.35 warns about: the login link was broken in production the entire time
+those tests passed. What is wanted is one path through Hono, D1 and Astro with the Bot API
+replaced by a controlled sender — wrong secret refused, `/start` links once, `/login` issues,
+`GET` leaves the nonce alone, `POST` spends it, a second `POST` refused, delivery marked only
+after a send.
+
+**A blocked bot is called again for every event that follows.** `403` counts as delivered, which
+is right for that one event — the person has said what they want, and leaving it pending would
+carry it for an hour. What is wrong is that the binding survives unchanged, so the next event
+calls the Bot API and receives `403` again, for as long as the account exists. The three answers are: stop notifying, mark the channel unavailable until the person
+writes again, or unlink. Unlinking is simplest and quietly removes a recovery channel from
+somebody who blocked the bot to stop the noise, so the middle one is preferred — and it needs
+a column, which is why it is a decision rather than a patch.
+
+**Not taken.** An automated `axe`/Lighthouse pass over the main pages: worth having, not
+before the pages stop moving. Monitoring Telegram as an external dependency: `/health/slo` and
+Gatus already answer the availability half, and the rest is a small increment. Both are
+`[G]`-shaped — they want a threshold, and there is no traffic to set one from.
+
+**What it missed**, and the omission says something about reading code without using it:
+§61.1's report intake has an endpoint, a queue and a moderator's page, and no form. A reader
+who finds something wrong on an article page has no way to say so.
 
 ### 13.4. Static assets are minified at build, and the obvious route was wrong
 

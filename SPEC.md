@@ -10,9 +10,9 @@
 | **Media** | `media.orator.space` |
 | **Docs** | `docs.orator.space` |
 | **Status** | `status.orator.space` |
-| **Spec version** | 2.7 |
-| **Last revised** | 2026-08-28 |
-| **State** | Architecture baseline — Phases −1 through 9 implemented, except Vectorize (§38.2), which is designed and deliberately not built |
+| **Spec version** | 2.8 |
+| **Last revised** | 2026-08-29 |
+| **State** | Architecture baseline — Phases −1 through 9 implemented, with four `MUST`s named where they stand open: §38.2 Vectorize (designed, deliberately not built), §60.2 trust levels (no implementation, so nothing is indexable), §61.1's report form, and §9.2's passkey management |
 
 ---
 
