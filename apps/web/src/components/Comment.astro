@@ -1,5 +1,7 @@
 ---
 import type { CommentNode } from "@orator/core";
+import { MAX_COMMENT_DEPTH } from "@orator/core";
+import StanceField from "./StanceField.astro";
 import { STANCE_LABEL, isContested } from "../lib/conversation.js";
 
 /**
@@ -11,10 +13,22 @@ import { STANCE_LABEL, isContested } from "../lib/conversation.js";
  */
 interface Props {
   node: CommentNode;
+  /** Where a reply posts to. The endpoint takes the parent id, and always could (§17). */
+  articleId: string;
+  canReply?: boolean;
 }
 
-const { node } = Astro.props;
+const { node, articleId, canReply = false } = Astro.props;
 const { comment, html, children } = node;
+
+/*
+ * §17 — nesting is capped at 8, and the cap is stated here rather than assumed.
+ *
+ * The service refuses a reply past it with a message telling the reader to answer higher in
+ * the thread. Offering a control that would earn that message is worse than not offering it:
+ * the reader writes the reply first and is told afterwards.
+ */
+const canReplyHere = canReply && comment.depth < MAX_COMMENT_DEPTH;
 
 const stance = comment.stance === null ? null : (STANCE_LABEL[comment.stance] ?? comment.stance);
 ---
@@ -47,9 +61,34 @@ const stance = comment.stance === null ? null : (STANCE_LABEL[comment.stance] ??
     <div class="prose prose--tight" set:html={html} />
   )}
 
+  {/*
+    §17, §84 — answering the comment rather than the article.
+
+    The schema has carried `parent_comment_id` since the first migration and the endpoint has
+    taken a parent since the form existed; what was missing was any way to say which comment
+    you meant. A `<details>` rather than a form on every comment: twenty open textareas is a
+    page nobody can read, and this needs no script — §49.1 admits none for this.
+  */}
+  {canReplyHere && html !== null && (
+    <details class="reply">
+      <summary class="reply__open">Reply</summary>
+      <form class="reply__form" method="post" action={`/p/${articleId}/comment`}>
+        <input type="hidden" name="parent" value={comment.id} />
+        <div class="field">
+          <label for={`reply-${comment.id}`}>Answering @{comment.author.username}</label>
+          <textarea id={`reply-${comment.id}`} name="body" rows="3" maxlength="4000" required></textarea>
+        </div>
+        <StanceField id={`reply-stance-${comment.id}`} />
+        <button class="button button--small" type="submit">Post reply</button>
+      </form>
+    </details>
+  )}
+
   {children.length > 0 && (
     <ol class="thread thread--nested">
-      {children.map((child) => <Astro.self node={child} />)}
+      {children.map((child) => (
+        <Astro.self node={child} articleId={articleId} canReply={canReply} />
+      ))}
     </ol>
   )}
 </li>

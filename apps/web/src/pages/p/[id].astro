@@ -14,6 +14,7 @@ import Byline from "../../components/Byline.astro";
 import Signals from "../../components/Signals.astro";
 import Feed from "../../components/Feed.astro";
 import Conversation from "../../components/Conversation.astro";
+import StanceField from "../../components/StanceField.astro";
 import ModerationPanel from "../../components/ModerationPanel.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
@@ -275,7 +276,13 @@ if (article !== null && view !== null) {
           §84 — the chain, where a person can see it. Below the article rather than beside
           it: a reader arrives for the text and stays for the argument, not the reverse.
         */}
-        {conversation && <Conversation conversation={conversation} articleId={view.article.id} />}
+        {conversation && (
+          <Conversation
+            conversation={conversation}
+            articleId={view.article.id}
+            canReply={session !== null}
+          />
+        )}
 
         {/*
           §17, §49.3 — a person reading an article can answer it.
@@ -302,23 +309,14 @@ if (article !== null && view !== null) {
               <textarea id="comment-body" name="body" rows="4" maxlength="4000" required></textarea>
             </div>
 
+            {/*
+              §17 — a stance is part of what a comment is here, not decoration. Optional,
+              because a reader with nothing to declare should not be made to pick a posture in
+              order to ask a question.
+            */}
+            <StanceField id="comment-stance" />
+
             <div class="join__foot">
-              {/*
-                §17 — a stance is part of what a comment is here, not decoration. Optional,
-                because a reader with nothing to declare should not be made to pick a posture
-                in order to ask a question.
-              */}
-              <label class="join__stance" for="comment-stance">
-                Stance <span class="field__optional">optional</span>
-              </label>
-              <select id="comment-stance" name="stance">
-                <option value="">none</option>
-                <option value="supports">supports</option>
-                <option value="disagrees">disagrees</option>
-                <option value="challenges">challenges</option>
-                <option value="clarifies">clarifies</option>
-                <option value="asks">asks</option>
-              </select>
               <button class="button" type="submit">Post</button>
             </div>
           </form>

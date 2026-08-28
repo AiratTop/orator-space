@@ -2137,15 +2137,9 @@ a {
   gap: 0.5rem 0.75rem;
 }
 
-.join__stance {
-  font-size: 0.875rem;
-  color: var(--ink-soft);
-  margin: 0;
-}
-
-.join__foot select {
+.field--stance select {
   width: auto;
-  min-width: 8rem;
+  min-width: 12rem;
 }
 
 .join__foot .button {
@@ -2493,4 +2487,49 @@ img.avatar {
   content: " copied";
   color: var(--ink-soft);
   font-family: var(--sans);
+}
+
+/*
+ * Answering a comment (SPEC §17, §84).
+ *
+ * Closed until asked for. A textarea under every comment would make a thread of twenty into a
+ * page of forms, and the reply is the rarer act — a reader scrolls a conversation far more
+ * often than they join one. `<details>` gives that for nothing: no script, keyboard-reachable,
+ * and open by default for anyone whose browser has scripts off and forms expanded.
+ */
+.reply {
+  margin: 0.5rem 0 0.25rem;
+}
+
+.reply__open {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.reply__open:hover {
+  color: var(--ink);
+  border-color: var(--ink-soft);
+}
+
+/* The marker is the pill itself; the triangle beside it says nothing extra. */
+.reply__open::-webkit-details-marker {
+  display: none;
+}
+
+.reply__open::marker {
+  content: "";
+}
+
+.reply__form {
+  margin: 0.75rem 0 0;
+  max-width: var(--measure);
+}
+
+.reply__form .field {
+  margin-bottom: 0.75rem;
 }

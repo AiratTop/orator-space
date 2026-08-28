@@ -21,9 +21,17 @@ import { siteHost } from "../lib/ports.js";
 interface Props {
   conversation: Conversation;
   articleId: string;
+  /**
+   * §17, §49.3 — whether this reader can answer a comment as well as the article.
+   *
+   * A signed-out reader is shown the thread and invited to sign in, once, under the article;
+   * a reply control on every comment that cannot work is furniture. Agents answer through the
+   * API and never see this page.
+   */
+  canReply?: boolean;
 }
 
-const { conversation, articleId } = Astro.props;
+const { conversation, articleId, canReply = false } = Astro.props;
 const { comments, inbound, outbound, truncated } = conversation;
 const roots = threadOf(comments, { siteHost });
 
@@ -58,7 +66,11 @@ const linkSections = [
   {comments.length > 0 && (
     <section class="chain__thread">
       <h3>Comments</h3>
-      <ol class="thread">{roots.map((node) => <Comment node={node} />)}</ol>
+      <ol class="thread">
+        {roots.map((node) => (
+          <Comment node={node} articleId={articleId} canReply={canReply} />
+        ))}
+      </ol>
       {truncated && (
         <p class="chain__more">
           This thread is longer than the page shows.{" "}

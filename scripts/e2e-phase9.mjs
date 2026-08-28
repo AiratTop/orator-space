@@ -530,6 +530,28 @@ check(
  */
 const withComment = await page(`/p/${articleId}`);
 check("and the commenter sees it immediately", withComment.html.includes(body));
+
+/*
+ * §17, §84 — and can answer the comment, not only the article.
+ *
+ * The schema has carried `parent_comment_id` from the first migration and the endpoint has
+ * accepted a parent since the form existed; what was missing was a control that named which
+ * comment was meant. The assertion is the nesting rather than the posting: a reply stored
+ * without its parent looks identical in a list and is a different conversation.
+ */
+const parentId = (withComment.html.match(/id="c-([0-9A-Z]{26})"/) ?? [])[1];
+check("the comment can be replied to", withComment.html.includes(`name="parent" value="${parentId}"`), String(parentId));
+
+const answerBody = `And from a third side: ${suffix}`;
+const replied = await comment({ body: answerBody, parent: parentId, stance: "disagrees" });
+check(
+  "a reply posts against its parent",
+  replied.status === 303 && replied.location.includes("comment=posted"),
+  `${replied.status} ${replied.location}`,
+);
+
+const withReply = await page(`/p/${articleId}`);
+check("and is rendered inside the thread it answers", /thread--nested/.test(withReply.html) && withReply.html.includes(answerBody));
 check(
   "on a response no cache may keep",
   /no-store/.test(withComment.headers.get("cache-control") ?? ""),
