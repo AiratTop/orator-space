@@ -38,6 +38,14 @@ interface Props {
   image?: string | null;
   /** Serialised JSON-LD (§52). Already stringified by the caller. */
   jsonLd?: string;
+  /**
+   * SPEC §48 — the Atom feed this page has, if it has one.
+   *
+   * Autodiscovery is the whole mechanism: a reader pastes the page's address into their
+   * client and the client finds the feed from this tag. Without it a feed exists at an
+   * address nobody can be expected to guess, which is the same as not existing.
+   */
+  feedPath?: string | null;
 }
 
 const {
@@ -52,6 +60,7 @@ const {
   modifiedAt,
   authorName,
   jsonLd,
+  feedPath = null,
 } = Astro.props;
 
 /* §50.1 — the caller's image, or the site's. Resolved once so the two tags cannot disagree. */
@@ -70,6 +79,9 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
     <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
+    {feedPath && (
+      <link rel="alternate" type="application/atom+xml" title={`${title} — Atom`} href={feedPath} />
+    )}
 
     {/*
       Synchronous, and before the stylesheet has finished, because its only job is to set the

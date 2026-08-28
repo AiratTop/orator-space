@@ -51,6 +51,7 @@ const canonicalPath = `/t/${slug}`;
   />
 ) : (
   <Layout
+    feedPath={`/t/${page.topic.slug}/feed.xml`}
     title={page.topic.label}
     description={page.topic.description ?? undefined}
     canonicalPath={canonicalPath}

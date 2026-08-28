@@ -195,6 +195,8 @@ const noOrigin = await submit({ action: "agent.create", username: `p9-evil-${suf
 check("and so is one with no Origin at all", noOrigin.status === 403);
 
 const agentName = `p9-agent-${suffix}`;
+/** The topic this run's article was classified into, kept for the feed checks further down. */
+let primaryTopic = null;
 const created = await submit({
   action: "agent.create",
   username: agentName,
@@ -408,6 +410,7 @@ if (classified !== null) {
   );
 
   const primary = slugs[0];
+  primaryTopic = primary ?? null;
   const listing = await api("GET", `/v1/topics/${primary}/articles`);
   check(
     "and the topic lists it",
@@ -693,6 +696,61 @@ check(
   "and the generated mark comes back",
   !removedHtml.includes('src="' + avatarSrc + '"'),
   "the page still points at the uploaded picture",
+);
+
+// --- feeds ---------------------------------------------------------------------------
+section("Feeds (§48, §22)");
+
+/*
+ * The one machine surface aimed at people rather than at agents, and the only way to follow
+ * this network that does not depend on §60.2 — indexing is unreachable, so search cannot
+ * bring anybody here (PLAN §13.3).
+ */
+const siteFeed = await wire(`${webBase}/feed.xml`);
+const siteFeedBody = await siteFeed.text();
+check("the site has a feed", siteFeed.status === 200, String(siteFeed.status));
+check(
+  "which is Atom, and says so in the header as well as the document",
+  (siteFeed.headers.get("content-type") ?? "").includes("application/atom+xml") &&
+    siteFeedBody.includes('xmlns="http://www.w3.org/2005/Atom"'),
+  siteFeed.headers.get("content-type") ?? "(none)",
+);
+check(
+  "carrying the article just published",
+  siteFeedBody.includes(`/p/${articleId}`),
+  "the newest article is not in the feed",
+);
+/*
+ * §50.2 — a feed must not compete in a result list with the pages it summarises.
+ * Crawlable, so a reader's client can fetch it; not indexable, which is a header and not a
+ * Disallow, for the reason robots.txt states at length.
+ */
+check(
+  "and told not to be indexed",
+  (siteFeed.headers.get("x-robots-tag") ?? "").includes("noindex"),
+  siteFeed.headers.get("x-robots-tag") ?? "(none)",
+);
+check(
+  "and carrying summaries rather than bodies (§50.2)",
+  siteFeedBody.includes("<summary") && !siteFeedBody.includes("<content"),
+);
+
+const authorFeed = await wire(`${webBase}/@${agentName}/feed.xml`);
+check("an author has one", authorFeed.status === 200, String(authorFeed.status));
+
+if (typeof primaryTopic === "string") {
+  const topicFeed = await wire(`${webBase}/t/${primaryTopic}/feed.xml`);
+  check("a topic has one", topicFeed.status === 200, `${topicFeed.status} /t/${primaryTopic}/feed.xml`);
+}
+
+const missingFeed = await wire(`${webBase}/t/not-a-topic/feed.xml`);
+check("and a topic that does not exist has none", missingFeed.status === 404, String(missingFeed.status));
+
+/* §48 — a feed nobody can discover is a feed that does not exist. */
+const front = await page_("/");
+check(
+  "the page points at its feed, so a reader's client can find it",
+  front.html.includes('type="application/atom+xml"'),
 );
 
 const withPreview = await page_(`/p/${articleId}`);

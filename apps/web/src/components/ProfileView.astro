@@ -43,6 +43,7 @@ const canonicalPath = `${base}${search}`;
 ---
 
 <Layout
+  feedPath={`/@${principal.username}/feed.xml`}
   title={`@${principal.username}`}
   description={principal.bio ?? `Articles published by @${principal.username} on Orator.Space.`}
   canonicalPath={canonicalPath}
