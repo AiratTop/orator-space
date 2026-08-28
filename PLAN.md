@@ -4,9 +4,9 @@ The order of work on Orator.Space.
 
 | | |
 |---|---|
-| **Version** | 1.5 |
-| **Revised** | 2026-08-23 |
-| **Tracks** | `SPEC.md` v2.6 |
+| **Version** | 1.6 |
+| **Revised** | 2026-08-28 |
+| **Tracks** | `SPEC.md` v2.7 |
 
 ---
 
@@ -1105,9 +1105,19 @@ work here; the three before them close commitments the specification already mad
 [x] the review queue as a page, and the actor that can use it    30bf6eb
 [x] exact duplicates: found, recorded, hidden, reported (§60.1)   28fc071
 [x] a private reading list (ADR 0011)                            59c5348
-[ ] images: variants, avatars, og:image (item 4)
+[x] named image variants, produced once and stored (§21.2)       ecb1c39
+[x] og:image on every page; an article's own where it has one    d0627ee
+[x] uploaded avatars, and the bucket the web writes to (§49.4)   5dc3b53
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
+
+**What Phase 9 turned out to be.** It was written as five items and closed as twelve. The
+five were right about what to build; what they did not predict is that each one exposed a
+neighbouring gap that was invisible until somebody used the thing next to it — `/settings`
+had no way to comment, classification had nothing to display it, the review queue had an
+actor that could not use it, the duplicate work needed a queue to report into, and the images
+work needed a bucket the web could write to. None of those were scope creep; each was the
+next sentence of a `MUST` that had been written down and left unfinished.
 
 **What the first live run taught, and what it cost.** The checkpoint passed while the page
 was wrong. An article about inference latency, carrying a plain-text instruction to classify
@@ -1138,15 +1148,17 @@ revised — the two questions are the same question.
     one with fewer is in neither (§51, §22.1) — built and unit-tested, and unprovable on a
     deployment for the reason in §13.3: no article is indexable anywhere
 [x] an article page suggests articles sharing its topics, with the topic named
-[ ] avatars upload, render at a fixed variant, and fall back when transformation fails
-[ ] og:image is present on every article page and resolves to an image
+[x] avatars upload, render at a fixed variant, and fall back when transformation fails
+[x] og:image is present on every article page and resolves to an image
 [x] a topic cannot be created two levels deep, and the database is what refuses it
 [x] /t/{section} lists its children's articles once each, not once per child
 [~] an archived topic still resolves; it only leaves the classifier's vocabulary
     — built and unit-tested; no deployment has an archived topic to prove it on
 [x] the classifier is given sanitised text, and a test feeds it an article carrying an
     invisible instruction and asserts the instruction never reached the model
-[ ] the checkpoint asserts all of the above against a real deployment
+[x] the checkpoint asserts all of the above against a real deployment, except the two
+    marked [~], which need state no deployment has: three indexable articles, and an
+    archived topic
 ```
 
 ---
@@ -1228,9 +1240,11 @@ duplicate question is a different one that happens to be answerable with the sam
 
 ```text
 [x] related articles never offer a body identical to the one being read, and stop at three
-[ ] an exact-hash check ahead of the expensive one, recorded as `duplicate_of:{id}`
-[ ] every applicable reason recorded, not the first
-[ ] a report raised, so a duplicate reaches the queue a person reads (§61.1)
+[x] an exact-hash check ahead of the expensive one, recorded as `duplicate_of:{id}`
+[~] every applicable reason recorded, not the first — solved differently, and better: the
+    duplication is its own column, so it survives whichever condition explains the article
+    rather than needing the reason field to become a list
+[x] a report raised, so a duplicate reaches the queue a person reads (§61.1)
 [x] decided: a duplicate leaves the platform's discovery surfaces and keeps its address
 ```
 

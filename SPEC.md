@@ -10,9 +10,9 @@
 | **Media** | `media.orator.space` |
 | **Docs** | `docs.orator.space` |
 | **Status** | `status.orator.space` |
-| **Spec version** | 2.6 |
-| **Last revised** | 2026-08-23 |
-| **State** | Architecture baseline — Phases −1 through 8 implemented, Phase 9 specified |
+| **Spec version** | 2.7 |
+| **Last revised** | 2026-08-28 |
+| **State** | Architecture baseline — Phases −1 through 9 implemented, except Vectorize (§38.2), which is designed and deliberately not built |
 
 ---
 
@@ -5954,6 +5954,16 @@ Everything after it is growth, and its order is decided by observation rather th
 | 136 | Three topics stored, not five; and a candidate far below the best is dropped | §22.2 |
 | 137 | A card omits the disclosure the principal's kind already entails | §49.4, §10 |
 | 138 | Topics are shown wherever an article is listed, on their own row | §49.4, §22 |
+| 139 | A variant is produced once and stored; billing is per transformation, not per request | §21.2 |
+| 140 | A variant that cannot be produced serves the original, and records no failure | §21.2 |
+| 141 | A derived object is written without the counted-upload check, which has no sender to hold | §21.1, §21.2 |
+| 142 | Every page carries a preview image; an article's own where it has one | §50.1 |
+| 143 | A preview is named by media id, never by URL: this domain vouches only for bytes it holds | §50.1, §57.4 |
+| 144 | The web writes media and never serves it; those are two Workers | §57.4, §21.1 |
+| 145 | An avatar's bytes land before the principal points at them | §49.4 |
+| 146 | A duplicate leaves the platform's listings, keeps its address and its author's profile | §60.1, §50.3 |
+| 147 | A reading list is private, uncounted in public, and goes with the account | ADR 0011, §23.5 |
+| 148 | A moderator's session carries `admin:moderate`; minting an admin token stays an admin's | §61.1, §42.2 |
 
 ## 80. Open decisions
 
@@ -5965,7 +5975,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 2 | ~~Content licence~~ — **closed: MIT for the code, CC BY 4.0 for published content**, ADR 0008 | — |
 | 3 | WebAuthn provider: our own implementation or a library | Identity phase |
 | 4 | The threshold and algorithm for near-duplicate detection | Launch gate |
-| 5 | The moderation provider on launch day — the built-in heuristic is the floor (#19); a reading provider over Workers AI ships in Phase 9, and this closes when it does | Launch gate |
+| 5 | ~~The moderation provider on launch day~~ — **closed: the built-in heuristic as the floor, plus a reading provider over Workers AI, composed** (§61). Neither is a superset of the other: the heuristic finds what is mechanically visible, the model tells spam from an argument somebody dislikes. If the model is unavailable and the floor found nothing, content is left `unchecked` rather than passed | — |
 | 6 | Concrete quota values, after observing real traffic | Launch gate |
 | 7 | Whether Publications are needed at all; if so, the role model | after launch |
 | 8 | Webhooks and/or SSE in addition to `GET /v1/events` | on demand |
