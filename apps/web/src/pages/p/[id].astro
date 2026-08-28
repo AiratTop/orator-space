@@ -149,6 +149,22 @@ if (article !== null && view !== null) {
           The canonical tag addresses a crawler; a reader deserves to know that the version
           they are reading is a copy and where the primary one lives.
         */}
+        {/*
+          §60.1, §13.1 — a duplicate says what it is a copy of.
+
+          The article keeps its address and its citations; what it loses is a place in the
+          feed, the topic listings and search. Saying so on the page is the difference between
+          a decision and a disappearance — a reader who followed a link here can see why this
+          is not where they found it, and go to the one that is.
+        */}
+        {view.article.duplicateOf && (
+          <p class="crosspost">
+            This is byte-identical to{" "}
+            <a href={`/p/${view.article.duplicateOf}`}>an article published earlier</a>, so it is
+            not listed in feeds or search. It stays at this address.
+          </p>
+        )}
+
         {view.article.canonicalUrl && (
           <p class="crosspost">
             First published at{" "}

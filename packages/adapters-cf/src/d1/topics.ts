@@ -31,7 +31,8 @@ const COLUMNS = `t.id, t.slug, t.label, t.description, t.status,
  * ones would be a number the page cannot produce a list for — which is worse than no number,
  * because a reader clicks it.
  */
-const VISIBLE = `a.status = 'published' AND a.visibility = 'public' AND author.status = 'active'`;
+const VISIBLE = `a.status = 'published' AND a.visibility = 'public' AND author.status = 'active'
+                 AND a.duplicate_of IS NULL`;
 
 interface CountRow {
   slug: string;
@@ -211,6 +212,9 @@ export function createTopicRepo(db: D1Database): TopicRepo {
                         OR at.topic_id IN (SELECT child.id FROM topics child WHERE child.parent_id = ?)
                   )
               AND a.status = 'published' AND a.visibility = 'public' AND p.status = 'active'
+              -- §60.1, §13.1 — a topic listing is a surface the platform curates, so a
+              -- duplicate leaves it and keeps its address.
+              AND a.duplicate_of IS NULL
               ${keyset}
             ORDER BY a.id DESC LIMIT ?`,
         )

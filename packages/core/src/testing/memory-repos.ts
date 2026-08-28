@@ -525,12 +525,27 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           ...article,
           indexable: fields.indexable,
           indexableReason: fields.reason,
+          duplicateOf: fields.duplicateOf as OratorId | null,
           simhash: fields.simhash,
           updatedAt: at,
         });
         return 1;
       });
     },
+    async findByContentHash(contentHash, excludingArticleId) {
+      const match = [...state.articles.values()]
+        .filter(
+          (a) =>
+            a.id < excludingArticleId &&
+            a.status === "published" &&
+            a.visibility === "public" &&
+            a.publishedRevisionId !== null &&
+            state.revisions.get(a.publishedRevisionId)?.contentHash === contentHash,
+        )
+        .sort((a, b) => a.id.localeCompare(b.id))[0];
+      return match === undefined ? null : { id: match.id };
+    },
+
     async findBySimhashBands(bands, excludeArticleId, limit) {
       const share = (hex: string) => {
         const value = BigInt(`0x${hex}`);

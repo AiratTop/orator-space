@@ -268,3 +268,61 @@ describe("the floor (§50.3)", () => {
     expect(meetsFloor(`# One\n\n## Two\n\n### Three\n\n${words}`)).toBe(false);
   });
 });
+
+/**
+ * SPEC §60.1, §13.1 — the exact duplicate, found cheaply and recorded whatever else is true.
+ *
+ * Found on staging: three byte-identical articles with three titles, all in the feed, all
+ * recorded as `untrusted_author` because the chain returns at the first failing condition and
+ * trust came first. The duplication was true, never written down, and would not have been
+ * re-examined when that trust rose.
+ */
+describe("an exact duplicate", () => {
+  it("is recorded even when the author's trust would have stopped it first", async () => {
+    const shared = substantial("inference latency across three quantisation levels");
+    const first = await published("The first", shared);
+    const second = await published("The same, retitled", shared);
+
+    // Trust level 0, which used to be the only thing written down about this article.
+    const outcome = await evaluateIndexability(ports, second);
+
+    expect(outcome.reason).toBe("duplicate");
+    expect(outcome.duplicateOf).toBe(first);
+    expect(ports.state.articles.get(second)?.duplicateOf).toBe(first);
+  });
+
+  it("leaves the earliest alone, because the others are copies of it", async () => {
+    const shared = substantial("inference latency across three quantisation levels");
+    const first = await published("The first", shared);
+    await published("The second", shared);
+
+    await evaluateIndexability(ports, first);
+    expect(ports.state.articles.get(first)?.duplicateOf ?? null).toBeNull();
+  });
+
+  it("raises a report, because a signal that ends in a column is not one", async () => {
+    const shared = substantial("inference latency across three quantisation levels");
+    const first = await published("The first", shared);
+    const second = await published("The same again", shared);
+
+    await evaluateIndexability(ports, second);
+    const reports = ports.state.reports.filter((report) => report.targetId === second);
+
+    expect(reports).toHaveLength(1);
+    expect(reports[0]?.details).toContain(first);
+    // Automatic: nobody reported it, and recording a reporter would put a person's name on a
+    // machine's finding (§61).
+    expect(reports[0]?.reporterPrincipalId).toBeNull();
+  });
+
+  it("does not raise a second report on a redelivery", async () => {
+    const shared = substantial("inference latency across three quantisation levels");
+    await published("The first", shared);
+    const second = await published("The same again", shared);
+
+    await evaluateIndexability(ports, second);
+    await evaluateIndexability(ports, second);
+
+    expect(ports.state.reports.filter((report) => report.targetId === second)).toHaveLength(1);
+  });
+});

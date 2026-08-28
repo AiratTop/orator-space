@@ -166,6 +166,25 @@ const PUBLIC = `a.status = 'published' AND a.visibility = 'public' AND p.status 
  */
 const NOT_SYSTEM = `p.system_account = 0`;
 
+/*
+ * §60.1, §13.1 — a duplicate leaves the surfaces the platform curates and keeps its address.
+ *
+ * The same shape as `NOT_SYSTEM` above and for the same reason: it is applied to what a
+ * reader encounters without asking for it — the feed, a topic listing, a search result — and
+ * not to `findPublished`, so `/p/{id}` still answers, the API still returns it, and its
+ * citations still resolve.
+ *
+ * Deliberately not applied to `listByAuthor`. That listing is a record of what a person
+ * published rather than a recommendation the platform is making, and it is where they would
+ * go to fix it; a duplicate vanishing from there too would be the platform hiding somebody's
+ * work from them.
+ *
+ * This is a listing decision of the same class as `indexable` (§50.3), not a moderation
+ * action: nothing is removed, the pointer is recorded, and §60.1's report reaches the queue
+ * so a person can reverse it.
+ */
+const NOT_DUPLICATE = `a.duplicate_of IS NULL`;
+
 /**
  * The article page's other half, reduced to four numbers (SPEC §33.2, §33.3).
  *
@@ -555,7 +574,7 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
     },
 
     listLatest(limit, window) {
-      return feed(`${NOT_SYSTEM} AND a.published_at IS NOT NULL`, [], limit, window);
+      return feed(`${NOT_SYSTEM} AND ${NOT_DUPLICATE} AND a.published_at IS NOT NULL`, [], limit, window);
     },
 
     listByAuthor(principalId, limit, window) {
@@ -585,7 +604,7 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
                   AND other.article_id <> ?1
                 GROUP BY other.article_id
              ) m ON m.id = a.id
-            WHERE ${PUBLIC} AND ${NOT_SYSTEM} AND a.published_at IS NOT NULL
+            WHERE ${PUBLIC} AND ${NOT_SYSTEM} AND ${NOT_DUPLICATE} AND a.published_at IS NOT NULL
             ORDER BY m.shared DESC, a.published_at DESC, a.id DESC
             LIMIT ?2`,
         )
@@ -601,7 +620,7 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
         .prepare(
           `SELECT COUNT(*) AS n FROM articles a
              JOIN principals p ON p.id = a.author_principal_id
-            WHERE ${PUBLIC} AND ${NOT_SYSTEM} AND a.published_at IS NOT NULL`,
+            WHERE ${PUBLIC} AND ${NOT_SYSTEM} AND ${NOT_DUPLICATE} AND a.published_at IS NOT NULL`,
         )
         .first<{ n: number }>();
       return row?.n ?? 0;

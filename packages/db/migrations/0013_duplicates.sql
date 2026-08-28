@@ -1,0 +1,20 @@
+-- What an article is a copy of (§60.1, §50.3).
+--
+-- Found on staging: three articles with byte-identical bodies and three different titles,
+-- all in the feed, none recorded as a duplicate of the others. They failed indexability
+-- earlier, on the author's trust level, and `evaluateIndexability` returns at the first
+-- failing condition — so the duplication was true, never written down, and would never have
+-- been re-examined when that trust rose.
+--
+-- A column rather than a substring of `indexable_reason`, which is where the pointer used to
+-- be packed. Three reasons:
+--
+--   1. the fact survives whichever condition happens to win the race to explain the article;
+--   2. `duplicate_of IS NULL` is a filter the feed, the topic listings and search can apply,
+--      which is how §13.1's decision — a duplicate leaves the platform's own surfaces and
+--      keeps its address — is expressed in SQL rather than in five separate opinions;
+--   3. a moderator can be shown *what* it duplicates rather than told that it does.
+--
+-- Nullable and unset for almost every row, so no index: the queries that read it already
+-- have a `WHERE` narrow enough to make it a filter on a small result rather than a scan.
+ALTER TABLE articles ADD COLUMN duplicate_of TEXT REFERENCES articles (id);

@@ -183,6 +183,15 @@ export async function search(
   for (const id of ids) {
     const view = await ports.reading.findPublished(id);
     if (view === null) continue;
+    /*
+     * §60.1, §13.1 — a search result is a surface the platform curates.
+     *
+     * Filtered here rather than in the index because the index is rebuilt from articles and
+     * a duplicate's text is still the text somebody searched for; what should not happen is
+     * the platform offering the same article twice under two titles. The article stays
+     * reachable by its own id, which is the search this one still answers.
+     */
+    if (view.article.duplicateOf !== null && view.article.duplicateOf !== undefined) continue;
     const card = cardFor(view);
     if (card !== null) cards.push(card);
   }

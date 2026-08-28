@@ -18,6 +18,8 @@ export interface ArticleRecord {
   translationGroupId: string | null;
   authorshipDisclosure: Disclosure;
   indexable: boolean;
+  /** SPEC §60.1 — the article this one is byte-identical to, or null. */
+  duplicateOf?: OratorId | null;
   canonicalUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -150,9 +152,35 @@ export interface ArticleRepo {
    */
   setIndexability(
     articleId: string,
-    fields: { indexable: boolean; reason: string; simhash: string | null },
+    fields: {
+      indexable: boolean;
+      reason: string;
+      simhash: string | null;
+      /**
+       * SPEC §60.1 — the article this one is a copy of, or null.
+       *
+       * A column rather than a substring of `reason`, so the fact survives whichever
+       * condition happened to win the race to explain the article — a duplicate by an author
+       * whose trust has not risen used to be recorded as `untrusted_author` and nothing else.
+       */
+      duplicateOf: string | null;
+    },
     at: string,
   ): PendingWrite;
+
+  /**
+   * SPEC §60.1 — the earliest published article with this exact body, if there is one.
+   *
+   * Free next to the simhash path: `content_hash` is already on every revision and is already
+   * unique per body, so this is an index seek where a near-duplicate needs a fingerprint and
+   * four band lookups. An identical body took the expensive route until now, and only after
+   * five earlier conditions had passed.
+   *
+   * Strictly earlier, not merely different. Ids are time-ordered (§12.2), so this asks
+   * "published before this one" — and the earliest of a set therefore finds nothing and is
+   * nobody's copy, which is what makes the relation a direction rather than a pair.
+   */
+  findByContentHash(contentHash: string, before: string): Promise<{ id: OratorId } | null>;
 
   /**
    * SPEC §60.1 — published articles whose fingerprint shares a band with this one.

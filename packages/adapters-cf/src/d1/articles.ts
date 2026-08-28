@@ -39,6 +39,7 @@ interface ArticleRow {
   simhash_b6: number | null;
   simhash_b7: number | null;
   indexable_reason: string | null;
+  duplicate_of: string | null;
   author_owner_principal_id: string | null;
   author_username: string;
 }
@@ -94,6 +95,7 @@ function toArticle(row: ArticleRow | null): ArticleRecord | null {
     moderatedAt: row.moderated_at,
     simhash: row.simhash,
     indexableReason: row.indexable_reason,
+    duplicateOf: (row.duplicate_of ?? null) as OratorId | null,
     authorUsername: row.author_username,
     ...(row.author_owner_principal_id === null
       ? {}
@@ -279,14 +281,48 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
         db
           .prepare(
             `UPDATE articles
-                SET indexable = ?, indexable_reason = ?, simhash = ?,
+                SET indexable = ?, indexable_reason = ?, duplicate_of = ?, simhash = ?,
                     simhash_b0 = ?, simhash_b1 = ?, simhash_b2 = ?, simhash_b3 = ?,
                     simhash_b4 = ?, simhash_b5 = ?, simhash_b6 = ?, simhash_b7 = ?,
                     updated_at = ?
               WHERE id = ?`,
           )
-          .bind(fields.indexable ? 1 : 0, fields.reason, fields.simhash, ...bands, at, articleId),
+          .bind(
+            fields.indexable ? 1 : 0,
+            fields.reason,
+            fields.duplicateOf,
+            fields.simhash,
+            ...bands,
+            at,
+            articleId,
+          ),
       );
+    },
+
+    /**
+     * SPEC §60.1 — the earliest published article with this exact body.
+     *
+     * Joined through the published revision rather than through any revision: a draft that
+     * happens to share bytes is not something anybody has published twice, and an article
+     * whose *current* draft matches is not a duplicate until it is published.
+     *
+     * `ORDER BY a.id` is oldest first, ids being time-ordered (§12.2).
+     */
+    async findByContentHash(contentHash, excludingArticleId) {
+      const row = await db
+        .prepare(
+          `SELECT a.id FROM articles a
+             JOIN revisions r ON r.id = a.published_revision_id
+            -- Strictly earlier, not merely different. Ids are time-ordered (§12.2), so this
+            -- is "published before this one" — without it the first article of a pair finds
+            -- the second and both are marked copies of each other, which is nobody's copy.
+            WHERE r.content_hash = ? AND a.id < ?
+              AND a.status = 'published' AND a.visibility = 'public'
+            ORDER BY a.id ASC LIMIT 1`,
+        )
+        .bind(contentHash, excludingArticleId)
+        .first<{ id: string }>();
+      return row === null ? null : { id: row.id as OratorId };
     },
 
     async findBySimhashBands(bands, excludeArticleId, limit) {

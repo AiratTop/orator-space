@@ -40,7 +40,9 @@ export type IndexabilityReason =
   | "flagged"
   | "untrusted_author"
   | "too_short"
-  | "near_duplicate";
+  | "near_duplicate"
+  /** Byte-identical to something already published. Cheaper to find and stronger to state. */
+  | "duplicate";
 
 export interface IndexabilityOutcome {
   indexable: boolean;
@@ -66,6 +68,35 @@ export async function evaluateIndexability(
 
   if (article.status !== "published" || article.visibility !== "public") {
     return record(ports, articleId, { indexable: false, reason: "not_published" }, null);
+  }
+
+  /*
+   * §60.1 — the exact duplicate, first and cheaply.
+   *
+   * `content_hash` is already on every revision and already unique per body, so this is an
+   * index seek where the near-duplicate path below needs a body read, a fingerprint and four
+   * band lookups. It goes here rather than beside that path because of what was found on
+   * staging: three byte-identical articles recorded as `untrusted_author`, because the chain
+   * returns at the first failing condition and trust came first. The duplication was true,
+   * never written down, and would never have been re-examined when that trust rose.
+   *
+   * Before the cross-post and moderation checks too. Those describe what an article *is*;
+   * this describes what it is a copy of, and the second fact is worth keeping whichever of
+   * the first ones happens to be true.
+   */
+  if (article.publishedRevisionId !== null) {
+    const published = await ports.articles.findRevision(article.publishedRevisionId);
+    if (published !== null) {
+      const original = await ports.articles.findByContentHash(published.contentHash, articleId);
+      if (original !== null) {
+        return record(
+          ports,
+          articleId,
+          { indexable: false, reason: "duplicate", duplicateOf: original.id },
+          null,
+        );
+      }
+    }
   }
 
   /*
@@ -154,6 +185,7 @@ async function record(
 ): Promise<IndexabilityOutcome> {
   const article = await ports.articles.findById(articleId);
   const reason = outcome.duplicateOf ? `${outcome.reason}:${outcome.duplicateOf}` : outcome.reason;
+  const duplicateOf = outcome.duplicateOf ?? null;
 
   // Nothing to do when the verdict has not moved. §50.3 requires a sitemap rebuild on a
   // change to `indexable`, and a write on every replayed queue message would rebuild it
@@ -162,12 +194,39 @@ async function record(
     return outcome;
   }
 
+  const now = ports.clock.now().toISOString();
+
+  /*
+   * §60.1 — a duplicate is a moderation signal, and a signal that ends in a column is not
+   * one. The report is raised the first time the pointer appears, which the guard above
+   * makes exactly once: a replayed message finds the verdict unmoved and returns.
+   *
+   * `insertReport` and not an action. Nothing is decided here — §61 gives an automatic
+   * verdict a report and nothing more, and which of two identical articles is the copy is a
+   * question a person may answer differently from the ordering by id.
+   */
+  const newlyDuplicate = duplicateOf !== null && article?.duplicateOf !== duplicateOf;
+
   await ports.db.commit([
     ports.articles.setIndexability(
       articleId,
-      { indexable: outcome.indexable, reason, simhash: hex ?? article?.simhash ?? null },
-      ports.clock.now().toISOString(),
+      { indexable: outcome.indexable, reason, duplicateOf, simhash: hex ?? article?.simhash ?? null },
+      now,
     ),
+    ...(newlyDuplicate
+      ? [
+          ports.moderation.insertReport({
+            id: ports.ids.next(),
+            targetType: "article",
+            targetId: articleId,
+            reporterPrincipalId: null,
+            reporterContact: null,
+            category: "other",
+            details: `Byte-identical to ${duplicateOf}. Detected automatically (§60.1); the ordering by id says which was published first, not which is the copy.`,
+            createdAt: now,
+          }),
+        ]
+      : []),
   ]);
   return outcome;
 }
