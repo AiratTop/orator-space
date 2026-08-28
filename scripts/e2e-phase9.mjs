@@ -26,6 +26,31 @@ const webBase = process.argv[3] ?? "http://localhost:4321";
 const webOrigin = new URL(webBase).origin;
 const rpId = new URL(webBase).hostname;
 
+/**
+ * One retry on a connection that never happened, and on nothing else.
+ *
+ * A run died on `ETIMEDOUT` to a Cloudflare address after every assertion in its section had
+ * passed, which turned a moment of runner networking into a red deploy and a skipped
+ * production release.
+ *
+ * The distinction is the whole of it: a thrown `fetch` means no answer arrived, which is a
+ * fact about the wire. A 500 is an answer, and retrying one would hide exactly what a
+ * checkpoint exists to find. So only the throw is retried, twice, briefly — and if the third
+ * attempt also fails, the run fails, because three failed connections in a row is not weather.
+ */
+const wire = async (input, init) => {
+  let last;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await fetch(input, init);
+    } catch (error) {
+      last = error;
+      await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+    }
+  }
+  throw last;
+};
+
 let failures = 0;
 const check = (name, ok, detail = "") => {
   console.log(`${ok ? "  ok  " : "  FAIL"}  ${name}${detail ? `  — ${detail}` : ""}`);
@@ -35,7 +60,7 @@ const section = (name) => console.log(`\n${name}`);
 
 const suffix = Math.random().toString(36).slice(2, 8);
 async function api(method, path, { token, body, key } = {}) {
-  const response = await fetch(`${apiBase}${path}`, {
+  const response = await wire(`${apiBase}${path}`, {
     method,
     headers: {
       "content-type": "application/json",
@@ -64,7 +89,7 @@ const cookieHeader = () => [...cookies].map(([name, value]) => `${name}=${value}
 
 /** A JSON post to the passkey endpoints, which is how the browser's script talks to them. */
 async function webJson(path, { body, token } = {}) {
-  const response = await fetch(`${webBase}${path}`, {
+  const response = await wire(`${webBase}${path}`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -80,7 +105,7 @@ async function webJson(path, { body, token } = {}) {
 }
 
 const page = async (path, { cookie = true } = {}) => {
-  const response = await fetch(`${webBase}${path}`, {
+  const response = await wire(`${webBase}${path}`, {
     headers: cookie && cookies.size > 0 ? { cookie: cookieHeader() } : {},
     redirect: "manual",
   });
@@ -89,7 +114,7 @@ const page = async (path, { cookie = true } = {}) => {
 
 /** A form post: `application/x-www-form-urlencoded` with an Origin, like every browser. */
 async function submit(fields, { origin = webOrigin } = {}) {
-  const response = await fetch(`${webBase}/settings`, {
+  const response = await wire(`${webBase}/settings`, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -459,7 +484,7 @@ check("and the original still is", listed.includes(articleId), `${listed.length}
 section("Commenting from a browser (§17, §49.3)");
 
 async function comment(fields, { origin = webOrigin } = {}) {
-  const response = await fetch(`${webBase}/p/${articleId}/comment`, {
+  const response = await wire(`${webBase}/p/${articleId}/comment`, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -536,7 +561,7 @@ const upload = new FormData();
 upload.set("action", "profile.avatar");
 upload.set("avatar", new Blob([PIXEL], { type: "image/png" }), "avatar.png");
 
-const uploaded = await fetch(`${webBase}/settings?tab=profile`, {
+const uploaded = await wire(`${webBase}/settings?tab=profile`, {
   method: "POST",
   headers: { origin: webOrigin, cookie: cookieHeader() },
   body: upload,
@@ -549,7 +574,7 @@ const avatarSrc = (uploadedHtml.match(/src="([^"]*\/avatar)"/) ?? [])[1];
 check("and the page then points at its avatar variant", typeof avatarSrc === "string", String(avatarSrc));
 
 if (typeof avatarSrc === "string") {
-  const served = await fetch(avatarSrc);
+  const served = await wire(avatarSrc);
   check("which is served from the media origin", served.status === 200, `${served.status} ${avatarSrc}`);
   check(
     "with a long cache, since a variant of an immutable record cannot change",
@@ -563,10 +588,10 @@ if (typeof avatarSrc === "string") {
    * The whole billing argument rests on this: an address that accepted arbitrary numbers
    * would let any caller mint unlimited billable transformations of one picture.
    */
-  const sized = await fetch(avatarSrc.replace(/\/avatar$/, "/w=800"));
+  const sized = await wire(avatarSrc.replace(/\/avatar$/, "/w=800"));
   check("and a size in the URL is not an address", sized.status === 404, String(sized.status));
 
-  const unknown = await fetch(avatarSrc.replace(/\/avatar$/, "/enormous"));
+  const unknown = await wire(avatarSrc.replace(/\/avatar$/, "/enormous"));
   check("nor is a variant nobody declared", unknown.status === 404, String(unknown.status));
 }
 
@@ -593,7 +618,7 @@ const beforeSaving = await page(`/p/${articleId}`);
 check("a signed-in reader is", beforeSaving.html.includes('aria-pressed="false"'));
 
 async function save(want) {
-  const response = await fetch(`${webBase}/p/${articleId}/save`, {
+  const response = await wire(`${webBase}/p/${articleId}/save`, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -606,7 +631,7 @@ async function save(want) {
   return { status: response.status, location: response.headers.get("location") ?? "" };
 }
 
-const forgedSave = await fetch(`${webBase}/p/${articleId}/save`, {
+const forgedSave = await wire(`${webBase}/p/${articleId}/save`, {
   method: "POST",
   headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://evil.test", cookie: cookieHeader() },
   body: "saved=yes",
@@ -649,7 +674,7 @@ check("and the list is empty again", !emptied.html.includes(articleId));
 // --- what the page must not be ---------------------------------------------------------
 section("What a writing page must not become (§28)");
 
-const publish = await fetch(`${webBase}/settings`, {
+const publish = await wire(`${webBase}/settings`, {
   method: "POST",
   headers: {
     "content-type": "application/x-www-form-urlencoded",
