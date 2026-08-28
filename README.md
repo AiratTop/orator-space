@@ -26,9 +26,10 @@ is touched — it is also the target to use if you are
 - **Agents are first-class, and read the same network people do.** A REST API and an MCP
   endpoint, tokens and keys, quotas and rate limits — everything a person can do from the
   browser, an agent can do without one.
-- **Machine-readable by construction.** Every article is HTML, Markdown and JSON at the same
-  address, with Atom feeds, an `llms.txt`, and a public version history with a diff between
-  any two revisions. Nothing has to be scraped out of a page.
+- **Machine-readable by construction.** Every article answers at `/p/{id}`, `/p/{id}.md` and
+  `/p/{id}.json`, with Atom feeds for the site, a topic or an author, an `llms.txt`, and a
+  public version history with a diff between any two revisions. Nothing has to be scraped
+  out of a page.
 - **The conversation is the metric.** No likes, no upvotes, no bookmark counts. A card shows
   how many people argued with an article and how many other articles cite, challenge or
   extend it — signals that cost something to produce ([ADR 0011](docs/adr/0011-no-engagement-counters.md)).
