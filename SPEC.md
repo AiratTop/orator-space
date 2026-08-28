@@ -870,7 +870,7 @@ CREATE TABLE webauthn_credentials (
   created_at    TEXT NOT NULL,
   last_used_at  TEXT
 );
-CREATE UNIQUE INDEX ux_webauthn_cred ON webauthn_credentials(credential_id);
+CREATE UNIQUE INDEX ux_webauthn_credential ON webauthn_credentials(credential_id);
 CREATE INDEX ix_webauthn_principal ON webauthn_credentials(principal_id);
 
 CREATE TABLE sessions (
@@ -889,7 +889,9 @@ CREATE INDEX ix_sessions_principal ON sessions(principal_id, id DESC);
 ```
 
 **MUST.** A user may hold several passkeys. Deleting the last one is refused unless a
-backup sign-in method is configured; otherwise the account becomes unreachable.
+backup sign-in method is configured; otherwise the account becomes unreachable. The backup
+method is §9.3's Telegram binding — until this rule has something to refuse, there is no way
+to delete a passkey at all (§9.2).
 
 **MUST.** The session cookie is `HttpOnly`, `Secure`, `SameSite=Lax`, with a bounded
 lifetime, and its value is stored only as a hash.
@@ -903,20 +905,37 @@ explicitly and does not have that property.
 
 ### 9.2. WebAuthn endpoints
 
+**MUST — the ceremony lives on the site origin, not on the API.** This is §9.1's own rule
+followed to its conclusion: the ceremony issues the session cookie, `api.orator.space` never
+reads one, and a WebAuthn relying party is an origin rather than a service. Endpoints under
+`/v1/auth/*` would have to set a cookie for a host that refuses it (ADR 0004).
+
 ```http
-POST   /v1/auth/webauthn/register/options
-POST   /v1/auth/webauthn/register/verify
-POST   /v1/auth/webauthn/login/options
-POST   /v1/auth/webauthn/login/verify
-POST   /v1/auth/logout
-GET    /v1/auth/credentials
-DELETE /v1/auth/credentials/{id}
+POST   /auth/passkey/signup-options     anonymous; checks the name, mints the id, seals a challenge
+POST   /auth/passkey/signup             the account, the credential and the session, in one commit
+POST   /auth/passkey/login-options      anonymous, usernameless; the credential is discoverable
+POST   /auth/passkey/login              verifies the assertion and opens a session
+POST   /auth/passkey/register-options   adds a passkey to an established identity
+POST   /auth/passkey/register           and completes it
+POST   /auth/signout                    ends the session. POST, so no page can sign a reader out
 ```
+
+Sessions are listed and revoked from `/settings` against the account service, not through an
+auth endpoint of their own; §9.1's `sessions` table is what both read.
+
+**Not built — listing and removing one passkey.** A person can add a second passkey and
+cannot see or delete either, so a lost or compromised authenticator can only be dealt with by
+closing the account. What is missing is a list carrying the label, the date it was last used
+and a delete, and a repository method to remove one credential: `CredentialRepo` today has
+`listFor` (used only inside the ceremony, to exclude what is already registered) and
+`deleteAllFor` (account closure). §9.1's refusal to delete the last passkey becomes
+implementable in the same change, because §9.3 is now the backup sign-in method it requires.
+Adding and removing a credential are both `audit_log` events under §62.
 
 ### 9.3. The Telegram bot
 
-**MUST.** The second channel is a Telegram bot (`@orator_space_bot`), running as a webhook on
-a Worker. It does three things, in the order they are worth building:
+**MUST.** The second channel is a Telegram bot, running as a webhook on a Worker. It does
+three things, in the order they are worth building:
 
 ```text
 link      a signed-in person connects their Telegram account to their principal
