@@ -254,6 +254,18 @@ const when = (iso: string) => iso.slice(0, 10);
       is also in the API — this page is the same operations with a form in front of them.
     </p>
 
+    {/*
+      §9.1 — signing out, which had no button anywhere.
+      
+      Sessions could be ended one at a time from their own tab, which is a different act: that
+      is "this browser in the airport lounge", and this is "I am done here". A POST rather than
+      a link, because a link a browser can follow means any page on the internet can sign a
+      reader out by embedding an image.
+    */}
+    <form class="settings__signout" method="post" action="/auth/signout">
+      <button class="button button--quiet button--small" type="submit">Sign out</button>
+    </form>
+
     {outcome.kind === "done" && <p class="notice notice--done" role="status">{outcome.message}</p>}
     {outcome.kind === "failed" && (
       <p class="notice notice--failed" role="alert">

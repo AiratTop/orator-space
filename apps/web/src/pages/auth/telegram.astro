@@ -1,0 +1,98 @@
+---
+import { openSessionFor, redeemTelegramLogin } from "@orator/core";
+import Layout from "../../components/Layout.astro";
+import { authContext, sessionCookie } from "../../lib/auth.js";
+import { telegramPorts } from "../../lib/account.js";
+import { sameOrigin } from "../../lib/account.js";
+import { siteOrigin } from "../../lib/ports.js";
+
+/**
+ * The end of the link `/login` sends (SPEC §9.3, §9.1).
+ *
+ * **The GET shows a button; the POST spends the token — and the first version did not, which
+ * broke the feature completely.** Telegram fetches every URL it delivers in order to build a
+ * link preview, so the one-time nonce was redeemed within six-tenths of a second of being
+ * sent, by Telegram's crawler, every single time. The person then followed a link that had
+ * already been used and was told it had expired.
+ *
+ * Disabling the preview fixes that one fetcher and not the class: a link in a chat is also
+ * read by antivirus proxies, corporate link scanners and whatever the reader's device does
+ * with a URL it sees. A credential that is spent by *looking* at it cannot survive contact
+ * with any of them. So looking is free and pressing is the act, which is what every mail
+ * provider learned to do about magic links a decade ago.
+ */
+const token = Astro.url.searchParams.get("token") ?? "";
+const shaped = /^[0-9A-Z]{8,64}$/.test(token);
+
+let failed = !shaped;
+
+if (Astro.request.method === "POST") {
+  if (!sameOrigin(Astro.request, siteOrigin)) {
+    return new Response("Cross-origin form posts are refused.", {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" },
+    });
+  }
+
+  const form = await Astro.request.formData();
+  const submitted = String(form.get("token") ?? "");
+
+  if (/^[0-9A-Z]{8,64}$/.test(submitted)) {
+    const redeemed = await redeemTelegramLogin(telegramPorts, submitted);
+    if (redeemed.ok) {
+      const opened = await openSessionFor(
+        authContext(Astro.request, crypto.randomUUID()),
+        redeemed.value.principalId,
+      );
+      if (opened.ok) {
+        /*
+         * The cookie is set on a redirect, so the address carrying the token is left behind.
+         * A reload would otherwise re-submit a credential that no longer works.
+         */
+        return new Response(null, {
+          status: 303,
+          headers: {
+            location: "/settings?tab=telegram",
+            "set-cookie": sessionCookie(opened.value.sessionToken),
+            "cache-control": "private, no-store",
+          },
+        });
+      }
+    }
+  }
+  failed = true;
+}
+
+Astro.response.headers.set("cache-control", "private, no-store");
+---
+
+<Layout title="Sign in from Telegram" canonicalPath="/auth/telegram">
+  <main id="main" class="wrap">
+    <h1 class="title">Sign in</h1>
+
+    {failed ? (
+      <>
+        <p class="account__lede">
+          That link is not usable. It works once and expires ten minutes after it is sent — ask
+          the bot for another with <code>/login</code>.
+        </p>
+        <p><a href="/signin">Sign in with a passkey instead</a></p>
+      </>
+    ) : (
+      <>
+        <p class="account__lede">
+          This link came from the Telegram chat connected to an account here. Pressing the
+          button signs you in on this device.
+        </p>
+        <form method="post" class="account__action">
+          <input type="hidden" name="token" value={token} />
+          <button class="button" type="submit">Sign in</button>
+        </form>
+        <p class="field__hint">
+          Nothing has happened yet: the link is spent when you press, not when it is opened.
+          That is deliberate — a chat message is read by more than the person it was sent to.
+        </p>
+      </>
+    )}
+  </main>
+</Layout>

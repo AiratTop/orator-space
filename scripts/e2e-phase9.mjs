@@ -1099,6 +1099,14 @@ const withSessions = await page("/settings?tab=sessions");
 const sessionId = (withSessions.html.match(/name="session" value="([0-9A-Z]{26})"/) ?? [])[1];
 check("the open session is listed", typeof sessionId === "string", String(sessionId));
 
+/*
+ * §9.1 — the page offers a way out, which it did not until somebody looked for one.
+ *
+ * Ending a session from its own row is a different act — "that browser, in the airport
+ * lounge" — and it was the only one available.
+ */
+check("the account page offers a way to sign out", withSessions.html.includes('action="/auth/signout"'));
+
 const ended = await submit({ action: "session.end", session: sessionId });
 check("ending the current session redirects away", ended.status === 303 && ended.headers.get("location") === "/");
 check("and clears the cookie rather than leaving a revoked one", !cookies.has("orator_session"));

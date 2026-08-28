@@ -150,11 +150,14 @@ export async function redeemTelegramLink(
  * from that account's owner. The link is what an email magic link would be, on a channel that
  * is already authenticated and that delivers in a second.
  *
- * **Two minutes, and once.** A link that opens a session is the account, so its lifetime is
- * the window in which a copy of the chat — a shared screen, a forwarded message — is worth
- * anything. Ten minutes is right for binding a chat, which is reversible; this is not.
+ * **Ten minutes, and once, and spent by pressing rather than by opening.** Two minutes was
+ * the first answer and it was the wrong axis: the risk is not how long the link lives, it is
+ * what can spend it. A chat message is fetched by Telegram to build a preview, by link
+ * scanners, by whatever else reads a URL on its way to a person — so the site asks for a
+ * press, and a fetch of the address does nothing. With that, a humane window costs nothing:
+ * somebody switching to another device has time to get there.
  */
-export const LOGIN_TTL_MS = 2 * 60 * 1000;
+export const LOGIN_TTL_MS = 10 * 60 * 1000;
 
 export interface StartedLogin {
   nonce: string;

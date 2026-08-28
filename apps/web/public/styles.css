@@ -2905,3 +2905,8 @@ img.avatar {
   gap: 0.75rem;
   margin: 0.75rem 0 0;
 }
+
+/* Sign out sits with the sentence that says who is signed in (§9.1). */
+.settings__signout {
+  margin: -1rem 0 2rem;
+}

@@ -56,12 +56,26 @@ function sameSecret(a: string, b: string): boolean {
 const escapeHtml = (value: string): string =>
   value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+/**
+ * Sends a message, and never asks Telegram to look at the links in it.
+ *
+ * Telegram fetches every URL it delivers in order to build a preview. That is harmless for an
+ * article and fatal for a credential: the login link was being spent six-tenths of a second
+ * after it was sent, by the preview crawler, before the person had seen it. The site no
+ * longer treats a fetch as use (see `/auth/telegram`), so this is the second lock rather than
+ * the only one — but a preview of a one-time link is worthless anyway.
+ */
 async function say(token: string, chatId: string, text: string): Promise<void> {
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        link_preview_options: { is_disabled: true },
+      }),
     });
   } catch (error) {
     // A reply that does not arrive is not a reason to answer Telegram with a failure: it
@@ -104,13 +118,18 @@ const SAID = {
    * act, and the sentence before it says what will stop.
    */
   loginSent: (url: string, minutes: number) =>
-    `Open this to sign in. It works once and expires in ${minutes} minutes.\n${url}\n\n` +
+    `Open this and press the button to sign in. It works once and expires in ${minutes} ` +
+    `minutes.\n${url}\n\n` +
     "If you did not ask for this, disconnect the chat from your account settings — somebody " +
     "else is holding this conversation.",
   confirmDisconnect:
     "This will disconnect the chat from your Orator.Space account: no notifications, and " +
     "nothing about your work will reach you here.\n\n" +
-    "To go ahead, send: /disconnect yes",
+    // A command rather than a word to type: Telegram renders `/disconnect_confirm` as a
+    // tappable link, so confirming is one deliberate press instead of an awkward edit on a
+    // phone keyboard. It is deliberately not in the command menu — it is only ever reached
+    // from this sentence.
+    "To go ahead: /disconnect_confirm",
   disconnected:
     "Disconnected. This chat no longer belongs to any account here and will receive nothing. " +
     "You can connect it again, to this account or another one, from the settings page.",
@@ -174,6 +193,8 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
   const telegramUserId = String(from.id);
   const repo = createTelegramRepo(c.env.DB);
   const command = text.trim().split(/\s+/)[0]?.replace(/@\w+$/, "").toLowerCase() ?? "";
+  // `/disconnect_confirm` is the same command, confirmed; the check below reads the whole line.
+  const isDisconnect = command === "/disconnect" || command === "/disconnect_confirm";
 
   /*
    * The commands, and why there are only three.
@@ -243,13 +264,13 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
     await say(
       token,
       chatId,
-      login.ok ? SAID.loginSent(login.value.url, 2) : SAID.notConnected,
+      login.ok ? SAID.loginSent(login.value.url, 10) : SAID.notConnected,
     );
     console.log(JSON.stringify({ level: "info", event: "telegram.login.issued", ok: login.ok }));
     return c.text("ok");
   }
 
-  if (command === "/disconnect") {
+  if (isDisconnect) {
     /*
      * Confirmed by the word after it, rather than by a button.
      *
@@ -257,7 +278,7 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
      * updates — a second kind of update to verify, parse and answer, for a confirmation that
      * two words already provide.
      */
-    const confirmed = /^\/disconnect(?:@\w+)?\s+(yes|confirm)$/i.test(text.trim());
+    const confirmed = /^\/disconnect(?:_confirm|(?:@\w+)?\s+(?:yes|confirm))/i.test(text.trim());
     if (!confirmed) {
       const account = await repo.findByTelegramUser(telegramUserId);
       await say(token, chatId, account === null ? SAID.notConnected : SAID.confirmDisconnect);
