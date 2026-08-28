@@ -115,6 +115,14 @@ export const articleView = (
   published_at: article.publishedAt,
   indexable: article.indexable,
   /*
+   * SPEC §60.1 — the article this one is byte-identical to, or null.
+   *
+   * An agent reading this should be told it is reading a copy, for the same reason a person
+   * is: the article keeps its address and its citations and is absent from the feed, the
+   * topic listings and search. Without the field that absence is unexplained.
+   */
+  duplicate_of: article.duplicateOf ?? null,
+  /*
    * SPEC §22 — assigned by the platform, never claimed by the author.
    *
    * `source` is carried because the three values mean different things to a caller: `ai` is

@@ -102,6 +102,14 @@ export async function closeAccount(
     ctx.ports.tokens.revokeAllFor(principal.id, at),
     ctx.ports.sessions.revokeAllFor(principal.id, at),
     ctx.ports.credentials.deleteAllFor(principal.id),
+    /*
+     * §23.5, ADR 0011 — a reading list goes with the account.
+     *
+     * Deleted rather than kept: it is one person's private notes about their own reading,
+     * it is not evidence of anything and nothing else in the system reads it. Keeping it
+     * would keep a record of what somebody read after they asked to be forgotten.
+     */
+    ctx.ports.readingList.removeAllFor(principal.id),
 
     // 5 — the personal data. The row survives because it is a foreign key target for
     // articles, comments, edges and audit entries.

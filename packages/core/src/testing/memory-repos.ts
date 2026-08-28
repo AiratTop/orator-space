@@ -46,6 +46,7 @@ import {
   type SessionRepo,
   type ReportRecord,
   type TopicRecord,
+  type ReadingListRepo,
   type TopicAssignmentRepo,
   type TopicRepo,
   type TokenRecord,
@@ -98,6 +99,7 @@ export interface MemoryState {
   /** The bytes, keyed the same way the R2 adapter keys them. */
   mediaBytes: Map<string, Uint8Array>;
   articleTopics: Map<string, Set<string>>;
+  readingList: Map<string, Set<string>>;
   classifications: Map<string, { contentHash: string; provider: string; topicCount: number }>;
   /** `${articleId}:${topicId}` → source, so a correction can outrank the machine (§22). */
   topicSources: Map<string, string>;
@@ -148,6 +150,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     media: new Map(),
     mediaBytes: new Map(),
     articleTopics: new Map(),
+    readingList: new Map(),
     classifications: new Map(),
     topicSources: new Map(),
     edges: new Map(),
@@ -202,6 +205,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         media: new Map(state.media),
         mediaBytes: new Map(state.mediaBytes),
         articleTopics: new Map(state.articleTopics),
+        readingList: new Map(state.readingList),
         classifications: new Map(state.classifications),
         topicSources: new Map(state.topicSources),
         edges: new Map(state.edges),
@@ -1383,6 +1387,42 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+  /** ADR 0011 — a private list, and nothing here can produce a public number. */
+  const readingList: ReadingListRepo = {
+    async has(principalId, articleId) {
+      return state.readingList.get(principalId)?.has(articleId) === true;
+    },
+    async list(principalId, limit, before) {
+      return [...(state.readingList.get(principalId) ?? [])]
+        .filter((id) => before === null || id < before)
+        .sort()
+        .reverse()
+        .slice(0, limit)
+        .map((id) => state.articles.get(id))
+        .filter((article) => article !== undefined)
+        .map((article) => viewOf(article))
+        .filter((view): view is ArticleView => view !== null)
+        .map(cardOf);
+    },
+    save: (principalId, articleId) =>
+      asWrite(() => {
+        const saved = state.readingList.get(principalId) ?? new Set<string>();
+        saved.add(articleId);
+        state.readingList.set(principalId, saved);
+        return 1;
+      }),
+    remove: (principalId, articleId) =>
+      asWrite(() => {
+        state.readingList.get(principalId)?.delete(articleId);
+        return 1;
+      }),
+    removeAllFor: (principalId) =>
+      asWrite(() => {
+        state.readingList.delete(principalId);
+        return 1;
+      }),
+  };
+
   const media: MediaRepo = {
     async listStalePending(cutoff, limit) {
       return [...state.media.values()]
@@ -1730,6 +1770,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     search,
     topics,
     topicAssignments,
+    readingList,
     media,
     mediaStore,
     moderation,

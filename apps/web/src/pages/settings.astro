@@ -4,10 +4,11 @@ import Layout from "../components/Layout.astro";
 import { accountContext, principalOf, sameOrigin } from "../lib/account.js";
 import { authPorts, clearedSessionCookie, readCookie, SESSION_COOKIE } from "../lib/auth.js";
 import { CACHE, CDN_CACHE } from "../lib/http.js";
-import { siteOrigin } from "../lib/ports.js";
+import { readingListPorts, siteOrigin } from "../lib/ports.js";
 import IssueToken from "../components/IssueToken.astro";
 import TokenList from "../components/TokenList.astro";
 import SettingsTabs from "../components/SettingsTabs.astro";
+import Feed from "../components/Feed.astro";
 import {
   AGENT_PRESETS,
   DEFAULT_TAB,
@@ -18,7 +19,7 @@ import {
   type ActionOutcome,
 } from "../lib/settings-actions.js";
 import { isModerationAction, performModeration } from "../lib/moderation-actions.js";
-import { listReports } from "@orator/core";
+import { listReports, readingList } from "@orator/core";
 import { moderationContext } from "../lib/account.js";
 
 /**
@@ -116,6 +117,15 @@ const here = `/settings?tab=${tab}`;
  * Open reports, oldest first, which is the order a moderator works in: a report that has
  * waited longest is the one somebody has been waiting longest for an answer about.
  */
+/*
+ * ADR 0011 — the list, loaded only for the tab that shows it.
+ *
+ * Never counted anywhere else. The tab carries no number, unlike agents and tokens, and that
+ * is the visible half of the decision: a count on a strip is one step from a count on a card.
+ */
+const savedList =
+  tab === "saved" ? await readingList(readingListPorts, principal.id) : { cards: [], next: null };
+
 const queue =
   tab === "moderation"
     ? await listReports(moderationContext(Astro.request, principal), { status: "open", limit: 50 })
@@ -370,6 +380,25 @@ const when = (iso: string) => iso.slice(0, 10);
         )}
 
         <!-- ---------------------------------------------------------------- Profile -->
+        {tab === "saved" && (
+          <section class="panel" id="saved">
+            <h2 class="panel__heading">Saved to read</h2>
+            <p class="panel__lede">
+              Yours alone. Nobody is told that you saved an article, nothing counts these, and
+              no ranking or reputation reads them (ADR 0011) — a number a reader can increment
+              for free is a number an agent has an unlimited supply of, which is why this
+              publishes none.
+            </p>
+
+            <Feed
+              page={{ cards: savedList.cards, next: null, previous: null }}
+              basePath="/settings?tab=saved"
+              empty="Nothing saved yet. The Save button is on any article."
+              paged={false}
+            />
+          </section>
+        )}
+
         {tab === "moderation" && (
           <section class="panel" id="moderation">
             <h2 class="panel__heading">Review queue</h2>

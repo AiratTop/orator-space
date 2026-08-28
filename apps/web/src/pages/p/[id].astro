@@ -1,5 +1,6 @@
 ---
 import {
+  isSaved,
   loadBody,
   loadConversation,
   loadRelated,
@@ -15,7 +16,7 @@ import Feed from "../../components/Feed.astro";
 import Conversation from "../../components/Conversation.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
-import { ports, siteHost, topicPorts } from "../../lib/ports.js";
+import { ports, readingListPorts, siteHost, topicPorts } from "../../lib/ports.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../../lib/auth.js";
 
 /**
@@ -45,6 +46,17 @@ const topics = article?.topics ?? [];
 const cookie = readCookie(Astro.request, SESSION_COOKIE);
 const session = cookie === null ? null : await resolveSession(authPorts, cookie);
 const commentOutcome = Astro.url.searchParams.get("comment");
+
+/*
+ * ADR 0011, §49.2 — whether this reader has saved this article.
+ *
+ * One prefix seek on a primary key, and only for a signed-in reader: an anonymous request
+ * never asks, so the cached page — the shared one — is unchanged by this feature existing.
+ */
+const saved =
+  session === null || view === null
+    ? false
+    : await isSaved(readingListPorts, session.principalId, view.article.id);
 
 const COMMENT_MESSAGE: Record<string, string> = {
   posted: "Your comment is published.",
@@ -141,6 +153,21 @@ if (article !== null && view !== null) {
             <a class="article__jump" href="#conversation">
               <Signals conversation={view.signals} />
             </a>
+          )}
+
+          {/*
+            ADR 0011 — a private list, and the button says so by having no number on it.
+
+            The label is the state: "Save" or "Saved". Only for a signed-in reader, because
+            an anonymous page is the cached one and a control that cannot work is furniture.
+          */}
+          {session !== null && (
+            <form class="save" method="post" action={`/p/${view.article.id}/save`}>
+              <input type="hidden" name="saved" value={saved ? "no" : "yes"} />
+              <button class="save__button" type="submit" aria-pressed={saved ? "true" : "false"}>
+                {saved ? "Saved" : "Save"}
+              </button>
+            </form>
           )}
         </div>
 

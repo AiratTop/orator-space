@@ -423,9 +423,17 @@ check("the same body publishes again under another title", copy.status === 201);
 const copyId = copy.body?.id;
 await api("POST", `/v1/articles/${copyId}/publish`, { token: workingToken, key: `p9-copypub-${suffix}` });
 
+/*
+ * Polled with the session cookie, and the reason is general enough to be worth stating.
+ *
+ * An anonymous article page is cacheable (§33.2, `s-maxage=60`), so a loop that polls one
+ * caches its own first miss and reads that miss for a minute — the answer can arrive and the
+ * loop will never see it. Any poll in this file must target a response no cache may keep,
+ * which a request carrying a cookie is by construction.
+ */
 let marked = null;
 for (let attempt = 0; attempt < 30; attempt++) {
-  const read = await page_(`/p/${copyId}`);
+  const read = await page(`/p/${copyId}`);
   if (read.html.includes("byte-identical")) {
     marked = read.html;
     break;
@@ -434,9 +442,12 @@ for (let attempt = 0; attempt < 30; attempt++) {
 }
 
 check("and is recorded as a copy of the earlier one", marked !== null);
+const copyJson = await api("GET", `/v1/articles/${copyId}`);
+check("which keeps its address rather than disappearing", copyJson.status === 200);
 check(
-  "which keeps its address rather than disappearing",
-  (await api("GET", `/v1/articles/${copyId}`)).status === 200,
+  "and the API says what it is a copy of, so the absence is explained",
+  copyJson.body?.duplicate_of === articleId,
+  String(copyJson.body?.duplicate_of),
 );
 
 const feed = await api("GET", "/v1/feed?limit=50");
@@ -506,6 +517,63 @@ check(
   empty.status === 303 && empty.location.includes("comment=invalid"),
   empty.location,
 );
+
+// --- the reading list ------------------------------------------------------------------
+section("A private reading list (ADR 0011, §49.2)");
+
+const anonymousArticle = await page_(`/p/${articleId}`);
+check(
+  "an anonymous reader is offered nothing to save with",
+  !anonymousArticle.html.includes('class="save"'),
+);
+
+const beforeSaving = await page(`/p/${articleId}`);
+check("a signed-in reader is", beforeSaving.html.includes('aria-pressed="false"'));
+
+async function save(want) {
+  const response = await fetch(`${webBase}/p/${articleId}/save`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      origin: webOrigin,
+      cookie: cookieHeader(),
+    },
+    body: new URLSearchParams({ saved: want }).toString(),
+    redirect: "manual",
+  });
+  return { status: response.status, location: response.headers.get("location") ?? "" };
+}
+
+const forgedSave = await fetch(`${webBase}/p/${articleId}/save`, {
+  method: "POST",
+  headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://evil.test", cookie: cookieHeader() },
+  body: "saved=yes",
+  redirect: "manual",
+});
+check("a save from another origin is refused", forgedSave.status === 403);
+
+check("saving redirects back", (await save("yes")).location.includes("saved=yes"));
+
+const savedTab = await page("/settings?tab=saved");
+check("and the article is on the reading list", savedTab.html.includes(articleId));
+
+/*
+ * ADR 0011's whole objection, asserted rather than described.
+ *
+ * The refusal was of a *counter*. So the article page, the card and the API must carry no
+ * number of saves — and the check is the absence of the word, because a count that exists
+ * anywhere is one refactor from a count on a card.
+ */
+const articleJson = await api("GET", `/v1/articles/${articleId}`);
+check(
+  "and no count of saves exists anywhere a reader or an agent can see",
+  !JSON.stringify(articleJson.body).includes("saved") &&
+    !JSON.stringify(articleJson.body).includes("bookmark"),
+);
+
+check("unsaving removes it", (await save("no")).location.includes("saved=no"));
+const emptied = await page("/settings?tab=saved");
+check("and the list is empty again", !emptied.html.includes(articleId));
 
 // --- what the page must not be ---------------------------------------------------------
 section("What a writing page must not become (§28)");

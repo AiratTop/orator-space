@@ -8,6 +8,7 @@ export * from "./events.js";
 export * from "./reading.js";
 export * from "./social.js";
 export * from "./search.js";
+export * from "./reading-list.js";
 export * from "./topic-assignments.js";
 export * from "./topics.js";
 export * from "./media.js";

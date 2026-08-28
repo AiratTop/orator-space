@@ -149,6 +149,15 @@ const VIEW_FROM = `
 
 const VIEW_SELECT = `SELECT ${VIEW_COLUMNS} ${VIEW_FROM}`;
 
+/**
+ * The card projection, for a repository that joins something else onto it.
+ *
+ * Exported rather than copied, because a second copy of forty columns is a second place for
+ * a card to gain a field and not gain it. The caller appends its own `JOIN` and `WHERE`.
+ */
+export const cardSelect = (): string => VIEW_SELECT;
+export const toCardRow = (row: unknown): ArticleCard => toCard(row as ViewRow);
+
 const PUBLIC = `a.status = 'published' AND a.visibility = 'public' AND p.status = 'active'`;
 
 /*

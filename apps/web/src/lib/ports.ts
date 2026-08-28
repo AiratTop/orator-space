@@ -1,12 +1,15 @@
 import { env } from "cloudflare:workers";
 import {
+  createD1Database,
   createR2AssetStore,
   createR2ContentStore,
   createReadingRepo,
   createSearchIndex,
+  systemClock,
+  createReadingListRepo,
   createTopicRepo,
 } from "@orator/adapters-cf";
-import type { ReadingPorts, SearchPorts, TopicPorts } from "@orator/core";
+import type { ReadingListPorts, ReadingPorts, SearchPorts, TopicPorts } from "@orator/core";
 
 /**
  * The ports the public web is allowed to reach (SPEC §28, §49).
@@ -72,6 +75,22 @@ export const searchLimiter = web.FLOOD_SEARCH;
 export const topicPorts: TopicPorts = {
   ...ports,
   topics: createTopicRepo(web.DB),
+};
+
+/**
+ * Reading, plus one person's own list (SPEC §49.2, ADR 0011).
+ *
+ * The only writable thing the public web reaches besides the account and comment surfaces,
+ * and the narrowest of the three: it can add and remove a row that names an article and the
+ * person who saved it. Nothing else in the system reads that table, which is what keeps ADR
+ * 0011's refusal intact — a private list cannot become a public number if no aggregate
+ * anywhere asks it a question.
+ */
+export const readingListPorts: ReadingListPorts = {
+  ...ports,
+  readingList: createReadingListRepo(web.DB),
+  db: createD1Database(web.DB),
+  clock: systemClock,
 };
 
 /**

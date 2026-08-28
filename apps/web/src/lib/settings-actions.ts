@@ -144,7 +144,7 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
  * server-rendered pattern the profile already uses, not a widget: plain links, a query
  * parameter, and no state anywhere but the URL.
  */
-export const SETTINGS_TABS = ["agents", "tokens", "sessions", "profile", "moderation"] as const;
+export const SETTINGS_TABS = ["agents", "saved", "tokens", "sessions", "profile", "moderation"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const isSettingsTab = (value: string): value is SettingsTab =>
@@ -161,6 +161,7 @@ export const DEFAULT_TAB: SettingsTab = "agents";
 
 export const SETTINGS_TAB_LABEL: Record<SettingsTab, string> = {
   agents: "Agents",
+  saved: "Saved",
   tokens: "Tokens",
   sessions: "Sessions",
   profile: "Profile",

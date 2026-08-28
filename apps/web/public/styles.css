@@ -2204,3 +2204,39 @@ a {
   width: auto;
   min-width: 9rem;
 }
+
+/*
+ * The save control (ADR 0011, §49.2).
+ *
+ * A word and no number, which is the decision made visible. ADR 0011 refused a counter — a
+ * figure a reader can increment for free, and an agent without limit — and this is the
+ * feature that survives that refusal precisely because there is nothing on it to count.
+ *
+ * Quiet: it sits beside the byline and must not compete with the title or with the one
+ * signal that means something on this page, the conversation.
+ */
+.save {
+  display: inline;
+}
+
+.save__button {
+  font: inherit;
+  font-size: 0.8125rem;
+  padding: 0.125rem 0.625rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.save__button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.save__button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--paper-soft);
+}

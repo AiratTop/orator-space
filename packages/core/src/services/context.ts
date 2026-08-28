@@ -20,6 +20,7 @@ import type {
   CredentialRepo,
   PrincipalRepo,
   QuotaGate,
+  ReadingListRepo,
   SessionRepo,
   ReadingRepo,
   SearchIndex,
@@ -60,6 +61,8 @@ export interface Ports {
    * taxonomy that untrusted content is sorted into.
    */
   topicAssignments: TopicAssignmentRepo;
+  /** SPEC §49.2, ADR 0011 — one person's private list, never counted in public. */
+  readingList: ReadingListRepo;
   /** SPEC §21 — the media record; the bytes are `mediaStore`. */
   media: MediaRepo;
   /** SPEC §21.1 — one streamed pass, counted, hashed and sniffed on the way in. */
