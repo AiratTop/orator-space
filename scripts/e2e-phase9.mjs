@@ -547,13 +547,17 @@ check(
 section("Images (§21.2, §50.1, §49.4)");
 
 /*
- * A one-pixel PNG, written out rather than fetched.
+ * A 64×64 PNG, written out rather than fetched.
  *
  * A checkpoint that downloaded a picture to test picture handling would fail when somebody
  * else's server was down, and report it as this platform's problem.
+ *
+ * Sixty-four pixels rather than one, because the assertion below is that the bytes came back
+ * transformed. A single pixel is a degenerate input to a resize, and a checkpoint should fail
+ * on the platform being wrong rather than on the picture being absurd.
  */
 const PIXEL = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAUUlEQVR42u3PQQkAMAzAwAwqevKnYo/ChRi4U3dq89PqAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP73AKB/A24eMiziAAAAAElFTkSuQmCC",
   "base64",
 );
 
@@ -580,6 +584,39 @@ if (typeof avatarSrc === "string") {
     "with a long cache, since a variant of an immutable record cannot change",
     /immutable/.test(served.headers.get("cache-control") ?? ""),
     served.headers.get("cache-control") ?? "(none)",
+  );
+
+  /*
+   * §21.2 — the variant is the transformation, not the original wearing its name.
+   *
+   * A 200 is not the assertion, because the fallback is also a 200: a deployment whose
+   * transformations all fail serves every original under every variant name and looks
+   * healthy from outside. The format is the difference — variants are produced as WebP and
+   * this picture was uploaded as PNG — and the failure it catches is expensive rather than
+   * cosmetic. It was live: `putDerived` wrote the produced object where nothing would look
+   * for it, so every request re-ran a billable transformation and served the original
+   * anyway.
+   */
+  check(
+    "and is the produced variant rather than the original under its name",
+    served.headers.get("content-type") === "image/webp",
+    served.headers.get("content-type") ?? "(none)",
+  );
+
+  /*
+   * §57.2, §57.4 — the policy has to admit the origin the page points at.
+   *
+   * Both halves are correct on their own here: the media host serves the picture and the
+   * page asks for it. A literal production origin in `img-src` made staging refuse its own
+   * avatars, and nothing visible from either side said so — the browser blocks the request
+   * and renders the gap, which reads as an upload that failed.
+   */
+  const policy = uploaded.headers.get("content-security-policy") ?? "";
+  const avatarOrigin = new URL(avatarSrc).origin;
+  check(
+    "and the page's own policy admits the origin it points at",
+    policy.includes(`img-src 'self' ${avatarOrigin}`),
+    `${avatarOrigin} vs ${policy.split("; ").find((one) => one.startsWith("img-src")) ?? "(none)"}`,
   );
 
   /*
