@@ -47,21 +47,19 @@ export interface SessionView extends OpenSession {
   current: boolean;
 }
 
+/*
+ * The reading list is not here any more, and neither is its count.
+ *
+ * It was a tab, so the strip carried a number like every other tab. It has its own address
+ * now (ADR 0011, §49.2): a page that lists the articles does not need to be told how many
+ * there are, and this saved a query on every load of a page about credentials.
+ */
 export interface AccountView {
   principal: PrincipalRecord;
   tokens: TokenSummary[];
   agents: AgentView[];
   sessions: SessionView[];
-  /**
-   * How many articles this reader has saved (ADR 0011).
-   *
-   * A count, and it does not contradict the ADR — what that refused was a *public* counter, a
-   * number on a card that reads as a measure of an article's worth and that an agent can
-   * manufacture without limit. This is one person being told the size of their own list, on a
-   * page only they can open. Omitting it was over-applying the rule, and it made this one tab
-   * the only one on the strip that would not say whether there was anything behind it.
-   */
-  saved: number;
+
 }
 
 /**
@@ -141,13 +139,12 @@ export async function accountView(
   }
 
   const now = ctx.ports.clock.now();
-  const [ownTokens, owned, sessions, saved] = await Promise.all([
+  const [ownTokens, owned, sessions] = await Promise.all([
     ctx.ports.tokens.listFor(principal.id),
     // Suspended agents included: this is the owner's view, and an agent that has been
     // stopped is exactly the row its owner needs to see in order to start it again.
     ctx.ports.principals.listAgentsOwnedBy(principal.id),
     ctx.ports.sessions.listFor(principal.id),
-    ctx.ports.readingList.countFor(principal.id),
   ]);
 
   const agents = await Promise.all(
@@ -166,7 +163,6 @@ export async function accountView(
     principal,
     tokens: liveTokens(ownTokens, now),
     agents,
-    saved,
     // The clock filters expiry rather than the adapter, so a test can move time (§68).
     sessions: sessions
       .filter((session) => Date.parse(session.expiresAt) > now.getTime())

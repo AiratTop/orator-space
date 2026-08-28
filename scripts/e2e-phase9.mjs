@@ -933,12 +933,8 @@ check(
   afterSave.location,
 );
 
-const savedTab = await page("/settings?tab=saved");
-check("and the article is on the reading list", savedTab.html.includes(articleId));
-check(
-  "and the tab says how many, like every other tab",
-  /tab=saved"[^>]*>Saved\s*<span class="tabs__count">1</.test(savedTab.html.replace(/\n\s*/g, "")),
-);
+const savedPage = await page("/bookmarks");
+check("and the article is in the bookmarks", savedPage.html.includes(articleId));
 
 /*
  * ADR 0011's whole objection, asserted rather than described.
