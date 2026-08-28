@@ -471,6 +471,17 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return 1;
       });
     },
+    markRevisionPublished(revisionId, at) {
+      return asWrite(() => {
+        const revision = state.revisions.get(revisionId);
+        if (revision === undefined) return 0;
+        // Filled once, like the article's own date: republishing after an unpublish does not
+        // restamp when the text first became public.
+        revision.publishedAt = revision.publishedAt ?? at;
+        return 1;
+      });
+    },
+
     unpublish(articleId, at) {
       return asWrite(() => {
         const article = state.articles.get(articleId);
@@ -1137,6 +1148,42 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           .map((edge) => linkOf(edge, edge.dstArticleId)),
         truncated: thread.length > limit,
       };
+    },
+
+    async listPublishedRevisions(articleId, limit) {
+      return [...state.revisions.values()]
+        .filter((revision) => revision.articleId === articleId &&
+            revision.publishedAt !== null &&
+            revision.publishedAt !== undefined)
+        .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+        .slice(0, limit)
+        .map((revision) => {
+          const author = state.principals.get(revision.createdByPrincipalId);
+          return {
+            id: revision.id,
+            title: revision.title,
+            excerpt: revision.excerpt,
+            contentHash: revision.contentHash,
+            contentBytes: revision.contentBytes,
+            createdBy:
+              author === undefined
+                ? null
+                : {
+                    id: author.id,
+                    kind: author.kind,
+                    username: author.username,
+                    displayName: author.displayName,
+                    bio: author.bio,
+                    ownerUsername: null,
+                    model: author.model ?? null,
+                    trustLevel: author.trustLevel ?? null,
+                    systemAccount: author.systemAccount,
+                  },
+            signed: revision.signature !== null,
+            createdAt: revision.createdAt,
+            publishedAt: revision.publishedAt!,
+          };
+        });
     },
 
     async findPrincipalByUsername(username) {

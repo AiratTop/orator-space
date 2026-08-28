@@ -60,6 +60,7 @@ interface RevisionRow {
   signature: string | null;
   signature_key_id: string | null;
   created_at: string;
+  published_at: string | null;
 }
 
 /**
@@ -120,6 +121,7 @@ const toRevision = (row: RevisionRow): RevisionRecord => ({
   signature: row.signature,
   signatureKeyId: row.signature_key_id as OratorId | null,
   createdAt: row.created_at,
+  publishedAt: row.published_at,
 });
 
 export function createArticleRepo(db: D1Database): ArticleRepo {
@@ -234,6 +236,16 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
           // On import the caller supplies that date and the service refuses to overwrite
           // one that already exists, so this only ever fills a blank.
           .bind(revisionId, publishedAt, at, articleId),
+      );
+    },
+
+    markRevisionPublished(revisionId, at) {
+      // COALESCE for the same reason `publish` uses it: republishing the same revision — a
+      // restore after an unpublish (§23.1) — does not restamp when it first became public.
+      return asWrite(
+        db
+          .prepare(`UPDATE revisions SET published_at = COALESCE(published_at, ?) WHERE id = ?`)
+          .bind(at, revisionId),
       );
     },
 

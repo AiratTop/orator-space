@@ -72,6 +72,8 @@ export interface ArticleRecord {
 }
 
 export interface RevisionRecord {
+  /** SPEC §16.3 — when this revision became the public text, or null if it never did. */
+  publishedAt?: string | null;
   id: OratorId;
   articleId: OratorId;
   parentRevisionId: OratorId | null;
@@ -144,6 +146,15 @@ export interface ArticleRepo {
    * where the article was first published somewhere else years ago.
    */
   publish(articleId: string, revisionId: string, at: string, publishedAt: string): PendingWrite;
+  /**
+   * Marks a revision as having been published (SPEC §16.3, §49.2).
+   *
+   * Separate from `publish`, and written in the same transaction. Publishing moves a pointer;
+   * this records that the thing pointed at was, at some moment, the public text — which is
+   * the only way to tell a superseded version from a draft the author never published. A
+   * history built without the distinction publishes work somebody chose not to publish.
+   */
+  markRevisionPublished(revisionId: string, at: string): PendingWrite;
   unpublish(articleId: string, at: string): PendingWrite;
   /** `removalSource` is required when the status is `removed`, and ignored otherwise. */
   setStatus(

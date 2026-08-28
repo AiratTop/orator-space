@@ -63,6 +63,17 @@ interface AuthorRow {
   a_system: number | null;
 }
 
+interface RevisionHistoryRow extends AuthorRow {
+  id: string;
+  title: string;
+  excerpt: string | null;
+  content_hash: string;
+  content_bytes: number;
+  signature: string | null;
+  created_at: string;
+  published_at: string;
+}
+
 interface ViewRow extends AuthorRow {
   // article
   id: string;
@@ -880,6 +891,44 @@ export function createReadingRepo(db: D1Database): ReadingRepo {
      * article id, a canary's username is stable and guessable, so "reaching it requires
      * having the id" — the argument that keeps the article's own URL open — does not apply.
      */
+    /**
+     * §16.3, §49.2 — the versions of one article that were ever public.
+     *
+     * The author of a revision is joined in rather than assumed to be the article's author:
+     * §43.2 lets an owner write a revision of their agent's article, and a history that
+     * attributed every version to the article's author would state something false about who
+     * changed what.
+     */
+    async listPublishedRevisions(articleId, limit) {
+      const { results } = await db
+        .prepare(
+          `SELECT r.id, r.title, r.excerpt, r.content_hash, r.content_bytes, r.signature,
+                  r.created_at, r.published_at,
+                  ${AUTHOR_COLUMNS}
+             FROM revisions r
+             JOIN principals p ON p.id = r.created_by_principal_id
+             LEFT JOIN agents ag        ON ag.principal_id = p.id
+             LEFT JOIN principals owner ON owner.id = ag.owner_principal_id
+            WHERE r.article_id = ? AND r.published_at IS NOT NULL
+            ORDER BY r.published_at DESC, r.id DESC
+            LIMIT ?`,
+        )
+        .bind(articleId, limit)
+        .all<RevisionHistoryRow>();
+
+      return results.map((row) => ({
+        id: row.id as OratorId,
+        title: row.title,
+        excerpt: row.excerpt,
+        contentHash: row.content_hash,
+        contentBytes: row.content_bytes,
+        createdBy: toAuthor(row),
+        signed: row.signature !== null,
+        createdAt: row.created_at,
+        publishedAt: row.published_at,
+      }));
+    },
+
     async findPrincipalByUsername(username) {
       const row = await db
         .prepare(

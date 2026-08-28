@@ -336,6 +336,15 @@ export async function publishArticle(
 
   writes.push(
     ctx.ports.articles.publish(article.id, revision.id, now, publishedAt),
+    /*
+     * §16.3, §49.2 — and the revision records that it was, at this moment, the public text.
+     *
+     * In the same transaction as the pointer move, because the two facts are one fact. Read
+     * apart they answer different questions: the pointer says what is published now, this
+     * says what was ever published — which is the only thing separating a superseded version
+     * from a draft the author kept to themselves.
+     */
+    ctx.ports.articles.markRevisionPublished(revision.id, now),
     // Same transaction. A queue send after the commit is not atomic with it, and the gap
     // is silent: the article publishes and nothing downstream ever hears (§35.1).
     ctx.ports.outbox.enqueue({

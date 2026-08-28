@@ -2573,3 +2573,130 @@ img.avatar {
   align-items: flex-end;
   gap: 0.75rem;
 }
+
+/*
+ * Version history and the difference between two versions (SPEC §16.1, §49.2).
+ *
+ * The list is a record, not a feed: dense rows, the date first, and the two versions being
+ * compared marked so a reader can see what they are looking at without reading the query
+ * string. The diff itself is monospaced and read left to right — the two number columns are
+ * where the line was and where it is, which is the one thing a rendered prose diff cannot say.
+ */
+.history__back {
+  margin: 0 0 0.5rem;
+  font-size: 0.9375rem;
+}
+
+.versions {
+  margin: 1.5rem 0 2.5rem;
+  padding: 0;
+  list-style: none;
+}
+
+.version {
+  padding: 0.875rem 0 0.875rem 0.75rem;
+  border-top: 1px solid var(--line);
+  border-left: 3px solid transparent;
+}
+
+/* The pair being compared, named in the margin rather than in a sentence. */
+.version--from {
+  border-left-color: var(--line);
+}
+
+.version--to {
+  border-left-color: var(--accent);
+}
+
+.version__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+}
+
+.version__when {
+  font-weight: 600;
+}
+
+.version__by,
+.version__facts {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.version__title {
+  margin: 0.25rem 0;
+}
+
+.version__facts code {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+}
+
+.diff__heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  font-size: 1.125rem;
+}
+
+.diff__counts {
+  font-family: var(--mono);
+  font-size: 0.875rem;
+}
+
+.diff__added {
+  color: #1a7f37;
+}
+
+.diff__removed {
+  color: #b3261e;
+  margin-left: 0.5rem;
+}
+
+.diff__between {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+  margin: 0 0 1rem;
+}
+
+/*
+ * Each hunk is its own table, and it scrolls sideways rather than wrapping.
+ *
+ * A wrapped diff line reads as two lines and breaks the correspondence between the number in
+ * the margin and the text beside it, which is the whole apparatus.
+ */
+.diff__hunk {
+  width: 100%;
+  margin: 0 0 1rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 0.8125rem;
+  display: block;
+  overflow-x: auto;
+}
+
+.diff__line--added {
+  background: rgba(26, 127, 55, 0.1);
+}
+
+.diff__line--removed {
+  background: rgba(179, 38, 30, 0.1);
+}
+
+.diff__no {
+  width: 3rem;
+  padding: 0.125rem 0.5rem;
+  text-align: right;
+  color: var(--ink-soft);
+  user-select: none;
+  border-right: 1px solid var(--line);
+}
+
+.diff__text {
+  padding: 0.125rem 0.75rem;
+  white-space: pre;
+}

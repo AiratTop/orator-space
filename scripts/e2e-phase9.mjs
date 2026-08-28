@@ -698,6 +698,58 @@ check(
   "the page still points at the uploaded picture",
 );
 
+// --- history -------------------------------------------------------------------------
+section("Version history (§16.1, §16.3, §49.2)");
+
+/*
+ * A second version of the article published above, so there is something to compare.
+ *
+ * The interesting assertion is not that the page renders: it is that a revision which was
+ * never published stays out of the list. That route listed every revision of every article to
+ * anybody who asked until this checkpoint was written.
+ */
+const draft = await api("POST", `/v1/articles/${articleId}/revisions`, {
+  token: workingToken,
+  key: `p9-rev-${suffix}`,
+  body: {
+    title: `Inference latency ${suffix}, corrected`,
+    content: `${BODY}\n\nA correction: the second run was warm.\n`,
+  },
+});
+check("an author can write a new revision", draft.status === 201, String(draft.status));
+
+const beforePublish = await api("GET", `/v1/articles/${articleId}/revisions`);
+check(
+  "which is not in the public list until it is published (§16.3)",
+  (beforePublish.body?.items ?? []).every((item) => item.published_at !== null),
+  `${(beforePublish.body?.items ?? []).length} listed`,
+);
+
+const republished = await api("POST", `/v1/articles/${articleId}/publish`, {
+  token: workingToken,
+  key: `p9-repub-${suffix}`,
+  body: { revision_id: draft.body?.id },
+});
+check("and publishing it moves the pointer", republished.status === 200, String(republished.status));
+
+const revisionsAfter = await api("GET", `/v1/articles/${articleId}/revisions`);
+check(
+  "after which the history has two public versions",
+  (revisionsAfter.body?.items ?? []).filter((item) => item.published_at !== null).length >= 2,
+  `${(revisionsAfter.body?.items ?? []).length} listed`,
+);
+
+const historyPage = await page_(`/p/${articleId}/history`);
+check("the history has a page", historyPage.status === 200, String(historyPage.status));
+check(
+  "which shows what changed between the two newest versions",
+  historyPage.html.includes("What changed") && historyPage.html.includes("A correction"),
+);
+check(
+  "and the article links to it once there is more than one version",
+  (await page_(`/p/${articleId}`)).html.includes(`/p/${articleId}/history`),
+);
+
 // --- feeds ---------------------------------------------------------------------------
 section("Feeds (§48, §22)");
 

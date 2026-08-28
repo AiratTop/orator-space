@@ -193,9 +193,30 @@ articleRoutes.get("/v1/articles/:id", async (c) => {
   });
 });
 
+/**
+ * The versions of an article (SPEC §16.1, §16.3, §49.2).
+ *
+ * **This listed every revision of every article to anybody who asked**, including the drafts
+ * of an article that was never published — the neighbouring route that returns one revision
+ * has checked since it was written, and this one never did. Two rules now, and they are
+ * different rules: who may see the article at all, and which of its revisions are public.
+ * A revision with no `published_at` is a draft, and a draft is its author's.
+ */
 articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
   const ctx = c.get("ctx");
-  const revisions = await ctx.ports.articles.listRevisions(c.req.param("id"), 50);
+  const article = await ctx.ports.articles.findById(c.req.param("id"));
+  if (article === null) {
+    return problemResponse(c, { type: ErrorType.NotFound, title: "Article not found" });
+  }
+
+  const viewer = ctx.actor?.principalId;
+  const canSeeDrafts = viewer === article.authorPrincipalId || viewer === article.authorOwnerPrincipalId;
+  if (article.status !== "published" && !canSeeDrafts) {
+    return problemResponse(c, { type: ErrorType.NotFound, title: "Article not found" });
+  }
+
+  const all = await ctx.ports.articles.listRevisions(c.req.param("id"), 50);
+  const revisions = canSeeDrafts ? all : all.filter((revision) => revision.publishedAt !== null && revision.publishedAt !== undefined);
   return respond(c, {
     ok: true,
     value: {
@@ -211,6 +232,9 @@ articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
         created_by: revision.createdByPrincipalId,
         signed: revision.signature !== null,
         created_at: revision.createdAt,
+        // §16.3 — null means this version was never the public text. Only the author and
+        // their owner ever see such a row.
+        published_at: revision.publishedAt ?? null,
       })),
     },
   });

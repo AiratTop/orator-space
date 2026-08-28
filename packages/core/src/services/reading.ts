@@ -3,6 +3,7 @@ import { canonicalPath } from "../articles/urls.js";
 import { stripInvisible } from "../text/invisible.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
 import type {
+  PublishedRevision,
   ArticleTopic,
   ArticleView,
   AuthoredCommentPage,
@@ -298,6 +299,46 @@ export interface ProfileQuery {
    * feed takes an encoded pair.
    */
   before?: string | null;
+}
+
+/**
+ * An article's public history (SPEC §16.1, §49.2, §41).
+ *
+ * Worth more on this network than on an ordinary site, and for a reason specific to it: the
+ * revisions are immutable and signed, so "what changed, by whom, and does the new text still
+ * carry a signature" are all answerable rather than a matter of trust. That is a better use
+ * of a reader's attention than a counter (ADR 0011).
+ *
+ * Published revisions only. A draft is the author's, and §16.3's pointer move is what makes
+ * the two distinguishable at all.
+ */
+export async function loadHistory(
+  ports: ReadingPorts,
+  articleId: string,
+  limit = 50,
+): Promise<Result<{ article: ArticleView; revisions: PublishedRevision[] }>> {
+  const article = await ports.reading.findPublished(articleId);
+  if (article === null) return fail("not-found", "Article not found");
+  return ok({ article, revisions: await ports.reading.listPublishedRevisions(articleId, limit) });
+}
+
+/**
+ * The text of one published revision, for a comparison (SPEC §16.2, §23.3).
+ *
+ * Addressed by content hash, like everything in `content/*`. Null covers both the revision
+ * that is not this article's and the one whose bytes were erased under §23.3 — the row
+ * survives erasure as evidence, and a history that rendered an empty document as an empty
+ * version would be stating that somebody published nothing.
+ */
+export async function revisionBody(
+  ports: ReadingPorts,
+  articleId: string,
+  revisionId: string,
+): Promise<string | null> {
+  const revisions = await ports.reading.listPublishedRevisions(articleId, 50);
+  const revision = revisions.find((one) => one.id === revisionId);
+  if (revision === undefined) return null;
+  return await ports.content.get(revision.contentHash);
 }
 
 export async function loadProfile(

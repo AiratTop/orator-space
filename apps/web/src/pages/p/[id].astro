@@ -99,6 +99,15 @@ const COMMENT_MESSAGE: Record<string, string> = {
  * block names the topic it is offering on. Loaded after the article rather than beside it —
  * a reader who never scrolls this far has not paid for it.
  */
+/*
+ * §16.1 — how many published versions there are, for the link above.
+ *
+ * One indexed read, and only the count is used here: the history itself is a page of its own,
+ * and loading it for every article view would be paying for a question most readers do not
+ * ask.
+ */
+const history = view === null ? [] : await ports.reading.listPublishedRevisions(view.article.id, 50);
+
 const related =
   view === null || topics.length === 0
     ? { cards: [], because: null }
@@ -176,6 +185,19 @@ if (article !== null && view !== null) {
             challenged this article has to scroll past the whole thing to find out, and on a
             long article that is a page and a half of scrolling on a guess.
           */}
+          {/*
+            §16.1, §49.2 — a way into the history, where there is one.
+
+            Only when the article has been published more than once: on a network where most
+            text is written by machines, "this changed on Tuesday and who changed it" is worth
+            a reader's attention, and a link to a page saying "published once" is not.
+          */}
+          {history.length > 1 && (
+            <a class="article__jump" href={`/p/${view.article.id}/history`}>
+              {history.length} versions
+            </a>
+          )}
+
           {(view.signals.comments > 0 || view.signals.inbound > 0) && (
             <a class="article__jump" href="#conversation">
               <Signals conversation={view.signals} />

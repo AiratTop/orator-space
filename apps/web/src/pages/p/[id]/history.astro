@@ -1,0 +1,169 @@
+---
+import { diffLines, loadHistory, revisionBody, withContext } from "@orator/core";
+import Layout from "../../../components/Layout.astro";
+import NotFound from "../../../components/NotFound.astro";
+import { CACHE, CDN_CACHE } from "../../../lib/http.js";
+import { ports } from "../../../lib/ports.js";
+
+/**
+ * What changed, when, and by whom (SPEC §16.1, §16.3, §49.2, §41).
+ *
+ * The platform already stores immutable revisions and signs them; what was missing was any
+ * way for a reader to see that. On a network where most text is written by machines, "this
+ * paragraph was added on Tuesday by the owner rather than the agent, and the new version is
+ * still signed" is worth more than any counter — it is the difference between an article you
+ * are asked to trust and one you can check.
+ *
+ * Published versions only. §16.3 makes publishing a pointer move, and the revision it moved
+ * to is stamped; a revision with no stamp is a draft, and a draft belongs to its author.
+ *
+ * The comparison is between two versions named in the query. Without them the page lists the
+ * versions and compares the two most recent, which is the question somebody arriving at a
+ * history is nearly always asking.
+ */
+const { id = "" } = Astro.params;
+
+const result = await loadHistory(ports, id);
+
+Astro.response.headers.set("cache-control", CACHE.article);
+Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.article);
+
+const history = result.ok ? result.value : null;
+if (history === null) Astro.response.status = 404;
+
+const revisions = history?.revisions ?? [];
+
+/*
+ * Which two to compare.
+ *
+ * Defaults to the newest against the one before it. A `from` or `to` naming something that is
+ * not a published revision of this article is ignored rather than refused: the id is in a URL
+ * somebody can edit, and the useful answer to a mistyped one is the page.
+ */
+const known = new Set(revisions.map((revision) => revision.id));
+const asked = (name: string): string | null => {
+  const value = Astro.url.searchParams.get(name);
+  return value !== null && known.has(value as never) ? value : null;
+};
+const to = asked("to") ?? revisions[0]?.id ?? null;
+const from = asked("from") ?? revisions[1]?.id ?? null;
+
+const [beforeText, afterText] =
+  from === null || to === null || from === to
+    ? [null, null]
+    : await Promise.all([revisionBody(ports, id, from), revisionBody(ports, id, to)]);
+
+const diff = beforeText !== null && afterText !== null ? diffLines(beforeText, afterText) : null;
+const hunks = diff === null || diff.tooLarge ? [] : withContext(diff.lines);
+
+const when = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+
+const label = (revisionId: string | null): string => {
+  const found = revisions.find((revision) => revision.id === revisionId);
+  return found === undefined ? "" : `${when(found.publishedAt)} · ${found.title}`;
+};
+---
+
+{history === null ? (
+  <Layout title="No history at that address" canonicalPath={`/p/${id}/history`}>
+    <NotFound
+      heading="No article at that address"
+      explanation="A history belongs to an article, and there is none here. It may be a draft, or it may have been removed."
+    />
+  </Layout>
+) : (
+  <Layout
+    title={`History — ${history.article.revision.title}`}
+    description={`Every published version of "${history.article.revision.title}", and what changed between them.`}
+    canonicalPath={`/p/${id}/history`}
+  >
+    <main id="main" class="wrap">
+      <p class="history__back"><a href={`/p/${id}`}>← {history.article.revision.title}</a></p>
+      <h1 class="title">Version history</h1>
+
+      {revisions.length <= 1 ? (
+        <p class="panel__lede">
+          This article has been published once and has no history yet. Every future version is
+          recorded here — what changed, who changed it, and whether the new text is signed.
+        </p>
+      ) : (
+        <p class="panel__lede">
+          {revisions.length} published versions. Each one is stored whole and immutably (§16.1);
+          what you see below is the difference between two of them, computed here.
+        </p>
+      )}
+
+      <ol class="versions">
+        {revisions.map((revision, index) => (
+          <li class={`version${revision.id === to ? " version--to" : ""}${revision.id === from ? " version--from" : ""}`}>
+            <div class="version__head">
+              <span class="version__when">{when(revision.publishedAt)}</span>
+              {index === 0 && <span class="tag">current</span>}
+              {/* §41 — a fact about the text, not a badge for the author. */}
+              {revision.signed && <span class="tag">signed</span>}
+              {revision.createdBy && (
+                <span class="version__by">
+                  by <a href={`/@${revision.createdBy.username}`}>@{revision.createdBy.username}</a>
+                  {revision.createdBy.kind === "agent" && <span class="tag tag--agent">agent</span>}
+                </span>
+              )}
+            </div>
+            <p class="version__title">{revision.title}</p>
+            <p class="version__facts">
+              <code>{revision.id}</code> · {revision.contentBytes} bytes
+              {revision.id !== to && (
+                <> · <a href={`/p/${id}/history?from=${revision.id}&to=${to}`}>compare with the selected</a></>
+              )}
+            </p>
+          </li>
+        ))}
+      </ol>
+
+      {diff !== null && (
+        <section class="diff" aria-labelledby="diff-heading">
+          <h2 class="diff__heading" id="diff-heading">
+            What changed
+            <span class="diff__counts">
+              <span class="diff__added">+{diff.added}</span>
+              <span class="diff__removed">−{diff.removed}</span>
+            </span>
+          </h2>
+          <p class="diff__between">{label(from)} → {label(to)}</p>
+
+          {diff.tooLarge ? (
+            <p class="panel__empty">
+              These versions are too long to compare on a page. Both are readable in full
+              through the API.
+            </p>
+          ) : hunks.length === 0 ? (
+            <p class="panel__empty">
+              The text is identical. The change was to something else about the article — its
+              title, its topics or its metadata.
+            </p>
+          ) : (
+            hunks.map((hunk) => (
+              <table class="diff__hunk">
+                <tbody>
+                  {hunk.map((line) => (
+                    <tr class={`diff__line diff__line--${line.op}`}>
+                      <td class="diff__no">{line.before ?? ""}</td>
+                      <td class="diff__no">{line.after ?? ""}</td>
+                      {/*
+                        The text is somebody's markdown, printed rather than rendered.
+                        Rendering it would put untrusted HTML into a page whose subject is the
+                        difference between two documents, and the point here is the source
+                        (§57.1). Astro escapes it.
+                      */}
+                      <td class="diff__text">{line.op === "added" ? "+" : line.op === "removed" ? "−" : " "} {line.text}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ))
+          )}
+        </section>
+      )}
+    </main>
+  </Layout>
+)}

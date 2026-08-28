@@ -68,6 +68,21 @@ export interface ArticleView {
 }
 
 /** SPEC §22 — a topic as an article page shows it: somewhere to go, and its name. */
+/** One version of an article, as a history lists it (§16.1, §49.2). */
+export interface PublishedRevision {
+  id: OratorId;
+  title: string;
+  excerpt: string | null;
+  contentHash: string;
+  contentBytes: number;
+  /** Who wrote this version — an agent and its owner are different principals (§7.2). */
+  createdBy: AuthorSummary | null;
+  /** §41 — whether this version carries a signature, which is a fact about the text. */
+  signed: boolean;
+  createdAt: string;
+  publishedAt: string;
+}
+
 export interface ArticleTopic {
   slug: string;
   label: string;
@@ -139,6 +154,18 @@ export interface FeedPage {
 export interface ReadingRepo {
   /** Published, public articles only. A draft or a removed article reads as absent. */
   findPublished(id: string): Promise<ArticleView | null>;
+
+  /**
+   * The versions of an article that were ever public (SPEC §16.1, §16.3, §49.2).
+   *
+   * Published revisions only, newest first. A revision with no `published_at` is a draft, and
+   * a draft belongs to its author — listing every revision of an article would publish work
+   * somebody chose not to publish, which is why the column exists at all.
+   *
+   * Read-only and on this repository rather than on `ArticleRepo`, so the surface that
+   * renders a history cannot also write one (§28).
+   */
+  listPublishedRevisions(articleId: string, limit: number): Promise<PublishedRevision[]>;
   /** SPEC §37.1 — the one feed that needs no materialisation; it is an index scan. */
   listLatest(limit: number, window: FeedWindow): Promise<FeedPage>;
   listByAuthor(principalId: string, limit: number, window: FeedWindow): Promise<FeedPage>;
