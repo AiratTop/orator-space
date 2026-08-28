@@ -129,7 +129,7 @@ export const siteOrigin =
  * label in front becomes a suffix behind: `staging.orator.space` → `api-staging.orator.space`,
  * and a bare apex stays a bare prefix.
  */
-function siblingOrigin(label: "api" | "mcp"): string {
+function siblingOrigin(label: "api" | "mcp" | "media"): string {
   // In development both surfaces are the same Worker on one port, routed by nothing.
   if (siteHost === "localhost") return "http://localhost:8787";
   const parts = siteHost.split(".");
@@ -142,3 +142,21 @@ function siblingOrigin(label: "api" | "mcp"): string {
 
 export const apiOrigin = siblingOrigin("api");
 export const mcpOrigin = siblingOrigin("mcp");
+
+/**
+ * SPEC §57.4 — where user bytes are served from, and never from here.
+ *
+ * Derived like its siblings rather than written down, for the reason `/llms.txt` learned the
+ * hard way: a literal in the code makes staging publish production's addresses.
+ */
+export const mediaOrigin = siblingOrigin("media");
+
+/**
+ * SPEC §50.1 — the preview shown for a page with no image of its own.
+ *
+ * A static asset rather than a generated one. Every social client crops to 1200×630 and
+ * caches what it fetched, so this is read far more often than anything on the site and never
+ * changes; generating it per request would be work done for a picture that is the same
+ * picture. It lives in `public/` and is checked in, which also means a review sees it.
+ */
+export const defaultCard = `${siteOrigin}/card.png`;

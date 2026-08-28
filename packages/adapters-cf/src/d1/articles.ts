@@ -40,6 +40,7 @@ interface ArticleRow {
   simhash_b7: number | null;
   indexable_reason: string | null;
   duplicate_of: string | null;
+  featured_media_id: string | null;
   author_owner_principal_id: string | null;
   author_username: string;
 }
@@ -96,6 +97,7 @@ function toArticle(row: ArticleRow | null): ArticleRecord | null {
     simhash: row.simhash,
     indexableReason: row.indexable_reason,
     duplicateOf: (row.duplicate_of ?? null) as OratorId | null,
+    featuredMediaId: (row.featured_media_id ?? null) as OratorId | null,
     authorUsername: row.author_username,
     ...(row.author_owner_principal_id === null
       ? {}
@@ -405,6 +407,10 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
       if (fields.canonicalUrl !== undefined) {
         assignments.push("canonical_url = ?");
         binds.push(fields.canonicalUrl);
+      }
+      if (fields.featuredMediaId !== undefined) {
+        assignments.push("featured_media_id = ?");
+        binds.push(fields.featuredMediaId);
       }
       if (fields.language !== undefined) {
         assignments.push("language = ?");

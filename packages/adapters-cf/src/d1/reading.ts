@@ -56,6 +56,7 @@ interface ViewRow extends AuthorRow {
   indexable: number;
   canonical_url: string | null;
   duplicate_of: string | null;
+  featured_media_id: string | null;
   created_at: string;
   updated_at: string;
   published_at: string | null;
@@ -126,6 +127,7 @@ const VIEW_COLUMNS = `
          a.id, a.author_principal_id, a.status, a.visibility,
          a.current_revision_id, a.published_revision_id, a.language, a.translation_group_id,
          a.authorship_disclosure, a.indexable, a.canonical_url, a.duplicate_of,
+         a.featured_media_id,
          a.created_at, a.updated_at, a.published_at, a.removed_at,
          r.id AS r_id, r.parent_revision_id AS r_parent, r.title AS r_title,
          r.excerpt AS r_excerpt, r.content_ref AS r_content_ref, r.content_hash AS r_content_hash,
@@ -435,6 +437,7 @@ function toView(row: ViewRow): ArticleView {
     indexable: row.indexable === 1,
     canonicalUrl: row.canonical_url,
     duplicateOf: (row.duplicate_of ?? null) as OratorId | null,
+    featuredMediaId: (row.featured_media_id ?? null) as OratorId | null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     publishedAt: row.published_at,

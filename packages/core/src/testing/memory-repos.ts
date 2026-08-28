@@ -500,6 +500,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
             : { authorshipDisclosure: fields.authorshipDisclosure }),
           ...(fields.canonicalUrl === undefined ? {} : { canonicalUrl: fields.canonicalUrl }),
           ...(fields.language === undefined ? {} : { language: fields.language }),
+          ...(fields.featuredMediaId === undefined
+            ? {}
+            : { featuredMediaId: fields.featuredMediaId as OratorId | null }),
           ...(fields.indexable === undefined ? {} : { indexable: fields.indexable }),
           updatedAt: at,
         });

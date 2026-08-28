@@ -286,6 +286,9 @@ articleRoutes.patch("/v1/articles/:id", async (c) => {
       : { authorshipDisclosure: parsed.data.authorship_disclosure }),
     ...(parsed.data.canonical_url === undefined ? {} : { canonicalUrl: parsed.data.canonical_url }),
     ...(parsed.data.language === undefined ? {} : { language: parsed.data.language }),
+    ...(parsed.data.featured_media_id === undefined
+      ? {}
+      : { featuredMediaId: parsed.data.featured_media_id }),
   });
   if (result.ok) deliverInBackground(c, ctx);
   return respond(c, result);

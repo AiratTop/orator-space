@@ -16,7 +16,7 @@ import Feed from "../../components/Feed.astro";
 import Conversation from "../../components/Conversation.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
-import { ports, readingListPorts, siteHost, topicPorts } from "../../lib/ports.js";
+import { mediaOrigin, ports, readingListPorts, siteHost, topicPorts } from "../../lib/ports.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../../lib/auth.js";
 
 /**
@@ -53,6 +53,19 @@ const commentOutcome = Astro.url.searchParams.get("comment");
  * One prefix seek on a primary key, and only for a signed-in reader: an anonymous request
  * never asks, so the cached page — the shared one — is unchanged by this feature existing.
  */
+/*
+ * §50.1, §21.2 — the article's own picture at the `social` variant, or the site's card.
+ *
+ * The variant is named and never sized, which is what keeps a preview from being an address
+ * anybody can use to mint billable transformations (§21.2). Served from the media origin,
+ * because §57.4 keeps user bytes off the origin that holds credentials — including when the
+ * bytes are being quoted by somebody else's link preview.
+ */
+const preview =
+  view?.article.featuredMediaId === null || view?.article.featuredMediaId === undefined
+    ? null
+    : `${mediaOrigin}/${view.article.featuredMediaId}/social`;
+
 const saved =
   session === null || view === null
     ? false
@@ -123,6 +136,7 @@ if (article !== null && view !== null) {
     canonicalUrl={view.article.canonicalUrl}
     indexable={view.article.indexable}
     ogType="article"
+    image={preview}
     publishedAt={view.article.publishedAt ?? undefined}
     modifiedAt={view.revision.createdAt}
     authorName={`@${view.author.username}`}

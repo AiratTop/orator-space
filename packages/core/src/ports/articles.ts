@@ -20,6 +20,14 @@ export interface ArticleRecord {
   indexable: boolean;
   /** SPEC §60.1 — the article this one is byte-identical to, or null. */
   duplicateOf?: OratorId | null;
+  /**
+   * SPEC §50.1, §21.2 — the image this article is previewed by, or null.
+   *
+   * A column since the first migration and unwritten until now. It is the article's own
+   * picture: the `social` variant of it is the `og:image`, and the site's default card is what
+   * stands in when there is none.
+   */
+  featuredMediaId?: OratorId | null;
   canonicalUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -237,6 +245,8 @@ export interface ArticleRepo {
       canonicalUrl?: string | null;
       language?: string;
       indexable?: boolean;
+      /** SPEC §50.1 — null clears it; absent leaves it alone (§44.2's merge semantics). */
+      featuredMediaId?: string | null;
     },
     at: string,
   ): PendingWrite;

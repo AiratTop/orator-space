@@ -1,5 +1,5 @@
 ---
-import { siteOrigin } from "../lib/ports.js";
+import { defaultCard, siteOrigin } from "../lib/ports.js";
 
 /**
  * The page shell (SPEC §49.1, §50.1).
@@ -28,6 +28,14 @@ interface Props {
   publishedAt?: string;
   modifiedAt?: string;
   authorName?: string;
+  /**
+   * SPEC §50.1 — the preview image, absolute.
+   *
+   * Optional in the type and never optional on the page: the default card stands in when a
+   * caller has nothing better, because a share with no image renders as a bare grey rectangle
+   * in every client, which is a worse advertisement for an article than no share at all.
+   */
+  image?: string | null;
   /** Serialised JSON-LD (§52). Already stringified by the caller. */
   jsonLd?: string;
 }
@@ -39,11 +47,15 @@ const {
   canonicalUrl: externalCanonical = null,
   indexable = false,
   ogType = "website",
+  image = null,
   publishedAt,
   modifiedAt,
   authorName,
   jsonLd,
 } = Astro.props;
+
+/* §50.1 — the caller's image, or the site's. Resolved once so the two tags cannot disagree. */
+const preview = image ?? defaultCard;
 
 const canonicalUrl = externalCanonical ?? `${siteOrigin}${canonicalPath}`;
 const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.Space`;
@@ -79,7 +91,21 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
     {publishedAt && <meta property="article:published_time" content={publishedAt} />}
     {modifiedAt && <meta property="article:modified_time" content={modifiedAt} />}
     {authorName && <meta property="article:author" content={authorName} />}
-    <meta name="twitter:card" content="summary" />
+
+    {/*
+      §50.1 — a preview image, and the same one wherever the page is quoted.
+
+      Never absent: a caller with nothing better gets the site's default card. A share with no
+      image is rendered by every client as a bare grey rectangle, which is a worse
+      advertisement for an article than no share at all, and §49.5 asks for previews that are
+      correct rather than technically valid.
+
+      `summary_large_image` follows from having one at all. The small card is what a page with
+      no image gets, and this site no longer has such a page.
+    */}
+    <meta property="og:image" content={preview} />
+    <meta name="twitter:image" content={preview} />
+    <meta name="twitter:card" content="summary_large_image" />
 
     {/*
       Not an inline script under the CSP: `application/ld+json` is data, not code, and

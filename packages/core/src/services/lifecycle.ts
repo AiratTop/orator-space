@@ -47,6 +47,8 @@ export interface PatchArticleInput {
   authorshipDisclosure?: Disclosure;
   canonicalUrl?: string | null;
   language?: string;
+  /** SPEC §50.1 — the article's own preview image. Null clears it (§44.2's merge). */
+  featuredMediaId?: string | null;
 }
 
 /**
@@ -82,6 +84,26 @@ export async function updateArticle(
     );
   }
 
+  /*
+   * §50.1, §21.2 — the preview image must be one this platform holds and this caller owns.
+   *
+   * An id rather than a URL is already half of it: nothing here can point a page's `og:image`
+   * at bytes this domain has never seen. The other half is ownership — without it, an article
+   * could be previewed by somebody else's picture, which is a claim about authorship made in
+   * the one place every social client repeats verbatim.
+   */
+  if (input.featuredMediaId !== undefined && input.featuredMediaId !== null) {
+    const media = await ctx.ports.media.findById(input.featuredMediaId);
+    if (media === null || media.status !== "ready" || media.kind !== "image") {
+      return fail(ErrorType.ValidationFailed, "No such image", "The media must exist and be ready.", {
+        field: "featured_media_id",
+      });
+    }
+    if (media.ownerPrincipalId !== actor.principalId) {
+      return fail(ErrorType.Forbidden, "Not permitted", "An article is previewed by its author's own image.");
+    }
+  }
+
   const now = ctx.ports.clock.now().toISOString();
   const writes = [];
 
@@ -90,6 +112,7 @@ export async function updateArticle(
     ...(input.authorshipDisclosure === undefined ? {} : { authorshipDisclosure: input.authorshipDisclosure }),
     ...(input.canonicalUrl === undefined ? {} : { canonicalUrl: input.canonicalUrl }),
     ...(input.language === undefined ? {} : { language: input.language }),
+    ...(input.featuredMediaId === undefined ? {} : { featuredMediaId: input.featuredMediaId }),
   };
   if (Object.keys(metadata).length > 0) {
     writes.push(ctx.ports.articles.updateMetadata(article.id, metadata, now));

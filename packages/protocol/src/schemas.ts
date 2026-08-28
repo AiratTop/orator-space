@@ -253,6 +253,14 @@ export const patchArticleRequest = z.object({
   authorship_disclosure: disclosure.optional(),
   canonical_url: z.string().url().nullable().optional(),
   language: z.string().max(20).optional(),
+  /**
+   * SPEC §50.1 — the image this article is previewed by.
+   *
+   * An id and never a URL. A URL would let an article point its `og:image` at anything on the
+   * internet, which is a page on this domain vouching for bytes this domain has never seen —
+   * and §57.4 keeps user bytes on their own origin precisely so that nothing here does that.
+   */
+  featured_media_id: oratorId.nullable().optional(),
 });
 
 export const publishRequest = z.object({

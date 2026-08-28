@@ -2544,6 +2544,19 @@
                   "language": {
                     "type": "string",
                     "maxLength": 20
+                  },
+                  "featured_media_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 26,
+                        "maxLength": 26,
+                        "description": "A 26-character Crockford base32 identifier"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   }
                 }
               }
