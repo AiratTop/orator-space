@@ -1140,6 +1140,7 @@ work here; the three before them close commitments the specification already mad
 [x] a Telegram bot: linking, commands, notifications, a login link  21cf76c, 6933fdc
 [x] bookmarks at their own address; a sign-out button that was missing cdd5f13
 [x] public version history with a diff, and the leak it uncovered   539d8b0
+[x] a form for the half of §61.1 that had only an endpoint
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
 
@@ -1616,8 +1617,13 @@ Gatus already answer the availability half, and the rest is a small increment. B
 `[G]`-shaped — they want a threshold, and there is no traffic to set one from.
 
 **What it missed**, and the omission says something about reading code without using it:
-§61.1's report intake has an endpoint, a queue and a moderator's page, and no form. A reader
-who finds something wrong on an article page has no way to say so.
+§61.1's report intake had an endpoint, a queue and a moderator's page, and no form. A reader
+who found something wrong on an article page had no way to say so. Built on 2026-08-29 —
+`/report`, reachable from an article, a comment and a profile, filed without an account
+because §61.2 refuses to make one the price of reporting illegal content. The address is
+hashed and carried, which no other write from the web surface does: an anonymous report has
+no principal on it, so a digest is the only thing that distinguishes many people reporting
+one thing from one script reporting everything.
 
 **And one it half-saw.** It listed "public registration as a separate deliberate switch" among
 the owner's open decisions, which understates it: registration on production is open now. The

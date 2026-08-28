@@ -89,5 +89,18 @@ const canonicalPath = `${base}${search}`;
     )}
     {content.tab === "comments" && <AuthoredComments page={content.page} basePath={base} />}
     {content.tab === "citations" && <Citations page={content.page} basePath={base} />}
+
+    {/*
+      §61.1 — an account is reportable, not only what it published.
+
+      §61.2 lists `principal` as a target type and there was nowhere to name one from. It
+      matters most for the case a per-article report cannot express: impersonation, or a
+      pattern across a hundred articles where no single one is the problem.
+    */}
+    <p class="report-link">
+      <a href={`/report?user=${encodeURIComponent(principal.username)}`} rel="nofollow">
+        Report this account
+      </a>
+    </p>
   </main>
 </Layout>

@@ -196,6 +196,45 @@ export function moderationContext(request: Request, principal: PrincipalRecord):
   return { ...accountContext(request, principal), ports: moderationPorts };
 }
 
+/**
+ * The context a report is filed in — by anybody, signed in or not (SPEC §61.2).
+ *
+ * Separate from `moderationContext` because of the one difference that matters: the actor is
+ * nullable. §61.2 refuses to make an account the price of reporting illegal content, and it
+ * is right for a second reason — the person best placed to report something is often the one
+ * it is about, who has no reason to hold an account here.
+ *
+ * The address is hashed and carried, which no other write from this surface does. Everywhere
+ * else the audit row names a principal; here there may be none, so a salted digest is the
+ * only thing distinguishing "many people are reporting this" from "one script is". The salt
+ * is the environment name, matching the API surface (§62) — weak as salts go, and what keeps
+ * the two deployments' hashes from being comparable.
+ */
+export async function reportContext(
+  request: Request,
+  principal: PrincipalRecord | null,
+): Promise<ModerationContext> {
+  return {
+    ports: moderationPorts,
+    requestId: request.headers.get("x-request-id") ?? ids.next(),
+    actor: principal === null ? null : sessionActor(principal),
+    tokenId: null,
+    ipHash: await hashAddress(request.headers.get("cf-connecting-ip")),
+    userAgent: request.headers.get("user-agent"),
+    audience: "human_web",
+  };
+}
+
+/** SPEC §62 — an address is stored as a hash or not at all. */
+async function hashAddress(address: string | null): Promise<string | null> {
+  if (address === null) return null;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(accountEnv.ENVIRONMENT + address),
+  );
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+}
+
 
 /**
  * What an avatar upload may reach (SPEC §21.1, §28, §49.4).

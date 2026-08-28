@@ -29,6 +29,8 @@ interface WebEnv {
   SITE_HOST: string;
   /** SPEC §59.1 — flood protection for the one public read the edge cache cannot absorb. */
   FLOOD_SEARCH: { limit(options: { key: string }): Promise<{ success: boolean }> };
+  /** SPEC §61.2 — the one public *write* that takes no credential at all. */
+  FLOOD_REPORT: { limit(options: { key: string }): Promise<{ success: boolean }> };
 }
 
 const web = env as unknown as WebEnv;
@@ -62,6 +64,17 @@ export const searchPorts: SearchPorts = {
  * work under no limit at all would be an inconsistency with a bill attached.
  */
 export const searchLimiter = web.FLOOD_SEARCH;
+
+/**
+ * SPEC §61.2 — reporting takes no account, so the address is all there is to limit by.
+ *
+ * §61.2 is explicit that requiring registration to report illegal content is not acceptable,
+ * and equally explicit that an anonymous report is subject to the same per-address limit as
+ * any other anonymous operation. The service already collapses a flood aimed at one target
+ * (twenty an hour, then refusal); this bounds a flood aimed at *many* targets, which that
+ * counter cannot see.
+ */
+export const reportLimiter = web.FLOOD_REPORT;
 
 /**
  * Reading, plus the curated vocabulary (SPEC §22, §28).

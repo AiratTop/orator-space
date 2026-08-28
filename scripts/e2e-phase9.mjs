@@ -131,6 +131,28 @@ async function submit(fields, { origin = webOrigin } = {}) {
 /** The same fetch without a cookie, for the public pages this checkpoint also reads. */
 const page_ = (path) => page(path, { cookie: false });
 
+/**
+ * A form post to any address, with or without the session cookie.
+ *
+ * `submit` above always posts to `/settings` and always signed in, which was every form on
+ * the site until §61.1's report form — the one form deliberately reachable by somebody with
+ * no account at all (§61.2). Asserting that it works *without* a cookie needs a helper that
+ * can leave one out.
+ */
+async function postForm(path, fields, { origin = webOrigin, cookie = true } = {}) {
+  const response = await wire(`${webBase}${path}`, {
+    method: "POST",
+    headers: {
+      "content-type": "application/x-www-form-urlencoded",
+      ...(origin === null ? {} : { origin }),
+      ...(cookie && cookies.size > 0 ? { cookie: cookieHeader() } : {}),
+    },
+    body: new URLSearchParams(fields).toString(),
+    redirect: "manual",
+  });
+  return { status: response.status, headers: response.headers, html: await response.text() };
+}
+
 console.log(`\nPhase 9 checkpoint — api ${apiBase}, web ${webBase}\n`);
 
 // --- getting in ------------------------------------------------------------------------
@@ -1089,6 +1111,74 @@ check(
 
 const stillThere = await page(`/p/${articleId}`);
 check("and the article is still there afterwards", stillThere.status === 200, String(stillThere.status));
+
+// --- reporting -------------------------------------------------------------------------
+section("Reporting content (§61.1, §61.2)");
+
+/*
+ * The half of §61.1's report intake that was missing.
+ *
+ * `POST /v1/reports` has answered since Phase 5; the line in §61.1 reads "POST /v1/reports
+ * + a form in the UI", and until now the platform's answer to somebody who found illegal
+ * content was to obtain a token and read the OpenAPI document. Everything below is asserted
+ * without a cookie, because that is the case §61.2 is actually about.
+ */
+const articleForReport = await page_(`/p/${articleId}`);
+check(
+  "an article offers a way to report it",
+  articleForReport.html.includes(`/report?article=${articleId}`),
+);
+
+const noTarget = await page_("/report");
+check(
+  "the report page with no target says so rather than offering a form",
+  noTarget.status === 200 && !noTarget.html.includes('name="category"'),
+  String(noTarget.status),
+);
+
+const reportForm = await page_(`/report?article=${articleId}`);
+check(
+  "and with one, names what is being reported and offers the six categories",
+  reportForm.status === 200 &&
+    reportForm.html.includes("You are reporting") &&
+    reportForm.html.includes('value="illegal"') &&
+    reportForm.html.includes('value="injection"'),
+  String(reportForm.status),
+);
+
+check(
+  "the form page is never cached: it carries the reader's own state",
+  (reportForm.headers.get("cache-control") ?? "").includes("no-store"),
+  reportForm.headers.get("cache-control") ?? "",
+);
+
+const crossOrigin = await postForm(
+  `/report?article=${articleId}`,
+  { category: "spam" },
+  { origin: "https://evil.test", cookie: false },
+);
+check("a cross-origin report is refused", crossOrigin.status === 403, String(crossOrigin.status));
+
+const filed = await postForm(
+  `/report?article=${articleId}`,
+  { category: "spam", details: `checkpoint ${suffix}` },
+  { cookie: false },
+);
+check(
+  "an anonymous reader can file one, and is told the reference",
+  filed.status === 200 && /Filed/.test(filed.html) && /[0-9A-Z]{26}/.test(filed.html),
+  String(filed.status),
+);
+
+/*
+ * §61.2 — a report about nothing is refused, because the table would otherwise be a way to
+ * write arbitrary strings into the database from an endpoint that takes no credential.
+ */
+const nothing = await page_("/report?article=06GXXXXXXXXXXXXXXXXXXXXXXX");
+check(
+  "an article that does not exist offers no form to report it",
+  !nothing.html.includes('name="category"'),
+);
 
 // --- sessions --------------------------------------------------------------------------
 section("Sessions (§9.1)");

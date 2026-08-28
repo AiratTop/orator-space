@@ -22,7 +22,11 @@
    * relationship.
    */
   "ratelimits": [
-    { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
+    { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } },
+    // §61.2 — a report is accepted without authentication, and is therefore rate limited by
+    // address like every other anonymous write. Five a minute: more than a person reporting
+    // a thread of comments needs, and far less than a script wants.
+    { "name": "FLOOD_REPORT", "namespace_id": "1004", "simple": { "limit": 5, "period": 60 } }
   ],
 
 
@@ -61,7 +65,8 @@
       "name": "orator-web-staging",
       "routes": [{ "pattern": "staging.orator.space", "custom_domain": true }],
       "ratelimits": [
-        { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
+        { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } },
+        { "name": "FLOOD_REPORT", "namespace_id": "1004", "simple": { "limit": 5, "period": 60 } }
       ],
       "durable_objects": {
         "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter", "script_name": "orator-edge-staging" }]
@@ -81,7 +86,8 @@
         { "pattern": "www.orator.space", "custom_domain": true }
       ],
       "ratelimits": [
-        { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } }
+        { "name": "FLOOD_SEARCH", "namespace_id": "1003", "simple": { "limit": 60, "period": 60 } },
+        { "name": "FLOOD_REPORT", "namespace_id": "1004", "simple": { "limit": 5, "period": 60 } }
       ],
       "durable_objects": {
         "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter", "script_name": "orator-edge" }]

@@ -4982,7 +4982,7 @@ makes an action reversible.
 **MUST** exist before public launch:
 
 ```text
-report intake            POST /v1/reports + a form in the UI
+report intake            POST /v1/reports + a form in the UI — /report, anonymous
 review queue             available to moderators
 moderator actions        hide · remove · suspend a principal · de-index
 author notification      through events, stating the reason
@@ -6042,8 +6042,9 @@ indicator that cannot be measured says so rather than reporting `ok`.
 the six checkpoint scripts against a real deployment on every push, and the test suite in CI —
 and a row is not ticked on somebody's recollection. What remains before a public launch is in
 `PLAN.md` §11 and §13: §60.2 has no implementation, so no article on any deployment is
-indexable; §61.1's report intake has no form a reader can use; §9.2 cannot list or remove a
-passkey; and branch protection on `main` is deliberately off.
+indexable; §9.2 cannot list or remove a passkey; branch protection on `main` is deliberately
+off; and nothing gates registration, so the `[L]` level's own trigger — "public registration
+opening" — is an event these documents treat as future and the deployment treats as past.
 
 ## 78. Development phases
 

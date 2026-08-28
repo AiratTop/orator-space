@@ -120,6 +120,20 @@ const stance = comment.stance === null ? null : (STANCE_LABEL[comment.stance] ??
     </details>
   )}
 
+  {/*
+    §61.1 — a comment is reportable by whoever is reading it, account or not.
+
+    Beside the anchor rather than as a third `<details>`: reporting is a rare act and a
+    disclosure control for it would compete for attention with Reply, which is the common
+    one. Not offered on a withheld comment — there is nothing left to report, and the row
+    survives only so a reply below it still reads as a reply to something (§23.2).
+  */}
+  {html !== null && (
+    <p class="comment__report">
+      <a href={`/report?article=${articleId}&comment=${comment.id}`} rel="nofollow">Report</a>
+    </p>
+  )}
+
   {children.length > 0 && (
     <ol class="thread thread--nested">
       {children.map((child) => (

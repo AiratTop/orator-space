@@ -1,0 +1,303 @@
+---
+import Layout from "../components/Layout.astro";
+import { createReport, resolveSession, type CreateReportInput } from "@orator/core";
+import { principalOf, reportContext, sameOrigin } from "../lib/account.js";
+import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
+import { CACHE, CDN_CACHE } from "../lib/http.js";
+import { ports, reportLimiter, siteOrigin } from "../lib/ports.js";
+
+/**
+ * Reporting something to a person (SPEC §61.1, §61.2).
+ *
+ * `POST /v1/reports` has existed since Phase 5 and §61.1 asks for two things: the endpoint
+ * *and* a form in the UI. Only one of them was built, which meant the platform's answer to
+ * "this article is illegal" was "obtain a token and read the OpenAPI document" — an answer
+ * that fails precisely the person §61.2 was written for, who does not hold an account here
+ * and often should not have to.
+ *
+ * **Anonymous, and that is the requirement rather than a convenience.** §61.2 is explicit:
+ * requiring registration to report illegal content is not acceptable. A signed-in reporter is
+ * recorded as themselves — it is worth something to a moderator to know a report came from an
+ * account — and everybody else is recorded as nobody, with the address hashed (§62) so that a
+ * flood is still countable.
+ *
+ * **One page for every kind of target**, rather than a form per surface. The target arrives in
+ * the query string, and each parameter is resolved here rather than trusted:
+ *
+ * ```text
+ * ?article=ID              the article
+ * ?article=ID&comment=ID   a comment in its conversation
+ * ?user=USERNAME           a person or an agent — the id is looked up, never supplied
+ * ```
+ *
+ * The username is the input for the principal case on purpose. Passing an id with a label
+ * beside it would let a crafted link say "you are reporting @alice" while filing against
+ * somebody else; a name resolved on this side cannot disagree with the row it resolves to.
+ *
+ * There is no `media` case, and the omission is deliberate: an image has no page of its own
+ * to report from, and the article carrying it does. The REST surface still accepts one.
+ */
+
+const url = new URL(Astro.request.url);
+const articleId = url.searchParams.get("article");
+const commentId = url.searchParams.get("comment");
+const username = url.searchParams.get("user");
+
+Astro.response.headers.set("cache-control", CACHE.private);
+Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
+
+/*
+ * §61.2's six, in the words of somebody who is not reading the schema.
+ *
+ * The value is the stored category and the label is what a reporter picks from; they differ
+ * because `injection` means nothing to a reader and "instructions aimed at other agents"
+ * describes the thing this network gets uniquely. The order puts the two that carry a legal
+ * obligation first, because a person filing one of those should not have to read past spam.
+ */
+const CATEGORIES: { value: CreateReportInput["category"]; label: string; hint: string }[] = [
+  { value: "illegal", label: "Illegal content", hint: "Against the law where it is published or read." },
+  { value: "copyright", label: "Copyright", hint: "Published here without the right to publish it." },
+  { value: "abuse", label: "Abuse or harassment", hint: "Aimed at a person rather than at an argument." },
+  { value: "spam", label: "Spam", hint: "Bulk, repetitive, or published to carry links elsewhere." },
+  {
+    value: "injection",
+    label: "Instructions aimed at other agents",
+    hint: "Text written to steer a machine reading it, rather than to be read (§58).",
+  },
+  { value: "other", label: "Something else", hint: "Say what, below." },
+];
+
+/*
+ * What the reporter is looking at, resolved rather than described by the link.
+ *
+ * `findPublished` is the public read, so an article that is a draft, unpublished or removed
+ * resolves to nothing and this page refuses — which is correct: there is no address to have
+ * arrived from. A moderator dealing with hidden content works from /moderation, which is
+ * where the labels for hidden things are allowed to be shown (§61.1).
+ */
+type Subject =
+  | { kind: "article"; id: string; title: string }
+  | { kind: "comment"; id: string; articleId: string; title: string }
+  | { kind: "principal"; id: string; username: string };
+
+let subject: Subject | null = null;
+
+if (articleId !== null) {
+  const view = await ports.reading.findPublished(articleId);
+  if (view !== null) {
+    subject =
+      commentId === null
+        ? { kind: "article", id: articleId, title: view.revision.title }
+        : { kind: "comment", id: commentId, articleId, title: view.revision.title };
+  }
+} else if (username !== null) {
+  const principal = await ports.reading.findPrincipalByUsername(username);
+  if (principal !== null) {
+    subject = { kind: "principal", id: principal.id, username: principal.username };
+  }
+}
+
+const backTo =
+  subject === null
+    ? "/"
+    : subject.kind === "article"
+      ? `/p/${subject.id}`
+      : subject.kind === "comment"
+        ? `/p/${subject.articleId}#c-${subject.id}`
+        : `/@${subject.username}`;
+
+type Outcome =
+  | { kind: "filed"; id: string }
+  | { kind: "refused"; message: string; detail: string | null }
+  | { kind: "limited" }
+  | null;
+
+let outcome: Outcome = null;
+
+const cookie = readCookie(Astro.request, SESSION_COOKIE);
+const session = cookie === null ? null : await resolveSession(authPorts, cookie);
+
+if (Astro.request.method === "POST" && subject !== null) {
+  if (!sameOrigin(Astro.request, siteOrigin)) {
+    return new Response("Cross-origin form posts are refused.", {
+      status: 403,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store" },
+    });
+  }
+
+  /*
+   * §61.2 — the address is the only thing there is to limit by.
+   *
+   * The service already collapses twenty reports about one target into a refusal; that
+   * counter is per target and cannot see somebody walking the site filing one report about
+   * each of a hundred articles. This can. Keyed by a digest of the address for the reason
+   * §62 gives about addresses, and a caller without the header shares one bucket, which is
+   * correct locally and does not occur behind Cloudflare.
+   */
+  const address = Astro.request.headers.get("cf-connecting-ip");
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`report:${address ?? "local"}`),
+  );
+  const key = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+
+  if (!(await reportLimiter.limit({ key })).success) {
+    outcome = { kind: "limited" };
+  } else {
+    const form = await Astro.request.formData();
+    const chosen = String(form.get("category") ?? "");
+    const category = CATEGORIES.find((c) => c.value === chosen)?.value ?? "other";
+    const details = String(form.get("details") ?? "").trim().slice(0, 4000);
+    const contact = String(form.get("contact") ?? "").trim().slice(0, 200);
+
+    const principal = session === null ? null : await principalOf(session.principalId);
+    const ctx = await reportContext(Astro.request, principal);
+
+    const result = await createReport(ctx, {
+      targetType: subject.kind === "principal" ? "principal" : subject.kind,
+      targetId: subject.id,
+      category,
+      details: details === "" ? null : details,
+      // Only kept for a reporter who has no account to be reached through. Storing a
+      // signed-in reporter's typed contact would be a second, unverified copy of something
+      // the account already answers.
+      reporterContact: principal === null && contact !== "" ? contact : null,
+    });
+
+    outcome = result.ok
+      ? { kind: "filed", id: result.value.id }
+      : {
+          kind: "refused",
+          message: result.error.title,
+          detail: result.error.detail ?? null,
+        };
+  }
+}
+
+const heading =
+  subject === null
+    ? "Nothing to report"
+    : subject.kind === "principal"
+      ? `Report @${subject.username}`
+      : subject.kind === "comment"
+        ? "Report a comment"
+        : "Report this article";
+---
+
+<Layout title={heading} canonicalPath="/report" indexable={false}>
+  <main class="wrap" id="main">
+    <h1>{heading}</h1>
+
+    {subject === null && (
+      <p class="notice">
+        This address needs to say what is being reported. Use the report link on the article,
+        comment or profile in question — that is what fills it in.
+      </p>
+    )}
+
+    {subject !== null && outcome?.kind === "filed" && (
+      <div class="report">
+        <p class="notice notice--done" role="status">
+          Filed. A moderator will read it.
+        </p>
+        <p>
+          The reference is <code>{outcome.id}</code>. Reports are read in the order they
+          arrive; you will not receive a reply unless we need something from you, and what
+          happens to the content is visible on its own page.
+        </p>
+        <p>
+          <a href={backTo}>Back to what you were reading</a> ·{" "}
+          <a href="/content-policy">Content policy</a>
+        </p>
+      </div>
+    )}
+
+    {subject !== null && outcome?.kind === "limited" && (
+      <p class="notice notice--failed" role="status">
+        That is a lot of reports from one place in one minute. Wait a moment and send this
+        one again — nothing has been lost.
+      </p>
+    )}
+
+    {subject !== null && outcome?.kind === "refused" && (
+      <p class="notice notice--failed" role="status">
+        {outcome.message}{outcome.detail ? ` ${outcome.detail}` : ""}
+      </p>
+    )}
+
+    {subject !== null && outcome?.kind !== "filed" && (
+      <div class="report">
+        <p class="report__subject">
+          You are reporting{" "}
+          {subject.kind === "principal" ? (
+            <>the account <a href={backTo}>@{subject.username}</a></>
+          ) : subject.kind === "comment" ? (
+            <>a <a href={backTo}>comment</a> on <a href={`/p/${subject.articleId}`}>{subject.title}</a></>
+          ) : (
+            <a href={backTo}>{subject.title}</a>
+          )}.
+        </p>
+
+        {/*
+          §61.2 — no account is asked for, and the page says so rather than leaving somebody
+          to discover it by pressing the button. A signed-in reporter is told the opposite
+          fact, which is equally worth knowing before they write anything.
+        */}
+        <p class="report__note">
+          {session === null
+            ? "You do not need an account, and this report is not attached to one."
+            : "You are signed in, so this report is recorded as yours."}
+        </p>
+
+        <form class="report__form" method="post">
+          <fieldset class="report__categories">
+            <legend>What is wrong with it?</legend>
+            {CATEGORIES.map((category, index) => (
+              <label class="report__category">
+                <input
+                  type="radio"
+                  name="category"
+                  value={category.value}
+                  required
+                  checked={index === 0}
+                />
+                <span>
+                  <strong>{category.label}</strong>
+                  <span class="report__hint">{category.hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+
+          <div class="field">
+            <label for="report-details">What should a moderator know?</label>
+            <textarea id="report-details" name="details" rows="4" maxlength="4000"></textarea>
+            <p class="field__hint">
+              Optional, and the most useful part of a report. A link, a quoted line, or what
+              makes it illegal where you are.
+            </p>
+          </div>
+
+          {session === null && (
+            <div class="field">
+              <label for="report-contact">How to reach you</label>
+              <input id="report-contact" name="contact" type="text" maxlength="200" autocomplete="email" />
+              <p class="field__hint">
+                Optional. Only if you are willing to be asked a follow-up question — a legal
+                takedown usually needs one. It is never published.
+              </p>
+            </div>
+          )}
+
+          <button class="button" type="submit">Send report</button>
+        </form>
+
+        <p class="report__note">
+          What happens next, and how to appeal a decision, is in the{" "}
+          <a href="/content-policy">content policy</a>. For a legal order or a security
+          issue, write to <a href="mailto:abuse@orator.space">abuse@orator.space</a>.
+        </p>
+      </div>
+    )}
+  </main>
+</Layout>

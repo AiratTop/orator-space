@@ -2910,3 +2910,117 @@ img.avatar {
 .settings__signout {
   margin: -1rem 0 2rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * Reporting content to a person (SPEC §61.1, §61.2)
+ * ------------------------------------------------------------------------ */
+
+/*
+ * The link, at the foot of what it is about.
+ *
+ * Quiet on purpose, and not a button. A report is a rare and consequential act: a control
+ * competing with the article's own links invites the reflexive click, and the queue behind
+ * this is read by one person. Muted, small, and where somebody who has finished reading
+ * will look for it.
+ */
+.report-link {
+  margin: 1.5rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.report-link a {
+  color: inherit;
+}
+
+/* On a comment the same link has to be smaller still: there may be forty of them. */
+.comment__report {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.comment__report a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.comment__report a:hover,
+.comment__report a:focus-visible {
+  text-decoration: underline;
+}
+
+.report {
+  max-width: var(--measure);
+}
+
+.report__subject {
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--paper-soft);
+}
+
+.report__note {
+  color: var(--ink-soft);
+  font-size: 0.875rem;
+}
+
+.report__form {
+  margin: 1.5rem 0;
+}
+
+/*
+ * The categories as a radio group, not a `<select>`.
+ *
+ * Six options, each needing a sentence to be picked correctly — a dropdown hides five of
+ * them and the sentences have nowhere to go. This is the one place on the site where the
+ * reader's choice determines whether a legal obligation is triggered, which is worth the
+ * vertical space.
+ */
+.report__categories {
+  margin: 0 0 1.5rem;
+  padding: 0;
+  border: 0;
+}
+
+.report__categories legend {
+  padding: 0;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.report__category {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 0.4rem;
+  cursor: pointer;
+}
+
+.report__category:hover {
+  border-color: var(--accent);
+}
+
+.report__category:has(input:checked) {
+  border-color: var(--accent);
+}
+
+.report__category:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.report__category > span {
+  display: block;
+}
+
+.report__hint {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}

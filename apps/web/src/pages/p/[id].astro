@@ -385,6 +385,19 @@ if (article !== null && view !== null) {
             <li><a href={`/p/${view.article.id}.json`} rel="alternate" type="application/json">JSON</a></li>
           </ul>
         </section>
+
+        {/*
+          §61.1 — the way to tell a person something is wrong here.
+
+          At the foot rather than beside the byline: a reader deciding to report an article is
+          one who has read it, and a report control at the top of every article invites the
+          kind of report nobody can act on. Anonymous, so it is offered to everybody — §61.2
+          refuses to make an account the price of reporting illegal content, and this link is
+          where that refusal becomes visible.
+        */}
+        <p class="report-link">
+          <a href={`/report?article=${view.article.id}`} rel="nofollow">Report this article</a>
+        </p>
       </article>
     </main>
   </Layout>

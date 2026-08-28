@@ -60,10 +60,9 @@ moderation with a queue and an undo, images and avatars, comments and their thre
 browser, Atom feeds, a public version history with a diff, and a Telegram bot (§9.3) that
 carries notifications and a second way in.
 
-Five things stand between this and a public launch, and none of them is a feature.
+Four things stand between this and a public launch, and none of them is a feature.
 §60.2 says trust levels rise on a schedule, nothing implements that schedule, and `indexable`
-requires level 1 — so every article is `noindex` and the sitemap is four static pages. §61.1's
-report intake has an endpoint, a queue and a moderator's page, and no form a reader can use.
+requires level 1 — so every article is `noindex` and the sitemap is four static pages.
 §9.2 can add a passkey and cannot list or remove one. Branch protection on `main` is
 deliberately off while the work is this fast. And nothing gates registration: anybody who
 finds the address can create an account today, so the `[L]` level's "public registration
