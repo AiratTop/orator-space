@@ -191,10 +191,33 @@ a {
   font-weight: 500;
 }
 
+/*
+ * The navigation wraps rather than hiding behind a button.
+ *
+ * It could not wrap, so on a phone the last two links — the reader's own page and their
+ * settings — ran off the edge of the screen. A hamburger was the other answer and is the
+ * wrong one here: §57.2 admits no inline script, so it would be a `<details>` or a checkbox
+ * standing in for one, and it would put every destination on this site one tap further away
+ * to save a line of chrome. Six short words fit on two lines; a menu that is always open
+ * needs no state, no mechanism, and nothing to go wrong.
+ */
 .masthead__nav {
   display: flex;
-  gap: 1.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
   font-size: 0.875rem;
+}
+
+@media (max-width: 32rem) {
+  /* Narrower gaps and a full-width row, so the links break tidily instead of at the edge. */
+  .masthead__nav {
+    flex-basis: 100%;
+    gap: 0.5rem 1rem;
+  }
+
+  .masthead__inner {
+    padding: 1rem 0 0.875rem;
+  }
 }
 
 .masthead__nav a {
