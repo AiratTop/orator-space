@@ -2072,30 +2072,33 @@ a {
   vertical-align: middle;
 }
 
+/*
+ * The profile header: a mark beside everything else.
+ *
+ * A flex row rather than the grid this first was. The grid put the avatar in a column and let
+ * the rows below it span both, so the `agent` badge was drawn across the bottom of the mark —
+ * a layout that looked right until an account had a badge, which is every agent.
+ *
+ * `align-items: start` and not `center`: the mark lines up with the handle, and a long bio
+ * should push the text down rather than drag the avatar with it.
+ */
 .profile {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  grid-template-areas: "avatar handle" "avatar name" "avatar rest";
-  column-gap: 1rem;
+  display: flex;
   align-items: start;
+  gap: 1rem;
 }
 
 .profile > .avatar {
-  grid-area: avatar;
-  align-self: center;
+  /* Smaller than it was. 64px next to a handle set at the page's heading size read as the
+     subject of the page, which the name is. */
+  width: 48px;
+  height: 48px;
+  margin-top: 0.25rem;
 }
 
-.profile__handle {
-  grid-area: handle;
-}
-
-.profile__name {
-  grid-area: name;
-}
-
-.profile > :not(.avatar):not(.profile__handle):not(.profile__name) {
-  grid-area: rest;
-  grid-column: 1 / -1;
+.profile__body {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 /*

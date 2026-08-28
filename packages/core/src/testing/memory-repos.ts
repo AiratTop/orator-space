@@ -1404,6 +1404,11 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         .filter((view): view is ArticleView => view !== null)
         .map(cardOf);
     },
+    async countFor(principalId) {
+      return [...(state.readingList.get(principalId) ?? [])].filter(
+        (id) => state.articles.get(id)?.status === "published",
+      ).length;
+    },
     save: (principalId, articleId) =>
       asWrite(() => {
         const saved = state.readingList.get(principalId) ?? new Set<string>();

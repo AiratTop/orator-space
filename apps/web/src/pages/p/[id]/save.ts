@@ -11,14 +11,23 @@ import { readingListPorts, siteOrigin } from "../../../lib/ports.js";
  * reason: nothing here is shown once, so refreshing after saving should re-read the article
  * rather than save it a second time.
  *
+ * **Back to the bare address, with nothing in the query.** The first version put `?saved=yes`
+ * there, and it said nothing the page does not: the button is rendered from the database, so
+ * after the redirect it reads "Saved" because it *is* saved. A parameter that duplicates
+ * state the page already knows is a parameter that can disagree with it — and it travels,
+ * into somebody's address bar and into whatever they paste it into.
+ *
+ * The comment endpoint keeps its parameter, and the difference is the point: there it carries
+ * a failure the page cannot otherwise know about.
+ *
  * No JavaScript. The button is a form, its label is the current state, and the state comes
  * from the page — which for a signed-in reader is `private, no-store` (§33.2), so it is never
  * a cached page telling somebody they saved something they did not.
  */
-const back = (id: string, outcome: string) =>
+const back = (id: string) =>
   new Response(null, {
     status: 303,
-    headers: { location: `/p/${id}?saved=${outcome}`, "cache-control": "private, no-store" },
+    headers: { location: `/p/${id}`, "cache-control": "private, no-store" },
   });
 
 export const POST: APIRoute = async ({ request, params }) => {
@@ -33,16 +42,16 @@ export const POST: APIRoute = async ({ request, params }) => {
 
   const cookie = readCookie(request, SESSION_COOKIE);
   const session = cookie === null ? null : await resolveSession(authPorts, cookie);
-  if (session === null) return back(id, "signed-out");
+  if (session === null) return back(id);
 
   const principal = await principalOf(session.principalId);
-  if (principal === null) return back(id, "signed-out");
+  if (principal === null) return back(id);
 
   const form = await request.formData();
   const wanted = form.get("saved") === "yes";
 
   const result = await setSaved(readingListPorts, principal.id, id, wanted);
-  if (!result.ok) return back(id, "missing");
+  if (!result.ok) return back(id);
 
-  return back(id, wanted ? "yes" : "no");
+  return back(id);
 };

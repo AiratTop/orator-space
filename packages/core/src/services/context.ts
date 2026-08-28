@@ -124,6 +124,7 @@ export type AccountPorts = Pick<
   | "sessions"
   | "credentials"
   | "reading"
+  | "readingList"
   | "clock"
   | "ids"
 >;

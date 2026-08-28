@@ -1370,6 +1370,40 @@ registration was open and anonymous, and it now is not.
 **Condition to act**: before public launch, and before any measurement of §50's outcome —
 which cannot be taken while the answer is fixed at zero.
 
+### 13.4. Static assets are minified at build, and the obvious route was wrong
+
+Asked on 2026-08-28: should the CSS and JS be minified. Measured before answering, because
+the intuition was wrong in a way worth recording.
+
+```text
+styles.css   46,055 raw   12,217 over the wire (brotli)
+             24,199 minified    4,837 gzipped
+```
+
+Comments compress far worse than they look like they should. This stylesheet's comments are
+its documentation and there are a great many of them, and the expectation was that brotli
+would make minification worth a kilobyte or two. It is worth about seven — more than half the
+transfer, on every first visit.
+
+**The obvious route was tried and reverted.** Moving `styles.css` into `src/` and importing it
+would let Vite minify it *and* give it a content hash, which would allow a long cache — a
+larger prize than the bytes, since the file is currently served `max-age=0, must-revalidate`
+and revalidated on every page load.
+
+It breaks the CSP in development. Astro's dev server injects a bundled stylesheet as an inline
+`<style>`, and §57.2's `style-src 'self'` carries no `unsafe-inline`, so the page renders
+unstyled locally while working in production. `styles.css` documents that exact arrangement as
+the worst one available — a policy that only fails where nobody is looking — and it was right.
+
+So the minification is a build step over `dist/client`, deliberately conservative: comments
+and whitespace, nothing that requires parsing the language. Development and production serve
+the same document from the same source, and the CSP is exercised in both.
+
+**What is left on the table**: the content hash and the long cache. Taking it means either
+relaxing the CSP in development, which is how a policy stops being tested, or teaching the
+page to link a hashed filename without going through Vite. Neither is worth doing for a
+stylesheet that now costs 4.8 KB; both become worth it when there is traffic to measure.
+
 ## 14. Risk register
 
 | Risk | Likelihood | Impact | Mitigation |

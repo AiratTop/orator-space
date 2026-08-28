@@ -552,10 +552,19 @@ const forgedSave = await fetch(`${webBase}/p/${articleId}/save`, {
 });
 check("a save from another origin is refused", forgedSave.status === 403);
 
-check("saving redirects back", (await save("yes")).location.includes("saved=yes"));
+const afterSave = await save("yes");
+check(
+  "saving redirects back to the article's own address, with nothing added to it",
+  afterSave.status === 303 && afterSave.location === `/p/${articleId}`,
+  afterSave.location,
+);
 
 const savedTab = await page("/settings?tab=saved");
 check("and the article is on the reading list", savedTab.html.includes(articleId));
+check(
+  "and the tab says how many, like every other tab",
+  /tab=saved"[^>]*>Saved\s*<span class="tabs__count">1</.test(savedTab.html.replace(/\n\s*/g, "")),
+);
 
 /*
  * ADR 0011's whole objection, asserted rather than described.
@@ -571,7 +580,7 @@ check(
     !JSON.stringify(articleJson.body).includes("bookmark"),
 );
 
-check("unsaving removes it", (await save("no")).location.includes("saved=no"));
+check("unsaving removes it", (await save("no")).status === 303);
 const emptied = await page("/settings?tab=saved");
 check("and the list is empty again", !emptied.html.includes(articleId));
 

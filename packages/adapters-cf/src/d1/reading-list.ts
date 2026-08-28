@@ -47,6 +47,18 @@ export function createReadingListRepo(db: D1Database): ReadingListRepo {
       return results.map(toCardRow);
     },
 
+    async countFor(principalId) {
+      const row = await db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM reading_list rl
+             JOIN articles a ON a.id = rl.article_id
+            WHERE rl.principal_id = ? AND a.status = 'published' AND a.visibility = 'public'`,
+        )
+        .bind(principalId)
+        .first<{ n: number }>();
+      return row?.n ?? 0;
+    },
+
     save(principalId, articleId, at) {
       return asWrite(
         db

@@ -9,6 +9,7 @@ import {
   createOutboxRepo,
   createPrincipalRepo,
   createQuotaGate,
+  createReadingListRepo,
   createReadingRepo,
   createSessionRepo,
   createMediaRepo,
@@ -69,6 +70,7 @@ export const accountPorts: AccountPorts = {
   sessions: createSessionRepo(accountEnv.DB),
   credentials: createCredentialRepo(accountEnv.DB),
   reading: createReadingRepo(accountEnv.DB),
+  readingList: createReadingListRepo(accountEnv.DB),
   clock: systemClock,
   ids,
 };

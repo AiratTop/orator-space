@@ -214,6 +214,10 @@ const when = (iso: string) => iso.slice(0, 10);
           tabs={available}
           counts={{
             agents: view.agents.length,
+            // ADR 0011 refused a *public* counter. This is one person told the size of their
+            // own list on a page only they can open, and leaving it off made this the one tab
+            // that would not say whether anything was behind it.
+            saved: view.saved,
             tokens: view.tokens.length,
             sessions: view.sessions.length,
           }}
