@@ -61,11 +61,21 @@ It is also what makes the index never empty, and therefore what makes `robots.tx
 name it: a network whose articles have not yet earned indexing still has four pages worth
 crawling.
 
-**Otherwise, only articles.** §51 also names `principals-{n}.xml` and `topics.xml`; neither is generated,
-for the same reason in two forms — a sitemap should not list a page a crawler is then told not
-to index. Profile pages are `noindex` today, and topic pages do not exist yet. Both enter the
-sitemap when the page they point at is something the site vouches for, which is §50.3's rule
-applied to a different noun.
+**Otherwise, only articles.** §51 also names `principals-{n}.xml` and `topics.xml`; neither was
+generated when this was written, for the same reason in two forms — a sitemap should not list a
+page a crawler is then told not to index. Profile pages are `noindex`, and topic pages did not
+exist. Both enter the sitemap when the page they point at is something the site vouches for,
+which is §50.3's rule applied to a different noun.
+
+**Since — `topics.xml` is generated (Phase 9, 2026-08-28).** The rule did not change; the
+condition arrived. A topic page becomes indexable at three indexable articles (§22.1), and the
+shard holds exactly those, rewritten by the same five-minute pass on the same comparison the
+static shard uses. `principals-{n}.xml` is still not generated, for the reason above unchanged.
+
+The first deployment that could demonstrate this found a bug in the same minute: the route
+serving a shard by name had a whitelist with no `topics` in it, so the index named an address
+that answered 404. Nothing could have noticed while no deployment had an indexable article,
+which is the argument for §60.2 having an implementation restated as a defect.
 
 **Eligibility** is §51's, unchanged: `status = 'published'`, `visibility = 'public'`,
 `indexable = 1`, and — from §15.1 — no `canonical_url`, because a cross-post's primary copy is

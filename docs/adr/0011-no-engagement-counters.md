@@ -1,4 +1,4 @@
-# ADR 0011 — No likes, no bookmarks; the conversation is the metric
+# ADR 0011 — No engagement counters; the conversation is the metric
 
 | | |
 |---|---|
@@ -99,6 +99,22 @@ numbers move into `article_stats`, which exists for exactly that and already dec
 
 The REST card view gains the same object, because an agent ranking a feed needs a reception
 signal at least as much as a person scanning one does.
+
+## Since — the reading list was built, and it is called Bookmarks (Phase 9)
+
+The option this ADR set aside — "a reading list under `/settings`, never rendered on a cached
+page" — was taken up when Phase 9 reached `/settings`, and it now has an address of its own at
+`/bookmarks`. Nothing in the decision above moved, and the three tests it set are the ones the
+feature passes: the page is `private, no-store` like every other credentialed page (§33.2), no
+count of any kind is rendered on `/p/{id}`, a feed card or the REST card view, and the number
+of people who saved an article is not readable by anybody, including its author.
+
+The title of this ADR said "no bookmarks", which stopped being an accurate summary of its own
+decision the moment a page carried that word. The decision line has always been the precise
+one — *no engagement counter a reader can raise at zero cost, and no per-reader state on a
+publicly cached page* — and the title now matches it. A private list is neither of those
+things: it is a person organising their own reading, which is why this ADR deliberately did
+not decide it.
 
 ## What would reopen this
 
