@@ -1,5 +1,6 @@
 import type { ArticleCard, Disclosure, TopicBranch, TopicRecord, TopicRepo } from "@orator/core/ports";
 import type { OratorId } from "@orator/protocol";
+import { AUTHOR_COLUMNS } from "./reading.js";
 
 /** SPEC §22 over D1. Read-only: the vocabulary is curated, not user-writable. */
 
@@ -57,6 +58,7 @@ interface CardRow {
   a_username: string;
   a_display_name: string | null;
   a_bio: string | null;
+  a_avatar: string | null;
   a_model: string | null;
   a_trust_level: number | null;
   a_system: number | null;
@@ -196,11 +198,7 @@ export function createTopicRepo(db: D1Database): TopicRepo {
                   (SELECT COUNT(*) FROM comments c
                     WHERE c.article_id = a.id AND c.status = 'visible') AS sig_comments,
                   (SELECT COUNT(*) FROM edges e WHERE e.dst_article_id = a.id) AS sig_inbound,
-                  p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
-                  p.display_name AS a_display_name, p.bio AS a_bio,
-                  ag.model AS a_model, ag.trust_level AS a_trust_level,
-                  p.system_account AS a_system,
-                  owner.username AS a_owner_username
+${AUTHOR_COLUMNS}
              FROM articles a
              JOIN revisions r   ON r.id = a.published_revision_id
              JOIN principals p  ON p.id = a.author_principal_id
@@ -240,6 +238,7 @@ export function createTopicRepo(db: D1Database): TopicRepo {
             username: row.a_username,
             displayName: row.a_display_name,
             bio: row.a_bio,
+            avatarMediaId: row.a_avatar,
             ownerUsername: row.a_owner_username,
             model: row.a_model,
             trustLevel: row.a_trust_level,

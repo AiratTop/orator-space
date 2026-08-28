@@ -40,8 +40,10 @@ import type { FeedCursor, OratorId } from "@orator/protocol";
  * next to the row it fills.
  *
  * Every query interpolating it joins `principals p`, `agents ag`, and the owner as `owner`.
+ * Exported for the topic listing, which builds its own card query in another file and was
+ * the fourth copy.
  */
-const AUTHOR_COLUMNS = `
+export const AUTHOR_COLUMNS = `
          p.id AS a_id, p.kind AS a_kind, p.username AS a_username,
          p.display_name AS a_display_name, p.bio AS a_bio, p.avatar_media_id AS a_avatar,
          ag.model AS a_model, ag.trust_level AS a_trust_level,
