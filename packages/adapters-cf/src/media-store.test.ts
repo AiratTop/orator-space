@@ -111,3 +111,44 @@ describe("reading and removing", () => {
     await expect(store.delete("doomed")).resolves.toBeUndefined();
   });
 });
+
+/**
+ * R2 takes a stream only when its length is known, and a `Response` body is one of the two
+ * shapes it accepts. That is what a transformation hands back, so it is what the test hands
+ * in — `streamOf` builds an anonymous stream and R2 refuses it, which is the same refusal
+ * that shaped `put`.
+ */
+const derivedStreamOf = (bytes: Uint8Array): ReadableStream<Uint8Array> =>
+  new Response(bytes).body as ReadableStream<Uint8Array>;
+
+describe("a derived variant", () => {
+  /**
+   * SPEC §21.2 — written where it will be looked for.
+   *
+   * The one assertion this file was missing, and the bug it would have caught was live:
+   * `putDerived` wrote to the bare key while `get` read from the prefixed one, so every
+   * request re-ran a billable transformation and served the original anyway. Stated as a
+   * round trip rather than by inspecting the key, because the invariant is that these two
+   * agree — not that either of them spells the prefix a particular way.
+   */
+  it("is written where get looks for it", async () => {
+    const bytes = fileOf(2048);
+    await store.putDerived("derived/avatar", derivedStreamOf(bytes));
+
+    const read = await store.get("derived/avatar");
+    expect(read?.byteSize).toBe(bytes.byteLength);
+  });
+
+  it("shares the prefix with the original it was derived from", async () => {
+    // Both halves of one record's storage, so a bucket listing shows them together and a
+    // prefix delete removes both (§23.3).
+    await store.put("pair/original", streamOf(fileOf(512)), 512);
+    await store.putDerived("pair/card", derivedStreamOf(fileOf(256)));
+
+    const listed = await env.MEDIA.list({ prefix: "test-media/pair/" });
+    expect(listed.objects.map((object) => object.key).sort()).toEqual([
+      "test-media/pair/card",
+      "test-media/pair/original",
+    ]);
+  });
+});
