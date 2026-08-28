@@ -21,15 +21,24 @@
   --accent: #1a56c4;
   --warn: #8a5300;
   /*
-   * The reading measure, widened from 38rem after seeing the pages side by side.
+   * One page width, everywhere.
    *
-   * 38rem is the textbook answer for a line of prose and it made this site look like three
-   * different sites: an article in a narrow column, a feed wider, an account page wider
-   * still. 44rem is about eighty-five characters at this size — past the classic optimum and
-   * short of the point where the eye loses the start of the next line — and it brings the
-   * article within a step of everything else rather than a jump.
+   * This site had three: an article at 38rem, a feed at 46rem, an account page at 52rem. Each
+   * was defensible on its own — prose reads better in a narrow column than a list does — and
+   * together they made moving between pages feel like moving between sites, with the layout
+   * jumping under the cursor at every click. A single column is worth more than the last few
+   * characters of an optimal measure, and an article now fits more of what it has to say.
    */
-  --measure: 44rem;
+  --page: 50rem;
+
+  /*
+   * The cap on a *block* of secondary text inside that column — a lede, an excerpt, a bio.
+   *
+   * Still narrow, because these are read at a glance and are set in grey: they are the one
+   * place where a long line genuinely costs something, and narrowing them changes nothing
+   * about where the page's edges are.
+   */
+  --measure: 42rem;
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
@@ -103,19 +112,19 @@ body {
 }
 
 .wrap {
-  max-width: var(--measure);
+  max-width: var(--page);
   margin: 0 auto;
 }
 
 /*
- * One step wider, for pages that are lists rather than prose.
+ * Kept as a name, no longer as a width.
  *
- * A feed card is a title, an excerpt and a row of facts; a line of that is not read the way a
- * paragraph is. Two widths rather than one because the difference is real, and near each
- * other because the site should not read as three sites.
+ * Every page is one column now. The class stays because a dozen pages carry it and removing
+ * it from each would be a diff nobody could review for anything but typos; it says "this page
+ * is a list", which may earn a difference again one day.
  */
 .wrap--wide {
-  max-width: 50rem;
+  max-width: var(--page);
 }
 
 a {
@@ -1427,9 +1436,9 @@ a {
  * ------------------------------------------------------------------------ */
 
 .settings {
-  /* The same width as every other list on the site. It was 52rem against a 38rem article,
-     which is the gap that made the pages look unrelated. */
-  max-width: 50rem;
+  /* The same width as everything else. It was 52rem against a 38rem article, and that gap is
+     what made the pages look unrelated. */
+  max-width: var(--page);
 }
 
 .settings__lede {
