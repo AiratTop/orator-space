@@ -1115,6 +1115,7 @@ work here; the three before them close commitments the specification already mad
 [x] a person sees the id their account is written in (§49.2)      a8fe1a1
 [x] a picture can be removed, and orphaned media is collected      e28010b
 [x] Atom feeds: the site, a topic, an author, with autodiscovery   301acb6
+[x] public version history with a diff, and the leak it uncovered   539d8b0
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
 
