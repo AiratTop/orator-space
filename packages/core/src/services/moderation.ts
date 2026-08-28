@@ -399,6 +399,60 @@ export async function recentActions(
 }
 
 /**
+ * One article, as a moderator needs to see it (SPEC §61.1).
+ *
+ * The state, not the paperwork. A lookup that answered with a list of past actions and a row
+ * of buttons was answering the wrong question: the first thing to know about an article
+ * somebody has written in about is whether it is currently published, listed, indexed or
+ * gone — and none of that can be read off the log, because a log is a sequence of edits and
+ * the state is where they landed.
+ *
+ * Reads the row directly rather than the public view: an article this is asked about is
+ * frequently one that is hidden or removed, which the public view will not return at all.
+ */
+export interface ArticleState {
+  id: string;
+  title: string | null;
+  status: string;
+  visibility: string;
+  indexable: boolean;
+  duplicateOf: string | null;
+  removalSource: string | null;
+  moderationState: string;
+  authorPrincipalId: string;
+  publishedAt: string | null;
+  updatedAt: string;
+}
+
+export async function inspectArticle(
+  ctx: ModerationContext,
+  id: string,
+): Promise<Result<ArticleState | null>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+
+  const article = await ctx.ports.articles.findById(id);
+  if (article === null) return ok(null);
+
+  const [described] = await ctx.ports.moderation.describeTargets([
+    { targetType: "article", targetId: id },
+  ]);
+  return ok({
+    id: article.id,
+    title: described?.label ?? null,
+    status: article.status,
+    visibility: article.visibility,
+    indexable: article.indexable,
+    duplicateOf: article.duplicateOf ?? null,
+    removalSource: article.removalSource,
+    moderationState: article.moderationState,
+    authorPrincipalId: article.authorPrincipalId,
+    publishedAt: article.publishedAt,
+    updatedAt: article.updatedAt,
+  });
+}
+
+/**
  * The moderation history of one object, to a moderator (SPEC §61.2).
  *
  * Takes the narrow context rather than the whole of `Ports`: this is reached from the

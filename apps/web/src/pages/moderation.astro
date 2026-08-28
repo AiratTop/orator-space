@@ -1,11 +1,13 @@
 ---
 import {
   describeTargets,
+  inspectArticle,
   listModerationActions,
   listReports,
   recentActions,
   resolveSession,
   REASON_CODES,
+  type ArticleState,
   type ModerationActionRecord,
   type ReportRecord,
   type TargetSummary,
@@ -86,7 +88,9 @@ const lookedUp = asked === "" ? null : (asked.split("/").pop() ?? "").toUpperCas
 let reports: ReportRecord[] = [];
 let actions: ModerationActionRecord[] = [];
 let subjects = new Map<string, TargetSummary>();
-let dossier: { id: string; summary: TargetSummary | null; history: ModerationActionRecord[] } | null = null;
+let dossier:
+  | { id: string; article: ArticleState | null; history: ModerationActionRecord[] }
+  | null = null;
 
 const describe = async (targets: readonly { targetType: TargetSummary["targetType"]; targetId: string }[]) => {
   if (targets.length === 0) return;
@@ -104,13 +108,13 @@ if (moderator) {
      * two fields to answer one question is how a tool stops being used. The history is read
      * for the id whatever its type turns out to be — an action names the type it acted on.
      */
-    const [described, history] = await Promise.all([
-      describeTargets(ctx, [{ targetType: "article", targetId: lookedUp }]),
+    const [state, history] = await Promise.all([
+      inspectArticle(ctx, lookedUp),
       listModerationActions(ctx, "article", lookedUp),
     ]);
     dossier = {
       id: lookedUp,
-      summary: described.ok ? (described.value[0] ?? null) : null,
+      article: state.ok ? state.value : null,
       history: history.ok ? history.value : [],
     };
   } else if (tab === "actions") {
@@ -154,6 +158,34 @@ const when = (iso: string) => iso.slice(0, 10);
 
 /** Which actions are undone by `restore`, and which were never a state to undo. */
 const REVERSIBLE = new Set(["hide", "remove", "unindex", "suspend"]);
+
+/*
+ * The action a `restore` would actually reverse, or null.
+ *
+ * The service undoes the most recent *unreversed* action whatever it is, and refuses when
+ * that turns out to be a `warn` or another `restore`. The page asks the same question in the
+ * same order rather than looking for the newest reversible one — otherwise it would offer to
+ * undo a de-indexing from last week that the service would decline to touch, and a control
+ * that fails when pressed is worse than an absent one.
+ */
+const lastStanding = dossier?.history.find((action) => action.reversedAt === null) ?? null;
+const undoable = lastStanding !== null && REVERSIBLE.has(lastStanding.action) ? lastStanding : null;
+
+/*
+ * The same question for the log: which rows are the newest standing action on their target.
+ *
+ * Only those can be undone, for the reason above, so only those carry the button.
+ */
+const undoableIds = new Set<string>();
+{
+  const seen = new Set<string>();
+  for (const action of actions) {
+    const key = `${action.targetType}:${action.targetId}`;
+    if (seen.has(key) || action.reversedAt !== null) continue;
+    seen.add(key);
+    if (REVERSIBLE.has(action.action)) undoableIds.add(action.id);
+  }
+}
 ---
 
 {!moderator ? (
@@ -199,14 +231,55 @@ const REVERSIBLE = new Set(["hide", "remove", "unindex", "suspend"]);
       {dossier !== null ? (
         <section class="panel" id="dossier">
           <h2 class="panel__heading">
-            {dossier.summary?.label ?? "Nothing at that identifier"}
+            {dossier.article?.title ?? (dossier.article === null ? "Nothing at that identifier" : "Untitled")}
           </h2>
-          <p class="panel__lede">
-            <code>{dossier.id}</code>
-            {dossier.summary?.label != null && (
-              <> · <a href={`/p/${dossier.id}`}>open the article</a></>
-            )}
-          </p>
+
+          {dossier.article === null ? (
+            <p class="panel__lede">
+              <code>{dossier.id}</code> · No article has that id. A comment or a principal is
+              looked up from the entry that names it, since acting on one needs its type as
+              well as its id.
+            </p>
+          ) : (
+            <>
+              {/*
+                §61.1 — the state first, and the log second.
+
+                What a moderator needs on arriving is where the article stands now: published
+                or hidden or a tombstone, listed or not, screened or not. That cannot be read
+                off the history — a log is a sequence of edits and the state is where they
+                landed, which is exactly the reading mistake a page of "unindex, unindex,
+                restore" invites.
+              */}
+              <p class="panel__lede">
+                <code>{dossier.id}</code> · <a href={`/p/${dossier.id}`}>open the article</a>
+              </p>
+
+              <ul class="state">
+                <li class={`state__fact state__fact--${dossier.article.status}`}>{dossier.article.status}</li>
+                <li class="state__fact">{dossier.article.visibility}</li>
+                <li class={`state__fact${dossier.article.indexable ? "" : " state__fact--off"}`}>
+                  {dossier.article.indexable ? "indexable" : "not indexed"}
+                </li>
+                <li class={`state__fact${dossier.article.moderationState === "flagged" ? " state__fact--off" : ""}`}>
+                  screening: {dossier.article.moderationState}
+                </li>
+                {dossier.article.duplicateOf !== null && (
+                  <li class="state__fact state__fact--off">
+                    duplicate of <a href={`/p/${dossier.article.duplicateOf}`}>{dossier.article.duplicateOf}</a>
+                  </li>
+                )}
+                {dossier.article.removalSource !== null && (
+                  <li class="state__fact state__fact--off">removed by {dossier.article.removalSource}</li>
+                )}
+                <li class="state__fact state__fact--quiet">
+                  {dossier.article.publishedAt === null
+                    ? "never published"
+                    : `published ${when(dossier.article.publishedAt)}`}
+                </li>
+              </ul>
+            </>
+          )}
 
           {dossier.history.length === 0 ? (
             <p class="panel__empty">Nothing has been done to this one.</p>
@@ -216,7 +289,13 @@ const REVERSIBLE = new Set(["hide", "remove", "unindex", "suspend"]);
                 <li class={`action action--${action.reversedAt === null ? "live" : "reversed"}`}>
                   <div class="action__head">
                     <span class="tag tag--warn">{action.action}</span>
-                    <span class="action__reason">{action.reasonCode.replace(/_/g, " ")}</span>
+                    {/*
+                      A reversal has no reason code worth showing: the field is required by
+                      the record and says nothing about why something was put back.
+                    */}
+                    {action.action !== "restore" && (
+                      <span class="action__reason">{action.reasonCode.replace(/_/g, " ")}</span>
+                    )}
                     <span class="action__source">{action.source}</span>
                     {action.reversedAt !== null && <span class="tag">undone</span>}
                     <span class="report__when">{when(action.createdAt)}</span>
@@ -255,14 +334,26 @@ const REVERSIBLE = new Set(["hide", "remove", "unindex", "suspend"]);
               <button class="button button--small" type="submit">Apply</button>
             </form>
 
-            <form method="post" action={here} class="report__form">
-              <input type="hidden" name="action" value="moderation.act" />
-              <input type="hidden" name="target-type" value="article" />
-              <input type="hidden" name="target" value={dossier.id} />
-              <input type="hidden" name="kind" value="restore" />
-              <input type="hidden" name="reason" value="other" />
-              <button class="button button--quiet button--small" type="submit">Restore</button>
-            </form>
+            {/*
+              Offered only when there is something to put back.
+
+              `restore` reverses the most recent action that has not been reversed already, so
+              on an article nothing has been done to it is a button that either fails or
+              undoes something older than the moderator expects. A control that does nothing
+              is worse than an absent one: it invites the click that teaches nothing.
+            */}
+            {undoable !== null && (
+              <form method="post" action={here} class="report__form">
+                <input type="hidden" name="action" value="moderation.act" />
+                <input type="hidden" name="target-type" value="article" />
+                <input type="hidden" name="target" value={dossier.id} />
+                <input type="hidden" name="kind" value="restore" />
+                <input type="hidden" name="reason" value="other" />
+                <button class="button button--quiet button--small" type="submit">
+                  Undo the {undoable.action}
+                </button>
+              </form>
+            )}
           </div>
         </section>
       ) : (
@@ -301,19 +392,26 @@ const REVERSIBLE = new Set(["hide", "remove", "unindex", "suspend"]);
                       </div>
 
                       <div class="action__facts">
-                        <span class="action__reason">{action.reasonCode.replace(/_/g, " ")}</span>
+                        {action.action !== "restore" && (
+                          <span class="action__reason">{action.reasonCode.replace(/_/g, " ")}</span>
+                        )}
                         <span class="action__source">{action.source}</span>
                         {action.reversedAt !== null && <span class="tag">undone</span>}
                         <code class="report__id">{action.targetId}</code>
                       </div>
 
-                      {action.reversedAt === null && REVERSIBLE.has(action.action) && (
+                      {undoableIds.has(action.id) && (
                         <form method="post" action={here} class="report__form">
                           <input type="hidden" name="action" value="moderation.act" />
                           <input type="hidden" name="target-type" value={action.targetType} />
                           <input type="hidden" name="target" value={action.targetId} />
                           <input type="hidden" name="kind" value="restore" />
-                          <input type="hidden" name="reason" value={action.reasonCode} />
+                          {/*
+                            A reversal's reason code is required by the record and says nothing
+                            about why something was put back; carrying the original one over
+                            would state that the article was restored *for* spam.
+                          */}
+                          <input type="hidden" name="reason" value="other" />
                           <button class="button button--quiet button--small" type="submit">Undo</button>
                         </form>
                       )}

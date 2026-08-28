@@ -2398,3 +2398,43 @@ img.avatar {
 .action .report__form {
   margin-top: 0.5rem;
 }
+
+/*
+ * The state of one article, as facts rather than as prose (§61.1).
+ *
+ * A row of small labels, because the question they answer is "where does this stand" and the
+ * answer is read at a glance: published or not, listed or not, screened or not. What is off
+ * — not indexed, removed, a duplicate — is the half a moderator is looking for, so it is the
+ * half that carries the colour.
+ */
+.state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.state__fact {
+  padding: 0.125rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+}
+
+.state__fact--off {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.state__fact--removed,
+.state__fact--draft {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.state__fact--quiet {
+  border-color: transparent;
+  color: var(--ink-soft);
+}
