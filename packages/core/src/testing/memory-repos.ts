@@ -26,6 +26,7 @@ import {
   type PrincipalRecord,
   type TelegramAccount,
   type TelegramLink,
+  type TelegramLogin,
   type TelegramRepo,
   type PrincipalRepo,
   type ArticleCard,
@@ -101,6 +102,7 @@ export interface MemoryState {
   telegramAccounts: Map<string, TelegramAccount>;
   telegramLinks: Map<string, TelegramLink>;
   telegramDeliveries: Map<string, string>;
+  telegramLogins: Map<string, TelegramLogin>;
   media: Map<string, MediaRecord>;
   /** The bytes, keyed the same way the R2 adapter keys them. */
   mediaBytes: Map<string, Uint8Array>;
@@ -154,6 +156,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     telegramAccounts: new Map(),
     telegramLinks: new Map(),
     telegramDeliveries: new Map(),
+    telegramLogins: new Map(),
     sitemapShards: new Map(),
     assets: new Map(),
     media: new Map(),
@@ -214,6 +217,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         telegramAccounts: new Map(state.telegramAccounts),
         telegramLinks: new Map(state.telegramLinks),
         telegramDeliveries: new Map(state.telegramDeliveries),
+        telegramLogins: new Map(state.telegramLogins),
         media: new Map(state.media),
         mediaBytes: new Map(state.mediaBytes),
         articleTopics: new Map(state.articleTopics),
@@ -1662,6 +1666,18 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         .slice(0, limit);
     },
     markDelivered: (eventId, at) => asWrite(() => void state.telegramDeliveries.set(eventId, at)),
+
+    insertLogin: (login) => asWrite(() => void state.telegramLogins.set(login.nonce, { ...login, usedAt: null })),
+    async findLogin(nonce) {
+      return state.telegramLogins.get(nonce) ?? null;
+    },
+    markLoginUsed: (nonce, at) =>
+      asWrite(() => {
+        const login = state.telegramLogins.get(nonce);
+        if (login === undefined || login.usedAt !== null) return 0;
+        login.usedAt = at;
+        return 1;
+      }),
 
     async deleteLinksBefore(cutoff, limit) {
       let deleted = 0;

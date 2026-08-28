@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { ErrorType } from "@orator/protocol";
 import { createMemoryPorts } from "../testing/memory-repos.js";
-import { LINK_TTL_MS, newNonce, redeemTelegramLink, startTelegramLink, unlinkTelegram } from "./telegram.js";
+import {
+  LINK_TTL_MS,
+  LOGIN_TTL_MS,
+  newNonce,
+  redeemTelegramLink,
+  redeemTelegramLogin,
+  startTelegramLink,
+  startTelegramLogin,
+  unlinkTelegram,
+} from "./telegram.js";
 
 /**
  * Binding a chat to an account (SPEC §9.3).
@@ -16,6 +25,7 @@ let ports: ReturnType<typeof createMemoryPorts>;
 const PRINCIPAL = "PERSON-1";
 const OTHER = "PERSON-2";
 const NOW = new Date("2026-08-28T12:00:00.000Z");
+const ORIGIN = "https://orator.space";
 
 /* Deterministic, and different per call: two links issued in a row are two credentials. */
 let entropy = 0;
@@ -137,5 +147,77 @@ describe("the nonce itself", () => {
     // §12.2 gives for the id alphabet: they are the ones people get wrong.
     const nonce = newNonce(new Uint8Array(32).map((_, i) => i));
     expect(nonce).not.toMatch(/[ILOU]/);
+  });
+});
+
+/**
+ * Signing in from the chat (SPEC §9.3, §9.1).
+ *
+ * The recovery path §9 asks for, and the reason it is safe is the binding: the chat was
+ * connected by somebody who was signed in, so a message from it is a message from that
+ * account's owner. What must hold is that the secret it hands out is spent exactly once and
+ * dies quickly — it opens a session, which is the account.
+ */
+describe("a login link", () => {
+  const connect = async () =>
+    unwrap(await redeemTelegramLink(ports, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
+
+  it("is refused to a chat that is not connected", async () => {
+    expect(errorOf(await startTelegramLogin(ports, "999", { siteOrigin: ORIGIN, random: random() }))).toBe(
+      ErrorType.NotFound,
+    );
+  });
+
+  it("points at this site and carries a nonce", async () => {
+    await connect();
+    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    expect(login.url).toBe(`${ORIGIN}/auth/telegram?token=${login.nonce}`);
+  });
+
+  it("lives two minutes, not ten", async () => {
+    // Binding a chat is reversible; this is the account. The lifetime is the window in which
+    // a copy of the chat — a shared screen, a forwarded message — is worth anything.
+    await connect();
+    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    expect(Date.parse(login.expiresAt) - NOW.getTime()).toBe(LOGIN_TTL_MS);
+  });
+
+  it("answers with the principal the chat belongs to", async () => {
+    await connect();
+    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    expect(unwrap(await redeemTelegramLogin(ports, login.nonce)).principalId).toBe(PRINCIPAL);
+  });
+
+  it("is spent once, and the second attempt is refused", async () => {
+    await connect();
+    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    unwrap(await redeemTelegramLogin(ports, login.nonce));
+    expect(errorOf(await redeemTelegramLogin(ports, login.nonce))).toBe(ErrorType.NotFound);
+  });
+
+  it("expires", async () => {
+    await connect();
+    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    ports.setNow(new Date(NOW.getTime() + LOGIN_TTL_MS + 1000));
+    expect(errorOf(await redeemTelegramLogin(ports, login.nonce))).toBe(ErrorType.NotFound);
+  });
+
+  it("answers every failure the same way", async () => {
+    // A link that never existed and one used a minute ago are the same fact to whoever holds
+    // it; telling them apart tells somebody which guesses are close.
+    expect(errorOf(await redeemTelegramLogin(ports, "NEVEREXISTED1234"))).toBe(ErrorType.NotFound);
+  });
+
+  it("cannot be used as a linking nonce, nor a link as a login", async () => {
+    // The two tables exist separately for this: one binds a chat and cannot open a session,
+    // the other opens a session and cannot bind a chat.
+    await connect();
+    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    expect(errorOf(await redeemTelegramLink(ports, { nonce: login.nonce, telegramUserId: "7", chatId: "7" }))).toBe(
+      ErrorType.NotFound,
+    );
+
+    const link = unwrap(await start(OTHER));
+    expect(errorOf(await redeemTelegramLogin(ports, link.nonce))).toBe(ErrorType.NotFound);
   });
 });

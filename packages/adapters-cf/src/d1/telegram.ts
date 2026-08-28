@@ -11,6 +11,15 @@ interface AccountRow {
   linked_at: string;
 }
 
+interface LoginRow {
+  nonce: string;
+  principal_id: string;
+  chat_id: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+}
+
 interface LinkRow {
   nonce: string;
   principal_id: string;
@@ -191,6 +200,44 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
         db
           .prepare(`INSERT OR IGNORE INTO telegram_deliveries (event_id, sent_at) VALUES (?, ?)`)
           .bind(eventId, at),
+      );
+    },
+
+    insertLogin(login) {
+      return asWrite(
+        db
+          .prepare(
+            `INSERT INTO telegram_logins (nonce, principal_id, chat_id, created_at, expires_at)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .bind(login.nonce, login.principalId, login.chatId, login.createdAt, login.expiresAt),
+      );
+    },
+
+    async findLogin(nonce) {
+      const row = await db
+        .prepare(`SELECT * FROM telegram_logins WHERE nonce = ?`)
+        .bind(nonce)
+        .first<LoginRow>();
+      return row === null
+        ? null
+        : {
+            nonce: row.nonce,
+            principalId: row.principal_id as OratorId,
+            chatId: row.chat_id,
+            createdAt: row.created_at,
+            expiresAt: row.expires_at,
+            usedAt: row.used_at,
+          };
+    },
+
+    markLoginUsed(nonce, at) {
+      // The single-use guarantee is in the WHERE, as it is for a link: two redemptions race
+      // and exactly one writes a row.
+      return asWrite(
+        db
+          .prepare(`UPDATE telegram_logins SET used_at = ? WHERE nonce = ? AND used_at IS NULL`)
+          .bind(at, nonce),
       );
     },
 

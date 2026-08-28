@@ -593,9 +593,9 @@ const when = (iso: string) => iso.slice(0, 10);
               somebody can run.
             */}
             <dl class="identity">
-              <dt>Handle</dt>
+              <dt>Username</dt>
               <dd><a href={`/@${view.principal.username}`}>@{view.principal.username}</a></dd>
-              <dt>Account id</dt>
+              <dt>Account ID</dt>
               <dd>
                 <code class="identity__id" data-copy role="button" tabindex="0" title="Click to copy">
                   {view.principal.id}
@@ -611,7 +611,7 @@ const when = (iso: string) => iso.slice(0, 10);
               action dispatchers take strings on purpose: everything else this page can do is
               unable to accept bytes, and stays that way by construction rather than by care.
             */}
-            <form method="post" action={here} class="issue__form" enctype="multipart/form-data">
+            <form method="post" action={here} class="issue__form" id="avatar-upload" enctype="multipart/form-data">
               <input type="hidden" name="action" value="profile.avatar" />
               <div class="field">
                 <label for="avatar">Picture</label>
@@ -628,35 +628,35 @@ const when = (iso: string) => iso.slice(0, 10);
                   <input id="avatar" name="avatar" type="file" accept="image/*" required />
                 </div>
                 <p class="field__hint">
-                  Square works best: it is cropped to one and rendered at 128 pixels (§21.2).
-                  Under 2 MB.
+                  Square, under 2 MB. Removing it brings the generated mark back; the file is
+                  collected a day later (§23.4).
                 </p>
               </div>
-              <button class="button" type="submit">Upload</button>
             </form>
 
             {/*
               §49.4 — and back to the generated mark.
 
-              Its own form, because it is the one control on this page that undoes something
-              rather than setting it, and because a `Remove` button inside the upload form
-              would be a second submit on a form whose file field is `required` — a browser
-              would refuse it before it ever reached the server. Only shown when there is a
-              picture: a control that does nothing is furniture.
+              A second form, because removing must not be a submit on a form whose file field
+              is `required`: the browser would refuse it before the server saw it. The two
+              buttons sit on one row anyway — `form=` associates a control with a form it is
+              not inside, which is what that attribute is for and it saves inventing a layout
+              where "undo this" lives half a screen below "do this".
             */}
             {view.principal.avatarMediaId != null && (
-              <form method="post" action={here} class="issue__form">
+              <form method="post" action={here} id="avatar-remove">
                 <input type="hidden" name="action" value="profile.avatar.remove" />
-                <button class="button button--quiet button--small" type="submit">
-                  Remove picture
-                </button>
-                <p class="field__hint">
-                  The generated mark comes back. The file stops being served once nothing
-                  points at it, and is deleted a day later (§23.4) — long enough for pages
-                  that already name it to expire.
-                </p>
               </form>
             )}
+
+            <div class="picture__actions">
+              <button class="button" type="submit" form="avatar-upload">Upload</button>
+              {view.principal.avatarMediaId != null && (
+                <button class="button button--quiet button--small" type="submit" form="avatar-remove">
+                  Remove picture
+                </button>
+              )}
+            </div>
 
             <form method="post" action={here} class="issue__form">
               <input type="hidden" name="action" value="profile" />

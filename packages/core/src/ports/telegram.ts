@@ -63,6 +63,30 @@ export interface TelegramRepo {
    */
   listPendingNotifications(cutoff: string, limit: number): Promise<PendingNotification[]>;
   markDelivered(eventId: string, at: string): PendingWrite;
+
+  /**
+   * The other direction of §9.3's nonce: from the chat into a browser.
+   *
+   * Its own table rather than a column on the linking one. A linking nonce binds a chat and
+   * cannot open a session; this one opens a session and cannot bind a chat. Sharing a table
+   * would make that difference a `WHERE` clause, and a mistake there turns one into the
+   * other.
+   */
+  insertLogin(login: NewTelegramLogin): PendingWrite;
+  findLogin(nonce: string): Promise<TelegramLogin | null>;
+  markLoginUsed(nonce: string, at: string): PendingWrite;
+}
+
+export interface NewTelegramLogin {
+  nonce: string;
+  principalId: OratorId;
+  chatId: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+export interface TelegramLogin extends NewTelegramLogin {
+  usedAt: string | null;
 }
 
 /** One thing to say, and where to say it (§9.3). */

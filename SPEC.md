@@ -969,6 +969,20 @@ is the smaller failure and is made rare by an idempotent record. The window — 
 is what keeps switching the channel on from delivering a deployment's whole history, and it
 states something true: a notification about last week is a nuisance.
 
+**MUST — signing in through the chat is a one-time secret, sent only into a bound chat, and
+spent by the write rather than by the read.** This is the recovery path §9 asks for: the chat
+was connected by somebody who was signed in, so a message from it is a message from that
+account's owner. Two minutes, once, and every failure — expired, spent, never existed —
+answers identically, because telling them apart tells a guesser which guesses are close.
+
+**MUST — the login nonce and the linking nonce are separate records.** One binds a chat and
+cannot open a session; the other opens a session and cannot bind a chat. Sharing a table
+makes that difference a `WHERE` clause, and a mistake there turns one into the other.
+
+**MUST — a session opened this way is an ordinary session.** Same lifetime, same row, listed
+and revocable under §9.1. A second way in must not be a second kind of session with rules
+somebody has to remember.
+
 **MUST — the message names what happened and links to it; it does not quote it.** A comment
 copied into a chat is untrusted text (§58.1) rendered somewhere this platform does not
 control, and the useful thing is the invitation to look.
@@ -6150,6 +6164,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 159 | Every shard the sitemap index names is fetchable at the address it names | §51 |
 | 160 | A chat is bound by a nonce the platform issued, never by an identifier a caller sent | §9.3 |
 | 161 | A notification is delivered after it is sent, from an event that already had an audience | §9.3, §61.2 |
+| 162 | A login link is single-use, short-lived, and spent by the write that marks it | §9.3, §9.1 |
 
 ## 80. Open decisions
 

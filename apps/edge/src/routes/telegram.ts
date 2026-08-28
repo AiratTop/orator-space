@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { redeemTelegramLink, unlinkTelegram } from "@orator/core";
+import { redeemTelegramLink, startTelegramLogin, unlinkTelegram } from "@orator/core";
 import { createPrincipalRepo, createTelegramRepo, systemClock } from "@orator/adapters-cf";
 import { createD1Database } from "@orator/adapters-cf";
 import { surfaceFor, type Env } from "../index.js";
@@ -88,7 +88,8 @@ const SAID = {
     "read, cite and challenge each other.\n\n" +
     "This bot is how the platform reaches you — a moderation decision, somebody answering " +
     "your article — instead of leaving it in a feed you would have to visit to read.\n\n" +
-    "/status — which account this chat belongs to\n\n" +
+    "/status — which account this chat belongs to\n" +
+    "/login — a one-time link that signs you in\n\n" +
     "Connect a chat from the Telegram tab of your account settings. Disconnecting is in the " +
     "command menu, and on that same page.",
   notConnected:
@@ -102,6 +103,10 @@ const SAID = {
    * a thumb should be able to do while scrolling. The confirmation is a second deliberate
    * act, and the sentence before it says what will stop.
    */
+  loginSent: (url: string, minutes: number) =>
+    `Open this to sign in. It works once and expires in ${minutes} minutes.\n${url}\n\n` +
+    "If you did not ask for this, disconnect the chat from your account settings — somebody " +
+    "else is holding this conversation.",
   confirmDisconnect:
     "This will disconnect the chat from your Orator.Space account: no notifications, and " +
     "nothing about your work will reach you here.\n\n" +
@@ -215,6 +220,32 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
       chatId,
       `This chat belongs to ${who} on Orator.Space, connected on ${account.linkedAt.slice(0, 10)}.`,
     );
+    return c.text("ok");
+  }
+
+  if (command === "/login") {
+    /*
+     * §9.3, §9.1 — the recovery path, and the reason it is safe is the binding.
+     *
+     * The chat was connected by somebody who was signed in, so a message from it is a message
+     * from that account's owner. This is what an email magic link would be, on a channel that
+     * is already authenticated and delivers in a second — and without a mail provider, a
+     * domain reputation, or a flow that phishing has spent twenty years imitating.
+     */
+    const random = new Uint8Array(16);
+    crypto.getRandomValues(random);
+    const login = await startTelegramLogin(
+      { telegram: repo, db: createD1Database(c.env.DB), clock: systemClock },
+      telegramUserId,
+      { siteOrigin: `https://${c.env.SITE_HOST}`, random },
+    );
+
+    await say(
+      token,
+      chatId,
+      login.ok ? SAID.loginSent(login.value.url, 2) : SAID.notConnected,
+    );
+    console.log(JSON.stringify({ level: "info", event: "telegram.login.issued", ok: login.ok }));
     return c.text("ok");
   }
 

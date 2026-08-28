@@ -388,6 +388,49 @@ export async function completePasskeyAuthentication(
 }
 
 /**
+ * Opens a session for a principal whose identity was established elsewhere (SPEC §9.3, §9.1).
+ *
+ * The only caller is the Telegram login link, and the signature is deliberately narrow: it
+ * takes a principal id and nothing that could be mistaken for a credential. Whatever
+ * establishes that identity does so before calling, and is responsible for spending its own
+ * one-time secret — this function is the part that knows how to make a session, not the part
+ * that decides who deserves one.
+ *
+ * A session made this way is indistinguishable from one made with a passkey: same lifetime,
+ * same row, same listing under §9.1, and the same one-press revocation. That is the point —
+ * a second way in must not be a second kind of session with rules somebody has to remember.
+ */
+export async function openSessionFor(
+  ctx: AuthContext,
+  principalId: string,
+): Promise<Result<SignedIn>> {
+  const principal = await ctx.ports.principals.findById(principalId);
+  if (principal === null || principal.status !== "active") {
+    return fail(ErrorType.Forbidden, "This account is not active");
+  }
+
+  const now = ctx.ports.clock.now();
+  const token = generateSessionToken();
+  const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS).toISOString();
+
+  await ctx.ports.db.commit([
+    ctx.ports.sessions.insert({
+      id: ctx.ports.ids.next(),
+      principalId: principal.id,
+      tokenHash: await sha256Hex(token),
+      userAgent: ctx.userAgent,
+      ipHash: ctx.ipHash,
+      createdAt: now.toISOString(),
+      lastSeenAt: now.toISOString(),
+      expiresAt,
+      revokedAt: null,
+    }),
+  ]);
+
+  return { ok: true, value: { principalId: principal.id, username: principal.username, sessionToken: token, expiresAt } };
+}
+
+/**
  * Resolves a session cookie.
  *
  * Returns null for anything not currently valid — unknown, revoked or expired — without
