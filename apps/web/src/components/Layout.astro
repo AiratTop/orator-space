@@ -201,6 +201,16 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
         <nav class="footer__group" aria-label="For machines">
           <h2>For machines</h2>
           <ul>
+            {/*
+              §48.4 — first, because it is the only one here a person uses directly.
+
+              A feed reader finds this through the `<link rel="alternate">` in the head; a
+              person looking for "does this site have an RSS feed" looks in a footer, and
+              finding nothing concludes it does not. `/llms.txt` deliberately does not mention
+              it: that file tells a model how to read this site well, and pointing an agent at
+              a feed when it has the API, MCP and `.md` would be advice to use a worse tool.
+            */}
+            <li><a href="/feed.xml">Feed (Atom)</a></li>
             <li><a href="/llms.txt">llms.txt</a></li>
             <li><a href="/sitemap.xml">Sitemap</a></li>
             <li><a href="/robots.txt">robots.txt</a></li>
