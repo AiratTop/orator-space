@@ -4764,6 +4764,18 @@ contact addresses        security@ and abuse@, plus mail@ — receiving, verifie
 report intake is an operational and legal risk from the first day of operation, not a
 "feature for version two".
 
+**MUST — the queue says what each entry is about, and the actions are reachable from the
+content itself.** A queue line naming a target type and an id is a list that has to be opened
+one entry at a time, and a decision made from such a line is a decision made without reading
+the thing. Both halves follow: the entry carries a subject line — an article's title, a
+comment's opening words — and a moderator viewing an article sees the same actions there.
+The second is also the only path for content nobody has reported, which is most of it.
+
+**MUST — an action with no report behind it is recorded as `proactive`, not as `report`.**
+The distinction is the value of the log: "acted on a complaint" and "went looking" are
+different facts about how a platform is run, and a takedown attributed to a report that does
+not exist cannot be audited by anybody, including us.
+
 ### 61.2. Schema
 
 ```sql
@@ -5975,6 +5987,8 @@ Everything after it is growth, and its order is decided by observation rather th
 | 148 | A moderator's session carries `admin:moderate`; minting an admin token stays an admin's | §61.1, §42.2 |
 | 149 | A produced variant is stored beside its original and read back before another is produced | §21.2 |
 | 150 | The page's `img-src` names this deployment's media origin, derived and never written down | §57.2, §14.3 |
+| 151 | A queue entry names its subject; moderation is reachable from the content itself | §61.1 |
+| 152 | An action with no report behind it is logged as proactive, never attributed to one | §61.1, §61.2 |
 
 ## 80. Open decisions
 

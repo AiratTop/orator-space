@@ -1108,6 +1108,8 @@ work here; the three before them close commitments the specification already mad
 [x] named image variants, produced once and stored (§21.2)       ecb1c39
 [x] og:image on every page; an article's own where it has one    d0627ee
 [x] uploaded avatars, and the bucket the web writes to (§49.4)   5dc3b53
+[x] the queue says what each report is about (§61.1)             26b92c0
+[x] moderation from the article's own page (§61.1)               1fd4fe7
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
 
