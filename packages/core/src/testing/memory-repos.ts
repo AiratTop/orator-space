@@ -1688,7 +1688,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       }),
     async listSpentLoginMessages(limit) {
       return [...state.telegramLogins.values()]
-        .filter((login) => login.usedAt !== null && login.cleanedAt == null && login.messageId != null)
+        .filter(
+          (login) =>
+            login.usedAt !== null &&
+            (login.cleanedAt === null || login.cleanedAt === undefined) &&
+            login.messageId !== null &&
+            login.messageId !== undefined,
+        )
         .slice(0, limit)
         .map((login) => ({ nonce: login.nonce, chatId: login.chatId, messageId: login.messageId! }));
     },
