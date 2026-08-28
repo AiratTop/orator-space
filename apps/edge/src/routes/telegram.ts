@@ -209,8 +209,8 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
    * The commands, and why there are only three.
    *
    * A command list is a promise: it appears in a menu and somebody presses it. These are the
-   * three that work on a chat by itself — the fourth thing anybody would want, signing in
-   * through Telegram, is not built, so it is not offered (§9.3).
+   * ones that work on a chat by itself. `/disconnect_confirm` is deliberately absent from the
+   * menu: it is reached only from the sentence that asks for it (§9.3).
    */
   if (command === "/help") {
     await say(token, chatId, SAID.help);

@@ -197,6 +197,7 @@ from `assets`. That bucket needs no name of its own.
 | ~~9~~ | ~~Stop Cloudflare AI Crawl Control managing `robots.txt`~~ ✅ done — both zones serve ours alone | — |
 | ~~11~~ | ~~A Gatus check on `/health/slo`~~ ✅ done — configured 2026-08-23, five minutes, alerting to Telegram and email with `send-on-resolved` | — |
 | 12 | **Two secrets on the edge Worker**, if publish p95 and the 5xx rate are wanted: `CF_ACCOUNT_ID` and `CF_ANALYTICS_TOKEN` (Account Analytics: Read). Without them those two report `unavailable` and the other five still answer | Phase 8 — §66.4 |
+| 13 | **The Telegram bot, per deployment** — see below | Phase 9 — §9.3 |
 
 **On item 3.** Gatus runs outside Cloudflare, on the operator's own host, which is the
 point: a status page served by the infrastructure it reports on says "ok" right up to the
@@ -222,6 +223,27 @@ makes the check report on the pipeline rather than on Gatus's patience.
 
 Fifteen minutes, not five: each run publishes and removes an article, and the interval is
 the resolution at which a stopped pipeline is noticed, not a measure of anything.
+
+**On item 13.** One bot per deployment (§9.3, §32.1), and three names that nothing in the
+repository could set for you:
+
+```text
+apps/web    TELEGRAM_BOT             a var in wrangler.jsonc — done, both environments
+apps/edge   TELEGRAM_BOT_TOKEN       wrangler secret put, per env
+apps/edge   TELEGRAM_WEBHOOK_SECRET  wrangler secret put, per env — any long random string
+```
+
+Then the webhook, once per bot, out of band:
+
+```bash
+curl -X POST "https://api.telegram.org/bot<token>/setWebhook" \
+  -d url="https://<api host>/telegram/webhook" \
+  -d secret_token="<the same TELEGRAM_WEBHOOK_SECRET>"
+```
+
+The failure mode to watch for is the asymmetric one: the settings page offers Connect Telegram
+as soon as `TELEGRAM_BOT` is set, and the deep link then leads to a bot whose webhook answers
+nobody. Setting the var last, after the token and the webhook, is what keeps the page honest.
 
 **The §66.4 thresholds, as a third endpoint check.** `/health/slo` evaluates all seven and
 answers `503` when one is breached, so the table needs no dashboard and no query language —
@@ -1503,17 +1525,24 @@ npmjs.com/org/orator-space           the package scope, for @orator/* if anythin
                                      published outside this workspace (§80.17)
 x.com/orator_space                   announcements
 t.me/orator_space                    channel
-t.me/orator_space_bot                the bot (§9.3) — staging's webhook today
-t.me/OratorSpaceBot                  reserved, unused: a second bot is what production needs,
-                                     since a bot has one webhook and §32.1 does not share
+t.me/orator_space_bot                the bot (§9.3) — production's, named by production's
+                                     TELEGRAM_BOT
+t.me/OratorSpaceBot                  staging's, named by staging's TELEGRAM_BOT
 youtube.com/@orator_space            reserved, unused
 ```
 
 **The two bots are not redundancy, they are §32.1.** A Telegram bot has exactly one webhook
 URL, so one bot cannot serve staging and production any more than one database can. The
-reserved handle is production's, and until it is configured the production settings page
-offers no Telegram at all — a link that bound somebody's chat to the wrong deployment would be
-worse than the absence.
+public-facing handle went to production and the second one to staging, which is the way round
+that matters: a person who finds the bot by searching for the project reaches the deployment
+their account is on.
+
+**A deployment without a bot offers no Telegram at all**, which is the intended behaviour and
+not a fallback — a link that bound somebody's chat to the wrong deployment would be worse than
+the absence. The page keys off `TELEGRAM_BOT`, and both `wrangler.jsonc` files now set it, so
+the absence is no longer what protects production: what protects it is that
+`TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET` are set and the webhook is registered
+against the right host. See §1.7 item 13.
 
 ### 13.36. What was recommended, and what was decided
 

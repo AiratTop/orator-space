@@ -964,12 +964,37 @@ client-supplied identity is a claim, and this one would be a claim to somebody's
 notifications of several accounts and can act for any of them, which is an account-sharing
 mechanism nobody asked for.
 
+**MUST — one bot per deployment.** A Telegram bot has exactly one webhook URL, so one bot
+cannot serve staging and production any more than one database can (§32.1). Each deployment
+names its own, and a deployment without one offers no Telegram at all rather than a link that
+would bind somebody's chat to the wrong platform.
+
+```text
+TELEGRAM_BOT            web Worker, a var: the handle, so a page can build a deep link
+TELEGRAM_BOT_TOKEN      edge Worker, a secret: what calls the Bot API
+TELEGRAM_WEBHOOK_SECRET edge Worker, a secret: what the incoming update is checked against
+```
+
 **MUST NOT — the bot token in the repository.** A Worker secret, like every other credential
-(§57.5). The webhook is registered out of band by an operator.
+(§57.5). The webhook is registered out of band by an operator, with `setWebhook` naming
+`https://<api host>/telegram/webhook` and the same secret.
 
 **MUST — unlinking is available and immediate**, and it is the first thing a person needs
 when a device or an account changes hands (§23.5). From the chat as well as from the page:
 the person who needs it most is the one who cannot reach the page.
+
+**The commands, because "from the chat as well as from the page" has to name them.**
+
+```text
+/help               what the bot is, and the commands worth pressing
+/status             whether this chat is linked, and to whom
+/login              a one-time sign-in link into this chat
+/disconnect         asks for confirmation
+/disconnect_confirm unlinks. A separate command rather than a word to type, because a
+                    confirmation somebody has to spell on a phone keyboard is a
+                    confirmation they get wrong. Deliberately not in the command menu —
+                    it is reached only from the sentence that asks for it
+```
 
 **MUST — a notification is delivered from an event that already has an audience, and never
 decided here.** §17, §18 and §61.2 settle which happenings have somebody waiting to hear
@@ -1000,8 +1025,20 @@ links a decade ago, and the same rule applies to any future channel.
 **MUST — signing in through the chat is a one-time secret, sent only into a bound chat, and
 spent by the write rather than by the read.** This is the recovery path §9 asks for: the chat
 was connected by somebody who was signed in, so a message from it is a message from that
-account's owner. Two minutes, once, and every failure — expired, spent, never existed —
+account's owner. Ten minutes, once, and every failure — expired, spent, never existed —
 answers identically, because telling them apart tells a guesser which guesses are close.
+
+The lifetime was two minutes while the link was spent by fetching it, and two minutes is
+wrong now that it is spent by pressing a button: the person receiving it is, by construction,
+somebody who has lost the device they were signed in on, and is now moving between a phone
+and another browser. The single use is what bounds the secret; the clock only bounds how long
+an unpressed one sits in a chat.
+
+**MUST — a spent link is taken out of the chat it was sent to.** The link stops working when
+it is pressed, so leaving it is not a vulnerability; it is a message that still reads "press
+this to sign in", which invites a second press and looks like a live credential to anybody
+reading over the person's shoulder. Deletion is recorded as asked-for, so a provider outage
+does not lose the intent and a sweep that runs twice does not ask twice.
 
 **MUST — the login nonce and the linking nonce are separate records.** One binds a chat and
 cannot open a session; the other opens a session and cannot bind a chat. Sharing a table
