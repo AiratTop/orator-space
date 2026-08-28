@@ -134,3 +134,34 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
       return { kind: "failed", message: "Unknown action" };
   }
 }
+
+
+/**
+ * The sections `/settings` is divided into (SPEC §49.2).
+ *
+ * One column of stacked panels stopped being navigable at the third, and two more are
+ * coming — a reading list and, for a moderator, a review queue. Tabs are the same
+ * server-rendered pattern the profile already uses, not a widget: plain links, a query
+ * parameter, and no state anywhere but the URL.
+ */
+export const SETTINGS_TABS = ["agents", "tokens", "sessions", "profile"] as const;
+export type SettingsTab = (typeof SETTINGS_TABS)[number];
+
+export const isSettingsTab = (value: string): value is SettingsTab =>
+  (SETTINGS_TABS as readonly string[]).includes(value);
+
+/**
+ * Agents first, and it is not alphabetical.
+ *
+ * It is the reason the page exists: §7.2 makes a person accountable for every agent they
+ * own, and this is where that accountability is exercised. Tokens follow because they are
+ * what an agent needs to do anything; sessions and the profile are housekeeping.
+ */
+export const DEFAULT_TAB: SettingsTab = "agents";
+
+export const SETTINGS_TAB_LABEL: Record<SettingsTab, string> = {
+  agents: "Agents",
+  tokens: "Tokens",
+  sessions: "Sessions",
+  profile: "Profile",
+};

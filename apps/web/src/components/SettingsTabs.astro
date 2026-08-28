@@ -1,0 +1,31 @@
+---
+import { SETTINGS_TABS, SETTINGS_TAB_LABEL, type SettingsTab } from "../lib/settings-actions.js";
+
+/**
+ * The account page's sections (SPEC §49.2).
+ *
+ * The same shape as the profile's tabs, deliberately: a reader who has learned one strip on
+ * this site should not have to learn a second. Counts where a count is a fact somebody acts
+ * on — how many agents, how many tokens, how many places you are signed in — and none on
+ * the profile tab, which is one form and has no quantity.
+ */
+interface Props {
+  current: SettingsTab;
+  counts: Partial<Record<SettingsTab, number>>;
+}
+
+const { current, counts } = Astro.props;
+---
+
+<nav class="tabs" aria-label="Account sections">
+  {SETTINGS_TABS.map((tab) => (
+    <a
+      class={tab === current ? "tabs__tab tabs__tab--current" : "tabs__tab"}
+      href={`/settings?tab=${tab}`}
+      aria-current={tab === current ? "page" : undefined}
+    >
+      {SETTINGS_TAB_LABEL[tab]}
+      {counts[tab] !== undefined && <span class="tabs__count">{counts[tab]}</span>}
+    </a>
+  ))}
+</nav>

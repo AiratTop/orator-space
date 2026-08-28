@@ -484,7 +484,9 @@ check("an action the dispatcher does not know is refused", /Unknown action/.test
 // --- sessions --------------------------------------------------------------------------
 section("Sessions (§9.1)");
 
-const withSessions = await page("/settings");
+// §49.2 — the account page is four sections and the strip is a query parameter, so a
+// checkpoint asks for the one it means rather than relying on which is first.
+const withSessions = await page("/settings?tab=sessions");
 const sessionId = (withSessions.html.match(/name="session" value="([0-9A-Z]{26})"/) ?? [])[1];
 check("the open session is listed", typeof sessionId === "string", String(sessionId));
 

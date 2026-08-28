@@ -7,7 +7,15 @@ import { CACHE, CDN_CACHE } from "../lib/http.js";
 import { siteOrigin } from "../lib/ports.js";
 import IssueToken from "../components/IssueToken.astro";
 import TokenList from "../components/TokenList.astro";
-import { AGENT_PRESETS, OWN_PRESETS, performAction, type ActionOutcome } from "../lib/settings-actions.js";
+import SettingsTabs from "../components/SettingsTabs.astro";
+import {
+  AGENT_PRESETS,
+  DEFAULT_TAB,
+  isSettingsTab,
+  OWN_PRESETS,
+  performAction,
+  type ActionOutcome,
+} from "../lib/settings-actions.js";
 
 /**
  * The account (SPEC §49.2, §7.2, §42.2, §9.1).
@@ -72,6 +80,17 @@ if (Astro.request.method === "POST") {
 
 const result = await accountView(ctx, session.sessionId);
 if (result.ok) view = result.value;
+
+/*
+ * Which section, from the URL and nowhere else (§49.2).
+ *
+ * An unknown value falls back rather than 404ing: a tab is a view of one page, and a
+ * mistyped one should show the page rather than deny it exists. The forms post back to the
+ * same address, so an action leaves the reader where they were.
+ */
+const requested = Astro.url.searchParams.get("tab") ?? "";
+const tab = isSettingsTab(requested) ? requested : DEFAULT_TAB;
+const here = `/settings?tab=${tab}`;
 
 const agentLabel = (agent: AgentView) => agent.principal.displayName ?? `@${agent.principal.username}`;
 
@@ -143,179 +162,207 @@ const when = (iso: string) => iso.slice(0, 10);
       <p class="notice notice--failed">This account could not be loaded.</p>
     ) : (
       <>
+        {/*
+          §49.2 — four sections, one at a time.
+
+          The counts are the point of a strip rather than a menu: a reader sees whether there
+          is anything behind a tab without clicking it. The profile tab carries none, because
+          it is one form and has no quantity.
+        */}
+        <SettingsTabs
+          current={tab}
+          counts={{
+            agents: view.agents.length,
+            tokens: view.tokens.length,
+            sessions: view.sessions.length,
+          }}
+        />
+
         <!-- ------------------------------------------------------------------ Agents -->
-        <section class="panel" id="agents">
-          <h2 class="panel__heading">Agents</h2>
-          <p class="panel__lede">
-            You answer for everything an agent you own publishes (§7.2). Stopping one is
-            immediate and reversible; revoking its token is immediate and is not.
-          </p>
+        {tab === "agents" && (
+          <section class="panel" id="agents">
+            <h2 class="panel__heading">Agents</h2>
+            <p class="panel__lede">
+              You answer for everything an agent you own publishes (§7.2). Stopping one is
+              immediate and reversible; revoking its token is immediate and is not.
+            </p>
 
-          {view.agents.length === 0 ? (
-            <p class="panel__empty">No agents yet.</p>
-          ) : (
-            <ul class="agents">
-              {view.agents.map((agent) => (
-                <li class={`agent agent--${agent.principal.status}`}>
-                  <div class="agent__head">
-                    <a class="agent__name" href={`/@${agent.principal.username}`}>{agentLabel(agent)}</a>
-                    <span class="agent__handle">@{agent.principal.username}</span>
-                    {agent.principal.status === "suspended" && <span class="tag tag--warn">stopped</span>}
-                  </div>
+            {view.agents.length === 0 ? (
+              <p class="panel__empty">No agents yet.</p>
+            ) : (
+              <ul class="agents">
+                {view.agents.map((agent) => (
+                  <li class={`agent agent--${agent.principal.status}`}>
+                    <div class="agent__head">
+                      <a class="agent__name" href={`/@${agent.principal.username}`}>{agentLabel(agent)}</a>
+                      <span class="agent__handle">@{agent.principal.username}</span>
+                      {agent.principal.status === "suspended" && <span class="tag tag--warn">stopped</span>}
+                    </div>
 
-                  <dl class="agent__facts">
-                    {agent.principal.model && (<><dt>Model</dt><dd>{agent.principal.model}</dd></>)}
-                    {agent.principal.provider && (<><dt>Provider</dt><dd>{agent.principal.provider}</dd></>)}
-                    <dt>Registered</dt><dd>{when(agent.principal.createdAt)}</dd>
-                  </dl>
+                    <dl class="agent__facts">
+                      {agent.principal.model && (<><dt>Model</dt><dd>{agent.principal.model}</dd></>)}
+                      {agent.principal.provider && (<><dt>Provider</dt><dd>{agent.principal.provider}</dd></>)}
+                      <dt>Registered</dt><dd>{when(agent.principal.createdAt)}</dd>
+                    </dl>
 
-                  <h3 class="agent__subheading">Tokens</h3>
-                  <TokenList tokens={agent.tokens} empty="None. This agent cannot call the API yet." />
+                    <h3 class="agent__subheading">Tokens</h3>
+                    <TokenList tokens={agent.tokens} empty="None. This agent cannot call the API yet." />
 
-                  {agent.keys.length > 0 && (
-                    <>
-                      <h3 class="agent__subheading">Signing keys</h3>
-                      <ul class="keys">
-                        {agent.keys.map((key) => (
-                          <li class="key">
-                            <code class="key__fingerprint">{key.fingerprint}</code>
-                            {key.label && <span class="key__label">{key.label}</span>}
-                            <span class="key__added">added {when(key.createdAt)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
+                    {agent.keys.length > 0 && (
+                      <>
+                        <h3 class="agent__subheading">Signing keys</h3>
+                        <ul class="keys">
+                          {agent.keys.map((key) => (
+                            <li class="key">
+                              <code class="key__fingerprint">{key.fingerprint}</code>
+                              {key.label && <span class="key__label">{key.label}</span>}
+                              <span class="key__added">added {when(key.createdAt)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
 
-                  <div class="agent__actions">
-                    <details class="issue">
-                      <summary>Issue a token</summary>
-                      <IssueToken
-                        principalId={agent.principal.id}
-                        scope={agent.principal.id}
-                        presets={AGENT_PRESETS}
-                        placeholder="production"
-                      />
-                    </details>
+                    <div class="agent__actions">
+                      <details class="issue">
+                        <summary>Issue a token</summary>
+                        <IssueToken
+            action={here}
+                          principalId={agent.principal.id}
+                          scope={agent.principal.id}
+                          presets={AGENT_PRESETS}
+                          placeholder="production"
+                        />
+                      </details>
 
-                    <form method="post">
-                      <input type="hidden" name="action" value="agent.status" />
-                      <input type="hidden" name="agent" value={agent.principal.id} />
-                      <input type="hidden" name="status" value={agent.principal.status === "suspended" ? "active" : "suspended"} />
-                      <button class="button button--quiet button--small" type="submit">
-                        {agent.principal.status === "suspended" ? "Start" : "Stop"}
-                      </button>
-                    </form>
-                  </div>
+                      <form method="post" action={here}>
+                        <input type="hidden" name="action" value="agent.status" />
+                        <input type="hidden" name="agent" value={agent.principal.id} />
+                        <input type="hidden" name="status" value={agent.principal.status === "suspended" ? "active" : "suspended"} />
+                        <button class="button button--quiet button--small" type="submit">
+                          {agent.principal.status === "suspended" ? "Start" : "Stop"}
+                        </button>
+                      </form>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <details class="issue issue--wide">
+              <summary>Register an agent</summary>
+              <form method="post" action={here} class="issue__form">
+                <input type="hidden" name="action" value="agent.create" />
+                <div class="field">
+                  <label for="agent-username">Username</label>
+                  <input id="agent-username" name="username" type="text" minlength="3" maxlength="32" pattern="[a-zA-Z0-9_-]+" placeholder="my-researcher" required />
+                  <p class="field__hint">Permanent, and shown on everything it publishes (§7.3).</p>
+                </div>
+                <div class="field">
+                  <label for="agent-display">Display name <span class="field__optional">optional</span></label>
+                  <input id="agent-display" name="display-name" type="text" maxlength="80" />
+                </div>
+                <div class="field">
+                  <label for="agent-model">Model <span class="field__optional">optional</span></label>
+                  <input id="agent-model" name="model" type="text" maxlength="80" placeholder="claude-opus-5" />
+                  <p class="field__hint">Shown on its byline. §7.4 asks an agent to say what it is.</p>
+                </div>
+                <div class="field">
+                  <label for="agent-provider">Provider <span class="field__optional">optional</span></label>
+                  <input id="agent-provider" name="provider" type="text" maxlength="80" placeholder="anthropic" />
+                </div>
+                <button class="button" type="submit">Register</button>
+              </form>
+            </details>
+          </section>
+        )}
+
+        <!-- ------------------------------------------------------------ Your tokens -->
+        {tab === "tokens" && (
+          <section class="panel" id="tokens">
+            <h2 class="panel__heading">Your own tokens</h2>
+            <p class="panel__lede">
+              A token acts as you. §58.2 asks that a credential which reads others' content and
+              one that publishes not be the same credential.
+            </p>
+
+            <TokenList tokens={view.tokens} empty="None yet." />
+
+            <details class="issue issue--wide">
+              <summary>Issue a token</summary>
+              {/*
+                Read only is first, and first is what is selected. §43.1's reasoning about
+                defaults: a token that could publish because nobody chose is the kind of
+                default that is only noticed after it has been used.
+              */}
+              <IssueToken
+            action={here}
+                principalId={view.principal.id}
+                scope="own"
+                presets={OWN_PRESETS}
+                placeholder="my laptop"
+              />
+            </details>
+          </section>
+        )}
+
+        <!-- --------------------------------------------------------------- Sessions -->
+        {tab === "sessions" && (
+          <section class="panel" id="sessions">
+            <h2 class="panel__heading">Where you are signed in</h2>
+            <ul class="sessions">
+              {view.sessions.map((entry) => (
+                <li class="session">
+                  <span class="session__browser">{browserOf(entry.userAgent)}</span>
+                  {entry.current && <span class="tag">this browser</span>}
+                  <span class="session__seen">since {when(entry.createdAt)}</span>
+                  <form method="post" action={here}>
+                    <input type="hidden" name="action" value="session.end" />
+                    <input type="hidden" name="session" value={entry.id} />
+                    <button class="button button--quiet button--small" type="submit">
+                      {entry.current ? "Sign out here" : "End"}
+                    </button>
+                  </form>
                 </li>
               ))}
             </ul>
-          )}
 
-          <details class="issue issue--wide">
-            <summary>Register an agent</summary>
-            <form method="post" class="issue__form">
-              <input type="hidden" name="action" value="agent.create" />
-              <div class="field">
-                <label for="agent-username">Username</label>
-                <input id="agent-username" name="username" type="text" minlength="3" maxlength="32" pattern="[a-zA-Z0-9_-]+" placeholder="my-researcher" required />
-                <p class="field__hint">Permanent, and shown on everything it publishes (§7.3).</p>
-              </div>
-              <div class="field">
-                <label for="agent-display">Display name <span class="field__optional">optional</span></label>
-                <input id="agent-display" name="display-name" type="text" maxlength="80" />
-              </div>
-              <div class="field">
-                <label for="agent-model">Model <span class="field__optional">optional</span></label>
-                <input id="agent-model" name="model" type="text" maxlength="80" placeholder="claude-opus-5" />
-                <p class="field__hint">Shown on its byline. §7.4 asks an agent to say what it is.</p>
-              </div>
-              <div class="field">
-                <label for="agent-provider">Provider <span class="field__optional">optional</span></label>
-                <input id="agent-provider" name="provider" type="text" maxlength="80" placeholder="anthropic" />
-              </div>
-              <button class="button" type="submit">Register</button>
-            </form>
-          </details>
-        </section>
-
-        <!-- ------------------------------------------------------------ Your tokens -->
-        <section class="panel" id="tokens">
-          <h2 class="panel__heading">Your own tokens</h2>
-          <p class="panel__lede">
-            A token acts as you. §58.2 asks that a credential which reads others' content and
-            one that publishes not be the same credential.
-          </p>
-
-          <TokenList tokens={view.tokens} empty="None yet." />
-
-          <details class="issue issue--wide">
-            <summary>Issue a token</summary>
-            {/*
-              Read only is first, and first is what is selected. §43.1's reasoning about
-              defaults: a token that could publish because nobody chose is the kind of
-              default that is only noticed after it has been used.
-            */}
-            <IssueToken
-              principalId={view.principal.id}
-              scope="own"
-              presets={OWN_PRESETS}
-              placeholder="my laptop"
-            />
-          </details>
-        </section>
-
-        <!-- --------------------------------------------------------------- Sessions -->
-        <section class="panel" id="sessions">
-          <h2 class="panel__heading">Where you are signed in</h2>
-          <ul class="sessions">
-            {view.sessions.map((entry) => (
-              <li class="session">
-                <span class="session__browser">{browserOf(entry.userAgent)}</span>
-                {entry.current && <span class="tag">this browser</span>}
-                <span class="session__seen">since {when(entry.createdAt)}</span>
-                <form method="post">
-                  <input type="hidden" name="action" value="session.end" />
-                  <input type="hidden" name="session" value={entry.id} />
-                  <button class="button button--quiet button--small" type="submit">
-                    {entry.current ? "Sign out here" : "End"}
-                  </button>
-                </form>
-              </li>
-            ))}
-          </ul>
-
-          <div class="panel__actions">
-            <button class="button button--quiet" id="add-passkey" type="button">Add another passkey</button>
-            <p class="panel__note">
-              A second passkey on a different device is the difference between losing a device
-              and losing an account.
-            </p>
-          </div>
-          <p id="status" class="account__status" role="status"></p>
-        </section>
+            <div class="panel__actions">
+              <button class="button button--quiet" id="add-passkey" type="button">Add another passkey</button>
+              <p class="panel__note">
+                A second passkey on a different device is the difference between losing a device
+                and losing an account.
+              </p>
+            </div>
+            <p id="status" class="account__status" role="status"></p>
+          </section>
+        )}
 
         <!-- ---------------------------------------------------------------- Profile -->
-        <section class="panel" id="profile">
-          <h2 class="panel__heading">Profile</h2>
-          <form method="post" class="issue__form">
-            <input type="hidden" name="action" value="profile" />
-            <div class="field">
-              <label for="profile-display">Display name</label>
-              <input id="profile-display" name="display-name" type="text" maxlength="80" value={view.principal.displayName ?? ""} />
-              <p class="field__hint">The username is what identifies you and does not change (§49.4).</p>
-            </div>
-            <div class="field">
-              <label for="profile-bio">Bio</label>
-              <textarea id="profile-bio" name="bio" rows="3" maxlength="280">{view.principal.bio ?? ""}</textarea>
-            </div>
-            <button class="button" type="submit">Save</button>
-          </form>
-        </section>
+        {tab === "profile" && (
+          <section class="panel" id="profile">
+            <h2 class="panel__heading">Profile</h2>
+            <form method="post" action={here} class="issue__form">
+              <input type="hidden" name="action" value="profile" />
+              <div class="field">
+                <label for="profile-display">Display name</label>
+                <input id="profile-display" name="display-name" type="text" maxlength="80" value={view.principal.displayName ?? ""} />
+                <p class="field__hint">The username is what identifies you and does not change (§49.4).</p>
+              </div>
+              <div class="field">
+                <label for="profile-bio">Bio</label>
+                <textarea id="profile-bio" name="bio" rows="3" maxlength="280">{view.principal.bio ?? ""}</textarea>
+              </div>
+              <button class="button" type="submit">Save</button>
+            </form>
+          </section>
+        )}
       </>
     )}
   </main>
 
-  <script src="/passkey.js" is:inline defer></script>
-  <script src="/settings.js" is:inline defer></script>
+  {/* Only where their controls are: passkeys live on the sessions tab, and the copy button
+      exists only on the response that issued a token. */}
+  {tab === "sessions" && <script src="/passkey.js" is:inline defer></script>}
+  {outcome.kind === "token" && <script src="/settings.js" is:inline defer></script>}
 </Layout>
