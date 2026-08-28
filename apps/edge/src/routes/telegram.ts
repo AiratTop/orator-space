@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { redeemTelegramLink, unlinkTelegram } from "@orator/core";
-import { createTelegramRepo, systemClock } from "@orator/adapters-cf";
+import { createPrincipalRepo, createTelegramRepo, systemClock } from "@orator/adapters-cf";
 import { createD1Database } from "@orator/adapters-cf";
 import { surfaceFor, type Env } from "../index.js";
 
@@ -77,12 +77,24 @@ const SAID = {
     "read, cite and challenge each other.\n\n" +
     "This bot is how the platform reaches you — a moderation decision, somebody answering " +
     "your article — instead of leaving it in a feed you would have to visit to read.\n\n" +
-    "/status — which account this chat belongs to\n" +
-    "/disconnect — stop this chat receiving anything\n\n" +
-    "Connect a chat from the Telegram tab of your account settings.",
+    "/status — which account this chat belongs to\n\n" +
+    "Connect a chat from the Telegram tab of your account settings. Disconnecting is in the " +
+    "command menu, and on that same page.",
   notConnected:
     "This chat is not connected to any Orator.Space account. Open the Telegram tab of your " +
     "account settings and press connect — it will bring you back here.",
+  /*
+   * §9.3 — a destructive command asks twice, and the reason is the interface.
+   *
+   * Telegram renders `/command` in a message as a button: one tap, no dialogue, done. This
+   * one removes the channel a person is told about takedowns through, so it is not something
+   * a thumb should be able to do while scrolling. The confirmation is a second deliberate
+   * act, and the sentence before it says what will stop.
+   */
+  confirmDisconnect:
+    "This will disconnect the chat from your Orator.Space account: no notifications, and " +
+    "nothing about your work will reach you here.\n\n" +
+    "To go ahead, send: /disconnect yes",
   disconnected:
     "Disconnected. This chat no longer belongs to any account here and will receive nothing. " +
     "You can connect it again, to this account or another one, from the settings page.",
@@ -159,17 +171,43 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
 
   if (command === "/status") {
     const account = await repo.findByTelegramUser(telegramUserId);
+    if (account === null) {
+      await say(token, chatId, SAID.notConnected);
+      return c.text("ok");
+    }
+
+    /*
+     * Named, not merely acknowledged.
+     *
+     * "an Orator.Space account" is no answer to somebody who has two, and this message
+     * reaches exactly one chat — the one the account is bound to — so the handle it prints is
+     * the reader's own. One extra read, on a command nobody presses in a loop.
+     */
+    const principal = await createPrincipalRepo(c.env.DB).findById(account.principalId);
+    const who = principal === null ? "an account" : `@${principal.username}`;
     await say(
       token,
       chatId,
-      account === null
-        ? SAID.notConnected
-        : `This chat belongs to an Orator.Space account, connected on ${account.linkedAt.slice(0, 10)}.`,
+      `This chat belongs to ${who} on Orator.Space, connected on ${account.linkedAt.slice(0, 10)}.`,
     );
     return c.text("ok");
   }
 
   if (command === "/disconnect") {
+    /*
+     * Confirmed by the word after it, rather than by a button.
+     *
+     * An inline keyboard would be prettier and would mean subscribing to `callback_query`
+     * updates — a second kind of update to verify, parse and answer, for a confirmation that
+     * two words already provide.
+     */
+    const confirmed = /^\/disconnect(?:@\w+)?\s+(yes|confirm)$/i.test(text.trim());
+    if (!confirmed) {
+      const account = await repo.findByTelegramUser(telegramUserId);
+      await say(token, chatId, account === null ? SAID.notConnected : SAID.confirmDisconnect);
+      return c.text("ok");
+    }
+
     /*
      * From the chat as well as from the page, and it is not a duplicate of that button.
      *
