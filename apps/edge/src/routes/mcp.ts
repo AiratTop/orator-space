@@ -4,6 +4,7 @@ import { ErrorType, problem } from "@orator/protocol";
 import { ErrorCode, failure, handleMessage, parseMessage } from "../mcp/server.js";
 import type { JsonRpcResponse } from "../mcp/server.js";
 import { surfaceFor, type Env } from "../index.js";
+import { semanticFor } from "../context.js";
 
 /**
  * `mcp.orator.space` — Streamable HTTP, without sessions (SPEC §47, ADR 0006).
@@ -42,10 +43,14 @@ async function handlePost(c: Ctx) {
 
   const ctx = c.get("ctx");
   const requestId = c.get("requestId");
+  // §38.2 — a property of the deployment, so it is read once here rather than per tool call.
+  const semantic = semanticFor(c.env);
   const mcp = {
     ctx,
     requestId,
     requestUrl: c.req.url,
+    // §38.2 — assembled from the bindings, so `undefined` on a deployment without them.
+    ...(semantic === undefined ? {} : { semantic }),
     authenticated: ctx.actor !== null,
     after: (work: Promise<unknown>) => {
       try {

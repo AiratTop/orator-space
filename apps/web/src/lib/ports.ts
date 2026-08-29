@@ -5,6 +5,8 @@ import {
   createR2ContentStore,
   createReadingRepo,
   createSearchIndex,
+  createVectorIndex,
+  createWorkersAiEmbedder,
   systemClock,
   createReadingListRepo,
   createTopicRepo,
@@ -31,6 +33,24 @@ interface WebEnv {
   FLOOD_SEARCH: { limit(options: { key: string }): Promise<{ success: boolean }> };
   /** SPEC §61.2 — the one public *write* that takes no credential at all. */
   FLOOD_REPORT: { limit(options: { key: string }): Promise<{ success: boolean }> };
+  /**
+   * SPEC §38.2, ADR 0012 — the two bindings semantic search needs, or neither.
+   *
+   * The only model this surface reaches, and it reaches it read-only in the strongest sense:
+   * it turns a query into a vector and can do nothing else with either. §43.4 requires REST,
+   * MCP and the web to reach the same verdict; a search is a read, so the same rule decides
+   * what each of them is able to *find*, and a reader searching in one language for an
+   * article written in another gets the answer an agent would.
+   */
+  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
+  VECTORS?: {
+    upsert(vectors: { id: string; values: number[] }[]): Promise<unknown>;
+    deleteByIds(ids: string[]): Promise<unknown>;
+    query(
+      vector: number[],
+      options: { topK: number; returnValues?: boolean; returnMetadata?: "none" | "indexed" | "all" },
+    ): Promise<{ matches: { id: string; score: number }[] }>;
+  };
 }
 
 const web = env as unknown as WebEnv;
@@ -39,6 +59,25 @@ export const ports: ReadingPorts = {
   reading: createReadingRepo(web.DB),
   content: createR2ContentStore(web.CONTENT),
 };
+
+/**
+ * The semantic leg, narrowed to `nearest` (SPEC §38.2, §28, ADR 0012).
+ *
+ * `VectorIndex` also has `upsert` and `remove`, which belong to the queue consumer that keeps
+ * the store in step with the data — and this is the surface that renders untrusted content.
+ * The same argument `search` makes about `query`, applied to the store: what a page can reach
+ * is what is written here, so a write from a page fails to compile rather than fails review.
+ *
+ * Undefined when either binding is absent, which is a deployment state rather than a fault:
+ * the dev server has neither, and §38.2's degradation makes search lexical there.
+ */
+const semantic =
+  web.AI === undefined || web.VECTORS === undefined
+    ? undefined
+    : {
+        embedder: createWorkersAiEmbedder(web.AI),
+        vectors: { nearest: createVectorIndex(web.VECTORS).nearest },
+      };
 
 /**
  * Reading, plus the ability to *ask* the search index a question (SPEC §38, §28).
@@ -52,6 +91,7 @@ export const ports: ReadingPorts = {
 export const searchPorts: SearchPorts = {
   ...ports,
   search: { query: createSearchIndex(web.DB).query },
+  ...(semantic === undefined ? {} : { semantic }),
 };
 
 /**

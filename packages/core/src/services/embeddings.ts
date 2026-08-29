@@ -1,0 +1,304 @@
+import { redactMachineAddressed } from "../moderation/heuristics.js";
+import { sha256Hex } from "../text/digest.js";
+import { stripInvisible } from "../text/invisible.js";
+import type { Embedder, VectorIndex } from "../ports/index.js";
+import type { Ports } from "./context.js";
+
+/**
+ * The two things a deployment may not have (SPEC §38.2).
+ *
+ * Passed in rather than put on `Ports`, and grouped rather than passed separately, because
+ * they are absent together and useless apart: a model with nowhere to put a vector and a
+ * store with nothing to put in it are both "this deployment has no semantic search". The
+ * ledger is on `Ports` instead — it is D1, it is always there, and it is what lets a
+ * deployment that gains the bindings later find out how far behind it is.
+ *
+ * The same shape the classifier takes (§22.3): the caller holds the binding and decides
+ * whether there is a provider at all, so a missing binding is a deployment state rather than
+ * an error, exactly as `wrangler.jsonc` describes for Workers AI.
+ */
+export interface SemanticProvider {
+  embedder: Embedder;
+  vectors: VectorIndex;
+}
+
+/**
+ * Embedding published articles (SPEC §38.2, §38.3, ADR 0012).
+ *
+ * The write half of semantic search. It runs where classification runs — on the article
+ * event, after the commit, never in front of it — for the reason §38.1 gives about the FTS
+ * index and §22.3 gives about the classifier: a model on the publishing path turns a
+ * provider having a bad minute into a platform that accepts no writes.
+ *
+ * Everything here is spending decisions. An embedding call is the only per-article cost on
+ * the platform that a redelivery could repeat indefinitely, so three separate things stop it
+ * from being spent twice, and each answers a different question:
+ *
+ *   1. is this article one whose vector could ever be returned?   (published, and no duplicate)
+ *   2. has this exact text already been read by this model?       (the ledger's input hash)
+ *   3. was the answer to 2 produced by the model in use now?      (the ledger's model)
+ */
+
+/**
+ * How much of an article is embedded.
+ *
+ * The same window the classifier reads (§22.3), and the same argument: what an article is
+ * about is established early and does not change on page nine. bge-m3 accepts 8 192 tokens,
+ * so this sits comfortably inside the context rather than relying on the provider to
+ * truncate — a provider that truncates silently and a caller that assumes it did not are how
+ * two deployments of the same corpus end up with different vectors.
+ */
+export const MAX_EMBEDDED_BODY_CHARS = 8_000;
+
+export type EmbeddingStatus =
+  /** A vector was written and the ledger updated. */
+  | "embedded"
+  /** Already embedded, from these exact bytes, by this model. A redelivery, and a no-op. */
+  | "unchanged"
+  /** The article's vector was removed: it is a duplicate, unpublished, private or gone. */
+  | "removed"
+  /** The provider or the store failed. Search stays lexical; nothing is recorded. */
+  | "unavailable"
+  /** Not an article this applies to: a draft, a tombstone, a missing body. */
+  | "skipped";
+
+/**
+ * The text a vector is made from.
+ *
+ * Title first, because the pooling is `cls` and the opening tokens carry disproportionate
+ * weight — which is the behaviour wanted, since a title is the densest sentence an article
+ * has. Then the excerpt, which is the author's own summary, then the body window.
+ *
+ * Sanitised exactly as the classifier's input is (§22.3, §58.1), and the reasoning transfers
+ * with one substitution. Invisible characters go because the renderer strips them on the way
+ * out and this path does not go through the renderer, so a payload has to be visible to a
+ * human reading the article. Sentences addressed to a machine go because they are how an
+ * article argues about its own placement — for the classifier that meant the wrong topic; for
+ * an embedding it means an article that ranks for a query it has nothing to do with, which is
+ * keyword stuffing with better grammar. Neither is a defence on its own; both are cheap.
+ */
+export function embeddableText(input: {
+  title: string;
+  excerpt: string | null;
+  body: string;
+}): string {
+  const clean = (text: string) => redactMachineAddressed(stripInvisible(text));
+  return [
+    clean(input.title),
+    input.excerpt === null ? "" : clean(input.excerpt),
+    clean(input.body).slice(0, MAX_EMBEDDED_BODY_CHARS),
+  ]
+    .filter((part) => part.length > 0)
+    .join("\n\n");
+}
+
+/**
+ * Embeds one article, or removes what should not be in the index.
+ *
+ * Reads current state rather than trusting the event, like every other handler: at-least-once
+ * delivery means the message may be a replay, and current state is the only thing that is
+ * true twice (§35.3).
+ */
+export async function embedArticle(
+  ports: Ports,
+  articleId: string,
+  semantic: SemanticProvider,
+): Promise<EmbeddingStatus> {
+  const { embedder, vectors } = semantic;
+  const article = await ports.articles.findById(articleId);
+
+  /*
+   * The removal path, which is most of the interesting cases.
+   *
+   * An article leaves the index for four different reasons and they arrive by three
+   * different routes — unpublished by its author, made private, removed by moderation, or
+   * found to be a byte-identical duplicate of somebody else's (§60.1). Handled together
+   * because the consequence is the same and because getting it wrong is invisible: a vector
+   * left behind for a withdrawn article is returned by a semantic query, is then dropped
+   * when `search` rehydrates it and finds nothing, and shows up as a search that quietly
+   * returns four results when it found five.
+   *
+   * The duplicate case is the one that saves money rather than correctness. §38.1's search
+   * already refuses to return a duplicate, so its vector could never surface; embedding it
+   * would spend an inference call on a row that is filtered at read time. It is checked
+   * *after* §50.3's evaluation on the same event, because that is what writes `duplicate_of`.
+   */
+  const live =
+    article !== null &&
+    article.status === "published" &&
+    article.visibility === "public" &&
+    (article.duplicateOf === null || article.duplicateOf === undefined)
+      ? article
+      : null;
+  const publishedRevisionId = live?.publishedRevisionId ?? null;
+
+  if (live === null || publishedRevisionId === null) {
+    // Nothing held means nothing to withdraw. Checked before the store is touched, so the
+    // ordinary case — a draft, or an event about an article that was never indexed — costs
+    // one indexed read rather than a round trip to Vectorize.
+    if ((await ports.embeddings.find(articleId)) === null) return "skipped";
+    try {
+      await vectors.remove([articleId]);
+    } catch (error) {
+      // Not fatal and not retried. The ledger row stays, so the backlog drain does not
+      // immediately re-embed; the stale vector is dropped at read time by `search`, and the
+      // next event tries the removal again.
+      log("error", "embedding.remove.unavailable", articleId, { error: String(error) });
+      return "unavailable";
+    }
+    await ports.db.commit([ports.embeddings.forget(articleId)]);
+    return "removed";
+  }
+
+  const revision = await ports.articles.findRevision(publishedRevisionId);
+  if (revision === null) return "skipped";
+
+  const stored = await ports.content.get(revision.contentHash);
+  if (stored === null) return "skipped";
+
+  const text = embeddableText({
+    title: revision.title,
+    excerpt: revision.excerpt,
+    body: stored,
+  });
+  const inputHash = await sha256Hex(text);
+
+  /*
+   * The three-part idempotency check, in one comparison.
+   *
+   * The model belongs in it as much as the hash does. Changing the embedder invalidates every
+   * vector in the store — a query embedded by one model against a corpus embedded by another
+   * returns plausible nonsense rather than an error, which is the worst failure mode
+   * available here — so a ledger row naming the previous model is as stale as one naming
+   * different bytes, and is treated identically. That is also what makes a model change a
+   * configuration change rather than a migration: the backlog drain finds every row that
+   * names the old name.
+   */
+  const held = await ports.embeddings.find(articleId);
+  if (held !== null && held.inputHash === inputHash && held.model === embedder.name) {
+    return "unchanged";
+  }
+
+  let vector: number[] | undefined;
+  try {
+    [vector] = await embedder.embed([text]);
+  } catch (error) {
+    /*
+     * §38.2 — an unavailable embedder leaves search lexical.
+     *
+     * The same degradation §22.3 chose for classification and §61 for screening. Nothing is
+     * recorded, so the next event — or the backlog drain, which does not need one — tries
+     * again. Not a queue failure: retrying the message would re-index and re-screen for no
+     * reason.
+     */
+    log("error", "embedding.provider.unavailable", articleId, {
+      provider: embedder.name,
+      error: String(error),
+    });
+    return "unavailable";
+  }
+
+  if (vector === undefined || vector.length !== embedder.dimensions) {
+    /*
+     * A dimension mismatch is a deployment error, not a bad article.
+     *
+     * The store would reject it, but only after the inference call has been paid for and
+     * with a message about a vector rather than about a configuration. Named here, once,
+     * loudly, because the shape of the failure it produces otherwise — every article failing
+     * identically and permanently — reads like an outage.
+     */
+    log("error", "embedding.dimensions.mismatch", articleId, {
+      provider: embedder.name,
+      expected: embedder.dimensions,
+      received: vector?.length ?? 0,
+    });
+    return "unavailable";
+  }
+
+  /*
+   * The store first, the ledger second, and the order is the whole of the crash safety.
+   *
+   * A crash between them re-embeds this article on the next event or cron run, which costs
+   * one call. The reverse order would record "done" for a vector that never arrived, and
+   * nothing would ever look at that article again — the failure that is silent, permanent,
+   * and invisible to every check the platform has.
+   */
+  try {
+    await vectors.upsert([{ articleId: live.id, vector }]);
+  } catch (error) {
+    log("error", "embedding.store.unavailable", articleId, { error: String(error) });
+    return "unavailable";
+  }
+
+  await ports.db.commit([
+    ports.embeddings.record({
+      articleId,
+      inputHash,
+      model: embedder.name,
+      dimensions: embedder.dimensions,
+      embeddedAt: ports.clock.now().toISOString(),
+    }),
+  ]);
+
+  return "embedded";
+}
+
+/**
+ * How many articles one cron run embeds.
+ *
+ * Small on purpose. The drain is a safety net (§35.2), not a batch job: it shares a five
+ * minute cron with the sitemap rebuild and a Worker's CPU budget with it, and a corpus that
+ * needs a thousand embeddings gets them over an afternoon rather than in one invocation that
+ * times out halfway and leaves nobody able to say how far it got.
+ */
+export const EMBEDDING_BATCH = 10;
+
+export interface DrainOutcome {
+  embedded: number;
+  failed: number;
+  /** What is still waiting, capped. Zero means the corpus is fully embedded. */
+  remaining: number;
+}
+
+/**
+ * Embeds whatever has no current vector (SPEC §35.2, ADR 0012).
+ *
+ * This is why there is no backfill script. Three different problems have the same shape and
+ * one answer: the corpus published before semantic search existed, an article whose event was
+ * lost to a queue failure, and every article at once after the model is changed. A script
+ * would have solved the first, been forgotten for the second, and been rewritten for the
+ * third.
+ *
+ * Stops at the first unavailability rather than working through the batch. A provider that is
+ * down is down for all ten, and ten failed calls a run is a bill for nothing.
+ */
+export async function drainEmbeddingBacklog(
+  ports: Ports,
+  semantic: SemanticProvider,
+  limit = EMBEDDING_BATCH,
+): Promise<DrainOutcome> {
+  const stale = await ports.embeddings.listStale(semantic.embedder.name, limit);
+  let embedded = 0;
+  let failed = 0;
+
+  for (const articleId of stale) {
+    const status = await embedArticle(ports, articleId, semantic);
+    if (status === "unavailable") {
+      failed += 1;
+      break;
+    }
+    if (status === "embedded") embedded += 1;
+  }
+
+  return {
+    embedded,
+    failed,
+    remaining: await ports.embeddings.countStale(semantic.embedder.name, 1_000),
+  };
+}
+
+function log(level: "error" | "warn", event: string, articleId: string, extra: Record<string, unknown>): void {
+  const line = JSON.stringify({ level, event, article_id: articleId, ...extra });
+  if (level === "error") console.error(line);
+  else console.warn(line);
+}

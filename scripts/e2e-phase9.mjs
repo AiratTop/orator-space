@@ -460,6 +460,84 @@ if (classified !== null) {
   check("and the article names its topics", articlePage.html.includes(`/t/${primary}`));
 }
 
+// --- semantic search -------------------------------------------------------------------
+section("Semantic search (§38.2, ADR 0012)");
+
+/*
+ * The one query that proves the feature, and it is chosen so that it cannot pass by accident.
+ *
+ * The article above is in English. This query is in Russian and shares no *character* with
+ * it, let alone a token, so FTS5 with `unicode61` scores the pair at exactly zero — there is
+ * no tokeniser setting, no stemmer and no amount of tuning that would make the lexical leg
+ * return it. If this finds the article, the vector leg found it, and nothing else could have.
+ *
+ * That is also why the check is worth its runtime. Every other assertion about search could
+ * be satisfied by the index that existed before this phase; this one could not.
+ */
+const CROSS_LINGUAL_QUERY = "задержка ответа языковой модели при квантовании";
+
+/*
+ * §38.1's own promise, checked first and separately.
+ *
+ * A query in the article's own language must keep working. A hybrid that improved the hard
+ * case and quietly broke the ordinary one would look like a success on the check below, so
+ * the ordinary one is asserted before the interesting one.
+ */
+let lexicalFound = false;
+for (let attempt = 0; attempt < 60; attempt++) {
+  const results = await api("GET", `/v1/search?q=${encodeURIComponent(`quantisation ${suffix}`)}`);
+  if ((results.body?.articles ?? []).some((card) => card.id === articleId)) {
+    lexicalFound = true;
+    break;
+  }
+  await pause(1000);
+}
+check("a query in the article's own words still finds it", lexicalFound);
+
+let semanticFound = false;
+for (let attempt = 0; attempt < 90; attempt++) {
+  const results = await api("GET", `/v1/search?q=${encodeURIComponent(CROSS_LINGUAL_QUERY)}`);
+  if ((results.body?.articles ?? []).some((card) => card.id === articleId)) {
+    semanticFound = true;
+    break;
+  }
+  await pause(1000);
+}
+check(
+  "a query sharing no token with the article finds it anyway",
+  semanticFound,
+  "the vector leg is the only thing that could have returned this",
+);
+
+/*
+ * §38.2's floor, from the other side.
+ *
+ * A vector store with no floor answers every query with the whole corpus in some order, which
+ * is worse than answering nothing: a reader cannot tell a bad result from a thin one. The
+ * measured hubness is what makes this a real risk rather than a theoretical one — a vague
+ * query sat at 0.38 to 0.40 from every article in the sample.
+ */
+const nonsense = await api("GET", `/v1/search?q=${encodeURIComponent("рецепт борща со свёклой и говядиной")}`);
+check(
+  "and a query about something else entirely returns nothing",
+  nonsense.status === 200 && (nonsense.body?.articles ?? []).length === 0,
+  `${(nonsense.body?.articles ?? []).length} result(s)`,
+);
+
+/*
+ * §43.4 — REST, MCP and the web reach the same verdict, and a search is a read.
+ *
+ * The web page is the surface a person uses and it holds its own bindings, so "semantic
+ * search works" being true of the API says nothing about it. This is the check that would
+ * have caught the binding being added to one `wrangler.jsonc` and not the other.
+ */
+const semanticPage = await page_(`/search?q=${encodeURIComponent(CROSS_LINGUAL_QUERY)}`);
+check(
+  "the web search page finds it too, not only the API",
+  semanticPage.html.includes(articleId),
+  "the two surfaces must not disagree about what is findable",
+);
+
 // --- duplicates ------------------------------------------------------------------------
 section("An exact duplicate (§60.1, §13.1)");
 

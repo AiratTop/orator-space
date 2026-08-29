@@ -39,6 +39,8 @@ import {
   type CommentRecord,
   type EdgeRecord,
   type SearchDocument,
+  type EmbeddingLedger,
+  type EmbeddingRecord,
   type SearchIndex,
   type SocialRepo,
   type ModerationRepo,
@@ -119,6 +121,8 @@ export interface MemoryState {
   follows: Set<string>;
   /** SPEC §66.4 — when each article was indexed, which is half of the lag measurement. */
   searchIndexedAt: Map<string, string>;
+  /** SPEC §38.2 — what has been embedded, and from which text. */
+  embeddings: Map<string, EmbeddingRecord>;
   /** SPEC §66.4 — arrival times of messages the consumer gave up on. */
   deadLetters: string[];
 }
@@ -169,6 +173,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     edges: new Map(),
     follows: new Set(),
     searchIndexedAt: new Map(),
+    embeddings: new Map(),
     deadLetters: [],
   };
 
@@ -209,6 +214,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         outbox: [...state.outbox],
         comments: new Map(state.comments),
         searchDocs: new Map(state.searchDocs),
+        embeddings: new Map(state.embeddings),
         topics: new Map(state.topics),
         metrics: [...state.metrics],
         credentials: [...state.credentials],
@@ -1344,8 +1350,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
     async indexedHash(articleId) {
       // The input hash, like the D1 adapter: what the entry was built from, not the body it
-      // describes. A double answering with the body would let the title-only edit this commit
-      // fixes pass here and fail in production, which is the worst kind of double.
+      // describes. A double that answered with the body would make the title-only edit ADR
+      // 0012 fixed pass here and fail in production, which is the worst kind of double.
       return state.searchDocs.get(articleId)?.inputHash ?? null;
     },
     async query(text, limit) {
@@ -1360,6 +1366,51 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
   };
 
+
+  /**
+   * The embedding ledger in memory (SPEC §38.2).
+   *
+   * Only the ledger has a double. `Embedder` and `VectorIndex` are handed to the two services
+   * that use them, so a test constructs whichever fake it needs for the behaviour it is
+   * asserting — a model that throws, a store that is empty — rather than reaching for one
+   * blessed double that has to be all of them.
+   */
+  const embeddings: EmbeddingLedger = {
+    async find(articleId) {
+      return state.embeddings.get(articleId) ?? null;
+    },
+    record: (entry) =>
+      asWrite(() => {
+        state.embeddings.set(entry.articleId, {
+          inputHash: entry.inputHash,
+          model: entry.model,
+          dimensions: entry.dimensions,
+        });
+        return 1;
+      }),
+    forget: (articleId) => asWrite(() => (state.embeddings.delete(articleId) ? 1 : 0)),
+    async listStale(model, limit) {
+      return staleIds(model).slice(0, limit);
+    },
+    async countStale(model, cap) {
+      return Math.min(staleIds(model).length, cap);
+    },
+  };
+
+  /** The same predicate the D1 ledger expresses in SQL, so the two agree about "stale". */
+  function staleIds(model: string): OratorId[] {
+    return [...state.articles.values()]
+      .filter(
+        (article) =>
+          article.status === "published" &&
+          article.visibility === "public" &&
+          (article.duplicateOf === null || article.duplicateOf === undefined) &&
+          article.publishedRevisionId !== null &&
+          state.embeddings.get(article.id)?.model !== model,
+      )
+      .map((article) => article.id)
+      .sort();
+  }
 
   /** SPEC §22 — curated, and empty until a moderator puts something in it. */
   const topics: TopicRepo = {
@@ -2107,6 +2158,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     sessions,
     social,
     search,
+    embeddings,
     topics,
     topicAssignments,
     readingList,

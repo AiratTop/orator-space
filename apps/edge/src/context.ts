@@ -2,6 +2,8 @@ import {
   createArticleRepo,
   createAuditRepo,
   createD1Database,
+  createEmbeddingLedger,
+  createVectorIndex,
   createEventRepo,
   createIdempotencyRepo,
   createIdGen,
@@ -20,6 +22,7 @@ import {
   createReadingRepo,
   createSearchIndex,
   createSitemapRepo,
+  createWorkersAiEmbedder,
   createSloRepo,
   createSocialRepo,
   createModerationRepo,
@@ -57,6 +60,7 @@ export function portsFor(env: Env): Ports {
     reading: createReadingRepo(env.DB),
     social: createSocialRepo(env.DB),
     search: createSearchIndex(env.DB),
+    embeddings: createEmbeddingLedger(env.DB),
     topics: createTopicRepo(env.DB),
     topicAssignments: createTopicAssignmentRepo(env.DB),
     readingList: createReadingListRepo(env.DB),
@@ -78,6 +82,23 @@ export function portsFor(env: Env): Ports {
     clock: systemClock,
     ids: idGen,
   };
+}
+
+/**
+ * The two bindings semantic search needs, or nothing (SPEC §38.2, ADR 0012).
+ *
+ * One function rather than two checks at three call sites, because the interesting property
+ * is that they are absent *together*: a model with nowhere to put a vector and a store with
+ * nothing to put in it are both "this deployment has no semantic search", and a deployment
+ * with one of the two is a configuration mistake rather than a degraded mode. Returning
+ * `undefined` for that case makes it behave like the honest absence rather than failing
+ * halfway through an article.
+ */
+export function semanticFor(env: Env) {
+  const ai = env.AI;
+  const vectors = env.VECTORS;
+  if (ai === undefined || vectors === undefined) return undefined;
+  return { embedder: createWorkersAiEmbedder(ai), vectors: createVectorIndex(vectors) };
 }
 
 /** SPEC §62 — the address itself is never stored, only a salted digest. */

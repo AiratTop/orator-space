@@ -30,7 +30,7 @@ const ALLOWED = {
 const SEALED = ["packages/core", "packages/protocol", "packages/db", "packages/sdk"];
 
 const CF_TYPES =
-  /\b(D1Database|D1PreparedStatement|D1Result|R2Bucket|R2Object|R2ObjectBody|KVNamespace|DurableObjectNamespace|DurableObjectState|DurableObjectStub|MessageBatch|ExecutionContext|ScheduledController|AnalyticsEngineDataset|Fetcher)\b|@cloudflare\/workers-types|cloudflare:workers/;
+  /\b(D1Database|D1PreparedStatement|D1Result|R2Bucket|R2Object|R2ObjectBody|KVNamespace|DurableObjectNamespace|DurableObjectState|DurableObjectStub|MessageBatch|ExecutionContext|ScheduledController|AnalyticsEngineDataset|Fetcher|VectorizeIndex|VectorizeVector|VectorizeMatches|VectorizeMatch)\b|@cloudflare\/workers-types|cloudflare:workers/;
 
 const DOMAIN_MODULES = ["identity", "articles", "social", "media", "discovery", "events", "moderation"];
 

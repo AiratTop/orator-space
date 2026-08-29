@@ -39,7 +39,8 @@
    */
 
   /*
-   * SPEC §22.3, §38.3, §61 — the classifier and the reading moderation provider.
+   * SPEC §22.3, §38.2, §38.3, §61 — the classifier, the reading moderation provider, and
+   * the two bindings semantic search needs (`AI` and `VECTORS`, ADR 0012).
    *
    * Declared per environment and deliberately absent from this block, which is the one the
    * local dev server and the `workerd` tests read. Workers AI has no local simulator, so its
@@ -50,6 +51,11 @@
    * depends on nothing, and the Worker treats a missing binding as "this deployment has no
    * reading provider" — screening by the heuristic alone, classification skipped — which is
    * a different thing from an outage and is logged as such.
+   *
+   * `VECTORS` follows `AI` rather than standing on its own, because semantic search needs
+   * both and a deployment holding one of the two is a configuration mistake rather than a
+   * degraded mode. Absent here, search is FTS alone — §38.2's degradation, which the tests
+   * exercise for free by having no bindings at all.
    */
   "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
@@ -109,6 +115,7 @@
       ],
       "ai": { "binding": "AI" },
       "images": { "binding": "IMAGES" },
+      "vectorize": [{ "binding": "VECTORS", "index_name": "orator-articles-staging" }],
       "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
       "ratelimits": [
@@ -167,6 +174,7 @@
       ],
       "ai": { "binding": "AI" },
       "images": { "binding": "IMAGES" },
+      "vectorize": [{ "binding": "VECTORS", "index_name": "orator-articles" }],
       "durable_objects": { "bindings": [{ "name": "QUOTA", "class_name": "QuotaCounter" }] },
       "migrations": [{ "tag": "v1", "new_sqlite_classes": ["QuotaCounter"] }],
       "ratelimits": [

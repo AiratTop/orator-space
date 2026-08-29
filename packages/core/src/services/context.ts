@@ -26,6 +26,7 @@ import type {
   SessionRepo,
   ReadingRepo,
   SearchIndex,
+  EmbeddingLedger,
   SitemapRepo,
   SloRepo,
   SocialRepo,
@@ -53,6 +54,17 @@ export interface Ports {
   social: SocialRepo;
   /** SPEC §38 — derived, rebuildable, and updated outside the write transaction. */
   search: SearchIndex;
+  /**
+   * SPEC §38.2 — what has been embedded, and from which text.
+   *
+   * Only the ledger is here. The model and the vector store are handed to the two services
+   * that use them, because a deployment may have neither — the local dev server and the
+   * `workerd` tests do not, for the reason `wrangler.jsonc` gives about Workers AI — and a
+   * port that is sometimes absent is a port every caller has to check. This one is D1 and is
+   * always present, which is what lets a deployment that gains the bindings later find out
+   * how far behind its corpus is.
+   */
+  embeddings: EmbeddingLedger;
   /** SPEC §22 — a curated vocabulary; nothing in a request writes to it. */
   topics: TopicRepo;
   /**

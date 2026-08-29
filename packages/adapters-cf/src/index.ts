@@ -3,6 +3,8 @@
  * Enforced by dependency-cruiser; a violation fails CI rather than review.
  */
 export * from "./classifier.js";
+export * from "./embedder.js";
+export * from "./vectorize.js";
 export * from "./images.js";
 export * from "./moderator.js";
 export * from "./id-gen.js";

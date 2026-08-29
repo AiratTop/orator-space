@@ -4,7 +4,19 @@ import { AGENT_PRESET } from "../identity/scopes.js";
 import type { Actor } from "../identity/authz.js";
 import type { RequestContext } from "./context.js";
 import { createArticle, publishArticle, unpublishArticle } from "./publishing.js";
-import { feed, MAX_INDEXED_BODY_BYTES, reindexArticle, search, searchPrincipals, truncateForIndex } from "./discovery.js";
+import {
+  feed,
+  fuse,
+  MAX_INDEXED_BODY_BYTES,
+  MIN_RELATIVE_SIMILARITY,
+  MIN_SIMILARITY,
+  reindexArticle,
+  search,
+  searchPrincipals,
+  truncateForIndex,
+} from "./discovery.js";
+import type { OratorId } from "@orator/protocol";
+import type { Embedder, VectorMatch } from "../ports/index.js";
 
 let ports: ReturnType<typeof createMemoryPorts>;
 
@@ -217,14 +229,156 @@ describe("the feed (SPEC §37.1)", () => {
 });
 
 
-describe("what a reindex compares", () => {
+/**
+ * Fusion, and the semantic leg (SPEC §38.2, ADR 0012).
+ *
+ * The interesting assertions are about degradation rather than about ranking. A vector store
+ * is the newest and least trustworthy thing on the read path, and §38.2's promise is that a
+ * reader cannot tell when it is unwell — the search simply becomes the search that existed
+ * before it did.
+ */
+
+/** A model that returns a fixed vector, or throws when the test wants an outage. */
+const modelReturning = (vector: number[] | Error): Embedder => ({
+  name: "test-model",
+  dimensions: 4,
+  embed: async () => {
+    if (vector instanceof Error) throw vector;
+    return [vector];
+  },
+});
+
+const storeReturning = (matches: VectorMatch[] | Error) => ({
+  nearest: async () => {
+    if (matches instanceof Error) throw matches;
+    return matches;
+  },
+});
+
+const semanticOf = (matches: VectorMatch[] | Error, vector: number[] | Error = [1, 0, 0, 0]) => ({
+  embedder: modelReturning(vector),
+  vectors: storeReturning(matches),
+});
+
+describe("reciprocal rank fusion", () => {
+  const A = "A" as OratorId;
+  const B = "B" as OratorId;
+  const C = "C" as OratorId;
+
+  it("puts an article both legs found above one only a single leg found", () => {
+    // B is second in each list and first in neither; A and C each top one list. Two second
+    // places beat one first, which is the whole reason to fuse rather than concatenate.
+    // A and C tie exactly, and the tie breaks to the newer id — C.
+    expect(fuse([[A, B], [C, B]], 3)).toEqual([B, C, A]);
+  });
+
+  it("is the ranking itself when only one leg produced anything", () => {
+    expect(fuse([[A, B, C], []], 3)).toEqual([A, B, C]);
+  });
+
+  it("returns nothing when neither leg did", () => {
+    expect(fuse([[], []], 3)).toEqual([]);
+  });
+
+  it("orders the same query the same way twice", () => {
+    // Ties broken deterministically. A ranking that wobbles between two identical requests is
+    // a bug report nobody can reproduce.
+    expect(fuse([[A, B, C]], 3)).toEqual(fuse([[A, B, C]], 3));
+  });
+});
+
+describe("the semantic leg", () => {
+  it("finds an article the lexical index cannot, sharing no term with the query", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    await reindexArticle(ports, id);
+
+    // Nothing in the article contains this word; FTS scores it zero. The vector leg is the
+    // only reason there is a result at all — which is the query class ADR 0012 was built for.
+    const results = unwrap(
+      await search({ ...ports, semantic: semanticOf([{ articleId: id as OratorId, score: 0.7 }]) }, "запуск"),
+    );
+    expect(results.articles.map((card) => card.id)).toEqual([id]);
+  });
+
+  it("drops a match under the absolute floor rather than offering it", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    await reindexArticle(ports, id);
+
+    // §38.2's hubness problem: a vague query sits at a middling distance from everything, so
+    // without this floor the queries that deserve no answer match the whole corpus.
+    const results = unwrap(
+      await search(
+        { ...ports, semantic: semanticOf([{ articleId: id as OratorId, score: MIN_SIMILARITY - 0.01 }]) },
+        "какой-то посторонний запрос",
+      ),
+    );
+    expect(results.articles).toEqual([]);
+  });
+
+  it("drops the tail under a strong peak", async () => {
+    const first = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    const second = await publish("Тёплый старт", "# Тёплый старт\n\nСовсем другое.\n");
+    await reindexArticle(ports, first);
+    await reindexArticle(ports, second);
+
+    const best = 0.9;
+    const results = unwrap(
+      await search(
+        {
+          ...ports,
+          semantic: semanticOf([
+            { articleId: first as OratorId, score: best },
+            { articleId: second as OratorId, score: best * MIN_RELATIVE_SIMILARITY - 0.01 },
+          ]),
+        },
+        "запуск",
+      ),
+    );
+    expect(results.articles.map((card) => card.id)).toEqual([first]);
+  });
+
+  it("stays lexical when the model is unavailable, and does not fail", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    await reindexArticle(ports, id);
+
+    const results = unwrap(
+      await search({ ...ports, semantic: semanticOf([], new Error("503")) }, "invocations"),
+    );
+    expect(results.articles.map((card) => card.id)).toEqual([id]);
+  });
+
+  it("stays lexical when the store is unreachable", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    await reindexArticle(ports, id);
+
+    const results = unwrap(
+      await search({ ...ports, semantic: semanticOf(new Error("unreachable")) }, "invocations"),
+    );
+    expect(results.articles.map((card) => card.id)).toEqual([id]);
+  });
+
+  it("never returns a semantic match the database has withdrawn", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    await reindexArticle(ports, id);
+    unwrap(await unpublishArticle(ctx(), id));
+
+    // The store lags a withdrawal by one event, exactly as the FTS index does, and live state
+    // is what decides — the vector leg gets no exemption from the rule the lexical leg obeys.
+    const results = unwrap(
+      await search({ ...ports, semantic: semanticOf([{ articleId: id as OratorId, score: 0.9 }]) }, "запуск"),
+    );
+    expect(results.articles).toEqual([]);
+  });
+});
+
+describe("what a reindex compares (ADR 0012)", () => {
   it("rebuilds the entry when only the title changed", async () => {
     const body = "# Cold start\n\nA hundred invocations.\n";
     const id = await publish("Cold start", body);
     await reindexArticle(ports, id);
 
     // Same body, new title: the case that compared equal when the check was over the body
-    // alone, leaving the previous title in the index. Live since Phase 4.
+    // alone, leaving the previous title in the index. Live from Phase 4 until ADR 0012.
     const article = ports.state.articles.get(id);
     const current = ports.state.revisions.get(article!.publishedRevisionId!);
     ports.state.revisions.set(current!.id, { ...current!, title: "Warm start" });

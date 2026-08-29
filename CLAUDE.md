@@ -26,21 +26,25 @@ early.
 No `Co-Authored-By` trailer (AGENTS.md, "Change discipline"). Restated here
 because some agent harnesses add one by default. Format follows the history.
 
-## Two checkpoint failures are the local environment, not a regression
+## Four checkpoint failures are the local environment, not a regression
 
-`node scripts/e2e-phase9.mjs` reports two failures on every local run, and they
+`node scripts/e2e-phase9.mjs` reports four failures on every local run, and they
 are not to be fixed:
 
 ```text
-the article is classified                        Workers AI
+the article is classified                              Workers AI
 and is the produced variant rather than the original   Images
+a query sharing no token with the article finds it     Workers AI + Vectorize
+the web search page finds it too, not only the API     Workers AI + Vectorize
 ```
 
-`apps/edge/wrangler.jsonc` declares `ai` and `images` per environment and
+`apps/edge/wrangler.jsonc` declares `ai`, `images` and `vectorize` per environment and
 deliberately not in the top-level block the dev server reads — Workers AI has no
 local simulator, and a binding here would turn a hermetic test into a paid
-network call. Both checks pass against staging in CI, which is where they mean
-something. Anything else red locally is real.
+network call. Vectorize follows the same rule for a different reason: semantic
+search needs the model *and* the store, so a deployment holding one of the two is
+a misconfiguration rather than a degraded mode. All four pass against staging in
+CI, which is where they mean something. Anything else red locally is real.
 
 ## The dev server goes stale, and says so obscurely
 

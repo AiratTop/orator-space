@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { feed, search, searchPrincipals, type RequestContext } from "@orator/core";
 import { decodeFeedCursor, encodeFeedCursor, schemas } from "@orator/protocol";
+import { semanticFor } from "../context.js";
 import { parse, problemResponse, respond } from "../http.js";
 import { cardView, topicView } from "../views.js";
 import type { Env } from "../index.js";
@@ -68,9 +69,20 @@ discoveryRoutes.get("/v1/search", async (c) => {
     });
   }
 
-  const result = await search(ports, parsed.data.q, {
-    ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }),
-  });
+  /*
+   * §38.2, ADR 0012 — the semantic leg is assembled here rather than carried on `Ports`.
+   *
+   * It is a property of the deployment, not of the request: a Worker either has the two
+   * bindings or has neither, and `Ports` is the set of things every service can assume
+   * exists. Adding an optional member there would make every service that never touches it
+   * carry the question of whether it is present.
+   */
+  const semantic = semanticFor(c.env);
+  const result = await search(
+    { ...ports, ...(semantic === undefined ? {} : { semantic }) },
+    parsed.data.q,
+    { ...(parsed.data.limit === undefined ? {} : { limit: parsed.data.limit }) },
+  );
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 
   return respond(c, {

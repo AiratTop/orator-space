@@ -47,6 +47,7 @@ export * from "./quota.js";
 export * from "./reading.js";
 export * from "./social.js";
 export * from "./search.js";
+export * from "./vectors.js";
 export * from "./classifier.js";
 export * from "./transform.js";
 export * from "./reading-list.js";

@@ -17,6 +17,7 @@ import {
   withIdempotency,
   type Disclosure,
   type RequestContext,
+  type SearchPorts,
   type Result,
   type Visibility,
 } from "@orator/core";
@@ -53,6 +54,17 @@ import {
 
 export interface ToolContext {
   ctx: RequestContext;
+  /**
+   * SPEC §38.2, ADR 0012 — the semantic leg of search, or nothing.
+   *
+   * Here rather than on `RequestContext.ports`, because it is a property of the deployment
+   * rather than of the request: a Worker either holds the two bindings or holds neither.
+   * §43.4 requires REST, MCP and the web to reach the same verdict, and search is a read —
+   * so the same rule applies to what they are able to *find*. An MCP client asking a question
+   * in one language about an article written in another gets the same answer the REST client
+   * does, which is the whole point of the feature.
+   */
+  semantic?: SearchPorts["semantic"];
   /** The URL the MCP request arrived at, for rendering absolute addresses. */
   requestUrl: string;
   /** Extends the response with background work, when the runtime allows it. */
@@ -116,9 +128,13 @@ const HANDLERS: Record<string, Handler> = {
     return result.ok ? ok(articleView(result.value, originOf(tools.requestUrl))) : result;
   },
 
-  async search_articles({ ctx }, args) {
+  async search_articles({ ctx, semantic }, args) {
     const limit = num(args, "limit");
-    const result = await search(ctx.ports, str(args, "q"), limit === undefined ? {} : { limit });
+    const result = await search(
+      { ...ctx.ports, ...(semantic === undefined ? {} : { semantic }) },
+      str(args, "q"),
+      limit === undefined ? {} : { limit },
+    );
     return result.ok
       ? ok({ query: result.value.query, articles: result.value.articles.map(cardView) })
       : result;

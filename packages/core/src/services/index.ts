@@ -18,6 +18,7 @@ export * from "./closure.js";
 export * from "./health.js";
 export * from "./sitemap.js";
 export * from "./classification.js";
+export * from "./embeddings.js";
 export * from "./reading-list.js";
 export * from "./topics.js";
 export * from "./telegram.js";

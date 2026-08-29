@@ -29,7 +29,7 @@ import { mediaRoutes } from "./routes/media.js";
 import { telegramRoutes } from "./routes/telegram.js";
 import { mcpRoutes } from "./routes/mcp.js";
 import { moderationRoutes } from "./routes/moderation.js";
-import { portsFor } from "./context.js";
+import { portsFor, semanticFor } from "./context.js";
 import {
   applyClosureDisposition,
   cleanSpentLogins,
@@ -39,6 +39,8 @@ import {
   evaluateSlo,
   markArticleShard,
   classifyArticle,
+  drainEmbeddingBacklog,
+  embedArticle,
   heuristicProvider,
   rebuildSitemap,
   reindexArticle,
@@ -89,6 +91,22 @@ export interface Env {
         output(options: Record<string, unknown>): Promise<{ image(): ReadableStream<Uint8Array> }>;
       };
     };
+  };
+  /**
+   * SPEC §38.2, ADR 0012 — the vector store.
+   *
+   * Optional for the same reason `AI` is, and it is the same absence: semantic search needs
+   * both, so a deployment has neither or has both. Search on a deployment without them is
+   * lexical and says so in a log line rather than in an error, which is §38.2's degradation
+   * rather than a gap.
+   */
+  VECTORS?: {
+    upsert(vectors: { id: string; values: number[] }[]): Promise<unknown>;
+    deleteByIds(ids: string[]): Promise<unknown>;
+    query(
+      vector: number[],
+      options: { topK: number; returnValues?: boolean; returnMetadata?: "none" | "indexed" | "all" },
+    ): Promise<{ matches: { id: string; score: number }[] }>;
   };
   /** SPEC §59.1 — the approximate half: per-colo flood protection, per IP and per token. */
   FLOOD: RateLimit;
@@ -532,6 +550,26 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
        */
       const shard = await markArticleShard(ports, event.aggregate_id);
 
+      /*
+       * §38.2, ADR 0012 — the vector, and it is last on purpose.
+       *
+       * After `evaluateIndexability`, because that is what writes `duplicate_of`, and a
+       * duplicate must not be embedded: §38.1's search already refuses to return one, so its
+       * vector could never surface and the inference call would buy a row that is filtered at
+       * read time. Running this first would embed every duplicate exactly once — the most
+       * expensive possible way to be wrong, because it would look like it worked.
+       *
+       * The ordering also does the withdrawal correctly. An article that has just *become* a
+       * duplicate has a vector already, and `embedArticle` removes it — which only happens if
+       * the duplicate verdict is already written when it runs.
+       *
+       * A failure here is not a queue failure, like the two above it. §38.2 leaves search
+       * lexical for that article; the cron drain retries without needing an event.
+       */
+      const semantic = semanticFor(env);
+      const embedded =
+        semantic === undefined ? "skipped" : await embedArticle(ports, event.aggregate_id, semantic);
+
       log(outcome, {
         moderation: screened,
         classification: classified.status,
@@ -539,6 +577,7 @@ async function handleEvent(event: OratorEvent, env: Env): Promise<void> {
         indexable: indexing.indexable,
         why: indexing.reason,
         sitemap_shard: shard,
+        embedding: embedded,
       });
       return;
     }
@@ -716,6 +755,31 @@ export default {
         console.error(
           JSON.stringify({ level: "error", task: "sitemap.overflow", shards: build.overflowing }),
         );
+      }
+
+      /*
+       * §38.2, §35.2, ADR 0012 — whatever has no current vector, ten at a time.
+       *
+       * This is why there is no backfill script. Three problems have the same shape and one
+       * answer: the corpus published before semantic search existed, an article whose event
+       * was lost to a queue failure, and every article at once after the model is changed. A
+       * script would have solved the first, been forgotten for the second, and been rewritten
+       * for the third.
+       *
+       * On this cron rather than the minute one, and bounded to ten, because it is a safety
+       * net and not a batch job — it shares a Worker's budget with the sitemap rebuild above,
+       * and a corpus needing a thousand embeddings gets them over an afternoon rather than in
+       * one invocation that times out halfway and cannot say how far it got.
+       *
+       * Logged only when it did something or has something left, so a fully embedded corpus
+       * is silent rather than printing a zero every five minutes for ever.
+       */
+      const semantic = semanticFor(env);
+      if (semantic !== undefined) {
+        const drained = await drainEmbeddingBacklog(ports, semantic);
+        if (drained.embedded > 0 || drained.failed > 0 || drained.remaining > 0) {
+          console.log(JSON.stringify({ level: "info", task: "embedding.drain", ...drained }));
+        }
       }
       return;
     }

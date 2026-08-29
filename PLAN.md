@@ -1059,6 +1059,10 @@ to change when they arrive.
 actually typed; or topic-based similarity producing recommendations nobody follows. Either
 is a measurement, and neither exists today.
 
+**What actually moved it — see §13.39.** The first of those two conditions turned out to be
+provable without a query log, and the second turned out to be false. Item 5 was right that
+building on no data was wrong; it was wrong about which data was missing.
+
 ### 12.2. Do not do in this phase
 
 - **No free tags, and none generated.** §22 rules out tags a person types because thousands
@@ -1100,7 +1104,7 @@ is a measurement, and neither exists today.
 2. classification     vocabulary migration → Workers AI on the existing queue → /t/{slug}
 3. screening          a second implementation of the port item 2 already exercises
 4. images             variants, avatars, og:image
-5. Vectorize          written, not built (§38.2)
+5. Vectorize          written first, then built — see §13.39
 ```
 
 Not arbitrary. `/settings` is first because it is the one gap a person hit while using the
@@ -1143,7 +1147,7 @@ work here; the three before them close commitments the specification already mad
 [x] a form for the half of §61.1 that had only an endpoint          01b7f62
 [x] a passkey can be seen and retired, and the last one is protected f7568b8
 [x] the queue made usable by the first person to use it (§61.1)     96d3516 … ddf4f71
-[ ] Vectorize — designed, deliberately not built (§38.2)
+[x] semantic search: embeddings, Vectorize, fused with FTS (§38.2, ADR 0012)
 ```
 
 **What Phase 9 turned out to be.** It was written as five items and closed as twelve. The
@@ -1222,7 +1226,7 @@ Order is decided by observation, not by plan. Entry conditions:
 |---|---|
 | ~~Image variants and transformations (§21.2)~~ | moved into Phase 9 — the condition was written when the alternative was building a resize pipeline, and a platform product with five thousand transformations a month included removes the cost it was protecting against |
 | Materialised feeds | feed p95 exceeds 200 ms |
-| Semantic search and a vector store (§38.2, §80.9) | FTS returns nothing useful for a query somebody actually typed, or topic-based similarity produces recommendations nobody follows. Designed in Phase 9 §12.1 item 5 and deliberately not built there: §38.2 compares stores on real data rather than in advance |
+| ~~Semantic search and a vector store (§38.2, §80.9)~~ | **built**, ADR 0012. The entry condition was met by construction rather than by waiting: a query in one language against an article in another returns nothing from FTS and cannot be made to return anything, which is "FTS returns nothing useful" without needing a query log to prove it. The comparison §38.2 wanted — Vectorize against an external store on real data — turned out not to be runnable at all, and §66.6 rules an external store out of being the *first* implementation regardless |
 | Webhooks | polling becomes a measurable problem |
 | OAuth 2.1 for MCP | external users without tokens appear |
 | Reputation | spam appears that quotas do not catch |
@@ -1702,6 +1706,92 @@ bookmark the end they work from; a dossier for an account, which §61.2 has made
 since the first migration with no way to reach one by name; and a history read across all
 three target types when nothing resolves, because a tombstone under §23.3 has no row left and
 its record is the only thing that can still answer for it.
+
+
+### 13.39. The vector store, and what "compare on real data" turned out to mean
+
+§38.2 said the same thing for three versions of the specification: defer the choice, compare
+Vectorize against an external store **on real data rather than in advance**. Phase 9 §12.1
+item 5 obeyed it and wrote the design without building it. The reasoning was sound and the
+instruction was not executable, which took until somebody sat down to execute it to notice.
+
+**The comparison cannot be run, and no amount of waiting fixes that.** A bake-off between two
+vector stores needs a corpus and a query log. The corpus is tens of articles; the query log is
+empty. On that data every store returns the same results in indistinguishable time, so the
+measurement §38.2 asked for would produce a number with no information in it. And waiting for
+traffic before deciding means deciding on the day the traffic arrives — under pressure, by
+whoever is on hand, which is the worst of the available conditions rather than the best.
+
+**§66.6 had already settled half of it.** The core runs on Cloudflare alone; an external
+service is optional reinforcement and never the only implementation of a port. A vector store
+that search depends on is not reinforcement. So Qdrant could only ever have been the *second*
+implementation — and the first has to exist for there to be a second. The comparison is still
+available, on the same port, against the corpus that has to be embedded either way.
+
+**What was measurable without traffic was not "which store", but "is there a query FTS cannot
+answer".** There is, and it is not a subtle one:
+
+```text
+"Измерение задержки инференса на GPU: p95 и хвосты"
+"Measuring inference latency on GPUs: p95 and tail behaviour"    cosine 0.82, FTS 0
+```
+
+FTS5 with `unicode61` scores that pair at zero and cannot be made to score it otherwise: the
+two strings share no character. §24 makes an article carry a language, §15.1 expects the same
+material in more than one, and the operator writes in Russian on a platform whose vocabulary
+and audience are English. So "search" meant "search the half of the corpus you happened to
+type the language of" — which is §13's entry condition, arrived at by construction instead of
+by waiting for somebody to hit it and not report it.
+
+**The second condition turned out to be false, and that is the more useful finding.** §13 also
+offered "topic-based similarity produces recommendations nobody follows" as a trigger, on the
+assumption that embeddings would be the better recommender. Measured before it was built:
+
+```text
+translations of one another          0.827
+same subject, different article      0.630
+adjacent subject, a real relation    0.584   0.559
+nothing whatsoever in common         up to 0.518
+```
+
+Sixty-six thousandths between a real relation and noise. That is not a threshold, it is a coin
+toss with a decimal point, and the failure would be invisible — a reader cannot tell a bad
+suggestion from a thin corpus. So the related-articles list stays topic-based, which is the
+opposite of what §13 predicted, and §22's list keeps the property the distance never had: it
+can say *why*. What makes the same numbers usable on the search path is fusion — every vector
+result gets a second opinion from FTS, and a lone cosine gets none.
+
+**And it found a live bug in the neighbour.** Asking what the embedding ledger should be keyed
+on — the body's hash, or the text actually given to the model — produced the same question
+about the FTS index, which had been answering it wrong since Phase 4. Editing an article's
+title creates a new revision carrying the same body, so the staleness check compared equal and
+the index kept the previous title. Nobody saw it because the result is right about which
+article and wrong about its name. Both indexes now key on what they were built from.
+
+**What the first live run cost, and it was not the model.** Everything about the model was
+right on the first attempt — the id, the input shape, the output shape, the dimension, the two
+thresholds, all verified against the account before a line was written. What was wrong was one
+option on the *store*: `returnMetadata` is an enum (`"none" | "indexed" | "all"`), it sits
+between two booleans, and it was written as `false`. Vectorize rejects that at query time
+only, with `VECTOR_QUERY_ERROR (code = 40026)`.
+
+Nothing caught it. §28.1 keeps Cloudflare types out of the domain, so the binding's interface
+is hand-written and the compiler agreed; every unit test passed against a double that accepts
+whatever it is given; the corpus embedded perfectly — 581 vectors written by the cron drain
+before a single query was tried.
+
+**And §38.2's own degradation is what hid it.** Search stayed lexical, the reader saw results,
+the API answered 200, and the only evidence anywhere was one `search.semantic.unavailable`
+line in a log nobody was reading. A graceful degradation conceals a bug exactly as well as it
+conceals an outage. That is the argument for the checkpoint asserting the *feature* — "a query
+sharing no token with the article finds it anyway" — rather than asserting that search still
+answers, which it did throughout.
+
+**The lesson worth keeping.** "Decide on real data" is good advice that quietly assumes the
+data will arrive before the decision is needed. When it will not, the honest move is not to
+defer indefinitely — it is to find the thing that *is* measurable today and check whether it
+decides the question. Here it did, twice: once for the feature, and once against a feature
+that was in the plan.
 
 ### 13.4. Static assets are minified at build, and the obvious route was wrong
 

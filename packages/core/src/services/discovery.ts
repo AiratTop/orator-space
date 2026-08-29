@@ -1,7 +1,15 @@
 import { ErrorType, isOratorId, type FeedCursor, type OratorId } from "@orator/protocol";
 import { sha256Hex } from "../text/digest.js";
 import { stripInvisible } from "../text/invisible.js";
-import type { ArticleCard, ArticleView, FeedPage, SearchDocument, SearchIndex } from "../ports/index.js";
+import type {
+  ArticleCard,
+  ArticleView,
+  Embedder,
+  FeedPage,
+  SearchDocument,
+  SearchIndex,
+  VectorIndex,
+} from "../ports/index.js";
 import { fail, ok, type Result } from "./context.js";
 import { pageSize, withTopics, type ReadingPorts } from "./reading.js";
 
@@ -27,7 +35,18 @@ export type DiscoveryPorts = ReadingPorts & { search: SearchIndex };
  * system's problem — the web assembles `{ query }` and a write from a page does not
  * compile, which is the same argument `ReadingPorts` makes for the rest of the read path.
  */
-export type SearchPorts = ReadingPorts & { search: Pick<SearchIndex, "query"> };
+export type SearchPorts = ReadingPorts & {
+  search: Pick<SearchIndex, "query">;
+  /**
+   * The semantic leg, absent on a deployment without the bindings (SPEC §38.2).
+   *
+   * Optional rather than a no-op implementation, because "this deployment has no vector
+   * store" and "the vector store returned nothing" are different facts and only one of them
+   * is worth logging. Narrowed to `nearest` for the reason `search` is narrowed to `query`:
+   * a page that renders untrusted content should not hold the ability to write an index.
+   */
+  semantic?: { embedder: Embedder; vectors: Pick<VectorIndex, "nearest"> };
+};
 
 export async function feed(
   ports: ReadingPorts,
@@ -88,13 +107,18 @@ export async function reindexArticle(ports: DiscoveryPorts, articleId: string): 
   };
 
   /*
-   * The skip check compares the whole document, not the body it contains.
+   * The skip check compares the whole document, not the body it contains (ADR 0012).
    *
    * It compared `revision.contentHash` from Phase 4 until 2026-08-29, and that was wrong in
    * one specific and entirely ordinary case: editing a title creates a new revision carrying
    * the *same* body, so the hashes matched, the entry was skipped, and the index kept
    * answering with the previous title. Nobody saw it because a stale title in an inverted
    * index produces a result that is right about which article and wrong about its name.
+   *
+   * Found by asking what the embedding ledger should be keyed on, where the same composition
+   * of title, excerpt and body had to be hashed for the same reason. Both indexes now key on
+   * the text they were actually built from, which is the only hash that answers the question
+   * either of them is asking.
    */
   const inputHash = await sha256Hex(
     [document.title, document.excerpt, document.author, document.topics, document.contentHash].join("\u0000"),
@@ -104,6 +128,133 @@ export async function reindexArticle(ports: DiscoveryPorts, articleId: string): 
 
   await ports.search.index({ ...document, inputHash }, new Date().toISOString());
   return "indexed";
+}
+
+/**
+ * The floor a semantic match has to clear (SPEC §38.2, ADR 0012).
+ *
+ * Measured, not chosen: on `@cf/baai/bge-m3`, a relevant article sits at 0.45 to 0.63 from a
+ * query and an irrelevant one at 0.16 to 0.40. The number that decides it is neither of
+ * those — it is what a *vague* query does. "какой-то совершенно посторонний запрос про
+ * садоводство" scored 0.38 to 0.40 against every article in the sample, because a long
+ * unfocused string sits at a middling distance from everything. Without a floor, the queries
+ * that deserve no answer are the ones that match the whole corpus.
+ *
+ * It sits 0.03 under the weakest true positive measured, and the asymmetry is what makes
+ * that acceptable: a semantic match dropped at 0.44 is one FTS almost certainly found,
+ * because a query that close shares terms with the article. A noise match admitted at 0.40
+ * is a wrong answer on a page that would otherwise have said nothing honestly.
+ *
+ * To be recalibrated on a real corpus, like §80.4's SimHash distance. A calibration, not an
+ * open question.
+ */
+export const MIN_SIMILARITY = 0.42;
+
+/**
+ * How far below the best match a result may sit and still be returned.
+ *
+ * The same shape `classification.ts` uses on the classifier's output, arrived at
+ * independently and for the same reason: a query with one strong answer and a tail of
+ * plausible ones is a different distribution from a query genuinely about two things, and
+ * the two differ in *shape* rather than in level — which is exactly what an absolute
+ * threshold cannot see.
+ */
+export const MIN_RELATIVE_SIMILARITY = 0.75;
+
+/**
+ * How deep each leg is asked to go before fusion.
+ *
+ * Deeper than the page, because RRF needs an ordering to work with and a leg truncated at
+ * the page size has thrown away the ranks that would have moved a result up. Bounded because
+ * both legs cost something — an FTS scan and a Vectorize query — and because a result ranked
+ * fortieth by both legs is not going to reach the top of anything.
+ */
+export const FUSION_DEPTH = 40;
+
+/**
+ * The constant in Reciprocal Rank Fusion.
+ *
+ * Sixty, from the original paper, and left alone deliberately. It sets how quickly a result's
+ * contribution decays with its rank; the published value is insensitive enough across corpora
+ * that tuning it on a corpus of tens of articles would be fitting noise.
+ */
+const RRF_K = 60;
+
+/**
+ * Merges two rankings into one (SPEC §38.2, ADR 0012).
+ *
+ * Reciprocal Rank Fusion, and the reason it is not a weighted sum of scores is that there are
+ * no comparable scores to weight. FTS5's `rank` is a BM25 value — unbounded, negative, and
+ * dependent on the corpus's term statistics. A cosine similarity is bounded, positive, and
+ * dependent on the query. Any constant chosen to bridge them is fitted to a corpus that is
+ * about to change, and the fit fails silently: the ranking stays plausible while being wrong.
+ *
+ * RRF throws both magnitudes away and keeps only the position each leg assigned. What
+ * survives is the property worth having — a result both legs liked beats one that only one
+ * leg liked, and a leg that returns nothing contributes nothing rather than contributing
+ * zeros. That last part is the degradation in §38.2, obtained for free rather than as a
+ * special case.
+ */
+export function fuse(rankings: readonly (readonly OratorId[])[], limit: number): OratorId[] {
+  const scores = new Map<OratorId, number>();
+  for (const ranking of rankings) {
+    ranking.forEach((id, index) => {
+      scores.set(id, (scores.get(id) ?? 0) + 1 / (RRF_K + index + 1));
+    });
+  }
+
+  /*
+   * Ties broken by id, descending — which is newest first, because §12 makes the id monotonic
+   * in creation time.
+   *
+   * Two things at once, and the second is why it is descending rather than any fixed rule.
+   * A tie has to break *somewhere*, and an unstable break means the same query returns its
+   * results in a different order on a second request, which is a bug report nobody can
+   * reproduce. Given that it must break somewhere, the newer of two equally relevant articles
+   * is the better answer, and it is the order the feed already uses.
+   */
+  return [...scores.entries()]
+    .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? 1 : -1))
+    .slice(0, limit)
+    .map(([id]) => id);
+}
+
+/**
+ * The semantic leg: embed the query, ask the store, apply the two floors.
+ *
+ * Returns an empty ranking for every kind of failure, which is what makes §38.2's degradation
+ * total: a deployment with no bindings, a model having a bad minute and a store that is
+ * unreachable all leave search lexical, and none of them reaches the caller as an error. The
+ * three are distinguished in the log and nowhere else, because a reader searching for
+ * something does not need to know which half of the platform is unwell.
+ */
+async function semanticRanking(
+  ports: SearchPorts,
+  query: string,
+  limit: number,
+): Promise<OratorId[]> {
+  const semantic = ports.semantic;
+  if (semantic === undefined) return [];
+
+  try {
+    const [vector] = await semantic.embedder.embed([query]);
+    if (vector === undefined) return [];
+
+    const matches = await semantic.vectors.nearest(vector, limit);
+    const best = matches[0]?.score ?? 0;
+    const floor = Math.max(MIN_SIMILARITY, best * MIN_RELATIVE_SIMILARITY);
+    return matches.filter((match) => match.score >= floor).map((match) => match.articleId);
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        level: "warn",
+        event: "search.semantic.unavailable",
+        provider: semantic.embedder.name,
+        error: String(error),
+      }),
+    );
+    return [];
+  }
 }
 
 export interface SearchResults {
@@ -144,13 +295,20 @@ function cardFor(view: ArticleView): ArticleCard | null {
 }
 
 /**
- * Full-text search over published articles.
+ * Hybrid search over published articles (SPEC §38.1, §38.2, ADR 0012).
  *
- * Returns one ranked page and no cursor. Ranked results cannot be keyset-paginated the way
- * §44.2 requires — the ordering is a score over an index that changes underneath the
- * reader, so page two of a relevance ranking is not a well-defined thing to ask for. An
- * agent that needs more asks for a larger `limit` or a narrower query, which is the honest
- * interface. Deep paging belongs with the vector store (§38.2), not with FTS.
+ * Two rankings fused: FTS5 over the inverted index, and cosine over the vector store. They
+ * are not competing implementations of the same idea — each answers a class of query the
+ * other cannot. FTS finds an exact term, a proper noun, an error message pasted from a log.
+ * The vector leg finds an article whose subject matches a question phrased differently, or
+ * phrased in another language: §24 makes an article carry a language and a Russian query
+ * shares no token at all with an English article, so FTS scores that pair at exactly zero,
+ * whatever it is about.
+ *
+ * Returns one ranked page and no cursor. Version 2.8 expected the vector store to bring deep
+ * paging with it; the opposite happened, and ADR 0012 says why — a fused ranking is a score
+ * over *two* indexes that change underneath the reader, which is less keyset-paginable than
+ * one, not more. An agent that needs more asks for a larger `limit` or a narrower query.
  *
  * **An Article ID is answered without touching the index.** Pasting one into a search box is
  * what somebody does with an id they found in a citation, a log or somebody else's article,
@@ -187,13 +345,39 @@ export async function search(
     });
   }
 
-  const ids = await ports.search.query(query, pageSize(options.limit));
+  const size = pageSize(options.limit);
+
+  /*
+   * Both legs at once (SPEC §38.2, ADR 0012).
+   *
+   * Concurrently rather than in sequence, because the semantic leg is an inference call plus
+   * a vector query and the lexical leg is an index scan — run one after the other, a reader
+   * waits for the sum of a fast thing and a slow one. Run together, they wait for the slow
+   * one, which is the honest cost of the feature.
+   *
+   * `semanticRanking` never rejects. §38.2's degradation is total by construction: no
+   * bindings, an unavailable model and an unreachable store all produce an empty ranking,
+   * and RRF over one non-empty ranking is that ranking. So a deployment without a vector
+   * store behaves exactly as it did before this existed, with no branch here saying so.
+   */
+  const [lexical, semantic] = await Promise.all([
+    ports.search.query(query, FUSION_DEPTH),
+    semanticRanking(ports, query, FUSION_DEPTH),
+  ]);
+
+  const ids = fuse([lexical, semantic], FUSION_DEPTH);
   if (ids.length === 0) return ok({ query, articles: [] });
 
   // Rehydrated one at a time rather than through a single `IN (…)`, because D1 caps a
   // statement at 100 bound parameters (ADR 0001) and a page is bounded well under that.
+  //
+  // Stops at a full page rather than rehydrating everything fused. The legs are asked for
+  // more than a page precisely so that the filters below — a withdrawn article, a duplicate,
+  // the canary — have something to eat into, and reading forty articles to render twenty
+  // would spend the whole saving.
   const cards: ArticleCard[] = [];
   for (const id of ids) {
+    if (cards.length >= size) break;
     const view = await ports.reading.findPublished(id);
     if (view === null) continue;
     /*

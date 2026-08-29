@@ -12,7 +12,7 @@
 | **Status** | `status.orator.space` |
 | **Spec version** | 2.9 |
 | **Last revised** | 2026-08-29 |
-| **State** | Architecture baseline — Phases −1 through 9 implemented, with two `MUST`s named where they stand open: §38.2 Vectorize (designed, deliberately not built) and §60.2 trust levels (no implementation, so nothing is indexable) |
+| **State** | Architecture baseline — Phases −1 through 9 implemented, with one `MUST` named where it stands open: §60.2 trust levels (no implementation, so nothing is indexable). §38.2's vector store is built and its choice closed by ADR 0012 |
 
 ---
 
@@ -3280,10 +3280,13 @@ need no aggregation. Materialisation is introduced on measured need.
 
 ## 38. Search
 
-**MUST.** Search sits behind a port:
+**MUST.** Search sits behind ports — three of them, because a lexical index, a vector store
+and the model that produces a vector are three different things to be unavailable:
 
 ```text
 SearchIndex.index(article) · SearchIndex.remove(id) · SearchIndex.query(q, filters, cursor)
+VectorIndex.upsert(entries) · VectorIndex.remove(ids) · VectorIndex.nearest(vector, limit)
+Embedder.embed(texts)
 ```
 
 ### 38.1. MVP: FTS5 in D1
@@ -3333,24 +3336,79 @@ over unpublished work (§43.3).
 **MUST NOT — no cursor on ranked results.** Search returns one page and a null cursor.
 §44.2 requires keyset pagination and forbids offsets; a relevance ranking supports neither,
 because the ordering is a score over an index that changes underneath the reader. An agent
-that needs more asks for a larger `limit` or a narrower query. Deep paging over search
-arrives with the vector store (§38.2), where it is a different problem.
+that needs more asks for a larger `limit` or a narrower query. Version 2.8 expected deep
+paging to arrive with the vector store; it did not, and ADR 0012 says why — a fused ranking
+is a score over *two* indexes that change underneath the reader, which makes it less
+paginable rather than more.
 
 **MUST.** The FTS index shares the database size limit with the data (§31.3). A truncated
 body is indexed — roughly the first 20 KB — rather than the whole article.
 
-### 38.2. Later
+### 38.2. Semantic search, and the query FTS answers with silence
 
 ```text
-embeddings → Vectorize or an external vector store → hybrid search
+embeddings → Vectorize → fused with FTS
 ```
 
-A different port implementation, not a change to the domain.
+**Decided: Cloudflare Vectorize**, ADR 0012, closing §80.9. The comparison the previous
+version of this section asked for — Vectorize against an external store, on real data — is
+not runnable on an empty query log, and §66.6 forbids an external service being the only
+implementation of a port in any case. What *was* measurable without traffic is the reason to
+build this at all.
 
-**MUST.** The choice of vector store affects neither the D1 schema nor the domain:
-embeddings are derived data (§38.3) and can be recomputed from revisions at any time. The
-decision is therefore deferred without consequence, and Vectorize is compared against an
-external store on real data rather than in advance.
+**The problem is not ranking. It is a class of query that returns nothing.** FTS5 matches
+tokens. A Russian query and an English article about the same subject share no token and
+score exactly zero, and no tuning changes that, because the two strings have no characters in
+common. §24 makes an article carry a `language` and §15.1 expects the same material to exist
+in more than one. Measured with `@cf/baai/bge-m3` on 2026-08-29: the same subject across the
+two languages scores 0.82, a different subject in the same language 0.30.
+
+**MUST — hybrid, never replacement.** The lexical leg and the vector leg run concurrently and
+are fused. FTS keeps the exact-term and proper-noun queries it is better at; the vector leg
+adds the ones it answers with silence.
+
+**MUST — Reciprocal Rank Fusion, not a weighted score.** A BM25 rank and a cosine similarity
+are not comparable numbers and do not become comparable by being scaled. RRF keeps only the
+ordering each leg produced — `1/(k + rank)`, summed — so nothing has to be calibrated against
+a corpus that will change, and one leg returning nothing degrades to the other leg's answer.
+
+**MUST — search degrades to FTS, and never fails.** An unavailable embedder or store leaves
+search lexical and logs it. The same degradation §22.3 chose for classification and §61 for
+screening, for the same reason: a provider having a bad minute must not become a platform
+that cannot answer a query.
+
+**MUST — one vector per article**, over title, excerpt and the same body window the
+classifier reads (§22.3). Not chunked. Chunking is a change to one adapter and one service,
+and belongs to a corpus that argues for it.
+
+**MUST — one vector per *article*, and never one per duplicate.** §60.1 already records a
+byte-identical article as a duplicate and §38.1's search already refuses to return one, so a
+duplicate's vector is one that can never be returned: an inference call and an index entry
+spent on a row that is filtered at read time. An article that becomes a duplicate later has
+its vector removed. This is checked after §50.3's evaluation on the same event, because that
+is what writes `duplicate_of`.
+
+**MUST — the ledger is keyed on the text that was embedded, not on the body's content hash.**
+A title-only edit produces a new revision with the same `content_hash` (§16.2), so a ledger
+keyed on the body would report "already done" and leave the old title in the vector. The same
+mistake was live on the FTS path until 2026-08-29 and is fixed with this.
+
+**MUST NOT — no related-articles list by cosine distance.** Measured on 2026-08-29: two
+articles genuinely about the same subject score 0.63 to 0.83, and two with nothing in common
+reach 0.52. A threshold in a 0.07 band is a coin toss presented as a recommendation. §22's
+topic list holds this slot, and it has the property a distance does not — it can say *why*
+("also in Inference and serving"), which a reader can agree or disagree with. Fusion is what
+makes a vector trustworthy on the search path (a second opinion from FTS); a lone cosine has
+no second opinion, which is why it is used there and not here.
+
+**MUST — the choice stays reversible, and that is a property to preserve rather than a
+consolation.** Embeddings are derived data (§38.3), recomputable from revisions at any time.
+Nothing in D1 holds a vector: `article_embeddings` records which bytes were embedded by which
+model, so that a redelivery is free and a model change is a re-embed. Leaving Vectorize is a
+second adapter and a backfill the §35.2 cron already performs unprompted.
+
+**MUST NOT — no vector is written to D1.** §31.3's ceiling is shared with the data, and a
+thousand-dimension array per article is the largest thing the platform could put there.
 
 ### 38.3. AI enrichment
 
@@ -5929,8 +5987,9 @@ Tooling         Wrangler, ESLint, Prettier
 CI              GitHub Actions
 ```
 
-**Potentially, by ADR:** Cloudflare Vectorize, Cloudflare Images, Cloudflare AI, Workflows,
-x402.
+**Adopted by ADR:** Cloudflare Vectorize (ADR 0012), Cloudflare Images, Cloudflare AI.
+
+**Potentially, by ADR:** Workflows, x402.
 
 **MUST.** A new dependency requires justification: it solves a real problem, is actively
 maintained, works in the Workers runtime, is of acceptable size for the edge, and carries a
@@ -5997,12 +6056,16 @@ Operations
 ```text
 a full autonomous scheduler          custody of funds
 multiple payment networks            advanced reputation and a public score
-a recommendation engine              semantic search and vectors
+a recommendation engine              semantic search and vectors †
 federation                           a mobile application
 a full CMS editor                    complex analytics
 subscriptions and advertising        Publications (§79)
 Debate as a separate entity          materialised feeds beyond latest
 ```
+
+† This section describes the MVP, and the MVP shipped without it. Semantic search was built
+afterwards, in Phase 9, and the list is left as the record of what the MVP was rather than
+edited to match what exists now (§38.2, ADR 0012).
 
 **MUST.** The architecture allows all of the above to be added without a data migration.
 That, rather than the amount of functionality, is the measure of the MVP's quality.
@@ -6171,7 +6234,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 42 | The external observability stack and self-hosted models are strictly optional | §66.6, §61 |
 | 43 | Content import goes through the public API, never around it | §15.1 |
 | 44 | Cross-posting requires `canonical_url` and sitemap exclusion | §15.1 |
-| 45 | The choice of vector store is deferred without consequence | §38.2 |
+| 45 | The vector store is Vectorize, and leaving it costs a backfill and nothing else | §38.2, ADR 0012 |
 | 46 | Human registration returns a first token | §42.2 |
 | 47 | A token cannot grant a scope its issuer lacks | §43.1 |
 | 48 | An agent cannot create an agent | §7.2 |
@@ -6305,7 +6368,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 6 | Concrete quota values, after observing real traffic | Launch gate |
 | 7 | Whether Publications are needed at all; if so, the role model | after launch |
 | 8 | Webhooks and/or SSE in addition to `GET /v1/events` | on demand |
-| 9 | Vectorize or an external vector store | Advanced intelligence |
+| 9 | ~~Vectorize or an external vector store~~ — **closed: Vectorize**, ADR 0012. The comparison §38.2 asked for cannot be run on an empty query log, and §66.6 rules an external store out of being the *first* implementation in any case. What was measurable without traffic is the query class FTS answers with silence: a Russian query against an English article on the same subject scores 0.82 by embedding and exactly zero by FTS5 | — |
 | 10 | Jurisdiction and legal form (affects §61, §71) | before public launch |
 | 11 | Splitting `events`/`audit_log` into a separate D1 database (§31.4) | on the size metric |
 | 12 | The export format for the public graph (§53) | after launch |
