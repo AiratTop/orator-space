@@ -1531,14 +1531,15 @@ github.com/orator-space              the organisation, and since 2026-08-29 the
                                      but for a second repository, since the closed part
                                      of ranking cannot live on a personal account
 github.com/orator-space/orator-space the repository
-npmjs.com/org/orator                 the scope the code already carries — every
-                                     package.json in the workspace says @orator/*, and
-                                     the reservation had to match the source rather than
-                                     the domain. Nothing is published yet, and whether
-                                     anything will be is §80.17
-npmjs.com/org/orator-space           the spare. Held so the spelling answers to nobody
-                                     else, and not a place to publish to: anything that
-                                     ships ships as @orator/*, whatever the domain says
+npmjs.com/org/orator                 where a package goes if §80.17 ever finds one a
+                                     consumer outside this workspace: all seven
+                                     package.json files already say @orator/*. GitHub
+                                     spells it otherwise not by choice — orator there is
+                                     a stranger's account, dormant since 2011 — and a
+                                     fallback forced in one registry is no reason to
+                                     rename the scope in another
+npmjs.com/org/orator-space           the spare spelling, held so that it answers to
+                                     nobody else. Not a place to publish to
 x.com/orator_space                   announcements
 t.me/orator_space                    channel
 t.me/orator_space_bot                the bot (§9.3) — production's, named by production's
