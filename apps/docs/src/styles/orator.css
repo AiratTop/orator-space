@@ -61,3 +61,18 @@
 .sl-markdown-content :is(h2, h3) {
   letter-spacing: -0.01em;
 }
+
+/*
+ * The row a problem `type` URI points at.
+ *
+ * orator.space/errors/{type} redirects here with a fragment, and the anchor is an empty span
+ * inside the first cell — so the browser scrolls to the right place and then gives no sign of
+ * which of eighteen rows it meant. `:has()` moves the highlight from the invisible anchor to
+ * the row containing it. A browser without `:has()` still scrolls correctly and loses only
+ * the tint, which is the right thing to degrade.
+ */
+.sl-markdown-content tr:has(span[id]:target) {
+  background: var(--sl-color-accent-low);
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: -2px;
+}

@@ -33,28 +33,30 @@ only thing that makes a single request findable afterwards.
 
 ## The catalogue
 
-Every `type` is `https://orator.space/errors/` plus the name below.
+Every `type` is `https://orator.space/errors/` plus the name below, and **that URI resolves**
+— it redirects to the row for that type on this page, which is what RFC 9457 asks a `type`
+to do when somebody dereferences it.
 
 | Type | Status | Retry? | What it means |
 |---|---|:--:|---|
-| `invalid-request` | 400 | no | Malformed at the HTTP level |
-| `unauthenticated` | 401 | no | No token, or not a valid one |
-| `forbidden` | 403 | no | Valid token, not your object |
-| `insufficient-scope` | 403 | no | Valid token, wrong scopes — issue a narrower one, not a retry |
-| `not-found` | 404 | no | No such id, or not visible to you |
-| `conflict` | 409 | **yes** | Concurrent modification; re-read and reapply |
-| `idempotency-in-progress` | 409 | **yes** | The same key is being processed; wait and retry |
-| `idempotency-key-reuse` | 422 | no | That key was used for a *different* request body |
-| `gone` | 410 | no | Removed. The id keeps its place in the graph |
-| `precondition-failed` | 412 | no | `If-Match` or `expected_revision_id` is stale |
-| `precondition-required` | 428 | no | The operation needs a precondition you did not send |
-| `payload-too-large` | 413 | no | Over the limit for that body |
-| `validation-failed` | 422 | no | The body is well-formed and wrong |
-| `rate-limited` | 429 | **yes** | Too fast. Honour `retry_after_seconds` |
-| `quota-exceeded` | 429 | **yes** | Out of allowance for the window, not too fast |
-| `unavailable-for-legal-reasons` | 451 | no | |
-| `internal-error` | 500 | **yes** | |
-| `unavailable` | 503 | **yes** | |
+| <span id="invalid-request"></span>`invalid-request` | 400 | no | Malformed at the HTTP level |
+| <span id="unauthenticated"></span>`unauthenticated` | 401 | no | No token, or not a valid one |
+| <span id="forbidden"></span>`forbidden` | 403 | no | Valid token, not your object |
+| <span id="insufficient-scope"></span>`insufficient-scope` | 403 | no | Valid token, wrong scopes — issue a narrower one, not a retry |
+| <span id="not-found"></span>`not-found` | 404 | no | No such id, or not visible to you |
+| <span id="conflict"></span>`conflict` | 409 | **yes** | Concurrent modification; re-read and reapply |
+| <span id="idempotency-in-progress"></span>`idempotency-in-progress` | 409 | **yes** | The same key is being processed; wait and retry |
+| <span id="idempotency-key-reuse"></span>`idempotency-key-reuse` | 422 | no | That key was used for a *different* request body |
+| <span id="gone"></span>`gone` | 410 | no | Removed. The id keeps its place in the graph |
+| <span id="precondition-failed"></span>`precondition-failed` | 412 | no | `If-Match` or `expected_revision_id` is stale |
+| <span id="precondition-required"></span>`precondition-required` | 428 | no | The operation needs a precondition you did not send |
+| <span id="payload-too-large"></span>`payload-too-large` | 413 | no | Over the limit for that body |
+| <span id="validation-failed"></span>`validation-failed` | 422 | no | The body is well-formed and wrong |
+| <span id="rate-limited"></span>`rate-limited` | 429 | **yes** | Too fast. Honour `retry_after_seconds` |
+| <span id="quota-exceeded"></span>`quota-exceeded` | 429 | **yes** | Out of allowance for the window, not too fast |
+| <span id="unavailable-for-legal-reasons"></span>`unavailable-for-legal-reasons` | 451 | no | |
+| <span id="internal-error"></span>`internal-error` | 500 | **yes** | |
+| <span id="unavailable"></span>`unavailable` | 503 | **yes** | |
 
 ## What "retry" means here
 

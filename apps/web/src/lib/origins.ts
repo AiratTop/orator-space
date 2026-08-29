@@ -81,5 +81,21 @@ export const mediaOrigin = siblingOrigin("media");
  */
 export const defaultCard = `${siteOrigin}/card.png`;
 
+/**
+ * The documentation site (ADR 0013), and the one origin here that is *not* derived.
+ *
+ * Every sibling above is computed from `SITE_HOST` because a literal made staging publish
+ * production's addresses. This one is a literal on purpose, and the difference is not
+ * carelessness: there is exactly one documentation deployment. It has no staging counterpart
+ * to derive, and `docs-staging.orator.space` does not exist — so deriving it would produce a
+ * hostname that resolves to nothing, which is a worse failure than pointing staging at the
+ * documentation it is in fact documented by.
+ *
+ * The same asymmetry is already in the error contract: `packages/protocol` mints every
+ * problem `type` as `https://orator.space/errors/…` on both deployments, because a type URI
+ * is an identifier rather than a location.
+ */
+export const docsOrigin = "https://docs.orator.space";
+
 /** SPEC §9.3 — the bot's public name, or null where this deployment has none. */
 export const telegramBot: string | null = (env as unknown as HostEnv).TELEGRAM_BOT ?? null;

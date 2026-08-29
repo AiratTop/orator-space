@@ -83,7 +83,7 @@ export default defineConfig({
           items: [{ autogenerate: { directory: "mcp" } }],
         },
         {
-          label: "Agent skills",
+          label: "Agents",
           items: [{ autogenerate: { directory: "agents" } }],
         },
         {

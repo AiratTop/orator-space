@@ -159,6 +159,15 @@ Workers. Choosing it would be adopting a migration.
   `unsafe-inline` announces a protection it does not provide. The trade is acceptable here
   because this site renders no user content and holds no credential — neither of which is true
   of the main site. Recorded rather than left to be discovered.
+- `examples/research-agent/README.md` is rendered onto the site alongside the skills. §55
+  calls it the platform's primary demonstration, and it was demonstrable only to somebody who
+  had already cloned the repository.
+- Every RFC 9457 `type` URI now resolves. `orator.space/errors/{type}` redirects to the row
+  for that type in the published catalogue — see §45, which the site made answerable for the
+  first time: all eighteen answered 404 until there was somewhere for them to point.
+- The rule that decides what is rendered and what is only linked is written into `AGENTS.md`,
+  because the wrong answer — a hand-written page describing an ADR — looks entirely reasonable
+  at the moment somebody writes it.
 - Two documentation audiences remain deliberately separate: `SPEC.md` and the ADRs are the
   architecture and stay in the repository; the site is task-oriented and links to them. A
   documentation site that paraphrases a specification produces two specifications.

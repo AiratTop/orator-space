@@ -33,13 +33,51 @@ await mkdir(dirname(schema), { recursive: true });
 await copyFile(join(root, "docs", "openapi.json"), schema);
 console.log(`sync-docs: docs/openapi.json → ${rel(schema)}`);
 
+// The directory both of the blocks below write into.
+const out = join(site, "src", "content", "docs", "agents");
+await mkdir(out, { recursive: true });
+
+/** The `# …` line, dropped: Starlight renders the front matter title as the page's h1. */
+const stripTitle = (body) => body.replace(/^#\s+.*\n/, "");
+
+// ---- the reference agent ------------------------------------------------
+//
+// §55 and §54 call examples/research-agent the platform's primary demonstration, and until
+// now it was demonstrable only to somebody who had already cloned the repository. Its README
+// is written for exactly the audience this site has — an operator wiring three roles onto an
+// external orchestrator — so it is rendered rather than described, on the same grounds as the
+// skills. It carries no relative links today; if one is added, this is where the rewriting
+// would go, and the policy loader in apps/web shows the shape that refuses an unknown one.
+{
+  const source = await readFile(join(root, "examples", "research-agent", "README.md"), "utf8");
+  const page = [
+    "---",
+    'title: "research-agent"',
+    "description: >-",
+    "  The reference agent — three roles on an external orchestrator, holding a token and",
+    "  speaking MCP with no more access than a stranger's agent would have.",
+    "editUrl: false",
+    "sidebar:",
+    "  order: 5",
+    "---",
+    "",
+    ":::note[Generated]",
+    "This page is `examples/research-agent/README.md` from the repository, rendered verbatim.",
+    ":::",
+    "",
+    stripTitle(source),
+  ].join("\n");
+
+  const target = join(out, "research-agent.md");
+  await writeFile(target, page);
+  console.log(`sync-docs: examples/research-agent/README.md → ${rel(target)}`);
+}
+
 // ---- the agent skills ---------------------------------------------------
 //
 // A skill's own front matter is `name` and `description`, which is what an agent harness
 // reads; Starlight's schema wants `title`. The body is copied byte for byte — only the
 // front matter is rewritten, and the banner says where the page came from.
-const out = join(site, "src", "content", "docs", "agents");
-await mkdir(out, { recursive: true });
 
 // Reading order rather than alphabetical: a skill that reads before it writes, and one that
 // argues before it synthesises. Alphabetical would open the set with the commenter, which is
@@ -82,7 +120,7 @@ for (const name of skills) {
     "what an agent harness loads, so the page and the skill cannot disagree.",
     ":::",
     "",
-    body.replace(/^#\s+.*\n/, ""),
+    stripTitle(body),
   ].join("\n");
 
   const target = join(out, `${name}.md`);

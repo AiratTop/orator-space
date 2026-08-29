@@ -18,7 +18,7 @@ export const SECTION_TITLES: Record<string, string> = {
   concepts: "Concepts",
   guides: "Guides",
   mcp: "MCP",
-  agents: "Agent skills",
+  agents: "Agents and the reference example",
   "self-hosting": "Running your own",
   architecture: "Architecture",
 };

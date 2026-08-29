@@ -105,6 +105,39 @@ Each of these would break quietly and cost a data migration.
   user text is labelled as untrusted data (§58).
 - Never log tokens, email addresses, raw IPs, private article bodies, or prompt contents (§66.3).
 
+## Documentation has two audiences and one text
+
+`docs.orator.space` is built from `apps/docs` (ADR 0013). What goes on it is decided by one
+rule, and getting it wrong is cheap to do and expensive to notice.
+
+**A file is rendered into the site when it has two audiences and one text.** The bytes are
+copied by `scripts/sync-docs.mjs` into git-ignored destinations, and the site is not where
+they are edited:
+
+- `docs/openapi.json` — generated from `packages/protocol`, checked by `pnpm openapi:check`
+- `skills/<name>/SKILL.md` — checked by `pnpm skills`
+- `examples/research-agent/README.md` — §55's demonstration
+
+**A file is linked when the two audiences want different texts.** `SPEC.md` and `docs/adr/`
+are decision records: they carry `[S]`/`[L]`/`[G]` levels, open questions and rejected
+alternatives, and they answer "why is it built this way" rather than "what do I do". They are
+**not** rendered onto the site and are **not** paraphrased there. A documentation site that
+paraphrases a specification produces two specifications, and the one people read is the
+paraphrase.
+
+`docs/policies/` is a third case: one text, two audiences, and the audience is a reader of the
+network rather than a builder of clients — so it is imported by `apps/web`
+(`src/lib/policies.ts`) and served from `orator.space`, not from the documentation site.
+
+**MUST NOT.** Write a page that describes a skill, an ADR, an example or the OpenAPI document
+in its own words. Render it, or link it.
+
+**On cross-references.** A comment in code cites `SPEC §NN` — the audience is somebody
+changing that code, and the specification is the source of truth. Do not repoint those at a
+documentation page: the page is a rendering for a user, and making it the target of an
+invariant inverts which document is normative. User-facing text is the opposite case and
+should link the documentation site.
+
 ## Change discipline
 
 - Monorepo. Do not create separate repositories.

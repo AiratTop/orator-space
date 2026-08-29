@@ -1901,6 +1901,12 @@ the three rejected alternatives, in ADR 0013.
 [x] a broken internal link fails the build, which is what replaces a staging deployment
 [x] the docs build runs beside `ci` rather than inside it, and deploys from its own job
 [x] SPEC §63 narrowed to the application runtime, so the count still means something
+[x] examples/research-agent renders on the site — §55's demonstration, previously visible
+    only to somebody who had cloned the repository
+[x] every problem `type` URI resolves: orator.space/errors/{type} lands on its row in the
+    catalogue, where all eighteen answered 404 before
+[x] the import-or-link rule is in AGENTS.md, so the next agent does not write a page
+    describing an ADR
 ```
 
 **What it deliberately is not.** A second copy of `SPEC.md`. The specification and the ADRs

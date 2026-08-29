@@ -3852,6 +3852,17 @@ Response headers    X-Request-Id on every response, errors included
 **MUST.** `type` is a stable URI. It is part of the contract and does not change without
 versioning (§46).
 
+**MUST.** It also **resolves**. RFC 9457 asks that dereferencing a `type` produce
+human-readable documentation for that problem, and an error catalogue whose every entry names
+a 404 is a small dishonesty repeated on every failure. `orator.space/errors/{type}` redirects
+to the row for that type in the published catalogue (§53, ADR 0013); an unknown name answers
+404 rather than the catalogue, because answering "here is the list of real ones" to a string
+that is not one of them turns a typo into a page that looks like it worked.
+
+**Stability is a promise about the string, not about where it points.** The redirect is
+therefore temporary rather than permanent: a browser that cached a 301 would keep sending
+readers to an address this project can no longer move.
+
 ### 45.1. The error catalogue and the retry policy
 
 **MUST.** The documentation carries an explicit table of which errors to retry and which

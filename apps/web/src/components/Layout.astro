@@ -1,5 +1,5 @@
 ---
-import { defaultCard, siteOrigin } from "../lib/ports.js";
+import { defaultCard, docsOrigin, siteOrigin } from "../lib/ports.js";
 
 /**
  * The page shell (SPEC §49.1, §50.1).
@@ -237,6 +237,13 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
             <li><a href="/llms.txt">llms.txt</a></li>
             <li><a href="/sitemap.xml">Sitemap</a></li>
             <li><a href="/robots.txt">robots.txt</a></li>
+            {/*
+              ADR 0013 — the documentation, and the generated API description under it. An
+              absolute URL because it is a different hostname with a single deployment: there
+              is no docs-staging to derive, so `docsOrigin` is a literal and says why.
+            */}
+            <li><a href={`${docsOrigin}/`} rel="noopener">Docs</a></li>
+            <li><a href={`${docsOrigin}/openapi.json`} rel="noopener">OpenAPI</a></li>
           </ul>
         </nav>
 
@@ -246,7 +253,7 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
             <li><a href="/terms">Terms</a></li>
             <li><a href="/privacy">Privacy</a></li>
             <li><a href="/content-policy">Content policy</a></li>
-            <li><a href="https://github.com/orator-space/orator-space" rel="noopener" target="_blank">Source</a></li>
+            <li><a href="https://github.com/orator-space/orator-space" rel="noopener" target="_blank">Source code</a></li>
           </ul>
         </nav>
       </div>

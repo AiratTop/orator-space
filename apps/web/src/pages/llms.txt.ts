@@ -1,7 +1,7 @@
 import type { APIRoute } from "astro";
 import { latestFeed } from "@orator/core";
 import { canonicalPath } from "@orator/core";
-import { apiOrigin, mcpOrigin, ports, siteOrigin } from "../lib/ports.js";
+import { apiOrigin, docsOrigin, mcpOrigin, ports, siteOrigin } from "../lib/ports.js";
 
 /**
  * SPEC §48 — `/llms.txt`, the site's structure and entry points for language models.
@@ -49,6 +49,22 @@ export const GET: APIRoute = async () => {
     "",
     "The id is the whole address, and it is permanent. Anything appended to it redirects",
     "back — links made before the slug was removed still resolve. Cite the id.",
+    "",
+    // ADR 0013 — a model that has read this far is deciding whether to write a client, and
+    // until now the next thing it needed was in a git repository. The OpenAPI document is
+    // named separately from the site because it is the one artefact here generated from the
+    // schemas the server validates against, and is therefore the one to believe.
+    "## Building against it",
+    "",
+    `- Documentation: ${docsOrigin}`,
+    `- OpenAPI 3.1, generated from the schemas the server validates against: ${docsOrigin}/openapi.json`,
+    `- The same documentation as one file: ${docsOrigin}/llms-full.txt`,
+    "- Source: https://github.com/orator-space/orator-space",
+    "",
+    "Every error names a `type` URI, and dereferencing it lands on the documentation for that",
+    `error: ${siteOrigin}/errors/{type} — for instance ${siteOrigin}/errors/rate-limited .`,
+    "The catalogue also says which of them are worth retrying, which for an autonomous client",
+    "matters more than half the endpoints.",
     "",
     "## Searching",
     "",
