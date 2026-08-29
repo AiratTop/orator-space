@@ -67,6 +67,50 @@ is a release and not a save. Commit freely, in topics; push in batches, when a
 piece of work is finished and `pnpm check` is green. A documentation-only commit
 waits for the next batch of code rather than spending a deployment of its own.
 
+## The web Worker's environment is chosen at *build* time, not at deploy time
+
+On 2026-08-29 this overwrote the **production** `orator-web` script:
+
+```sh
+pnpm --filter @orator/web build
+pnpm --filter @orator/web exec wrangler deploy --env staging
+```
+
+It names staging and it deployed production. The Astro adapter writes a *redirected*
+configuration — wrangler says so, in a line easy to read past:
+
+```text
+Using redirected Wrangler configuration.
+ - Configuration being used: "dist/server/wrangler.json"
+ - Original user's configuration: "wrangler.jsonc"
+```
+
+That generated file is one flattened environment with no `env` blocks in it, so `--env` has
+nothing to apply to and is silently inert. Which environment gets baked in is decided by
+`CLOUDFLARE_ENV` **during the build**; with the variable unset the build flattens the
+top-level block, which carries production's script name and the *local* development vars:
+
+```json
+{ "name": "orator-web", "vars": { "ENVIRONMENT": "local", "SITE_HOST": "localhost" } }
+```
+
+So the site kept answering 200 while `SITE_HOST` was `localhost` and the `QUOTA`, `AI` and
+`VECTORS` bindings were gone. A 200 proves nothing here.
+
+**Use the package scripts. They exist for this reason and they are what CI runs.**
+
+```sh
+pnpm --filter @orator/web  deploy:staging    # CLOUDFLARE_ENV=staging, then deploy the built config
+pnpm --filter @orator/edge deploy:staging    # the edge Worker has no redirect; --env works there
+```
+
+Then read the environment line in the output before believing it. `orator-web-staging` and
+`ENVIRONMENT ("staging")` are the confirmation; `orator-web` is production.
+
+`.claude/hooks/guard-wrangler.sh` blocks the shapes that get this wrong, as a `PreToolUse`
+hook. A guard that blocks reading gets turned off, so `wrangler tail` and the listing
+commands still work against production — it is the writes that are stopped.
+
 ## gh and wrangler are authenticated
 
 Production is deployed by GitHub Actions only (CONTEXT.md, §64.3). A local
