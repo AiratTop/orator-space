@@ -15,12 +15,13 @@
     "boundaries": "node scripts/check-boundaries.mjs",
     "skills": "node scripts/check-skills.mjs",
     "test": "vitest run",
-    "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm skills && pnpm openapi:check && pnpm schema && pnpm test && pnpm build",
+    "check": "pnpm typecheck && pnpm lint && pnpm boundaries && pnpm skills && pnpm docs:drift && pnpm openapi:check && pnpm schema && pnpm test && pnpm build",
     "schema": "pnpm --filter @orator/edge exec wrangler d1 migrations apply DB --local --persist-to ../../.wrangler-state && node scripts/dump-schema.mjs --local > .schema.json && node scripts/check-schema.mjs .schema.json",
     "seed": "node scripts/seed.mjs",
     "openapi": "node --import ./scripts/lib/register-ts.mjs scripts/generate-openapi.mjs",
     "openapi:check": "node --import ./scripts/lib/register-ts.mjs scripts/generate-openapi.mjs --check",
-    "docs:check": "pnpm --filter @orator/docs typecheck && pnpm --filter @orator/docs build",
+    "docs:drift": "node --import ./scripts/lib/register-ts.mjs scripts/check-docs.mjs",
+    "docs:check": "pnpm docs:drift && pnpm --filter @orator/docs typecheck && pnpm --filter @orator/docs build",
     "coverage": "vitest run --project domain --coverage.enabled --coverage.provider=v8 --coverage.include='packages/core/src/**' --coverage.exclude='**/*.test.ts' --coverage.exclude='**/testing/**' --coverage.reporter=text"
   },
   "devDependencies": {

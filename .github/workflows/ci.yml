@@ -35,6 +35,11 @@ jobs:
         run: pnpm boundaries
       - name: skills
         run: pnpm skills
+      # ADR 0013 — the written documentation pages against the contract they describe. Here
+      # rather than in the `docs` job because what breaks it is a code change: a new scope, a
+      # new error type or a new MCP tool falsifies a page nothing else makes anybody open.
+      - name: docs drift
+        run: pnpm docs:drift
       # §53 — the published description of the API, checked against the schemas it is
       # generated from. `pnpm check` has run this since it existed and this workflow lists
       # its steps by hand, so a stale docs/openapi.json passed CI for as long as both have

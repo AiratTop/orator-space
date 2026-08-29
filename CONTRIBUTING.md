@@ -67,6 +67,16 @@ Three of those steps fail builds for reasons that are not obvious the first time
 - **`pnpm skills`** asserts that every [§54](SPEC.md#54-agent-skills) requirement is
   documented in every skill under `skills/`. Adding a rule agents must follow means adding
   it there too.
+- **`pnpm docs:drift`** holds the written pages of [docs.orator.space](https://docs.orator.space)
+  against the contract they describe: every scope, every error type and every MCP tool has to
+  appear, each error type needs the anchor its `type` URI redirects to, and the counts spelled
+  out in the prose have to be the real ones. It fails on a *code* change — adding a scope is
+  what makes a sentence about fifteen of them false, and nothing else would make anybody open
+  that file.
+
+`pnpm docs:check` is separate and is not part of `pnpm check`: it type-checks and builds the
+documentation site, including a link validation that fails on a broken internal link. It runs
+beside CI rather than inside it, so a prose change never waits on an application build.
 
 ## Tests
 
@@ -106,6 +116,27 @@ stated once, rather than stamped on every artefact — which is also why the dis
 *is* required goes in the pull request description. See
 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md#contributions-made-by-agents); it applies to
 contributions from agents, and this repository expects them.
+
+## When a change needs the documentation
+
+[docs.orator.space](https://docs.orator.space) is built from `apps/docs` in this repository
+([ADR 0013](docs/adr/0013-documentation-site.md)). Most of it looks after itself:
+
+| What you changed | What happens |
+|---|---|
+| a schema in `packages/protocol` | the REST reference regenerates; `pnpm openapi:check` fails if you forgot to commit it |
+| a skill under `skills/` | its page is that file, rendered |
+| `examples/research-agent/README.md` | same |
+| a scope, an error type, an MCP tool | `pnpm docs:drift` fails until the page says so |
+
+What is left is the part no check can reach: a new endpoint, a changed workflow, a behaviour
+somebody would have to discover. **That belongs in the same pull request as the change**, for
+the same reason the test does — a follow-up nobody opened is indistinguishable from a decision
+not to document it.
+
+What does **not** belong there: a page describing an ADR, a skill or the specification in its
+own words. Render it or link it; see [AGENTS.md](AGENTS.md). `SPEC.md` and `docs/adr/` answer
+"why is it built this way" and are not user documentation.
 
 ## What gets a change turned down quickly
 

@@ -71,6 +71,27 @@ rm -rf apps/web/node_modules/.vite
 pnpm dev
 ```
 
+## The documentation site builds separately, on purpose
+
+`docs.orator.space` is `apps/docs` (ADR 0013), and it is **excluded from `pnpm dev` and
+`pnpm build`**. That is not an oversight to fix — `ci` already takes ten minutes and prose
+should not add to it, nor wait on an application build.
+
+```sh
+pnpm docs:drift      # the written pages against the contract — this one IS in `pnpm check`
+pnpm docs:check      # drift, then astro check, then the build with link validation
+pnpm --filter @orator/docs dev     # localhost:4323
+```
+
+`pnpm docs:drift` is in `pnpm check` because what breaks it is a *code* change: adding a
+scope, an error type or an MCP tool falsifies a sentence on a page nothing else would make
+anybody open. `pnpm docs:check` is not, because a failing link check should not block a
+change to the domain.
+
+Do not hand-write a page describing a skill, an ADR, the reference agent or the OpenAPI
+document. They are rendered by `scripts/sync-docs.mjs` into git-ignored destinations. The
+rule and its reasoning are in AGENTS.md, "Documentation has two audiences and one text".
+
 ## Pushing to main deploys to production
 
 `ci → staging → production` runs on every push (README, "Deployment"), so a push
@@ -128,6 +149,8 @@ Production is deployed by GitHub Actions only (CONTEXT.md, §64.3). A local
 `wrangler deploy` to production bypasses the release path even when it works.
 
 - local first — `wrangler d1 execute --local`, `pnpm dev`
+- `orator-docs` has one environment and it is production; the guard denies a local deploy of
+  it by name rather than demanding an `--env staging` that does not exist
 - staging is the place to try a real deployment
 - `--remote` against production, `wrangler secret`, and production migrations
   need an explicit instruction naming the environment (AGENTS.md)

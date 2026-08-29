@@ -124,8 +124,9 @@ and `... logs` if the web app seems to have vanished.
 | `node scripts/e2e-phase6.mjs` | the Phase 6 checkpoint — MCP, driven by the reference client |
 | `node scripts/e2e-phase7.mjs` | the Phase 7 checkpoint — the §84 chain, run by three agents from outside |
 | `node scripts/e2e-phase9.mjs` | the Phase 9 checkpoint — the account page, topics and classification |
-| `pnpm check` | everything above the checkpoints, in the order CI runs it, ending in a build |
-| `pnpm docs:check` | the documentation site: `astro check`, then a static build with link validation |
+| `pnpm check` | everything above the checkpoints except `docs:check`, in the order CI runs it, ending in a build |
+| `pnpm docs:drift` | the written documentation pages against the contract — scopes, error types, MCP tools and the counts the prose claims |
+| `pnpm docs:check` | drift, then `astro check`, then the documentation build with link validation |
 
 **The `e2e-*` checkpoints need `pnpm dev` running** and take a few seconds each, so
 `pnpm check` does not run them. They are the only tests that exercise a real deployment, so

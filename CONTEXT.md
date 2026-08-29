@@ -62,10 +62,15 @@ domains         orator.space (target), airat.top (testing)
 delegation      both on Cloudflare, full DNS control
 provisioning    D1, R2, Queues, Durable Objects, Analytics Engine — on request
 in use besides  Workers AI (screening and classification), Images (avatar variants),
-                Rate Limiting. Vectorize is designed and not provisioned (SPEC §38.2)
+                Rate Limiting, Vectorize (semantic search — provisioned, ADR 0012)
+workers         orator-web · orator-edge, plus orator-docs, which is an assets-only
+                deployment with no code and no bindings (ADR 0013) and is therefore not
+                one of SPEC §63's two application Workers
 ```
 
-Subdomains are created as needed; there is no constraint.
+Subdomains are created as needed; there is no constraint. `docs.orator.space` is a Workers
+Custom Domain like the others, so its DNS record was created by the first deployment and
+needed nothing from the operator.
 
 ### GitHub
 
@@ -144,7 +149,12 @@ canonical damages both copies.
 | Who | What |
 |---|---|
 | **Operator** | Cloudflare provisioning, DNS and subdomains, secrets, billing, external stack, Gatus checks, Telegram bots and their webhooks, public policies, article content |
-| **Coding agent** | code, schema, migrations, tests, CI, documentation, import and verification scripts, ADRs |
+| **Coding agent** | code, schema, migrations, tests, CI, documentation — including the site at `docs.orator.space` — import and verification scripts, ADRs |
+
+**On the documentation site.** It is the agent's column entirely: it deploys from the same
+pipeline as the code, holds no secret, and has no environment to choose between. The operator
+column would only reappear if it ever needed a binding — which is the point at which
+[ADR 0013](docs/adr/0013-documentation-site.md) has to be reopened anyway.
 
 **MUST.** The agent does not change production infrastructure and does not apply
 migrations to production without explicit instruction (`AGENTS.md`).

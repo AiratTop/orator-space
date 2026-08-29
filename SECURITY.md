@@ -40,6 +40,12 @@ infrastructure. Reports in these areas are especially welcome:
 
 - Findings against `spikes/`, which are throwaway verification harnesses.
 - Missing hardening on a hostname that serves no content.
+- The absence of a Content-Security-Policy on `docs.orator.space`. It is deliberate and
+  recorded ([ADR 0013](docs/adr/0013-documentation-site.md)): the documentation site is
+  static files served without a Worker, it renders no user content and holds no credential,
+  and its theme script is inline — so `script-src 'self'` would break it and `unsafe-inline`
+  would announce a protection it does not provide. A way to get *executable* content onto
+  that hostname is very much in scope.
 - Rate limits during the pre-launch phases, which are still being tuned.
 - Reports produced solely by an automated scanner, without a demonstrated impact.
 
@@ -57,3 +63,7 @@ REST    https://api-staging.orator.space
 MCP     https://mcp-staging.orator.space
 media   https://media-staging.orator.space
 ```
+
+`docs.orator.space` has no staging counterpart — it is one deployment of static files with no
+bindings and no code (ADR 0013), so there is nothing behind it to hold anybody's work. Test
+it where it is.
