@@ -778,12 +778,36 @@ a {
  * rather than being an inert span: the row keeps its width, and a keyboard reader has
  * something to land on. `aria-current` is what carries the state to a screen reader.
  */
+/*
+ * The strip, and the rule beneath the whole row it now sits in.
+ *
+ * The border used to be here, which was right while the tabs were the row. They are a flex
+ * item beside the filter now, so a border on them stops where the last tab does — a short
+ * hairline under half the width, with `.panel`'s own rule below it. `.sections` draws the one
+ * line, and the tabs draw none.
+ */
 .tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   margin: 0 0 0.5rem;
   border-bottom: 1px solid var(--line);
+}
+
+/*
+ * Inside a row, the row draws the line.
+ *
+ * On a profile or in settings the strip *is* the row and its own border is right. On the
+ * moderation page it is a flex item beside the filter, so its border stops where the last tab
+ * does — a hairline under half the width, with `.panel`'s rule below it.
+ */
+.sections {
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.5rem;
+}
+
+.sections .tabs {
+  border-bottom: none;
 }
 
 /*
@@ -794,7 +818,8 @@ a {
  * rendering fault rather than as a decision. The strip's line wins: it is the one that
  * belongs to the control.
  */
-.tabs + .panel {
+.tabs + .panel,
+.sections + .panel {
   border-top: none;
   padding-top: 1.25rem;
 }
@@ -1785,7 +1810,9 @@ a {
 
 .token:last-child,
 .key:last-child,
-.session:last-child {
+.session:last-child,
+/* The pager draws the rule under the list; a border here would put a second one beside it. */
+.reports .report:last-child {
   border-bottom: none;
 }
 
@@ -2950,22 +2977,22 @@ img.avatar {
   text-decoration: underline;
 }
 
-.report {
+.filing {
   max-width: var(--measure);
 }
 
-.report__subject {
+.filing__subject {
   padding: 0.75rem 1rem;
   border-left: 3px solid var(--accent);
   background: var(--paper-soft);
 }
 
-.report__note {
+.filing__note {
   color: var(--ink-soft);
   font-size: 0.875rem;
 }
 
-.report__form {
+.filing__form {
   margin: 1.5rem 0;
 }
 
@@ -2977,20 +3004,20 @@ img.avatar {
  * reader's choice determines whether a legal obligation is triggered, which is worth the
  * vertical space.
  */
-.report__categories {
+.filing__categories {
   margin: 0 0 1.5rem;
   padding: 0;
   border: 0;
 }
 
-.report__categories legend {
+.filing__categories legend {
   padding: 0;
   margin-bottom: 0.75rem;
   font-size: 0.875rem;
   font-weight: 600;
 }
 
-.report__category {
+.filing__category {
   display: flex;
   gap: 0.6rem;
   align-items: baseline;
@@ -3001,24 +3028,24 @@ img.avatar {
   cursor: pointer;
 }
 
-.report__category:hover {
+.filing__category:hover {
   border-color: var(--accent);
 }
 
-.report__category:has(input:checked) {
+.filing__category:has(input:checked) {
   border-color: var(--accent);
 }
 
-.report__category:has(input:focus-visible) {
+.filing__category:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
-.report__category > span {
+.filing__category > span {
   display: block;
 }
 
-.report__hint {
+.filing__hint {
   display: block;
   margin-top: 0.15rem;
   color: var(--ink-soft);
@@ -3136,6 +3163,11 @@ img.avatar {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem 1rem;
+}
+
+/* The filter sits on the same baseline as the tabs, not below their descenders. */
+.sections .tabs {
+  margin-bottom: 0;
 }
 
 .kinds {

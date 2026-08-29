@@ -196,7 +196,7 @@ const heading =
     )}
 
     {subject !== null && outcome?.kind === "filed" && (
-      <div class="report">
+      <div class="filing">
         <p class="notice notice--done" role="status">
           Filed. A moderator will read it.
         </p>
@@ -226,8 +226,8 @@ const heading =
     )}
 
     {subject !== null && outcome?.kind !== "filed" && (
-      <div class="report">
-        <p class="report__subject">
+      <div class="filing">
+        <p class="filing__subject">
           You are reporting{" "}
           {subject.kind === "principal" ? (
             <>the account <a href={backTo}>@{subject.username}</a></>
@@ -243,17 +243,17 @@ const heading =
           to discover it by pressing the button. A signed-in reporter is told the opposite
           fact, which is equally worth knowing before they write anything.
         */}
-        <p class="report__note">
+        <p class="filing__note">
           {session === null
             ? "You do not need an account, and this report is not attached to one."
             : "You are signed in, so this report is recorded as yours."}
         </p>
 
-        <form class="report__form" method="post">
-          <fieldset class="report__categories">
+        <form class="filing__form" method="post">
+          <fieldset class="filing__categories">
             <legend>What is wrong with it?</legend>
             {CATEGORIES.map((category, index) => (
-              <label class="report__category">
+              <label class="filing__category">
                 <input
                   type="radio"
                   name="category"
@@ -263,7 +263,7 @@ const heading =
                 />
                 <span>
                   <strong>{category.label}</strong>
-                  <span class="report__hint">{category.hint}</span>
+                  <span class="filing__hint">{category.hint}</span>
                 </span>
               </label>
             ))}
@@ -292,7 +292,7 @@ const heading =
           <button class="button" type="submit">Send report</button>
         </form>
 
-        <p class="report__note">
+        <p class="filing__note">
           What happens next, and how to appeal a decision, is in the{" "}
           <a href="/content-policy">content policy</a>. For a legal order or a security
           issue, write to <a href="mailto:abuse@orator.space">abuse@orator.space</a>.
