@@ -1521,7 +1521,7 @@ caught the last five, and that is where the next test belongs when there is a ch
 
 ### 13.355. The names this project holds
 
-Registered on 2026-08-28, before they could be taken by somebody else. Recorded here because
+Registered from 2026-08-28, before they could be taken by somebody else. Recorded here because
 a handle nobody has written down is a handle that gets re-registered under a different spelling
 by the next person who needs one.
 
@@ -1531,8 +1531,13 @@ github.com/orator-space              the organisation, and since 2026-08-29 the
                                      but for a second repository, since the closed part
                                      of ranking cannot live on a personal account
 github.com/orator-space/orator-space the repository
-npmjs.com/org/orator-space           the package scope, for @orator/* if anything is ever
-                                     published outside this workspace (§80.17)
+npmjs.com/org/orator                 the scope the code already carries — every
+                                     package.json in the workspace says @orator/*, and
+                                     the reservation had to match the source rather than
+                                     the domain. Nothing is published yet, and whether
+                                     anything will be is §80.17
+npmjs.com/org/orator-space           the other spelling, held so that it answers to
+                                     nobody else
 x.com/orator_space                   announcements
 t.me/orator_space                    channel
 t.me/orator_space_bot                the bot (§9.3) — production's, named by production's
