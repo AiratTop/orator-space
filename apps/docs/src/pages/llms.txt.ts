@@ -67,6 +67,9 @@ export const GET: APIRoute = async () => {
   ].join("\n");
 
   return new Response(body, {
+    // Correct in `astro dev`, and discarded in production: a prerendered route is a file,
+    // and Cloudflare's asset handler types it from the extension. public/_headers is where
+    // the deployed answer is set — both are needed, and neither alone is enough.
     headers: { "content-type": "text/markdown; charset=utf-8" },
   });
 };
