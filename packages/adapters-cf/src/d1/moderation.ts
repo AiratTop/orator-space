@@ -191,6 +191,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             targetId: row.id,
             label: row.title,
             articleId: row.id,
+            username: null,
           });
         }
       }
@@ -212,6 +213,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             targetId: row.id,
             label: row.opening,
             articleId: row.article_id,
+            username: null,
           });
         }
       }
@@ -230,6 +232,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             targetId: row.id,
             label: row.display_name ?? `@${row.username}`,
             articleId: null,
+            username: row.username,
           });
         }
       }
@@ -247,6 +250,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             ...target,
             label: null,
             articleId: null,
+            username: null,
           },
       );
     },

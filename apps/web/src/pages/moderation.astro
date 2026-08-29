@@ -166,19 +166,40 @@ if (moderator) {
 
 const here = `/moderation?tab=${tab}`;
 
-/** A queue line's subject and where it points (§61.1). */
-function subjectOf(target: { targetType: string; targetId: string }): { label: string | null; href: string } {
+/**
+ * A queue line's subject and where it points (SPEC §61.1).
+ *
+ * `href` is null when the target has no page, and the line is then plain text rather than a
+ * link. It used to fall back to `#{id}` — an anchor to nothing, on the page you are already
+ * on — which looks exactly like a link and does nothing, and is worse than no link because it
+ * invites the click before it fails.
+ *
+ * The principal case is why this was found. The address was recovered by parsing the label,
+ * which is `display_name ?? "@" + username`: correct for everybody who had not set a display
+ * name, and a dead anchor for everybody who had. The handle is carried on the summary now,
+ * beside the article id a comment carries for the same reason.
+ */
+function subjectOf(target: { targetType: string; targetId: string }): {
+  label: string | null;
+  href: string | null;
+} {
   const summary = subjects.get(`${target.targetType}:${target.targetId}`) ?? null;
   const label = summary?.label ?? null;
   if (target.targetType === "article") return { label, href: `/p/${target.targetId}` };
-  if (target.targetType === "comment" && summary?.articleId != null) {
-    return { label, href: `/p/${summary.articleId}#conversation` };
+  if (target.targetType === "comment" && summary?.articleId !== null && summary?.articleId !== undefined) {
+    return { label, href: `/p/${summary.articleId}#c-${target.targetId}` };
   }
-  if (target.targetType === "principal" && label !== null && label.startsWith("@")) {
-    return { label, href: `/${label}` };
+  if (target.targetType === "principal" && summary?.username !== null && summary?.username !== undefined) {
+    return { label, href: `/@${summary.username}` };
   }
-  return { label, href: `#${target.targetId}` };
+  // Media, and anything whose row is gone: erased under §23.3, or an id that never existed.
+  // The report still has to render — dropping the line would hide an open report.
+  return { label, href: null };
 }
+
+/** The label a line falls back to when the target cannot be described (§23.3). */
+const nameOf = (target: { targetType: string; targetId: string }): string =>
+  subjectOf(target).label ?? `${target.targetType} that is no longer here`;
 
 const when = (iso: string) => iso.slice(0, 10);
 
@@ -411,9 +432,11 @@ const undoableIds = new Set<string>();
                     <li class={`action action--${action.reversedAt === null ? "live" : "reversed"}`}>
                       <div class="action__head">
                         <span class="tag tag--warn">{action.action}</span>
-                        <a class="report__target" href={subjectOf(action).href}>
-                          {subjectOf(action).label ?? `${action.targetType} with no title`}
-                        </a>
+                        {subjectOf(action).href === null ? (
+                          <span class="report__target report__target--gone">{nameOf(action)}</span>
+                        ) : (
+                          <a class="report__target" href={subjectOf(action).href}>{nameOf(action)}</a>
+                        )}
                         <span class="report__when">{when(action.createdAt)}</span>
                       </div>
 
@@ -494,9 +517,11 @@ const undoableIds = new Set<string>();
                     <li class="report">
                       <div class="report__head">
                         <span class="tag tag--warn">{report.category}</span>
-                        <a class="report__target" href={subjectOf(report).href}>
-                          {subjectOf(report).label ?? `${report.targetType} with no title`}
-                        </a>
+                        {subjectOf(report).href === null ? (
+                          <span class="report__target report__target--gone">{nameOf(report)}</span>
+                        ) : (
+                          <a class="report__target" href={subjectOf(report).href}>{nameOf(report)}</a>
+                        )}
                         <span class="report__when">{when(report.createdAt)}</span>
                         <code class="report__id">{report.targetId}</code>
                       </div>

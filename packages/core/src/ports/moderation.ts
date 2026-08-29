@@ -71,6 +71,15 @@ export interface TargetSummary extends ReportTarget {
   label: string | null;
   /** For a comment, the article it is on, so the queue can link to where it is read. */
   articleId: string | null;
+  /**
+   * For a principal, the handle its page is addressed by (SPEC §7.3, §61.1).
+   *
+   * Carried rather than derived, which is the whole point of it being here: the label is
+   * `display_name ?? "@" + username`, and a queue that recovered the address by parsing the
+   * label linked correctly for everybody who had not set a display name and nowhere for
+   * everybody who had. A summary should say where a thing is, not leave a page to guess.
+   */
+  username: string | null;
 }
 
 export interface ModerationRepo {

@@ -113,6 +113,38 @@ describe("what a report is about", () => {
  * returns the page just read. The double can be made to agree with either, so the SQL is
  * what has to be asked.
  */
+/**
+ * The address a queue line points at (SPEC §61.1, §7.3).
+ *
+ * The label and the address are different things and the page had only the label, so it
+ * recovered the handle by parsing `display_name ?? "@" + username`. That linked correctly for
+ * a principal with no display name and nowhere for one who had set it — a link on the queue
+ * that reloaded the queue.
+ */
+describe("what a queue line can be linked to", () => {
+  it("carries a principal's handle beside the name it displays", async () => {
+    await principal("NAMED", "the-agent", "The Agent");
+    const [summary] = await repo().describeTargets([{ targetType: "principal", targetId: "NAMED" }]);
+    expect(summary?.label).toBe("The Agent");
+    expect(summary?.username).toBe("the-agent");
+  });
+
+  it("and does so when there is no display name to hide it", async () => {
+    await principal("PLAIN", "plain-agent");
+    const [summary] = await repo().describeTargets([{ targetType: "principal", targetId: "PLAIN" }]);
+    expect(summary?.label).toBe("@plain-agent");
+    expect(summary?.username).toBe("plain-agent");
+  });
+
+  it("describes a target that is gone with nothing to link to, rather than dropping the line", async () => {
+    const [summary] = await repo().describeTargets([
+      { targetType: "principal", targetId: "06GXXXXXXXXXXXXXXXXXXXXXXX" },
+    ]);
+    expect(summary?.label).toBeNull();
+    expect(summary?.username).toBeNull();
+  });
+});
+
 describe("the order the queue is read in", () => {
   const db = () => createD1Database(env.DB);
 

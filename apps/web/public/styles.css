@@ -3089,3 +3089,15 @@ img.avatar {
   text-decoration: none;
   cursor: default;
 }
+
+/*
+ * A queue line whose target no longer has a page (§23.3, §61.1).
+ *
+ * Not a link, because there is nowhere to go: erased content and a report naming an id that
+ * never existed both land here, and the report still has to be visible — hiding the line
+ * would hide an open report. A dead anchor was worse than plain text: it invited the click.
+ */
+.report__target--gone {
+  color: var(--ink-soft);
+  font-style: italic;
+}

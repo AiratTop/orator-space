@@ -1914,7 +1914,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           const article = state.articles.get(target.targetId);
           const revisionId = article?.publishedRevisionId ?? article?.currentRevisionId ?? null;
           const revision = revisionId === null ? undefined : state.revisions.get(revisionId);
-          return { ...target, label: revision?.title ?? null, articleId: article?.id ?? null };
+          return { ...target, label: revision?.title ?? null, articleId: article?.id ?? null, username: null };
         }
         if (target.targetType === "comment") {
           const comment = state.comments.get(target.targetId);
@@ -1922,6 +1922,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
             ...target,
             label: comment?.contentMarkdown.slice(0, 120) ?? null,
             articleId: comment?.articleId ?? null,
+            username: null,
           };
         }
         if (target.targetType === "principal") {
@@ -1930,9 +1931,10 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
             ...target,
             label: principal === undefined ? null : (principal.displayName ?? `@${principal.username}`),
             articleId: null,
+            username: principal?.username ?? null,
           };
         }
-        return { ...target, label: null, articleId: null };
+        return { ...target, label: null, articleId: null, username: null };
       });
     },
     setReportStatus(id, status, expected, reviewedBy, resolution, at) {
