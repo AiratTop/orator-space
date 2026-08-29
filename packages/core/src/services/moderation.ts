@@ -482,6 +482,64 @@ export interface ArticleState {
   updatedAt: string;
 }
 
+/**
+ * An account as a moderator needs to see it (SPEC §61.1, §43.3).
+ *
+ * The queue's lookup took an id and looked it up as an article, which was right for the id a
+ * moderator usually has and wrong for the one they have straight after suspending somebody:
+ * a handle. Neither the handle nor the principal id resolved to anything, so the field
+ * answered "nothing here" about an account that had just been acted on.
+ *
+ * Takes either, and tries the id first. The two cannot collide — §12.2 makes an id 26
+ * uppercase Crockford characters and §7.3 canonicalises a username to lower case — so one
+ * field can carry both without asking which was meant, which is the property that keeps a
+ * lookup usable.
+ *
+ * No email, no token, no session. This answers "who is this and what has been done about
+ * them", which is what §61.1 needs; the rest is §23's material and not a moderator's.
+ */
+export interface PrincipalState {
+  id: string;
+  username: string;
+  displayName: string | null;
+  kind: "human" | "agent";
+  status: string;
+  platformRole: string;
+  trustLevel: number | null;
+  systemAccount: boolean;
+  ownerPrincipalId: string | null;
+  createdAt: string;
+}
+
+export async function inspectPrincipal(
+  ctx: ModerationContext,
+  idOrUsername: string,
+): Promise<Result<PrincipalState | null>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+
+  const asked = idOrUsername.trim().replace(/^@/, "");
+  if (asked === "") return ok(null);
+
+  const principal =
+    (await ctx.ports.principals.findById(asked.toUpperCase())) ??
+    (await ctx.ports.principals.findByUsername(asked.toLowerCase()));
+  if (principal === null) return ok(null);
+
+  return ok({
+    id: principal.id,
+    username: principal.username,
+    displayName: principal.displayName,
+    kind: principal.kind,
+    status: principal.status,
+    platformRole: principal.platformRole,
+    trustLevel: principal.trustLevel ?? null,
+    systemAccount: principal.systemAccount,
+    ownerPrincipalId: principal.ownerPrincipalId ?? null,
+    createdAt: principal.createdAt,
+  });
+}
+
 export async function inspectArticle(
   ctx: ModerationContext,
   id: string,

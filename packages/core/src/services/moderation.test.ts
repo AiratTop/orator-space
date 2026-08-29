@@ -10,6 +10,7 @@ import {
   ACTIONS_FOR,
   applyModerationAction,
   createReport,
+  inspectPrincipal,
   describeTargets,
   inspectArticle,
   listReports,
@@ -226,6 +227,64 @@ describe("the queue (§61.1)", () => {
  * These assert the two directions that matter: nothing outside the table is accepted, and
  * nothing inside it is refused for being the wrong verb.
  */
+/**
+ * Finding an account, which the lookup could not do (SPEC §61.1, §7.3, §12.2).
+ *
+ * Found by suspending one and then trying to look it up: the field uppercased the handle and
+ * searched for an article, so the page said nothing was there about an account acted on a
+ * minute earlier. One field can carry both because an id and a username cannot be confused —
+ * §12.2 makes an id upper-case Crockford, §7.3 canonicalises a username to lower case.
+ */
+describe("looking an account up (§61.1)", () => {
+  it("finds it by handle, which is what a moderator has after acting", async () => {
+    const articleId = await publishedArticle();
+    const article = await ports.articles.findById(articleId);
+    const author = await ports.principals.findById(article!.authorPrincipalId);
+
+    const found = unwrap(await inspectPrincipal(ctxFor(moderator()), author!.username));
+    expect(found?.id).toBe(author!.id);
+    expect(found?.username).toBe(author!.username);
+  });
+
+  it("finds it by handle with the @ somebody types in front of it", async () => {
+    const articleId = await publishedArticle();
+    const article = await ports.articles.findById(articleId);
+    const author = await ports.principals.findById(article!.authorPrincipalId);
+
+    expect(unwrap(await inspectPrincipal(ctxFor(moderator()), `@${author!.username}`))?.id).toBe(author!.id);
+  });
+
+  it("finds it by id as well, since a moderator may hold either", async () => {
+    const articleId = await publishedArticle();
+    const article = await ports.articles.findById(articleId);
+
+    const found = unwrap(await inspectPrincipal(ctxFor(moderator()), article!.authorPrincipalId));
+    expect(found?.id).toBe(article!.authorPrincipalId);
+  });
+
+  it("shows the status a suspension leaves behind", async () => {
+    const articleId = await publishedArticle();
+    const article = await ports.articles.findById(articleId);
+    await applyModerationAction(ctxFor(moderator()), {
+      targetType: "principal",
+      targetId: article!.authorPrincipalId,
+      action: "suspend",
+      reasonCode: "spam",
+    });
+
+    const found = unwrap(await inspectPrincipal(ctxFor(moderator()), article!.authorPrincipalId));
+    expect(found?.status).toBe("suspended");
+  });
+
+  it("answers nothing for a handle that matches nothing, rather than failing", async () => {
+    expect(unwrap(await inspectPrincipal(ctxFor(moderator()), "nobody-at-all"))).toBeNull();
+  });
+
+  it("refuses an ordinary account, like everything else here", async () => {
+    expect(errorOf(await inspectPrincipal(ctxFor(null), "anyone"))).toBe(ErrorType.Unauthenticated);
+  });
+});
+
 describe("which verb applies to which target (§61.1)", () => {
   const KINDS = ["hide", "remove", "unindex", "suspend", "warn", "restore"] as const;
 

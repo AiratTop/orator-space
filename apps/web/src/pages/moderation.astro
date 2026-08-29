@@ -4,6 +4,7 @@ import {
   ACTION_LABEL,
   describeTargets,
   inspectArticle,
+  inspectPrincipal,
   listModerationActions,
   listReports,
   recentActions,
@@ -11,6 +12,7 @@ import {
   REASON_CODES,
   type ArticleState,
   type ModerationActionRecord,
+  type PrincipalState,
   type ReportRecord,
   type TargetSummary,
 } from "@orator/core";
@@ -89,21 +91,39 @@ const order: "oldest" | "newest" = Astro.url.searchParams.get("order") === "newe
 let total = 0;
 
 /*
- * The search is one field and it takes an id.
+ * One field, and it works out what it was given.
  *
- * Not a text search: a moderator arrives here holding an identifier — from an email, from a
+ * Not a text search: a moderator arrives holding an identifier — from an email, from a
  * report, from the address bar of the page they were just looking at — and what they need is
- * that object's history and the controls, not a list of things that resemble it. An address
- * paste works too, since the id is the last path segment of one.
+ * that object's history and the controls, not a list of things that resemble it.
+ *
+ * What it did was uppercase the input and look it up as an article, which was right for the
+ * id somebody usually has and wrong for the one they have immediately after suspending
+ * somebody: a handle. `p5-agent-b07tz9` became `P5-AGENT-B07TZ9`, matched no article, and the
+ * page said nothing was there about an account acted on a minute earlier.
+ *
+ * Asking for a second field to say which kind was meant is how a tool stops being used, and
+ * it is not necessary: §12.2 makes an id 26 upper-case Crockford characters and §7.3
+ * canonicalises a username to lower case, so the two cannot be confused. An address paste
+ * works either way, since both are the last path segment of one, and a leading `@` is what a
+ * person types when they mean a handle.
  */
 const asked = (Astro.url.searchParams.get("id") ?? "").trim();
-const lookedUp = asked === "" ? null : (asked.split("/").pop() ?? "").toUpperCase();
+const term = asked === "" ? "" : (asked.split("/").pop() ?? "").replace(/^@/, "");
+const CROCKFORD = /^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$/i;
+const looksLikeId = CROCKFORD.test(term);
+const lookedUp = term === "" ? null : looksLikeId ? term.toUpperCase() : term.toLowerCase();
 
 let reports: ReportRecord[] = [];
 let actions: ModerationActionRecord[] = [];
 let subjects = new Map<string, TargetSummary>();
 let dossier:
-  | { id: string; article: ArticleState | null; history: ModerationActionRecord[] }
+  | {
+      id: string;
+      article: ArticleState | null;
+      principal: PrincipalState | null;
+      history: ModerationActionRecord[];
+    }
   | null = null;
 
 const describe = async (targets: readonly { targetType: TargetSummary["targetType"]; targetId: string }[]) => {
@@ -116,20 +136,36 @@ const describe = async (targets: readonly { targetType: TargetSummary["targetTyp
 if (moderator) {
   if (lookedUp !== null && lookedUp !== "") {
     /*
-     * Looked up as an article, because that is the id somebody has.
+     * An article and an account, and the history of whatever it turns out to be.
      *
-     * A comment or a principal reached this way would need its type as well, and asking for
-     * two fields to answer one question is how a tool stops being used. The history is read
-     * for the id whatever its type turns out to be — an action names the type it acted on.
+     * A handle can only be an account, so that lookup runs alone. An id could be either, and
+     * both are asked because the alternative is a moderator who has to know what they are
+     * holding before they can look it up.
+     *
+     * The history is read for all three target types when the id resolved to nothing. That
+     * is the case that matters most: an article erased under §23.3 has no row left, and the
+     * record of what was done to it is the only thing that can still answer for it.
      */
-    const [state, history] = await Promise.all([
-      inspectArticle(ctx, lookedUp),
-      listModerationActions(ctx, "article", lookedUp),
+    const [state, who] = await Promise.all([
+      looksLikeId ? inspectArticle(ctx, lookedUp) : Promise.resolve({ ok: true as const, value: null }),
+      inspectPrincipal(ctx, lookedUp),
     ]);
+    const article = state.ok ? state.value : null;
+    const principal = who.ok ? who.value : null;
+
+    const types =
+      article !== null ? ["article"] : principal !== null ? ["principal"] : ["article", "comment", "principal"];
+    const histories = await Promise.all(
+      types.map((type) => listModerationActions(ctx, type, principal?.id ?? lookedUp)),
+    );
+
     dossier = {
-      id: lookedUp,
-      article: state.ok ? state.value : null,
-      history: history.ok ? history.value : [],
+      id: principal?.id ?? lookedUp,
+      article,
+      principal,
+      history: histories
+        .flatMap((one) => (one.ok ? one.value : []))
+        .sort((a, b) => b.id.localeCompare(a.id)),
     };
   } else if (tab === "actions") {
     const recent = await recentActions(ctx, { limit: 50 });
@@ -225,6 +261,16 @@ const undoable = lastStanding !== null && REVERSIBLE.has(lastStanding.action) ? 
  *
  * Only those can be undone, for the reason above, so only those carry the button.
  */
+/**
+ * What the lookup found, decided once (SPEC §61.1).
+ *
+ * Everything below — the heading, the facts, the verbs the form offers, what the undo button
+ * acts on — depends on this one answer, and deriving it four times is how three of them stay
+ * right and the fourth offers `remove` against an account.
+ */
+const found: "article" | "principal" | null =
+  dossier?.article != null ? "article" : dossier?.principal != null ? "principal" : null;
+
 const undoableIds = new Set<string>();
 {
   const seen = new Set<string>();
@@ -262,16 +308,16 @@ const undoableIds = new Set<string>();
         </p>
       )}
 
-      {/* One field, and it takes the id a moderator already has. */}
+      {/* One field, and it works out what it was handed (§12.2, §7.3). */}
       <form class="lookup" method="get" action="/moderation">
-        <label class="lookup__label" for="lookup">Find an article</label>
+        <label class="lookup__label" for="lookup">Find an article or an account</label>
         <input
           class="lookup__input"
           id="lookup"
           name="id"
           type="text"
           value={asked}
-          placeholder="Article id, or a link to it"
+          placeholder="An id, a @handle, or a link to either"
           autocomplete="off"
         />
         <button class="button button--small" type="submit">Look up</button>
@@ -280,16 +326,64 @@ const undoableIds = new Set<string>();
       {dossier !== null ? (
         <section class="panel" id="dossier">
           <h2 class="panel__heading">
-            {dossier.article?.title ?? (dossier.article === null ? "Nothing at that identifier" : "Untitled")}
+            {found === "article"
+              ? (dossier.article?.title ?? "Untitled")
+              : found === "principal"
+                ? `@${dossier.principal?.username}`
+                : "Nothing at that identifier"}
           </h2>
 
-          {dossier.article === null ? (
+          {/*
+            §61.1 — an account is a target, and now it can be reached by name.
+
+            §23.1's separation is the whole of what this shows: an account's status is whether
+            the person may act, and it says nothing about what they published. The two are
+            acted on separately because they are separate.
+          */}
+          {found === "principal" && dossier.principal !== null && (
+            <>
+              <p class="panel__lede">
+                <code>{dossier.principal.id}</code> ·{" "}
+                <a href={`/@${dossier.principal.username}`}>open the profile</a>
+              </p>
+              <ul class="state">
+                <li class={`state__fact state__fact--${dossier.principal.status}`}>
+                  {dossier.principal.status}
+                </li>
+                <li class="state__fact">{dossier.principal.kind}</li>
+                {dossier.principal.platformRole !== "user" && (
+                  <li class="state__fact">{dossier.principal.platformRole}</li>
+                )}
+                <li class={`state__fact${(dossier.principal.trustLevel ?? 0) < 1 ? " state__fact--off" : ""}`}>
+                  trust level {dossier.principal.trustLevel ?? 0}
+                </li>
+                {dossier.principal.ownerPrincipalId !== null && (
+                  <li class="state__fact state__fact--quiet">
+                    operated by{" "}
+                    <a href={`/moderation?id=${dossier.principal.ownerPrincipalId}`}>
+                      {dossier.principal.ownerPrincipalId}
+                    </a>
+                  </li>
+                )}
+                {dossier.principal.systemAccount && (
+                  <li class="state__fact state__fact--off">system account (§66.7)</li>
+                )}
+                <li class="state__fact state__fact--quiet">
+                  registered {when(dossier.principal.createdAt)}
+                </li>
+              </ul>
+            </>
+          )}
+
+          {found === null && (
             <p class="panel__lede">
-              <code>{dossier.id}</code> · No article has that id. A comment or a principal is
-              looked up from the entry that names it, since acting on one needs its type as
-              well as its id.
+              <code>{dossier.id}</code> · Nothing here answers to that. An id belongs to an
+              article or an account; a handle to an account. Anything done to it is below, if
+              there is anything — a tombstone keeps its record after the row is gone (§23.3).
             </p>
-          ) : (
+          )}
+
+          {dossier.article !== null && (
             <>
               {/*
                 §61.1 — the state first, and the log second.
@@ -330,6 +424,7 @@ const undoableIds = new Set<string>();
             </>
           )}
 
+
           {dossier.history.length === 0 ? (
             <p class="panel__empty">Nothing has been done to this one.</p>
           ) : (
@@ -364,15 +459,15 @@ const undoableIds = new Set<string>();
           <div class="report__actions">
             <form method="post" action={here} class="report__form">
               <input type="hidden" name="action" value="moderation.act" />
-              <input type="hidden" name="target-type" value="article" />
+              <input type="hidden" name="target-type" value={found ?? "article"} />
               <input type="hidden" name="target" value={dossier.id} />
 
+              {/* The verbs for what was found, from the table the service checks against. */}
               <label class="report__label" for="dossier-kind">Action</label>
               <select id="dossier-kind" name="kind">
-                <option value="unindex">de-index</option>
-                <option value="hide">hide</option>
-                <option value="warn">warn</option>
-                <option value="remove">remove</option>
+                {ACTIONS_FOR[found ?? "article"]
+                  .filter((kind) => kind !== "restore")
+                  .map((kind) => <option value={kind}>{ACTION_LABEL[kind]}</option>)}
               </select>
 
               <label class="report__label" for="dossier-reason">Reason</label>
@@ -394,7 +489,7 @@ const undoableIds = new Set<string>();
             {undoable !== null && (
               <form method="post" action={here} class="report__form">
                 <input type="hidden" name="action" value="moderation.act" />
-                <input type="hidden" name="target-type" value="article" />
+                <input type="hidden" name="target-type" value={found ?? "article"} />
                 <input type="hidden" name="target" value={dossier.id} />
                 <input type="hidden" name="kind" value="restore" />
                 <input type="hidden" name="reason" value="other" />

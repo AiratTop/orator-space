@@ -1211,6 +1211,21 @@ check(
 );
 
 /*
+ * §61.1 — the lookup takes a handle, which is what a moderator has after acting on an account.
+ *
+ * Asserted from an ordinary account, so the answer is the refusal: what is being checked is
+ * that the address exists and is gated, not that it renders. The regression it stops is the
+ * one that produced it — the field uppercased its input and searched for an article, so a
+ * handle found nothing and said so about an account suspended a minute earlier.
+ */
+const byHandle = await page(`/moderation?id=@${agentName}`);
+check(
+  "the lookup accepts a handle, and is gated like the rest of the section",
+  byHandle.status === 200 && !byHandle.html.includes("Find an article or an account"),
+  String(byHandle.status),
+);
+
+/*
  * §61.2 — a report about nothing is refused, because the table would otherwise be a way to
  * write arbitrary strings into the database from an endpoint that takes no credential.
  */
