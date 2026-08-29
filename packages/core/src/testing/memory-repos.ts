@@ -1383,6 +1383,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       asWrite(() => {
         state.embeddings.set(entry.articleId, {
           inputHash: entry.inputHash,
+          revisionId: entry.revisionId,
           model: entry.model,
           dimensions: entry.dimensions,
         });
@@ -1400,14 +1401,20 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
   /** The same predicate the D1 ledger expresses in SQL, so the two agree about "stale". */
   function staleIds(model: string): OratorId[] {
     return [...state.articles.values()]
-      .filter(
-        (article) =>
-          article.status === "published" &&
-          article.visibility === "public" &&
-          (article.duplicateOf === null || article.duplicateOf === undefined) &&
-          article.publishedRevisionId !== null &&
-          state.embeddings.get(article.id)?.model !== model,
-      )
+      .filter((article) => {
+        if (article.status !== "published" || article.visibility !== "public") return false;
+        if (article.duplicateOf !== null && article.duplicateOf !== undefined) return false;
+        if (article.publishedRevisionId === null) return false;
+        const held = state.embeddings.get(article.id);
+        // Never embedded, by another model, or from a revision that is no longer published —
+        // the third is what migration 0023 added, and a double that omitted it would let the
+        // gap this fixes pass here and stay open in production.
+        return (
+          held === undefined ||
+          held.model !== model ||
+          held.revisionId !== article.publishedRevisionId
+        );
+      })
       .map((article) => article.id)
       .sort();
   }

@@ -175,7 +175,34 @@ export async function embedArticle(
    * names the old name.
    */
   const held = await ports.embeddings.find(articleId);
-  if (held !== null && held.inputHash === inputHash && held.model === embedder.name) {
+  const sameText = held !== null && held.inputHash === inputHash && held.model === embedder.name;
+
+  if (sameText && held.revisionId === publishedRevisionId) return "unchanged";
+
+  if (sameText) {
+    /*
+     * The revision moved and the text the model reads did not (migration 0023).
+     *
+     * Two ways to get here. A body edit past the 8 000-character window produces a new
+     * revision whose first 8 000 characters are identical — re-embedding would buy a vector
+     * bit-for-bit equal to the one already stored. And every row written before 0023 recorded
+     * no revision at all, so the drain hands each of them over exactly once.
+     *
+     * The ledger is written and the model is not called, which is the whole point: without
+     * this branch the drain would select those rows on every run for ever, paying an R2 read
+     * each time to reach the same conclusion. A safety net that cannot mark a thing as caught
+     * keeps catching it.
+     */
+    await ports.db.commit([
+      ports.embeddings.record({
+        articleId,
+        inputHash,
+        revisionId: publishedRevisionId,
+        model: embedder.name,
+        dimensions: embedder.dimensions,
+        embeddedAt: ports.clock.now().toISOString(),
+      }),
+    ]);
     return "unchanged";
   }
 
@@ -234,6 +261,7 @@ export async function embedArticle(
     ports.embeddings.record({
       articleId,
       inputHash,
+      revisionId: publishedRevisionId,
       model: embedder.name,
       dimensions: embedder.dimensions,
       embeddedAt: ports.clock.now().toISOString(),

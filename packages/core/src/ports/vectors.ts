@@ -81,6 +81,14 @@ export interface EmbeddingRecord {
    * vector. The FTS index had exactly that bug from Phase 4 until ADR 0012.
    */
   inputHash: string;
+  /**
+   * The revision the vector was made from (migration 0023).
+   *
+   * Not part of the decision to spend an inference call — `inputHash` is. It exists so the
+   * backlog drain can ask "has this moved?" in SQL, which it cannot do with a hash it has no
+   * way to recompute. Null for a row written before 0023, which reads as stale.
+   */
+  revisionId: string | null;
   model: string;
   dimensions: number;
 }
@@ -101,10 +109,13 @@ export interface EmbeddingLedger {
    * Published articles with no current vector, oldest first (SPEC §35.2).
    *
    * The backlog drain's whole query, and the reason there is no backfill script. "No current
-   * vector" is three cases and one predicate: never embedded, embedded from text that has
-   * since been replaced, or embedded by a model that is no longer the one in use. Duplicates
+   * vector" is three cases and one predicate: never embedded, embedded from a revision that is
+   * no longer the published one, or embedded by a model that is no longer in use. Duplicates
    * are excluded here rather than by the caller, because the caller would have to read every
    * candidate to find out.
+   *
+   * The second of the three was claimed by 0022 and implemented by 0023: the predicate checked
+   * only the first and third, so a lost `article.updated` event left a vector stale for good.
    */
   listStale(model: string, limit: number): Promise<OratorId[]>;
   /** How deep the backlog is, for §66.4's report. Bounded by a cap, not a full count. */

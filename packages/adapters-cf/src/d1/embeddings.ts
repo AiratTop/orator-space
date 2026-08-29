@@ -14,14 +14,24 @@ export function createEmbeddingLedger(db: D1Database): EmbeddingLedger {
   /**
    * What has no current vector, as one predicate.
    *
-   * Three conditions that are one idea. An article is stale if nothing has embedded it, if
-   * the model that did is not the model in use, or if the text has moved on since — and the
-   * third is a join rather than a column comparison, because `input_hash` is over the
-   * composed document and D1 cannot recompute it. `content_hash` stands in: a body that has
-   * changed guarantees the document has, and a title-only edit is caught by the event handler
-   * rather than here. The drain is the safety net (§35.2), not the primary path, and a net
-   * that catches the common case and lets the rare one through to the handler is the right
-   * division.
+   * Three conditions that are one idea: nothing has embedded this article, the revision it was
+   * embedded from is no longer the published one, or the model that did it is no longer in use.
+   *
+   * The middle one was missing until migration 0023, and its absence was the whole gap. The
+   * comment here claimed `content_hash` stood in for it; the SQL compared nothing of the kind,
+   * so a lost `article.updated` event left a vector stale permanently — no further event was
+   * coming, and this query could not see it. That is exactly what a safety net is for (§35.2),
+   * and a net described as covering a case it does not cover is worse than one with a stated
+   * limit, because the argument for having no backfill script rests on it.
+   *
+   * `revision_id` and not a body hash. The ledger's exact key is `input_hash`, over the
+   * composed document, which D1 has no way to recompute. A body hash would stand in for most
+   * edits and miss the one this feature was built around — editing a title makes a new revision
+   * carrying the *same* body. A revision id moves whenever any field does.
+   *
+   * The division of labour stays: coarse and free here, exact and paid in the service. A
+   * revision whose text lands identically inside the model's window is selected by this query,
+   * found unchanged by `embedArticle`, and costs an R2 read rather than an inference call.
    *
    * `duplicate_of IS NULL` is in the predicate rather than left to the caller, which would
    * have to read every candidate to find out — turning a bounded query into ten reads that
@@ -34,31 +44,53 @@ export function createEmbeddingLedger(db: D1Database): EmbeddingLedger {
    WHERE a.status = 'published'
      AND a.visibility = 'public'
      AND a.duplicate_of IS NULL
-     AND (e.article_id IS NULL OR e.model <> ?1)`;
+     AND (e.article_id IS NULL
+          OR e.model <> ?1
+          -- NULL is every row written by 0022, which recorded no revision. Stale once, then
+          -- carrying one: the service writes the row without calling a model when the text
+          -- has not moved, which is what stops that single pass becoming a loop.
+          OR e.revision_id IS NULL
+          OR e.revision_id <> r.id)`;
 
   return {
     async find(articleId) {
       const row = await db
-        .prepare(`SELECT input_hash, model, dimensions FROM article_embeddings WHERE article_id = ?`)
+        .prepare(
+          `SELECT input_hash, revision_id, model, dimensions FROM article_embeddings WHERE article_id = ?`,
+        )
         .bind(articleId)
-        .first<{ input_hash: string; model: string; dimensions: number }>();
+        .first<{ input_hash: string; revision_id: string | null; model: string; dimensions: number }>();
       if (row === null) return null;
-      return { inputHash: row.input_hash, model: row.model, dimensions: row.dimensions };
+      return {
+        inputHash: row.input_hash,
+        revisionId: row.revision_id,
+        model: row.model,
+        dimensions: row.dimensions,
+      };
     },
 
     record(entry) {
       return asWrite(
         db
           .prepare(
-            `INSERT INTO article_embeddings (article_id, input_hash, model, dimensions, embedded_at)
-             VALUES (?, ?, ?, ?, ?)
+            `INSERT INTO article_embeddings
+               (article_id, input_hash, revision_id, model, dimensions, embedded_at)
+             VALUES (?, ?, ?, ?, ?, ?)
              ON CONFLICT (article_id) DO UPDATE
                SET input_hash = excluded.input_hash,
+                   revision_id = excluded.revision_id,
                    model = excluded.model,
                    dimensions = excluded.dimensions,
                    embedded_at = excluded.embedded_at`,
           )
-          .bind(entry.articleId, entry.inputHash, entry.model, entry.dimensions, entry.embeddedAt),
+          .bind(
+            entry.articleId,
+            entry.inputHash,
+            entry.revisionId,
+            entry.model,
+            entry.dimensions,
+            entry.embeddedAt,
+          ),
       );
     },
 

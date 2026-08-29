@@ -299,6 +299,55 @@ describe("what happens when a provider is unwell", () => {
   });
 });
 
+describe("the backlog drain catches what a lost event left behind", () => {
+  /*
+   * The gap migration 0023 closed.
+   *
+   * The predicate selected on "no row" and "different model" only, so an article whose
+   * `article.updated` event was lost — five failed deliveries, then the dead-letter queue —
+   * kept a vector built from the previous text for ever: no further event was coming, and the
+   * drain could not see it. That is the exact case the drain exists for, and its absence
+   * undercut the argument for having no backfill script.
+   */
+  it("selects an article whose published revision has moved on", async () => {
+    const { semantic } = semanticOf();
+    const id = await publish("On inference latency", "A long enough body about serving models.");
+    await embedArticle(ports, id, semantic);
+    expect(await ports.embeddings.listStale("test-model", 10)).toEqual([]);
+
+    // A new revision, published, with no event delivered: the shape of a lost message.
+    const article = ports.state.articles.get(id);
+    const current = ports.state.revisions.get(article!.publishedRevisionId!);
+    const next = { ...current!, id: "REV-2" as never, title: "On tail latency" };
+    ports.state.revisions.set("REV-2", next);
+    ports.state.articles.set(id, { ...article!, publishedRevisionId: "REV-2" as never });
+
+    expect(await ports.embeddings.listStale("test-model", 10)).toEqual([id]);
+  });
+
+  /*
+   * And the other half: a pass that cannot mark a thing as caught keeps catching it.
+   *
+   * A row written before 0023 carries no revision id and so reads as stale. If the drain could
+   * only ever re-embed, every such row would be selected on every run for ever — an R2 read
+   * each time to reach the same conclusion. The ledger is written instead, and no model is
+   * called, because the text has not moved.
+   */
+  it("settles a row that names no revision without calling the model", async () => {
+    const { semantic, model } = semanticOf();
+    const id = await publish("On inference latency", "A long enough body about serving models.");
+    await embedArticle(ports, id, semantic);
+
+    const held = await ports.embeddings.find(id);
+    ports.state.embeddings.set(id, { ...held!, revisionId: null });
+    expect(await ports.embeddings.listStale("test-model", 10)).toEqual([id]);
+
+    expect(await embedArticle(ports, id, semantic)).toBe("unchanged");
+    expect(model.seen).toHaveLength(1);
+    expect(await ports.embeddings.listStale("test-model", 10)).toEqual([]);
+  });
+});
+
 describe("the backlog drain", () => {
   it("embeds what has no vector and reports an empty backlog afterwards", async () => {
     const { semantic } = semanticOf();

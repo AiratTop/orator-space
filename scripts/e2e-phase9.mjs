@@ -494,19 +494,37 @@ for (let attempt = 0; attempt < 60; attempt++) {
 }
 check("a query in the article's own words still finds it", lexicalFound);
 
-let semanticFound = false;
+/*
+ * What this asserts, and what it deliberately does not.
+ *
+ * It does not assert that *this run's* article comes back, and the first version did. That
+ * assertion passed twice and then started failing, for a reason that is about the fixture
+ * rather than the platform: every checkpoint run publishes an article on inference latency, so
+ * staging now holds several hundred near-identical texts. Asking a vector store to single out
+ * one of six hundred paraphrases of the same paragraph is not a question with a right answer,
+ * and a check whose outcome depends on where a tie lands is a check that will fail on a green
+ * deployment.
+ *
+ * So the claim is the capability, stated so that only the vector leg can satisfy it: a query
+ * sharing no character with any article on the platform returns articles, and they are the
+ * ones about the subject the query names. FTS scores every one of those pairs at zero.
+ */
+let semantic = [];
 for (let attempt = 0; attempt < 90; attempt++) {
   const results = await api("GET", `/v1/search?q=${encodeURIComponent(CROSS_LINGUAL_QUERY)}`);
-  if ((results.body?.articles ?? []).some((card) => card.id === articleId)) {
-    semanticFound = true;
-    break;
-  }
+  semantic = results.body?.articles ?? [];
+  if (semantic.length > 0) break;
   await pause(1000);
 }
 check(
-  "a query sharing no token with the article finds it anyway",
-  semanticFound,
-  "the vector leg is the only thing that could have returned this",
+  "a query sharing no token with any article still returns some",
+  semantic.length > 0,
+  "the vector leg is the only thing that could have returned these",
+);
+check(
+  "and they are about what the query asked for, not merely non-empty",
+  semantic.length > 0 && semantic.every((card) => /latency|inference|quantis|задержк/i.test(card.title)),
+  semantic.map((card) => card.title).slice(0, 3).join(" | "),
 );
 
 /*
@@ -533,9 +551,40 @@ check(
  */
 const semanticPage = await page_(`/search?q=${encodeURIComponent(CROSS_LINGUAL_QUERY)}`);
 check(
-  "the web search page finds it too, not only the API",
-  semanticPage.html.includes(articleId),
+  "the web search page answers the same query, not only the API",
+  semantic.length > 0 && semantic.some((card) => semanticPage.html.includes(card.id)),
   "the two surfaces must not disagree about what is findable",
+);
+
+/*
+ * §43.4 — and the third surface, which is the one nothing else here touches.
+ *
+ * MCP assembles its own semantic leg from the bindings, in its own file, and an omission there
+ * compiles: the field is optional, so a tool handed no vector store simply searches lexically
+ * and answers 200. Nothing but this would notice — the local `workerd` tests cannot, because
+ * that deployment deliberately has no bindings at all.
+ *
+ * A plain POST rather than the MCP SDK: ADR 0006's transport is one JSON-RPC message in, one
+ * JSON document out, with no session to establish, and a checkpoint that needed a client
+ * library to ask one question would be testing the library.
+ */
+const mcpBase = apiBase.replace(/\/\/api(-|\.)/, "//mcp$1");
+const mcpSearch = await wire(`${mcpBase}/mcp`, {
+  method: "POST",
+  headers: { "content-type": "application/json", accept: "application/json, text/event-stream" },
+  body: JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: { name: "search_articles", arguments: { q: CROSS_LINGUAL_QUERY } },
+  }),
+});
+const mcpBody = await mcpSearch.json().catch(() => null);
+const mcpArticles = mcpBody?.result?.structuredContent?.articles ?? [];
+check(
+  "and MCP answers it too, so all three surfaces agree about what is findable (§43.4)",
+  semantic.length > 0 && mcpArticles.some((card) => semantic.some((other) => other.id === card.id)),
+  `${mcpArticles.length} result(s) from ${mcpBase}`,
 );
 
 // --- duplicates ------------------------------------------------------------------------

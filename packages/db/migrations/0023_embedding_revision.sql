@@ -1,0 +1,27 @@
+-- Which revision the vector was made from (§38.2, §35.2, ADR 0012).
+--
+-- Fixing a gap in what 0022 shipped. The backlog drain selected on two conditions — no row,
+-- or a row naming a different model — and a comment above it claimed a third, "the text has
+-- moved on since", which the SQL did not implement. So a lost `article.updated` event left a
+-- vector stale permanently: no further event was coming, and the drain could not see it.
+--
+-- That is precisely the case the drain exists for. §35.2 makes direct delivery the primary
+-- path and the cron the safety net, and a net with a hole in it is worse than a named
+-- limitation, because the argument for having no backfill script rests on it.
+--
+-- `revision_id` rather than `content_hash`, which was the obvious choice and the weaker one.
+-- The ledger's real key is `input_hash`, over the composed document, and D1 cannot recompute
+-- that. A body hash would stand in for most edits and miss the one 0022 was written to catch:
+-- editing a title produces a new revision carrying the *same* body. A revision id changes on
+-- every new revision, whichever field moved, so the coarse check in SQL and the exact check in
+-- the service now agree about what "stale" means.
+--
+-- The division stays: the drain is coarse and free, the service is exact and paid. A revision
+-- whose text lands identically inside the model's window — a body edit past 8 000 characters —
+-- is selected here, found unchanged there, and costs an R2 read rather than an inference call.
+--
+-- Nullable, because §65 runs migrations before the Worker deploys and the outgoing Worker
+-- inserts without it. NULL reads as stale, so every row written by 0022 is re-examined once
+-- and then carries a revision id; the service updates the row without calling a model when the
+-- text turns out not to have moved, which is what keeps that one pass from becoming a loop.
+ALTER TABLE article_embeddings ADD COLUMN revision_id TEXT;

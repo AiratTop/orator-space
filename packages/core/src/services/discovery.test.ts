@@ -7,6 +7,9 @@ import { createArticle, publishArticle, unpublishArticle } from "./publishing.js
 import {
   feed,
   fuse,
+  fusionDepth,
+  MAX_FUSION_DEPTH,
+  MIN_FUSION_DEPTH,
   MAX_INDEXED_BODY_BYTES,
   MIN_RELATIVE_SIMILARITY,
   MIN_SIMILARITY,
@@ -284,6 +287,29 @@ describe("reciprocal rank fusion", () => {
     // Ties broken deterministically. A ranking that wobbles between two identical requests is
     // a bug report nobody can reproduce.
     expect(fuse([[A, B, C]], 3)).toEqual(fuse([[A, B, C]], 3));
+  });
+});
+
+describe("how deep the legs are asked to go", () => {
+  it("never shallower than the floor, so a small page still fuses on a real ordering", () => {
+    expect(fusionDepth(1)).toBe(MIN_FUSION_DEPTH);
+    expect(fusionDepth(20)).toBe(MIN_FUSION_DEPTH);
+  });
+
+  /*
+   * §44.2 lets a caller ask for a hundred results, and both legs were asked for forty
+   * regardless — so the fused list was cut to forty before anything read it, and a limit the
+   * API advertises could not be honoured. Found by a checkpoint on a corpus large enough for
+   * the difference to show.
+   */
+  it("scales past the floor when a bigger page is asked for", () => {
+    expect(fusionDepth(30)).toBe(60);
+    expect(fusionDepth(50)).toBe(100);
+  });
+
+  it("stops at what the store will actually return", () => {
+    // Vectorize caps topK at 100. Asking deeper is asking for something that does not arrive.
+    expect(fusionDepth(100)).toBe(MAX_FUSION_DEPTH);
   });
 });
 

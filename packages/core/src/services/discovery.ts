@@ -164,12 +164,25 @@ export const MIN_RELATIVE_SIMILARITY = 0.75;
 /**
  * How deep each leg is asked to go before fusion.
  *
- * Deeper than the page, because RRF needs an ordering to work with and a leg truncated at
- * the page size has thrown away the ranks that would have moved a result up. Bounded because
- * both legs cost something — an FTS scan and a Vectorize query — and because a result ranked
- * fortieth by both legs is not going to reach the top of anything.
+ * Deeper than the page, because RRF needs an ordering to work with: a leg truncated at the
+ * page size has already thrown away the ranks that would have moved a result up. Twice the
+ * page is also what gives the filters below — a withdrawn article, a duplicate, the canary —
+ * something to eat into without shortening the page.
+ *
+ * The floor exists so a small page still fuses on a real ordering. The ceiling is not a
+ * preference: Vectorize caps `topK` at 100, so asking for more would be asking the store for
+ * something it will not give.
+ *
+ * It scales with the requested page, and did not until a checkpoint caught it. §44.2 lets a
+ * caller ask for a hundred results and both legs were asked for forty regardless, so the
+ * fused list was truncated to forty before anything read it — a limit the API advertises and
+ * silently could not honour.
  */
-export const FUSION_DEPTH = 40;
+export const MIN_FUSION_DEPTH = 40;
+export const MAX_FUSION_DEPTH = 100;
+
+export const fusionDepth = (size: number): number =>
+  Math.min(Math.max(MIN_FUSION_DEPTH, size * 2), MAX_FUSION_DEPTH);
 
 /**
  * The constant in Reciprocal Rank Fusion.
@@ -360,12 +373,13 @@ export async function search(
    * and RRF over one non-empty ranking is that ranking. So a deployment without a vector
    * store behaves exactly as it did before this existed, with no branch here saying so.
    */
+  const depth = fusionDepth(size);
   const [lexical, semantic] = await Promise.all([
-    ports.search.query(query, FUSION_DEPTH),
-    semanticRanking(ports, query, FUSION_DEPTH),
+    ports.search.query(query, depth),
+    semanticRanking(ports, query, depth),
   ]);
 
-  const ids = fuse([lexical, semantic], FUSION_DEPTH);
+  const ids = fuse([lexical, semantic], depth);
   if (ids.length === 0) return ok({ query, articles: [] });
 
   // Rehydrated one at a time rather than through a single `IN (…)`, because D1 caps a
