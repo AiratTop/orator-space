@@ -26,25 +26,36 @@ early.
 No `Co-Authored-By` trailer (AGENTS.md, "Change discipline"). Restated here
 because some agent harnesses add one by default. Format follows the history.
 
-## Four checkpoint failures are the local environment, not a regression
+## The checkpoint's model-dependent failures are the local environment, not a regression
 
-`node scripts/e2e-phase9.mjs` reports four failures on every local run, and they
-are not to be fixed:
+`node scripts/e2e-phase9.mjs` against a local dev server fails these, and they are not to be
+fixed. Observed, not derived — the list is what a run actually prints:
 
 ```text
-the article is classified                              Workers AI
-and is the produced variant rather than the original   Images
-a query sharing no token with the article finds it     Workers AI + Vectorize
-the web search page finds it too, not only the API     Workers AI + Vectorize
+the article is classified                                    Workers AI
+and is the produced variant rather than the original ...     Images
+a query sharing no token with any article still returns some Workers AI + Vectorize
+and they are about what the query asked for ...              Workers AI + Vectorize
+the web search page answers the same query, not only the API Workers AI + Vectorize
+and MCP answers it too, so all three surfaces agree ...       Workers AI + Vectorize
 ```
 
+Named rather than counted, deliberately. The heading said "four" until the semantic checks
+were rewritten and MCP was added, at which point the number was wrong and two of the four
+names described checks that no longer existed — a note that tells a future reader the wrong
+thing with total confidence. A list rots visibly; a count rots silently.
+
+The four semantic ones are one absence with four faces: three of them are gated on the first
+having returned something, so a deployment with no vector store fails all four together or
+none of them.
+
 `apps/edge/wrangler.jsonc` declares `ai`, `images` and `vectorize` per environment and
-deliberately not in the top-level block the dev server reads — Workers AI has no
-local simulator, and a binding here would turn a hermetic test into a paid
-network call. Vectorize follows the same rule for a different reason: semantic
-search needs the model *and* the store, so a deployment holding one of the two is
-a misconfiguration rather than a degraded mode. All four pass against staging in
-CI, which is where they mean something. Anything else red locally is real.
+deliberately not in the top-level block the dev server reads — Workers AI has no local
+simulator, and a binding here would turn a hermetic test into a paid network call. Vectorize
+follows the same rule for a different reason: semantic search needs the model *and* the store,
+so a deployment holding one of the two is a misconfiguration rather than a degraded mode. All
+six pass against staging in CI, which is where they mean something. Anything else red locally
+is real.
 
 ## The dev server goes stale, and says so obscurely
 

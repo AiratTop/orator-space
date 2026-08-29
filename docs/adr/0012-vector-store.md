@@ -183,6 +183,14 @@ concurrently, so the added latency is the embedding call rather than the sum of 
   4. Both indexes now key on a hash of the text that was actually indexed. Found by asking
   what the embedding ledger should be keyed on, which is the sort of thing that is only ever
   found by asking about the neighbour.
+- **The drain shipped unable to do the middle of its three jobs.** Its predicate selected on
+  "never embedded" and "different model" while the comment above it named a third — "the text
+  has moved on" — that the SQL did not implement. A lost `article.updated` event therefore left
+  a vector stale for good: no further event was coming and the query was blind to it. Closed by
+  migration 0023, which records the revision the vector was made from; a revision id moves
+  whenever any field does, where a body hash would have missed the title-only edit this feature
+  was built around. The claim above — that leaving Vectorize costs a backfill the cron performs
+  on its own — was false for the hours between the two releases.
 - **A hand-written binding interface is unchecked, and the store is where that bites.** §28.1
   keeps Cloudflare types out of the domain, so `VectorizeBinding` is declared by hand in the
   adapter. `returnMetadata` is an enum sitting between two booleans; written as `false` it

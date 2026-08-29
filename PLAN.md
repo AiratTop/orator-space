@@ -1787,6 +1787,28 @@ conceals an outage. That is the argument for the checkpoint asserting the *featu
 sharing no token with the article finds it anyway" — rather than asserting that search still
 answers, which it did throughout.
 
+**Then three more, and each was found by a different kind of check.** The pattern is worth more
+than the bugs.
+
+A *question* found the first two. Asking what the embedding ledger should be keyed on exposed
+that the FTS index had been answering the same question wrongly since Phase 4; asking what
+happens on an update exposed that the cron's predicate selected on two conditions while the
+comment above it described three — so a lost event left a vector stale for good, and the
+argument for shipping no backfill script rested on a net with a hole in it. Neither was
+reachable by running anything. Both came from somebody asking what the code was for.
+
+A *test written against the real thing* found the shape of the second. The in-memory double
+agreed with the broken SQL, and always would have: it was written from the same
+misunderstanding as the code. A double is a restatement of the author's belief, so it can
+confirm a belief and never correct one. The D1 suite that replaced it fails exactly the two
+cases when the old predicate is put back.
+
+A *checkpoint on a corpus large enough to be awkward* found the last two. It failed on a green
+deployment, and the failure was two things at once: a real defect — both legs were asked for a
+fixed depth of forty whatever page was requested, so a hundred-result page could hold forty —
+and a bad assertion of its own, which demanded that one paraphrase be singled out of six
+hundred near-identical ones the checkpoint had itself published. Small corpora hide both.
+
 **The lesson worth keeping.** "Decide on real data" is good advice that quietly assumes the
 data will arrive before the decision is needed. When it will not, the honest move is not to
 defer indefinitely — it is to find the thing that *is* measurable today and check whether it

@@ -3403,8 +3403,9 @@ no second opinion, which is why it is used there and not here.
 
 **MUST — the choice stays reversible, and that is a property to preserve rather than a
 consolation.** Embeddings are derived data (§38.3), recomputable from revisions at any time.
-Nothing in D1 holds a vector: `article_embeddings` records which bytes were embedded by which
-model, so that a redelivery is free and a model change is a re-embed. Leaving Vectorize is a
+Nothing in D1 holds a vector: `article_embeddings` records which text was embedded, from which
+revision, by which model — so a redelivery is free, a model change is a re-embed, and the drain
+can see an article whose revision has moved without recomputing a hash D1 cannot compute. Leaving Vectorize is a
 second adapter and a backfill the §35.2 cron already performs unprompted.
 
 **MUST NOT — no vector is written to D1.** §31.3's ceiling is shared with the data, and a
