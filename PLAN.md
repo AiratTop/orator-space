@@ -1536,8 +1536,9 @@ npmjs.com/org/orator                 the scope the code already carries — ever
                                      the reservation had to match the source rather than
                                      the domain. Nothing is published yet, and whether
                                      anything will be is §80.17
-npmjs.com/org/orator-space           the other spelling, held so that it answers to
-                                     nobody else
+npmjs.com/org/orator-space           the spare. Held so the spelling answers to nobody
+                                     else, and not a place to publish to: anything that
+                                     ships ships as @orator/*, whatever the domain says
 x.com/orator_space                   announcements
 t.me/orator_space                    channel
 t.me/orator_space_bot                the bot (§9.3) — production's, named by production's
