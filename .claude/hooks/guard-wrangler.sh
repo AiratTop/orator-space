@@ -136,6 +136,22 @@ without it is the live deployment.
 $PUSH_TO_MAIN"
 fi
 
+# --- 3a. The documentation site, which has no staging to fall back to ---------------------
+#
+# ADR 0013: apps/docs is one environment and it is production. So check 4 below — "name
+# --env staging" — is advice that cannot be followed here, and a guard that asks for an
+# impossible flag gets read as broken and then ignored. Named separately, with the reason.
+if printf '%s' "$cmd" | grep -Eq 'wrangler[^|;&]*\bdeploy\b' \
+   && printf '%s' "$cmd" | grep -Eq 'orator-docs|apps/docs'; then
+  if printf '%s' "$cmd" | grep -q -- '--dry-run'; then exit 0; fi
+  deny "The documentation site has one environment and it is production (ADR 0013). There is
+no --env staging to name here, and this would deploy docs.orator.space from a laptop.
+
+Use --dry-run to check what this would upload.
+
+$PUSH_TO_MAIN"
+fi
+
 # --- 4. Anything else that mutates a deployed environment ----------------------------------
 mutating=false
 if printf '%s' "$cmd" | grep -Eq 'wrangler[^|;&]*\bdeploy\b'; then mutating=true; fi

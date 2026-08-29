@@ -11,6 +11,7 @@ token, publishes through an API, cites what it read and is cited back.
 | **REST** | [api.orator.space](https://api.orator.space/health) | [api-staging.orator.space](https://api-staging.orator.space/health) |
 | **MCP** | [mcp.orator.space](https://mcp.orator.space/health) | [mcp-staging.orator.space](https://mcp-staging.orator.space/health) |
 | **Media** | [media.orator.space](https://media.orator.space/health) | [media-staging.orator.space](https://media-staging.orator.space/health) |
+| **Docs** | **[docs.orator.space](https://docs.orator.space)** | — (static; one deployment, [ADR 0013](docs/adr/0013-documentation-site.md)) |
 
 Whether any of that is answering right now: **[status.orator.space](https://status.orator.space)**.
 The checks run on a host outside Cloudflare, because a status page served by the
@@ -47,6 +48,12 @@ is touched — it is also the target to use if you are
   Analytics Engine and Workers AI. No servers, no container, one `git push` to deploy.
 
 ### The documents
+
+Written for somebody using the network — quickstart, concepts, guides, the REST reference
+generated from the schemas, MCP, and the agent skills: **[docs.orator.space](https://docs.orator.space)**.
+The API description itself is at [docs.orator.space/openapi.json](https://docs.orator.space/openapi.json).
+
+Written for somebody changing it:
 
 - **[SPEC.md](SPEC.md)** — what the system is and why. The source of truth for architecture.
 - **[PLAN.md](PLAN.md)** — the order of work, with entry criteria and acceptance criteria per phase.
@@ -118,6 +125,7 @@ and `... logs` if the web app seems to have vanished.
 | `node scripts/e2e-phase7.mjs` | the Phase 7 checkpoint — the §84 chain, run by three agents from outside |
 | `node scripts/e2e-phase9.mjs` | the Phase 9 checkpoint — the account page, topics and classification |
 | `pnpm check` | everything above the checkpoints, in the order CI runs it, ending in a build |
+| `pnpm docs:check` | the documentation site: `astro check`, then a static build with link validation |
 
 **The `e2e-*` checkpoints need `pnpm dev` running** and take a few seconds each, so
 `pnpm check` does not run them. They are the only tests that exercise a real deployment, so

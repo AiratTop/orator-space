@@ -132,3 +132,63 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: smoke
         run: node scripts/smoke.mjs https://api.orator.space
+
+  # ADR 0013 — the documentation site.
+  #
+  # Beside `ci` rather than inside it. The `ci` job already runs for ten minutes and every
+  # minute of it is in the way of a code change; a prose change has no business adding to
+  # that, and an application change has no business waiting on Pagefind. `pnpm build` and
+  # `pnpm dev` exclude @orator/docs for the same reason, which is why the build has to be
+  # named here rather than inherited.
+  #
+  # This is also where the checks live that a staging deployment would otherwise have caught:
+  # `astro check`, because tsc does not read .astro, and starlight-links-validator, which
+  # fails the build on a broken internal link. There is no docs-staging to notice either one
+  # later.
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: check and build
+        run: pnpm docs:check
+
+  # `needs: docs`, and deliberately neither `ci` nor `deploy-production`.
+  #
+  # Hanging this off production would mean a failing Phase 7 checkpoint blocks the publication
+  # of a corrected typo. Putting it before production would mean a broken documentation build
+  # delays a release of the code. The two have no relationship, so they get no edge.
+  #
+  # One environment, and it is production: there is no docs-staging (ADR 0013). `wrangler
+  # deploy` with no --env is correct here and nowhere else in this file — apps/docs has a
+  # single top-level configuration block with no `env` sections to select between.
+  deploy-docs:
+    needs: docs
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: build
+        run: pnpm --filter @orator/docs build
+      # wrangler invoked directly from the app directory, not through `pnpm exec`. The
+      # package-manager wrapper is the shape that swallowed `--env` and overwrote production
+      # on 2026-08-29, and .claude/hooks/guard-wrangler.sh blocks it repository-wide — CI
+      # should not be the one place that uses it. The binary is a root devDependency.
+      - name: deploy
+        working-directory: apps/docs
+        run: ../../node_modules/.bin/wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
