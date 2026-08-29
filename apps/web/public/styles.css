@@ -3068,3 +3068,24 @@ img.avatar {
   color: var(--ink-soft);
   font-size: 0.8125rem;
 }
+
+/* §61.1 — a page of fifty says what it is fifty of. */
+.panel__count {
+  margin-left: 0.6rem;
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+/* Which end of the queue, as two links rather than a control needing a script (§49.1). */
+.panel__order {
+  margin: -0.5rem 0 1rem;
+  font-size: 0.8125rem;
+}
+
+.panel__order a[aria-current] {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: default;
+}

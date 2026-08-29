@@ -187,21 +187,43 @@ export interface ActionInput {
 /** SPEC §61.1 — the queue, to a moderator and to nobody else. */
 export async function listReports(
   ctx: ModerationContext,
-  options: { status?: ReportStatus | null; limit?: number; after?: string | null } = {},
-): Promise<Result<{ items: ReportRecord[]; nextCursor: string | null }>> {
+  options: {
+    status?: ReportStatus | null;
+    limit?: number;
+    after?: string | null;
+    /**
+     * Which end of the queue (SPEC §61.1).
+     *
+     * `oldest` is the default and is the order a backlog is worked in. `newest` is the other
+     * question a queue gets asked — "what has just come in" — which the oldest fifty cannot
+     * answer on a queue of any depth, and which is the question somebody has whenever a
+     * report has just been filed.
+     */
+    order?: "oldest" | "newest";
+  } = {},
+): Promise<Result<{ items: ReportRecord[]; nextCursor: string | null; total: number }>> {
   const gate = moderatorOnly(ctx);
   if (!gate.ok) return gate;
 
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
-  const items = await ctx.ports.moderation.listReports(
-    options.status ?? null,
-    limit + 1,
-    options.after ?? null,
-  );
+  const [items, total] = await Promise.all([
+    ctx.ports.moderation.listReports(
+      options.status ?? null,
+      limit + 1,
+      options.after ?? null,
+      options.order ?? "oldest",
+    ),
+    // Only where a status was named. "How many reports are there in total" is not a question
+    // any surface asks, and a count over the whole table is an index scan nobody wanted.
+    options.status === undefined || options.status === null
+      ? Promise.resolve(0)
+      : ctx.ports.moderation.countReports(options.status),
+  ]);
   const page = items.slice(0, limit);
   return ok({
     items: page,
     nextCursor: items.length > limit ? (page[page.length - 1]?.id ?? null) : null,
+    total,
   });
 }
 

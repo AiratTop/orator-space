@@ -119,23 +119,40 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
      * backlog it exists to drain. The cursor is the last id seen, like every other listing
      * here (§20.5) — an offset would repeat and drop rows as reports arrive underneath.
      */
-    async listReports(status, limit, after) {
+    async listReports(status, limit, after, order = "oldest") {
       const clauses = [];
       const binds: unknown[] = [];
       if (status !== null) {
         clauses.push("status = ?");
         binds.push(status);
       }
+      /*
+       * The cursor compares in the direction the page runs.
+       *
+       * `id > ?` walking forwards and `id < ?` walking back. Getting this wrong does not
+       * error — it returns the page you already read — which is why the comparison and the
+       * sort are decided together, from one value, rather than in two places.
+       */
       if (after !== null) {
-        clauses.push("id > ?");
+        clauses.push(order === "oldest" ? "id > ?" : "id < ?");
         binds.push(after);
       }
       const where = clauses.length === 0 ? "" : ` WHERE ${clauses.join(" AND ")}`;
+      const direction = order === "oldest" ? "ASC" : "DESC";
       const { results } = await db
-        .prepare(`SELECT * FROM reports${where} ORDER BY id ASC LIMIT ?`)
+        .prepare(`SELECT * FROM reports${where} ORDER BY id ${direction} LIMIT ?`)
         .bind(...binds, limit)
         .all<ReportRow>();
       return results.map(toReport);
+    },
+
+    /** SPEC §61.1 — how many there are, so a page of fifty can say what it is fifty of. */
+    async countReports(status) {
+      const row = await db
+        .prepare(`SELECT COUNT(*) AS n FROM reports WHERE status = ?`)
+        .bind(status)
+        .first<{ n: number }>();
+      return row?.n ?? 0;
     },
 
     /**

@@ -1874,11 +1874,21 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       ).length;
     },
 
-    async listReports(status, limit, after) {
+    async listReports(status, limit, after, order = "oldest") {
+      // The cursor compares in the direction the page runs, exactly as the SQL does. A
+      // double that always walks forwards agrees with the adapter until somebody pages back.
+      const forwards = order === "oldest";
       return state.reports
-        .filter((report) => (status === null || report.status === status) && (after === null || report.id > after))
-        .sort((a, b) => a.id.localeCompare(b.id))
+        .filter(
+          (report) =>
+            (status === null || report.status === status) &&
+            (after === null || (forwards ? report.id > after : report.id < after)),
+        )
+        .sort((a, b) => (forwards ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id)))
         .slice(0, limit);
+    },
+    async countReports(status) {
+      return state.reports.filter((report) => report.status === status).length;
     },
     async findReport(id) {
       return state.reports.find((report) => report.id === id) ?? null;

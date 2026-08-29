@@ -1171,6 +1171,21 @@ check(
 );
 
 /*
+ * §61.1 — the queue has to be able to show the thing that was just filed.
+ *
+ * This is asserted from an ordinary account, so both answers are the refusal — the point is
+ * that the address exists and is gated, not that the queue renders. What it stops is the
+ * regression that produced it: a queue whose only order is ascending answers "did my report
+ * arrive" with a screen of last week's, and nothing errors.
+ */
+const newestFirst = await page("/moderation?tab=queue&order=newest");
+check(
+  "the queue has an address for its newest end, and it is gated like the rest",
+  newestFirst.status === 200 && !newestFirst.html.includes("Open reports"),
+  String(newestFirst.status),
+);
+
+/*
  * §61.2 — a report about nothing is refused, because the table would otherwise be a way to
  * write arbitrary strings into the database from an endpoint that takes no credential.
  */

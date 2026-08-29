@@ -147,6 +147,59 @@ describe("the queue (§61.1)", () => {
     expect(queue.items.map((report) => report.id)).toEqual([first.id, second.id]);
   });
 
+  /*
+   * The other question a queue gets asked, and could not answer.
+   *
+   * A page of fifty, ascending, on a queue four hundred deep: the report filed a minute ago
+   * is not on it. Nothing errored — the page simply answered "did my report arrive?" with a
+   * screen of last week's, which is how this was found.
+   */
+  it("lists them newest first when asked, so a report just filed is on the first page", async () => {
+    const articleId = await publishedArticle();
+    const first = unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "spam" }));
+    const second = unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "abuse" }));
+
+    const queue = unwrap(await listReports(ctxFor(moderator()), { status: "open", order: "newest" }));
+    expect(queue.items.map((report) => report.id)).toEqual([second.id, first.id]);
+  });
+
+  it("says how many there are, so a page of one can say it is one of two", async () => {
+    const articleId = await publishedArticle();
+    await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "spam" });
+    await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "abuse" });
+
+    const queue = unwrap(await listReports(ctxFor(moderator()), { status: "open", limit: 1 }));
+    expect(queue.items).toHaveLength(1);
+    expect(queue.total).toBe(2);
+  });
+
+  /*
+   * The cursor has to compare in the direction the page runs.
+   *
+   * Getting this wrong does not error — walking back with `id > ?` returns the page just
+   * read — so the failure is an infinite first page rather than an exception.
+   */
+  it("pages in the direction it is running", async () => {
+    const articleId = await publishedArticle();
+    const first = unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "spam" }));
+    const second = unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "abuse" }));
+
+    const newest = unwrap(
+      await listReports(ctxFor(moderator()), { status: "open", limit: 1, order: "newest" }),
+    );
+    expect(newest.items[0]!.id).toBe(second.id);
+
+    const next = unwrap(
+      await listReports(ctxFor(moderator()), {
+        status: "open",
+        limit: 1,
+        order: "newest",
+        after: newest.nextCursor,
+      }),
+    );
+    expect(next.items[0]!.id).toBe(first.id);
+  });
+
   it("claims a report, and refuses the second moderator who tries", async () => {
     const articleId = await publishedArticle();
     const report = unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "spam" }));

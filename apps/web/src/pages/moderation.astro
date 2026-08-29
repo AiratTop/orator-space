@@ -75,6 +75,18 @@ const requested = Astro.url.searchParams.get("tab") ?? "";
 const tab: Tab = (TABS as readonly string[]).includes(requested) ? (requested as Tab) : "queue";
 
 /*
+ * Which end of the queue, from the URL (SPEC §61.1, §49.1).
+ *
+ * Oldest stays the default, and the reason it was chosen still holds: the report that has
+ * waited longest is the one somebody has been waiting longest for an answer about, and a
+ * queue sorted newest-first buries the backlog it exists to drain. What was missing is that
+ * the other question — "what has just come in" — is also a real one, and on a deep queue the
+ * default cannot answer it at all.
+ */
+const order: "oldest" | "newest" = Astro.url.searchParams.get("order") === "newest" ? "newest" : "oldest";
+let total = 0;
+
+/*
  * The search is one field and it takes an id.
  *
  * Not a text search: a moderator arrives here holding an identifier — from an email, from a
@@ -130,10 +142,24 @@ if (moderator) {
      * looking back wants them together — "what did we conclude", not "how did we conclude it".
      */
     const wanted = tab === "queue" ? (["open", "reviewing"] as const) : (["actioned", "rejected"] as const);
-    const pages = await Promise.all(wanted.map((status) => listReports(ctx, { status, limit: 50 })));
+    const pages = await Promise.all(
+      wanted.map((status) => listReports(ctx, { status, limit: 50, order })),
+    );
+    /*
+     * §61.1 — how many there are, which the page did not say and had to.
+     *
+     * Fifty of four hundred and seventy-nine, rendered as fifty, is a sample presented as a
+     * queue. The failure it produced is the one that found this: a report filed a minute ago
+     * is at the far end of an ascending list, so the page answered "did it arrive?" with
+     * silence. The count says what is not on screen; the order control reaches it.
+     */
+    total = pages.reduce((sum, page) => sum + (page.ok ? page.value.total : 0), 0);
     reports = pages
       .flatMap((page) => (page.ok ? page.value.items : []))
-      .sort((a, b) => (tab === "queue" ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id)));
+      .sort((a, b) =>
+        tab === "closed" || order === "newest" ? b.id.localeCompare(a.id) : a.id.localeCompare(b.id),
+      )
+      .slice(0, 50);
     await describe(reports.map((one) => ({ targetType: one.targetType, targetId: one.targetId })));
   }
 }
@@ -422,12 +448,41 @@ const undoableIds = new Set<string>();
             </section>
           ) : (
             <section class="panel" id="reports">
-              <h2 class="panel__heading">{LABEL[tab]}</h2>
+              <h2 class="panel__heading">
+                {LABEL[tab]}
+                {total > reports.length && (
+                  <span class="panel__count">{reports.length} of {total}</span>
+                )}
+              </h2>
               <p class="panel__lede">
                 {tab === "queue"
-                  ? "Oldest first: the report that has waited longest is the one somebody has been waiting longest for an answer about."
+                  ? order === "oldest"
+                    ? "Oldest first: the report that has waited longest is the one somebody has been waiting longest for an answer about."
+                    : "Newest first: what has come in since you last looked."
                   : "Decisions already taken. A report closed with no action is as much of a record as one that removed something."}
               </p>
+
+              {/*
+                §61.1 — two links, not a control that needs a script.
+
+                The queue answers two questions and one order cannot serve both: drain the
+                backlog, or see what just arrived. §49.1 admits no script for this, and none
+                is needed — the order is in the address, so a moderator can bookmark the end
+                they work from.
+              */}
+              {tab === "queue" && total > 0 && (
+                <p class="panel__order">
+                  <a
+                    href="/moderation?tab=queue"
+                    aria-current={order === "oldest" ? "true" : undefined}
+                  >Oldest first</a>
+                  {" · "}
+                  <a
+                    href="/moderation?tab=queue&order=newest"
+                    aria-current={order === "newest" ? "true" : undefined}
+                  >Newest first</a>
+                </p>
+              )}
 
               {reports.length === 0 ? (
                 <p class="panel__empty">

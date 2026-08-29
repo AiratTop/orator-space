@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createModerationRepo } from "./moderation.js";
+import { createD1Database } from "./database.js";
 
 /**
  * What the review queue says each report is about (SPEC §61.1).
@@ -101,5 +102,57 @@ describe("what a report is about", () => {
 
   it("asks nothing when there is nothing to ask about", async () => {
     expect(await repo().describeTargets([])).toEqual([]);
+  });
+});
+
+/**
+ * Which end of the queue, and how deep it is (SPEC §61.1, §44.2).
+ *
+ * Here rather than only against the double because a keyset cursor running backwards is the
+ * class of bug that does not throw: pair `ORDER BY id DESC` with `id > ?` and every "next"
+ * returns the page just read. The double can be made to agree with either, so the SQL is
+ * what has to be asked.
+ */
+describe("the order the queue is read in", () => {
+  const db = () => createD1Database(env.DB);
+
+  const file = (id: string, category: string) =>
+    repo().insertReport({
+      id: id as never,
+      targetType: "article",
+      targetId: "ART",
+      reporterPrincipalId: null,
+      reporterContact: null,
+      category: category as never,
+      details: null,
+      createdAt: AT,
+    });
+
+  beforeEach(async () => {
+    await env.DB.exec("DELETE FROM reports");
+    await db().commit([file("R1", "spam"), file("R2", "abuse"), file("R3", "other")]);
+  });
+
+  it("walks oldest first by default", async () => {
+    const page = await repo().listReports("open", 10, null);
+    expect(page.map((report) => report.id)).toEqual(["R1", "R2", "R3"]);
+  });
+
+  it("walks newest first when asked", async () => {
+    const page = await repo().listReports("open", 10, null, "newest");
+    expect(page.map((report) => report.id)).toEqual(["R3", "R2", "R1"]);
+  });
+
+  it("pages backwards without repeating the page it just returned", async () => {
+    const first = await repo().listReports("open", 1, null, "newest");
+    expect(first.map((report) => report.id)).toEqual(["R3"]);
+
+    const second = await repo().listReports("open", 1, "R3", "newest");
+    expect(second.map((report) => report.id)).toEqual(["R2"]);
+  });
+
+  it("counts what is in a state, not what is on the page", async () => {
+    expect(await repo().countReports("open")).toBe(3);
+    expect(await repo().countReports("actioned")).toBe(0);
   });
 });

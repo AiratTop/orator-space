@@ -85,8 +85,32 @@ export interface ModerationRepo {
   describeTargets(targets: readonly ReportTarget[]): Promise<TargetSummary[]>;
   countRecentReports(targetType: string, targetId: string, since: string): Promise<number>;
 
-  /** The queue itself: oldest first, because that is the order a moderator works in. */
-  listReports(status: ReportStatus | null, limit: number, after: string | null): Promise<ReportRecord[]>;
+  /**
+   * The queue itself (SPEC §61.1).
+   *
+   * Oldest first by default, because that is the order a backlog is worked in. `newest`
+   * exists because a backlog is not the only thing a queue is: a moderator who has just been
+   * told something was reported is asking a question the oldest fifty cannot answer, and on
+   * a queue of any size the newest entry is on the last page. Keyset either way (§44.2) —
+   * the cursor compares in the direction the page is running.
+   */
+  listReports(
+    status: ReportStatus | null,
+    limit: number,
+    after: string | null,
+    order?: "oldest" | "newest",
+  ): Promise<ReportRecord[]>;
+
+  /**
+   * How many reports are in a state (SPEC §61.1).
+   *
+   * A count, which §44.2 keeps out of pagination for reasons that hold — it cannot be made
+   * consistent with a keyset page, and it costs an index scan. It is here for the reason
+   * `countPublished` is: orientation rather than paging. A page showing fifty of four
+   * hundred and seventy-nine without saying so is not a queue, it is a sample, and a
+   * moderator cannot tell the difference by looking.
+   */
+  countReports(status: ReportStatus): Promise<number>;
   findReport(id: string): Promise<ReportRecord | null>;
   /**
    * Moves a report along, but only from the state the caller believed it was in.
