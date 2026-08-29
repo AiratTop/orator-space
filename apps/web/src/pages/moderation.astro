@@ -88,7 +88,34 @@ const tab: Tab = (TABS as readonly string[]).includes(requested) ? (requested as
  * default cannot answer it at all.
  */
 const order: "oldest" | "newest" = Astro.url.searchParams.get("order") === "newest" ? "newest" : "oldest";
+
+/*
+ * Which kind of thing, from the URL (SPEC §61.1, §49.1).
+ *
+ * "The accounts" and "the comments" are different jobs, done in different states of mind, and
+ * a moderator with an hour for one of them should not have to read the other to find it. On a
+ * queue five hundred deep that is not a convenience: a report about an account arrives once a
+ * week and sits behind four hundred about articles.
+ *
+ * A `<select>` with a button rather than one that submits itself, because §49.1 admits no
+ * script for this and a control that needs one is a control that does not work.
+ */
+const KINDS = ["article", "principal", "comment", "media"] as const;
+const requestedKind = Astro.url.searchParams.get("kind") ?? "";
+const kind: (typeof KINDS)[number] | null = (KINDS as readonly string[]).includes(requestedKind)
+  ? (requestedKind as (typeof KINDS)[number])
+  : null;
+
+/*
+ * Where the page starts, as the id of the last row of the one before it (§44.2).
+ *
+ * Keyset, like every listing here. The count says how deep the queue is and this is what
+ * reaches the rest of it: fifty of five hundred and thirty-three with no way past the
+ * fiftieth is a page that can only be drained by acting on whatever it happens to show.
+ */
+const after = Astro.url.searchParams.get("after");
 let total = 0;
+let nextCursor: string | null = null;
 
 /*
  * One field, and it works out what it was given.
@@ -179,30 +206,65 @@ if (moderator) {
      * which is still work. `actioned` and `rejected` are both decisions, and a moderator
      * looking back wants them together — "what did we conclude", not "how did we conclude it".
      */
-    const wanted = tab === "queue" ? (["open", "reviewing"] as const) : (["actioned", "rejected"] as const);
-    const pages = await Promise.all(
-      wanted.map((status) => listReports(ctx, { status, limit: 50, order })),
-    );
     /*
-     * §61.1 — how many there are, which the page did not say and had to.
+     * §61.1 — one query, two statuses, and a page that can be walked.
      *
-     * Fifty of four hundred and seventy-nine, rendered as fifty, is a sample presented as a
-     * queue. The failure it produced is the one that found this: a report filed a minute ago
-     * is at the far end of an ascending list, so the page answered "did it arrive?" with
-     * silence. The count says what is not on screen; the order control reaches it.
+     * `reviewing` belongs with `open`: it is a report somebody has claimed and not finished,
+     * which is still work. `actioned` and `rejected` are both decisions, and a moderator
+     * looking back wants them together — "what did we conclude", not "how did we conclude it".
+     *
+     * One query rather than the two this merged in the caller. Two pages cannot be paged:
+     * each carries its own cursor and the merge carries none, so "next" had no meaning and
+     * the count described a different population from the rows above it. The count says how
+     * deep the queue is; the cursor is what reaches the rest of it.
      */
-    total = pages.reduce((sum, page) => sum + (page.ok ? page.value.total : 0), 0);
-    reports = pages
-      .flatMap((page) => (page.ok ? page.value.items : []))
-      .sort((a, b) =>
-        tab === "closed" || order === "newest" ? b.id.localeCompare(a.id) : a.id.localeCompare(b.id),
-      )
-      .slice(0, 50);
+    const wanted = tab === "queue" ? (["open", "reviewing"] as const) : (["actioned", "rejected"] as const);
+    const loaded = await listReports(ctx, {
+      status: wanted,
+      targetType: kind,
+      limit: 50,
+      after,
+      // A closed list is a record and reads newest first; a queue is work and reads oldest
+      // first unless a moderator asks for the other end.
+      order: tab === "closed" ? "newest" : order,
+    });
+    if (loaded.ok) {
+      reports = loaded.value.items;
+      total = loaded.value.total;
+      nextCursor = loaded.value.nextCursor;
+    }
     await describe(reports.map((one) => ({ targetType: one.targetType, targetId: one.targetId })));
   }
 }
 
-const here = `/moderation?tab=${tab}`;
+/*
+ * Where a form posts back to, carrying the view it was submitted from.
+ *
+ * A moderator working through the accounts and pressing Apply should land back among the
+ * accounts. Without the filter and the order on this, every action threw them to the top of
+ * the unfiltered queue — which on a five-hundred-deep one is the same as losing their place.
+ * The cursor is deliberately not carried: the row they just acted on has left the queue, so
+ * the page it anchored is not the page to return to.
+ */
+const view = new URLSearchParams({ tab });
+if (kind !== null) view.set("kind", kind);
+if (order === "newest") view.set("order", "newest");
+const here = `/moderation?${view.toString()}`;
+
+/** The same view, plus a cursor — what "older" points at. */
+const pageAt = (cursor: string) => {
+  const params = new URLSearchParams(view);
+  params.set("after", cursor);
+  return `/moderation?${params.toString()}`;
+};
+
+const KIND_OPTION: { value: string; label: string }[] = [
+  { value: "", label: "Everything" },
+  { value: "article", label: "Articles" },
+  { value: "principal", label: "Accounts" },
+  { value: "comment", label: "Comments" },
+  { value: "media", label: "Images" },
+];
 
 /**
  * What kind of thing a line is about, in a word a moderator reads (SPEC §61.1).
@@ -532,15 +594,45 @@ const undoableIds = new Set<string>();
         </section>
       ) : (
         <>
-          <nav class="tabs" aria-label="Moderation sections">
-            {TABS.map((one) => (
-              <a
-                class={`tabs__tab${one === tab ? " tabs__tab--current" : ""}`}
-                href={`/moderation?tab=${one}`}
-                aria-current={one === tab ? "page" : undefined}
-              >{LABEL[one]}</a>
-            ))}
-          </nav>
+          <div class="sections">
+            <nav class="tabs" aria-label="Moderation sections">
+              {TABS.map((one) => (
+                <a
+                  class={`tabs__tab${one === tab ? " tabs__tab--current" : ""}`}
+                  href={one === "actions" ? "/moderation?tab=actions" : `/moderation?tab=${one}${kind === null ? "" : `&kind=${kind}`}`}
+                  aria-current={one === tab ? "page" : undefined}
+                >{LABEL[one]}</a>
+              ))}
+            </nav>
+
+            {/*
+              §61.1 — which kind of thing, beside the sections rather than inside the list.
+
+              The filter belongs to the whole of what is below it and survives the move between
+              open and closed, which is how the job is actually done: somebody who has set
+              aside an hour for the accounts wants both halves of that hour to be about
+              accounts. The action log does not take it — it is a record of what was done, not
+              a worklist — so the tab that leads there drops it.
+
+              A button rather than a select that submits itself: §49.1 admits no script here,
+              and a control that needs one is a control that does not work.
+            */}
+            {tab !== "actions" && (
+              <form class="kinds" method="get" action="/moderation">
+                <input type="hidden" name="tab" value={tab} />
+                {order === "newest" && <input type="hidden" name="order" value="newest" />}
+                <label class="kinds__label" for="kind">Show</label>
+                <select class="kinds__select" id="kind" name="kind">
+                  {KIND_OPTION.map((option) => (
+                    <option value={option.value} selected={option.value === (kind ?? "")}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <button class="button button--quiet button--small" type="submit">Filter</button>
+              </form>
+            )}
+          </div>
 
           {tab === "actions" ? (
             <section class="panel" id="actions">
@@ -637,7 +729,18 @@ const undoableIds = new Set<string>();
 
               {reports.length === 0 ? (
                 <p class="panel__empty">
-                  {tab === "queue" ? "Nothing open. That is the ordinary state." : "Nothing closed yet."}
+                  {/*
+                    An empty page says whether it is empty or merely filtered. Without that,
+                    a filter left set from the last visit reads as "nothing has been reported"
+                    — which is the one sentence a moderation queue must never say wrongly.
+                  */}
+                  {kind !== null
+                    ? `No ${KIND_LABEL[kind]} reports ${tab === "queue" ? "are open" : "have been closed"}.`
+                    : after !== null
+                      ? "Nothing further. This is the end of the queue."
+                      : tab === "queue"
+                        ? "Nothing open. That is the ordinary state."
+                        : "Nothing closed yet."}
                 </p>
               ) : (
                 <ul class="reports">
@@ -711,6 +814,26 @@ const undoableIds = new Set<string>();
                     </li>
                   ))}
                 </ul>
+              )}
+
+              {/*
+                §44.2 — the rest of the queue, reached by a cursor rather than an offset.
+
+                One direction and no page numbers, which is what a keyset gives and all it
+                gives: an offset would repeat and drop rows as reports arrive underneath, and
+                a page number over a list that changes while it is read is a number that means
+                nothing. "Back to the start" is the other half, because a cursor cannot walk
+                the way it came without a second one.
+              */}
+              {(nextCursor !== null || after !== null) && (
+                <p class="pager">
+                  {after !== null && <a href={here}>Back to the start</a>}
+                  {nextCursor !== null && (
+                    <a class="pager__next" href={pageAt(nextCursor)}>
+                      {order === "newest" && tab === "queue" ? "Older" : "Next 50"}
+                    </a>
+                  )}
+                </p>
               )}
             </section>
           )}

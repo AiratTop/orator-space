@@ -82,6 +82,15 @@ export interface TargetSummary extends ReportTarget {
   username: string | null;
 }
 
+/** What a page of the queue is a page of (SPEC §61.1). */
+export interface ReportQuery {
+  /** Empty or null means every status. The queue asks for `open` and `reviewing` together. */
+  status: readonly ReportStatus[] | null;
+  /** Null means every kind of target. */
+  targetType: ReportTarget["targetType"] | null;
+  order?: "oldest" | "newest";
+}
+
 export interface ModerationRepo {
   insertReport(report: NewReport): PendingWrite;
 
@@ -102,24 +111,31 @@ export interface ModerationRepo {
    * told something was reported is asking a question the oldest fifty cannot answer, and on
    * a queue of any size the newest entry is on the last page. Keyset either way (§44.2) —
    * the cursor compares in the direction the page is running.
+   *
+   * `status` is a set rather than one value because the queue is two statuses: `reviewing`
+   * is a report somebody claimed and has not finished, which is still work. Two queries
+   * merged in the caller cannot be paged — each has its own cursor and the merge has none —
+   * and the count would describe a different population from the page.
+   *
+   * `targetType` is the filter that makes a deep queue workable: "the accounts" and "the
+   * comments" are different jobs, done in different states of mind, and a moderator who has
+   * an hour for one of them should not have to read the other to find it.
    */
-  listReports(
-    status: ReportStatus | null,
-    limit: number,
-    after: string | null,
-    order?: "oldest" | "newest",
-  ): Promise<ReportRecord[]>;
+  listReports(query: ReportQuery & { limit: number; after: string | null }): Promise<ReportRecord[]>;
 
   /**
-   * How many reports are in a state (SPEC §61.1).
+   * How many reports match (SPEC §61.1).
    *
    * A count, which §44.2 keeps out of pagination for reasons that hold — it cannot be made
    * consistent with a keyset page, and it costs an index scan. It is here for the reason
-   * `countPublished` is: orientation rather than paging. A page showing fifty of four
-   * hundred and seventy-nine without saying so is not a queue, it is a sample, and a
+   * `countPublished` is: orientation rather than paging. A page showing fifty of five
+   * hundred and thirty-three without saying so is not a queue, it is a sample, and a
    * moderator cannot tell the difference by looking.
+   *
+   * Takes the same filter as the listing, necessarily: a count over a wider population than
+   * the page shows is a number that describes something else.
    */
-  countReports(status: ReportStatus): Promise<number>;
+  countReports(query: ReportQuery): Promise<number>;
   findReport(id: string): Promise<ReportRecord | null>;
   /**
    * Moves a report along, but only from the state the caller believed it was in.

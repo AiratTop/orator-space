@@ -202,6 +202,65 @@ describe("the queue (§61.1)", () => {
     expect(next.items[0]!.id).toBe(first.id);
   });
 
+  /*
+   * §61.1 — the filter that makes a deep queue workable.
+   *
+   * A report about an account arrives once a week and sits behind four hundred about
+   * articles. "The accounts" and "the comments" are different jobs, and the count has to
+   * describe the filtered population or the heading says fifty of five hundred above one row.
+   */
+  it("lists only the kind asked for, and counts the same population", async () => {
+    const articleId = await publishedArticle();
+    const article = await ports.articles.findById(articleId);
+    await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "spam" });
+    const account = unwrap(
+      await createReport(ctxFor(null), {
+        targetType: "principal",
+        targetId: article!.authorPrincipalId,
+        category: "abuse",
+      }),
+    );
+
+    const accounts = unwrap(
+      await listReports(ctxFor(moderator()), { status: "open", targetType: "principal" }),
+    );
+    expect(accounts.items.map((report) => report.id)).toEqual([account.id]);
+    expect(accounts.total).toBe(1);
+
+    const everything = unwrap(await listReports(ctxFor(moderator()), { status: "open" }));
+    expect(everything.total).toBe(2);
+  });
+
+  /*
+   * §61.1 — the queue is two statuses, and one query rather than two merged by the caller.
+   *
+   * Two pages cannot be paged: each carries its own cursor and the merge carries none, so
+   * "next" had no meaning and the count described a different population from the rows.
+   */
+  it("carries a claimed report alongside the open ones, and pages through both", async () => {
+    const articleId = await publishedArticle();
+    const first = unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "spam" }));
+    const second = unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "abuse" }));
+    unwrap(await reviewReport(ctxFor(moderator()), { reportId: first.id, status: "reviewing" }));
+
+    const page = unwrap(
+      await listReports(ctxFor(moderator()), { status: ["open", "reviewing"], limit: 1 }),
+    );
+    expect(page.items.map((report) => report.id)).toEqual([first.id]);
+    expect(page.total).toBe(2);
+    expect(page.nextCursor).toBe(first.id);
+
+    const next = unwrap(
+      await listReports(ctxFor(moderator()), {
+        status: ["open", "reviewing"],
+        limit: 1,
+        after: page.nextCursor,
+      }),
+    );
+    expect(next.items.map((report) => report.id)).toEqual([second.id]);
+    expect(next.nextCursor).toBeNull();
+  });
+
   it("claims a report, and refuses the second moderator who tries", async () => {
     const articleId = await publishedArticle();
     const report = unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: articleId, category: "spam" }));

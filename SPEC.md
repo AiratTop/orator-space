@@ -5025,11 +5025,27 @@ service consults it before acting, and every control is built from it. A form of
 action the service is obliged to refuse is not a smaller fault than a service accepting one
 it should not: it costs the moderator the attempt, and it hides the verb that does apply.
 
-**MUST — a page of the queue says how many entries it is a page of, and can be read from
-either end.** Oldest first is the order a backlog is worked in and stays the default. It
-cannot answer "what has just come in", which is the question somebody has whenever a report
-has just been filed, and on a deep queue the newest entry is on the last page. Without the
-count, a page of fifty out of five hundred is a sample presented as a queue.
+**MUST — a page of the queue says how many entries it is a page of, can be read from either
+end, and reaches the rest.** Oldest first is the order a backlog is worked in and stays the
+default. It cannot answer "what has just come in", which is the question somebody has whenever
+a report has just been filed, and on a deep queue the newest entry is on the last page.
+Without the count, a page of fifty out of five hundred is a sample presented as a queue; and
+without a cursor the other four hundred and eighty are reachable only by acting on whichever
+fifty the page happens to show. Keyset like every other listing (§44.2) — no page numbers,
+because a number over a list that changes while it is read means nothing.
+
+**MUST — the queue filters by what the report is about.** "The accounts" and "the comments"
+are different jobs done in different states of mind, and a report about an account arrives
+once a week and sits behind four hundred about articles. The filter belongs to the view rather
+than to the list — it survives the move between open and closed, and an action returns to it —
+and the count describes the filtered population, not the whole table. An empty page says
+whether it is empty or merely filtered: "nothing has been reported" is the one sentence a
+moderation queue must never say wrongly.
+
+**MUST — the queue is one query over the statuses it shows.** `open` and `reviewing` together,
+because a claimed and unfinished report is still work. Two queries merged by the caller cannot
+be paged — each carries its own cursor and the merge carries none — and the count then
+describes a different population from the rows above it.
 
 **MUST — the lookup takes any identifier a moderator holds.** An id, a handle, or a pasted
 address of either. §12.2 makes an id upper-case Crockford and §7.3 canonicalises a username to

@@ -48,6 +48,7 @@ import {
   type ModerationActionRecord,
   type SessionRecord,
   type SessionRepo,
+  type ReportQuery,
   type ReportRecord,
   type TopicRecord,
   type ReadingListRepo,
@@ -1856,6 +1857,11 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       }),
   };
 
+  /** The same filter the listing and the count share in SQL, for the same reason. */
+  const matchesReport = (report: ReportRecord, query: ReportQuery): boolean =>
+    (query.status === null || query.status.length === 0 || query.status.includes(report.status)) &&
+    (query.targetType === null || report.targetType === query.targetType);
+
   const moderation: ModerationRepo = {
     insertReport: (report) =>
       asWrite(() =>
@@ -1874,21 +1880,22 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       ).length;
     },
 
-    async listReports(status, limit, after, order = "oldest") {
+    async listReports(query) {
       // The cursor compares in the direction the page runs, exactly as the SQL does. A
       // double that always walks forwards agrees with the adapter until somebody pages back.
-      const forwards = order === "oldest";
+      const forwards = (query.order ?? "oldest") === "oldest";
       return state.reports
         .filter(
           (report) =>
-            (status === null || report.status === status) &&
-            (after === null || (forwards ? report.id > after : report.id < after)),
+            matchesReport(report, query) &&
+            (query.after === null ||
+              (forwards ? report.id > query.after : report.id < query.after)),
         )
         .sort((a, b) => (forwards ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id)))
-        .slice(0, limit);
+        .slice(0, query.limit);
     },
-    async countReports(status) {
-      return state.reports.filter((report) => report.status === status).length;
+    async countReports(query) {
+      return state.reports.filter((report) => matchesReport(report, query)).length;
     },
     async findReport(id) {
       return state.reports.find((report) => report.id === id) ?? null;

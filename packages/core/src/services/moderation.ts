@@ -224,7 +224,10 @@ export interface ActionInput {
 export async function listReports(
   ctx: ModerationContext,
   options: {
-    status?: ReportStatus | null;
+    /** One status, several, or none for all of them. The queue asks for two. */
+    status?: ReportStatus | readonly ReportStatus[] | null;
+    /** Null for every kind. §61.1 — "the accounts" and "the comments" are different jobs. */
+    targetType?: ReportTarget["targetType"] | null;
     limit?: number;
     after?: string | null;
     /**
@@ -242,18 +245,23 @@ export async function listReports(
   if (!gate.ok) return gate;
 
   const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+  const status =
+    options.status === undefined || options.status === null
+      ? null
+      : typeof options.status === "string"
+        ? [options.status]
+        : options.status;
+  const query = {
+    status,
+    targetType: options.targetType ?? null,
+    order: options.order ?? ("oldest" as const),
+  };
+
   const [items, total] = await Promise.all([
-    ctx.ports.moderation.listReports(
-      options.status ?? null,
-      limit + 1,
-      options.after ?? null,
-      options.order ?? "oldest",
-    ),
+    ctx.ports.moderation.listReports({ ...query, limit: limit + 1, after: options.after ?? null }),
     // Only where a status was named. "How many reports are there in total" is not a question
     // any surface asks, and a count over the whole table is an index scan nobody wanted.
-    options.status === undefined || options.status === null
-      ? Promise.resolve(0)
-      : ctx.ports.moderation.countReports(options.status),
+    status === null ? Promise.resolve(0) : ctx.ports.moderation.countReports(query),
   ]);
   const page = items.slice(0, limit);
   return ok({

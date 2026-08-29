@@ -1218,6 +1218,13 @@ check(
  * one that produced it — the field uppercased its input and searched for an article, so a
  * handle found nothing and said so about an account suspended a minute earlier.
  */
+const filtered = await page("/moderation?tab=queue&kind=principal&after=06GXXXXXXXXXXXXXXXXXXXXXXX");
+check(
+  "the queue takes a kind and a cursor, and is gated with them as without",
+  filtered.status === 200 && !filtered.html.includes("Open reports"),
+  String(filtered.status),
+);
+
 const byHandle = await page(`/moderation?id=@${agentName}`);
 check(
   "the lookup accepts a handle, and is gated like the rest of the section",

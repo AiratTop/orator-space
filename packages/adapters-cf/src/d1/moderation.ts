@@ -3,6 +3,7 @@ import type {
   ModerationRepo,
   NewModerationAction,
   NewReport,
+  ReportQuery,
   ReportRecord,
   ReportStatus,
   TargetSummary,
@@ -69,6 +70,27 @@ const toAction = (row: ActionRow): ModerationActionRecord => ({
   createdAt: row.created_at,
 });
 
+/**
+ * The `WHERE` the listing and the count must share (SPEC §61.1).
+ *
+ * One builder for both, because the number beside a page has to describe that page's
+ * population. Written twice, they agree until somebody adds a filter to one of them — and
+ * the symptom is a heading that says fifty of five hundred while showing fifty of eleven.
+ */
+function filter(query: ReportQuery): { clauses: string[]; binds: unknown[] } {
+  const clauses: string[] = [];
+  const binds: unknown[] = [];
+  if (query.status !== null && query.status.length > 0) {
+    clauses.push(`status IN (${query.status.map(() => "?").join(", ")})`);
+    binds.push(...query.status);
+  }
+  if (query.targetType !== null) {
+    clauses.push("target_type = ?");
+    binds.push(query.targetType);
+  }
+  return { clauses, binds };
+}
+
 export function createModerationRepo(db: D1Database): ModerationRepo {
   return {
     insertReport(report: NewReport) {
@@ -119,13 +141,9 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
      * backlog it exists to drain. The cursor is the last id seen, like every other listing
      * here (§20.5) — an offset would repeat and drop rows as reports arrive underneath.
      */
-    async listReports(status, limit, after, order = "oldest") {
-      const clauses = [];
-      const binds: unknown[] = [];
-      if (status !== null) {
-        clauses.push("status = ?");
-        binds.push(status);
-      }
+    async listReports(query) {
+      const order = query.order ?? "oldest";
+      const { clauses, binds } = filter(query);
       /*
        * The cursor compares in the direction the page runs.
        *
@@ -133,24 +151,26 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
        * error — it returns the page you already read — which is why the comparison and the
        * sort are decided together, from one value, rather than in two places.
        */
-      if (after !== null) {
+      if (query.after !== null) {
         clauses.push(order === "oldest" ? "id > ?" : "id < ?");
-        binds.push(after);
+        binds.push(query.after);
       }
       const where = clauses.length === 0 ? "" : ` WHERE ${clauses.join(" AND ")}`;
       const direction = order === "oldest" ? "ASC" : "DESC";
       const { results } = await db
         .prepare(`SELECT * FROM reports${where} ORDER BY id ${direction} LIMIT ?`)
-        .bind(...binds, limit)
+        .bind(...binds, query.limit)
         .all<ReportRow>();
       return results.map(toReport);
     },
 
-    /** SPEC §61.1 — how many there are, so a page of fifty can say what it is fifty of. */
-    async countReports(status) {
+    /** SPEC §61.1 — how many match, so a page of fifty can say what it is fifty of. */
+    async countReports(query) {
+      const { clauses, binds } = filter(query);
+      const where = clauses.length === 0 ? "" : ` WHERE ${clauses.join(" AND ")}`;
       const row = await db
-        .prepare(`SELECT COUNT(*) AS n FROM reports WHERE status = ?`)
-        .bind(status)
+        .prepare(`SELECT COUNT(*) AS n FROM reports${where}`)
+        .bind(...binds)
         .first<{ n: number }>();
       return row?.n ?? 0;
     },

@@ -165,26 +165,68 @@ describe("the order the queue is read in", () => {
     await db().commit([file("R1", "spam"), file("R2", "abuse"), file("R3", "other")]);
   });
 
+  const open = { status: ["open"] as const, targetType: null };
+
   it("walks oldest first by default", async () => {
-    const page = await repo().listReports("open", 10, null);
+    const page = await repo().listReports({ ...open, limit: 10, after: null });
     expect(page.map((report) => report.id)).toEqual(["R1", "R2", "R3"]);
   });
 
   it("walks newest first when asked", async () => {
-    const page = await repo().listReports("open", 10, null, "newest");
+    const page = await repo().listReports({ ...open, order: "newest", limit: 10, after: null });
     expect(page.map((report) => report.id)).toEqual(["R3", "R2", "R1"]);
   });
 
   it("pages backwards without repeating the page it just returned", async () => {
-    const first = await repo().listReports("open", 1, null, "newest");
+    const first = await repo().listReports({ ...open, order: "newest", limit: 1, after: null });
     expect(first.map((report) => report.id)).toEqual(["R3"]);
 
-    const second = await repo().listReports("open", 1, "R3", "newest");
+    const second = await repo().listReports({ ...open, order: "newest", limit: 1, after: "R3" });
     expect(second.map((report) => report.id)).toEqual(["R2"]);
   });
 
-  it("counts what is in a state, not what is on the page", async () => {
-    expect(await repo().countReports("open")).toBe(3);
-    expect(await repo().countReports("actioned")).toBe(0);
+  it("counts what matches, not what is on the page", async () => {
+    expect(await repo().countReports(open)).toBe(3);
+    expect(await repo().countReports({ status: ["actioned"], targetType: null })).toBe(0);
+  });
+
+  /*
+   * §61.1 — the filter that makes a deep queue workable, and the count that must agree.
+   *
+   * A number beside a page has to describe that page's population. Built from one `WHERE`
+   * for both, because written twice they agree until somebody adds a filter to one — and the
+   * symptom is a heading saying fifty of five hundred above eleven rows.
+   */
+  it("filters by what the report is about, and counts the same population", async () => {
+    await db().commit([
+      repo().insertReport({
+        id: "R4" as never,
+        targetType: "principal",
+        targetId: "AUTHOR",
+        reporterPrincipalId: null,
+        reporterContact: null,
+        category: "abuse" as never,
+        details: null,
+        createdAt: AT,
+      }),
+    ]);
+
+    const accounts = { status: ["open"] as const, targetType: "principal" as const };
+    expect((await repo().listReports({ ...accounts, limit: 10, after: null })).map((r) => r.id)).toEqual(["R4"]);
+    expect(await repo().countReports(accounts)).toBe(1);
+    expect(await repo().countReports(open)).toBe(4);
+  });
+
+  it("takes several statuses at once, which is what the queue is", async () => {
+    await db().commit([
+      repo().setReportStatus("R2", "reviewing", ["open"], "AUTHOR" as never, null, AT),
+    ]);
+    const queue = { status: ["open", "reviewing"] as const, targetType: null };
+    expect((await repo().listReports({ ...queue, limit: 10, after: null })).map((r) => r.id)).toEqual([
+      "R1",
+      "R2",
+      "R3",
+    ]);
+    expect(await repo().countReports(queue)).toBe(3);
   });
 });

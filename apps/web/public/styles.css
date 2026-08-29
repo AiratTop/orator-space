@@ -3118,3 +3118,60 @@ img.avatar {
   vertical-align: middle;
   font-weight: 400;
 }
+
+/* ---------------------------------------------------------------------------
+ * Working a queue that is deeper than a page (SPEC §61.1, §44.2)
+ * ------------------------------------------------------------------------ */
+
+/*
+ * The sections and the filter on one row.
+ *
+ * The filter belongs to everything below it rather than to the list, which is why it sits
+ * with the tabs and not inside the panel: it survives the move between open and closed,
+ * because somebody who set aside an hour for the accounts wants both halves of it.
+ */
+.sections {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+}
+
+.kinds {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.kinds__label {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}
+
+.kinds__select {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+/* One direction, no page numbers: a keyset gives an id to resume from and nothing else. */
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 1.5rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.875rem;
+}
+
+/* Sits right even when it is the only one there. */
+.pager__next {
+  margin-left: auto;
+}
