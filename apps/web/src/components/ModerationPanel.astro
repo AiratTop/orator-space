@@ -1,5 +1,5 @@
 ---
-import { REASON_CODES } from "@orator/core";
+import { ACTIONS_FOR, ACTION_LABEL, REASON_CODES } from "@orator/core";
 
 /**
  * The review actions, on the page being reviewed (SPEC §61.1, §49.2).
@@ -28,13 +28,15 @@ interface Props {
 
 const { articleId, outcome = null } = Astro.props;
 
-/** §61.1's verbs, minus the two that are not about a piece of content. */
-const ACTIONS = [
-  { value: "unindex", label: "de-index" },
-  { value: "hide", label: "hide" },
-  { value: "warn", label: "warn the author" },
-  { value: "remove", label: "remove" },
-] as const;
+/*
+ * §61.1's verbs for an article, from the table the service checks against.
+ *
+ * This panel only ever acts on an article, so the list was written out here — which made it
+ * a second copy of a rule that lives in one place, and a second copy is a copy that drifts.
+ * `restore` is not offered: reversing is done from the log in /moderation, where the thing
+ * being reversed is named.
+ */
+const ACTIONS = ACTIONS_FOR.article.filter((kind) => kind !== "restore");
 ---
 
 <aside class="moderate" aria-labelledby="moderate-heading">
@@ -55,7 +57,7 @@ const ACTIONS = [
     <div class="field">
       <label for="moderate-kind">Action</label>
       <select id="moderate-kind" name="kind">
-        {ACTIONS.map((action) => <option value={action.value}>{action.label}</option>)}
+        {ACTIONS.map((kind) => <option value={kind}>{ACTION_LABEL[kind]}</option>)}
       </select>
     </div>
 

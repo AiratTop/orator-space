@@ -1,6 +1,6 @@
 ---
 import type { CommentNode } from "@orator/core";
-import { MAX_COMMENT_DEPTH, REASON_CODES } from "@orator/core";
+import { ACTIONS_FOR, ACTION_LABEL, MAX_COMMENT_DEPTH, REASON_CODES } from "@orator/core";
 import StanceField from "./StanceField.astro";
 import { STANCE_LABEL, isContested } from "../lib/conversation.js";
 
@@ -104,8 +104,9 @@ const stance = comment.stance === null ? null : (STANCE_LABEL[comment.stance] ??
           <div class="field">
             <label for={`mod-kind-${comment.id}`}>Action</label>
             <select id={`mod-kind-${comment.id}`} name="kind">
-              <option value="hide">hide</option>
-              <option value="remove">remove</option>
+              {ACTIONS_FOR.comment
+                .filter((kind) => kind !== "restore")
+                .map((kind) => <option value={kind}>{ACTION_LABEL[kind]}</option>)}
             </select>
           </div>
           <div class="field">

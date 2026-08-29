@@ -1,5 +1,7 @@
 ---
 import {
+  ACTIONS_FOR,
+  ACTION_LABEL,
   describeTargets,
   inspectArticle,
   listModerationActions,
@@ -541,12 +543,21 @@ const undoableIds = new Set<string>();
                             <input type="hidden" name="target" value={report.targetId} />
                             <input type="hidden" name="report" value={report.id} />
 
+                            {/*
+                              §61.1 — the verbs that apply to *this* target, and no others.
+
+                              The list was four article-shaped actions on every row, so a
+                              report about an account offered de-index, hide, warn and remove,
+                              every one of which the service is obliged to refuse — and
+                              `suspend`, the only verb that applies, was not there at all. The
+                              answer is not a longer list: it is the same list the service
+                              checks against.
+                            */}
                             <label class="report__label" for={`kind-${report.id}`}>Action</label>
                             <select id={`kind-${report.id}`} name="kind">
-                              <option value="unindex">de-index</option>
-                              <option value="hide">hide</option>
-                              <option value="warn">warn</option>
-                              <option value="remove">remove</option>
+                              {(ACTIONS_FOR[report.targetType] ?? [])
+                                .filter((kind) => kind !== "restore")
+                                .map((kind) => <option value={kind}>{ACTION_LABEL[kind]}</option>)}
                             </select>
 
                             <label class="report__label" for={`reason-${report.id}`}>Reason</label>

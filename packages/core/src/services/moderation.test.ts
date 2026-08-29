@@ -7,6 +7,7 @@ import type { RequestContext } from "./context.js";
 import { createArticle, publishArticle, readArticle } from "./publishing.js";
 import { createComment } from "./social.js";
 import {
+  ACTIONS_FOR,
   applyModerationAction,
   createReport,
   describeTargets,
@@ -213,6 +214,55 @@ describe("the queue (§61.1)", () => {
     // Two moderators opening one queue is ordinary, not a race to prevent by locking. The
     // second write is refused so the first one's work is not silently overwritten (§34.3).
     expect(errorOf(second)).toBe(ErrorType.Conflict);
+  });
+});
+
+/**
+ * The table a surface offers from is the table the service checks against (SPEC §61.1).
+ *
+ * Found by using the queue: a report about an account offered de-index, hide, warn and
+ * remove — four verbs the service is obliged to refuse — and not `suspend`, the one that
+ * applies. The list was written out in the page, so it could not have been anything else.
+ * These assert the two directions that matter: nothing outside the table is accepted, and
+ * nothing inside it is refused for being the wrong verb.
+ */
+describe("which verb applies to which target (§61.1)", () => {
+  const KINDS = ["hide", "remove", "unindex", "suspend", "warn", "restore"] as const;
+
+  it("refuses every pair the table does not name", async () => {
+    const articleId = await publishedArticle();
+    const wrong = KINDS.filter((kind) => !ACTIONS_FOR.article.includes(kind));
+    expect(wrong).toEqual(["suspend"]);
+
+    for (const kind of wrong) {
+      const result = await applyModerationAction(ctxFor(moderator()), {
+        targetType: "article",
+        targetId: articleId,
+        action: kind,
+        reasonCode: "spam",
+      });
+      expect(errorOf(result)).toBe(ErrorType.ValidationFailed);
+    }
+  });
+
+  it("names suspend for a principal, and nothing that takes their words down", async () => {
+    // §23.1 — a person is stopped from acting; removing what they wrote is a separate act
+    // against the separate thing, and conflating the two is how one click does both.
+    expect([...ACTIONS_FOR.principal]).toEqual(["suspend", "warn", "restore"]);
+    expect(ACTIONS_FOR.principal).not.toContain("remove");
+  });
+
+  it("accepts suspend against a principal, which the queue could not offer", async () => {
+    const articleId = await publishedArticle();
+    const article = await ports.articles.findById(articleId);
+    const result = await applyModerationAction(ctxFor(moderator()), {
+      targetType: "principal",
+      targetId: article!.authorPrincipalId,
+      action: "suspend",
+      reasonCode: "spam",
+    });
+    expect(result.ok).toBe(true);
+    expect((await ports.principals.findById(article!.authorPrincipalId))?.status).toBe("suspended");
   });
 });
 

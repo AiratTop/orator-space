@@ -166,6 +166,42 @@ export const REASON_CODES = [
 
 export type ReasonCode = (typeof REASON_CODES)[number];
 
+/**
+ * Which verbs apply to which kind of target (SPEC §61.1, §23.2, §50.3).
+ *
+ * Exported because a surface offering an action the service must refuse is not a smaller
+ * mistake than a service accepting one it should not. The queue offered de-index, hide, warn
+ * and remove against every target regardless of type, which meant a report about an *account*
+ * had four options and no usable one: `suspend` is the only verb that applies to a principal
+ * and it was not on the list. A moderator's only route was to pick something and read the
+ * refusal.
+ *
+ * `warn` is on every row because it changes nothing and exists so a warning is on the record
+ * before an escalation is. `restore` is on every row because reversing is always available;
+ * it is offered from the log rather than the queue, which is where the thing to reverse is.
+ */
+export const ACTIONS_FOR: Record<
+  "article" | "comment" | "principal" | "media",
+  readonly ModerationActionKind[]
+> = {
+  article: ["unindex", "hide", "remove", "warn", "restore"],
+  comment: ["hide", "remove", "warn", "restore"],
+  // §23.1 — a person is stopped from acting; their words are not taken down by the same verb.
+  principal: ["suspend", "warn", "restore"],
+  // §21.1 — `rejected` is a media record's only removal state, reached by either verb.
+  media: ["hide", "remove", "warn", "restore"],
+};
+
+/** The word a person reads for a verb. Only one differs from the stored value. */
+export const ACTION_LABEL: Record<ModerationActionKind, string> = {
+  unindex: "de-index",
+  hide: "hide",
+  remove: "remove",
+  suspend: "suspend the account",
+  warn: "warn",
+  restore: "restore",
+};
+
 export interface ReviewInput {
   reportId: string;
   /** `rejected` closes the report with no action; `reviewing` claims it. */
@@ -578,6 +614,22 @@ async function stateChange(
   now: string,
 ): Promise<Result<PendingWrite[]>> {
   const { targetType, targetId, action } = input;
+
+  /*
+   * The map decides, and the switch below only says how.
+   *
+   * Checked here so that `ACTIONS_FOR` is the single answer to "may this verb be used on
+   * this target" rather than a second copy of the switch that a surface reads. A table and a
+   * `switch` that must agree are a table and a `switch` that eventually do not.
+   */
+  if (!ACTIONS_FOR[targetType].includes(action)) {
+    return fail(
+      ErrorType.ValidationFailed,
+      `${action} does not apply to a ${targetType}`,
+      "Suspension applies to a principal; unindexing to an article; hide and remove to content.",
+      { field: "action" },
+    );
+  }
 
   if (action === "warn") return ok([]);
 

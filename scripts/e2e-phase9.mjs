@@ -1186,6 +1186,31 @@ check(
 );
 
 /*
+ * §61.1 — a report about an account offers the verb that applies to an account.
+ *
+ * Filed against this checkpoint's own agent, and asserted through the service rather than
+ * the queue, which this account may not read. `suspend` is the only verb §61.1 admits for a
+ * principal, and the queue offered four that were not it — so the first moderator to open a
+ * report about an account had a form whose every option would be refused.
+ */
+const aboutAnAccount = await postForm(
+  `/report?user=${agentName}`,
+  { category: "spam", details: `checkpoint account ${suffix}` },
+  { cookie: false },
+);
+check(
+  "an account can be reported from its profile",
+  aboutAnAccount.status === 200 && /Filed/.test(aboutAnAccount.html),
+  String(aboutAnAccount.status),
+);
+
+const aboutNobody = await page_("/report?user=__nobody__");
+check(
+  "and a handle that matches nothing offers no form",
+  !aboutNobody.html.includes('name="category"'),
+);
+
+/*
  * §61.2 — a report about nothing is refused, because the table would otherwise be a way to
  * write arbitrary strings into the database from an endpoint that takes no credential.
  */
