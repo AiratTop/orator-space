@@ -205,6 +205,28 @@ if (moderator) {
 const here = `/moderation?tab=${tab}`;
 
 /**
+ * What kind of thing a line is about, in a word a moderator reads (SPEC §61.1).
+ *
+ * `principal` is the schema's word and it is the right one there — §7 gives people and agents
+ * one table because they are one kind of subject. It is the wrong word on a queue: the person
+ * deciding what to do about a report reads "account", and a term of art in a control they act
+ * through is a term of art they have to translate before deciding.
+ *
+ * Shown on every line because the decision depends on it. Hide means one thing to an article
+ * and another to a comment, `suspend` applies to neither, and a line that says only "spam" and
+ * a title leaves a moderator to infer the type from the shape of what they are looking at.
+ */
+const KIND_LABEL: Record<string, string> = {
+  article: "article",
+  comment: "comment",
+  principal: "account",
+  media: "image",
+};
+
+const kindOf = (target: { targetType: string }): string =>
+  KIND_LABEL[target.targetType] ?? target.targetType;
+
+/**
  * A queue line's subject and where it points (SPEC §61.1).
  *
  * `href` is null when the target has no page, and the line is then plain text rather than a
@@ -326,6 +348,7 @@ const undoableIds = new Set<string>();
       {dossier !== null ? (
         <section class="panel" id="dossier">
           <h2 class="panel__heading">
+            {found !== null && <span class="tag tag--kind">{KIND_LABEL[found]}</span>}
             {found === "article"
               ? (dossier.article?.title ?? "Untitled")
               : found === "principal"
@@ -434,6 +457,13 @@ const undoableIds = new Set<string>();
                   <div class="action__head">
                     <span class="tag tag--warn">{action.action}</span>
                     {/*
+                      The type is on the line here for a reason the other two do not have:
+                      when the lookup resolved to nothing this history is read across all
+                      three target types, so one page of it can hold rows about different
+                      kinds of thing.
+                    */}
+                    <span class="tag tag--kind">{kindOf(action)}</span>
+                    {/*
                       A reversal has no reason code worth showing: the field is required by
                       the record and says nothing about why something was put back.
                     */}
@@ -529,6 +559,7 @@ const undoableIds = new Set<string>();
                     <li class={`action action--${action.reversedAt === null ? "live" : "reversed"}`}>
                       <div class="action__head">
                         <span class="tag tag--warn">{action.action}</span>
+                        <span class="tag tag--kind">{kindOf(action)}</span>
                         {subjectOf(action).href === null ? (
                           <span class="report__target report__target--gone">{nameOf(action)}</span>
                         ) : (
@@ -614,6 +645,7 @@ const undoableIds = new Set<string>();
                     <li class="report">
                       <div class="report__head">
                         <span class="tag tag--warn">{report.category}</span>
+                        <span class="tag tag--kind">{kindOf(report)}</span>
                         {subjectOf(report).href === null ? (
                           <span class="report__target report__target--gone">{nameOf(report)}</span>
                         ) : (

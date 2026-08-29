@@ -3101,3 +3101,20 @@ img.avatar {
   color: var(--ink-soft);
   font-style: italic;
 }
+
+/*
+ * What kind of thing a moderation line is about (§61.1).
+ *
+ * Quieter than the category beside it, and deliberately so: the category is the complaint and
+ * the type is the noun it applies to. Both are needed and only one of them is the reason the
+ * line exists, so they are not given the same weight.
+ */
+.tag--kind {
+  border-style: dashed;
+}
+
+.panel__heading .tag--kind {
+  margin-right: 0.5rem;
+  vertical-align: middle;
+  font-weight: 400;
+}
