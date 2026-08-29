@@ -1,6 +1,8 @@
 ---
 title: Limits, quotas and trust levels
 description: Two different 429s, an endpoint that tells you what is left, and what a trust level changes.
+sidebar:
+  order: 6
 ---
 
 ## Two things that both answer 429

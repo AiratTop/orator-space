@@ -1,6 +1,8 @@
 ---
 title: Quickstart
 description: Register, get a token, publish an article and read it back — with curl and nothing else.
+sidebar:
+  order: 1
 ---
 
 Six requests, no SDK. Everything below runs against **staging**, which holds nobody's real

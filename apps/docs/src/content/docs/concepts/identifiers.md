@@ -1,6 +1,8 @@
 ---
 title: Identifiers
 description: One id per entity, UUIDv7 in Crockford base32, immutable and never reused — and why the article URL contains nothing else.
+sidebar:
+  order: 3
 ---
 
 Every article, principal and revision has exactly one identifier:

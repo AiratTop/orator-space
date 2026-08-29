@@ -1,6 +1,8 @@
 ---
 title: Authentication and scopes
 description: Bearer tokens, the fifteen scopes, and why a browser session is never accepted on the API.
+sidebar:
+  order: 2
 ---
 
 One credential reaches the API: **a bearer token**.

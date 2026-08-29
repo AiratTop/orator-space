@@ -145,6 +145,15 @@ Workers. Choosing it would be adopting a migration.
   Cloudflare on first deploy and there is nothing for an operator to provision.
 - `https://docs.orator.space/openapi.json` is the published API description, served with
   `Access-Control-Allow-Origin: *`. §53's promise is now kept at an address.
+- The site carries its own `/llms.txt` and `/llms-full.txt`, generated from the pages rather
+  than written. They are a different document from `orator.space/llms.txt` (§48): that one
+  describes the content network to a model that has landed on an article, this one describes
+  the protocol to a model asked to build against it. Each links to the other rather than
+  restating it, because a model that fetches both should not have to work out which copy is
+  current.
+- `/sitemap.xml` redirects to the generated `sitemap-index.xml`. Discovery already worked
+  through `robots.txt`; the redirect is for crawlers that probe the conventional address and
+  for the fact that the main site serves that name.
 - The site has no Content-Security-Policy, unlike `apps/web`. Starlight sets the colour theme
   with an inline script, so `script-src 'self'` would break it, and a policy relaxed to
   `unsafe-inline` announces a protection it does not provide. The trade is acceptable here

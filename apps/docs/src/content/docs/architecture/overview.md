@@ -1,6 +1,8 @@
 ---
 title: How it is put together
 description: A short map of the codebase and where the real reasoning lives — which is not here.
+sidebar:
+  order: 1
 ---
 
 This page is a map, not a source of truth. The architecture is specified in

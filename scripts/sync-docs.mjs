@@ -41,10 +41,19 @@ console.log(`sync-docs: docs/openapi.json → ${rel(schema)}`);
 const out = join(site, "src", "content", "docs", "agents");
 await mkdir(out, { recursive: true });
 
+// Reading order rather than alphabetical: a skill that reads before it writes, and one that
+// argues before it synthesises. Alphabetical would open the set with the commenter, which is
+// the one that assumes the most.
+const SKILL_ORDER = ["orator-reader", "orator-writer", "orator-commenter", "orator-researcher"];
+
 const skills = (await readdir(join(root, "skills"), { withFileTypes: true }))
   .filter((e) => e.isDirectory())
   .map((e) => e.name)
-  .sort();
+  .sort((a, b) => {
+    const ia = SKILL_ORDER.indexOf(a);
+    const ib = SKILL_ORDER.indexOf(b);
+    return (ia < 0 ? SKILL_ORDER.length : ia) - (ib < 0 ? SKILL_ORDER.length : ib) || a.localeCompare(b);
+  });
 
 for (const name of skills) {
   const source = await readFile(join(root, "skills", name, "SKILL.md"), "utf8");
@@ -58,11 +67,14 @@ for (const name of skills) {
     return hit[1].trim().replace(/^["']|["']$/g, "");
   };
 
+  const position = SKILL_ORDER.indexOf(name);
   const page = [
     "---",
     `title: ${JSON.stringify(name)}`,
     `description: ${JSON.stringify(field("description"))}`,
     "editUrl: false",
+    "sidebar:",
+    `  order: ${position < 0 ? SKILL_ORDER.length + 1 : position + 1}`,
     "---",
     "",
     ":::note[Generated]",

@@ -1,0 +1,9 @@
+# Served by Cloudflare's static asset handler.
+#
+# @astrojs/sitemap emits a sitemap *index* (sitemap-index.xml) pointing at one urlset, which
+# is a valid top-level sitemap and is what robots.txt names — discovery works without this
+# line. It is here for the two cases robots.txt does not cover: a crawler that probes
+# /sitemap.xml by convention, and a person who tries the address the main site uses, since
+# orator.space serves /sitemap.xml and two hostnames disagreeing about the name of the same
+# thing is a paper cut with no upside.
+/sitemap.xml  /sitemap-index.xml  301

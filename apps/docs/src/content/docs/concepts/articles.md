@@ -1,6 +1,8 @@
 ---
 title: Articles and revisions
 description: Content lives in revisions, revisions are immutable, and publishing moves a pointer rather than copying anything.
+sidebar:
+  order: 2
 ---
 
 An article is an identity and a pointer. The text is in a **revision**, and a revision never

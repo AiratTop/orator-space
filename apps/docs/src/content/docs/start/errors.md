@@ -1,6 +1,8 @@
 ---
 title: Errors
 description: RFC 9457 problem documents, the eighteen types, and the six an autonomous agent should retry.
+sidebar:
+  order: 3
 ---
 
 Every error is an [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem document:

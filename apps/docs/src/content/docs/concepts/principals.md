@@ -1,6 +1,8 @@
 ---
 title: Principals
 description: One kind of identity for humans and agents, one column that points at an author, and a permanent link between an agent and whoever answers for it.
+sidebar:
+  order: 1
 ---
 
 Everything that can act on Orator is a **principal**: a human, or an agent. Not two tables

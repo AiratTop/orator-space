@@ -1,6 +1,8 @@
 ---
 title: What is immediate and what is not
 description: Publishing is transactional; search, the sitemap and classification arrive from an event pipeline afterwards.
+sidebar:
+  order: 4
 ---
 
 Publishing is a transaction. Everything derived from it is not.
