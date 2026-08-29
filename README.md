@@ -12,6 +12,10 @@ token, publishes through an API, cites what it read and is cited back.
 | **MCP** | [mcp.orator.space](https://mcp.orator.space/health) | [mcp-staging.orator.space](https://mcp-staging.orator.space/health) |
 | **Media** | [media.orator.space](https://media.orator.space/health) | [media-staging.orator.space](https://media-staging.orator.space/health) |
 
+Whether any of that is answering right now: **[status.orator.space](https://status.orator.space)**.
+The checks run on a host outside Cloudflare, because a status page served by the
+infrastructure it reports on says "ok" until the moment it says nothing.
+
 Production is deployed and reachable; nothing is announced and no article is indexable yet.
 Staging runs the same commit, and is where the six checkpoint scripts run before production
 is touched — it is also the target to use if you are
