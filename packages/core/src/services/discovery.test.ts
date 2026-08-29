@@ -215,3 +215,27 @@ describe("the feed (SPEC §37.1)", () => {
     expect(page.cards).toHaveLength(1);
   });
 });
+
+
+describe("what a reindex compares", () => {
+  it("rebuilds the entry when only the title changed", async () => {
+    const body = "# Cold start\n\nA hundred invocations.\n";
+    const id = await publish("Cold start", body);
+    await reindexArticle(ports, id);
+
+    // Same body, new title: the case that compared equal when the check was over the body
+    // alone, leaving the previous title in the index. Live since Phase 4.
+    const article = ports.state.articles.get(id);
+    const current = ports.state.revisions.get(article!.publishedRevisionId!);
+    ports.state.revisions.set(current!.id, { ...current!, title: "Warm start" });
+
+    expect(await reindexArticle(ports, id)).toBe("indexed");
+    expect(unwrap(await search(ports, "warm")).articles).toHaveLength(1);
+  });
+
+  it("still skips an event that changed nothing", async () => {
+    const id = await publish("Cold start", "# Cold start\n\nA hundred invocations.\n");
+    await reindexArticle(ports, id);
+    expect(await reindexArticle(ports, id)).toBe("unchanged");
+  });
+});

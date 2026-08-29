@@ -43,10 +43,11 @@ export function createSearchIndex(db: D1Database): SearchIndex {
         (
           await db
             .prepare(
-              `INSERT INTO search_docs (article_id, content_hash, indexed_at) VALUES (?, ?, ?)
+              `INSERT INTO search_docs (article_id, content_hash, input_hash, indexed_at)
+               VALUES (?, ?, ?, ?)
                RETURNING doc_id`,
             )
-            .bind(document.articleId, document.contentHash, at)
+            .bind(document.articleId, document.contentHash, document.inputHash, at)
             .first<{ doc_id: number }>()
         )?.doc_id;
 
@@ -63,8 +64,10 @@ export function createSearchIndex(db: D1Database): SearchIndex {
           )
           .bind(docId, document.title, document.excerpt, document.body, document.author, document.topics),
         db
-          .prepare(`UPDATE search_docs SET content_hash = ?, indexed_at = ? WHERE doc_id = ?`)
-          .bind(document.contentHash, at, docId),
+          .prepare(
+            `UPDATE search_docs SET content_hash = ?, input_hash = ?, indexed_at = ? WHERE doc_id = ?`,
+          )
+          .bind(document.contentHash, document.inputHash, at, docId),
       ]);
     },
 
@@ -83,10 +86,21 @@ export function createSearchIndex(db: D1Database): SearchIndex {
 
     async indexedHash(articleId: string) {
       const row = await db
-        .prepare(`SELECT content_hash FROM search_docs WHERE article_id = ?`)
+        /*
+         * `input_hash`, not `content_hash` (ADR 0012).
+         *
+         * The two are different questions and this one is "was the entry built from the text
+         * I would build now". Comparing bodies answered it wrong for a title-only edit — same
+         * body, new title, entry skipped — which is the bug this column exists to fix.
+         *
+         * Null for an entry written before migration 0022. That reads as "not indexed", so
+         * the next event rebuilds it: the entry was never wrong, only unanswerable, and
+         * rebuilding one costs an R2 read.
+         */
+        .prepare(`SELECT input_hash FROM search_docs WHERE article_id = ?`)
         .bind(articleId)
-        .first<{ content_hash: string }>();
-      return row?.content_hash ?? null;
+        .first<{ input_hash: string | null }>();
+      return row?.input_hash ?? null;
     },
 
     async query(text: string, limit: number) {

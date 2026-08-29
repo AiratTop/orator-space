@@ -5,6 +5,11 @@
  * does not hand over working credentials. The prefix is kept in clear purely so a human
  * can tell two tokens apart in a list.
  */
+import { sha256Hex } from "../text/digest.js";
+
+/** Re-exported: it lived here first, and callers outside this module still ask for it here. */
+export { sha256Hex };
+
 
 export const TOKEN_PREFIX = "orat_sk";
 const SECRET_BYTES = 32;
@@ -30,10 +35,6 @@ function base62(bytes: Uint8Array): string {
   return out;
 }
 
-export async function sha256Hex(text: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
-}
 
 export async function generateToken(environment: "live" | "test" = "live"): Promise<GeneratedToken> {
   const secret = new Uint8Array(SECRET_BYTES);

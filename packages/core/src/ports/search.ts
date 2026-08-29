@@ -22,14 +22,29 @@ export interface SearchDocument {
   body: string;
   author: string;
   topics: string;
-  /** What the entry was built from, so a reindex can skip what has not changed. */
+  /** Which body this entry describes. §23.3's refcount reads bodies by this. */
   contentHash: string;
+  /**
+   * The sha256 of the whole indexed document, and what a reindex actually compares.
+   *
+   * Not `contentHash`, which is the body alone. A title-only edit produces a new revision
+   * carrying the same body hash (§16.2), so comparing bodies answered "unchanged" and left
+   * the previous title in the index — live from Phase 4 until ADR 0012 asked what the
+   * embedding ledger should be keyed on and found the same mistake next door.
+   */
+  inputHash: string;
 }
 
 export interface SearchIndex {
   index(document: SearchDocument, at: string): Promise<void>;
   remove(articleId: string): Promise<void>;
-  /** Null when the article is not indexed. Compared against the current hash. */
+  /**
+   * The `inputHash` of the entry held for this article, or null when there is none.
+   *
+   * Null is also the answer for an entry written before ADR 0012, which stored no input
+   * hash. That reads as "not indexed", so the next event rebuilds it — the entry itself was
+   * never wrong, only the question asked about it, and rebuilding one is cheap.
+   */
   indexedHash(articleId: string): Promise<string | null>;
   query(text: string, limit: number): Promise<OratorId[]>;
 }

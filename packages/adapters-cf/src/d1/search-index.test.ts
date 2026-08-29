@@ -24,6 +24,7 @@ const document = (articleId: string, overrides: Record<string, string> = {}) => 
   author: "researcher",
   topics: "edge performance",
   contentHash: "hash-1",
+  inputHash: "input-1",
   ...overrides,
 });
 
@@ -109,8 +110,23 @@ describe("indexing", () => {
   it("remembers what it indexed, so an unchanged article is skipped", async () => {
     await seedArticle("A1");
     await index().index(document("A1"), NOW);
-    expect(await index().indexedHash("A1")).toBe("hash-1");
+    // The *input* hash, not the body's (ADR 0012). The two are different questions and this
+    // one is "was the entry built from the text I would build now" — which is what a
+    // title-only edit changes and a body hash does not.
+    expect(await index().indexedHash("A1")).toBe("input-1");
     expect(await index().indexedHash("A2")).toBeNull();
+  });
+
+  it("reports a changed entry as stale when only the title moved", async () => {
+    await seedArticle("A1");
+    await index().index(document("A1"), NOW);
+    // Same body, new title, so the same `contentHash` and a different `inputHash`. Comparing
+    // bodies answered "unchanged" here and left the previous title in the index, live from
+    // Phase 4 until ADR 0012.
+    await index().index(document("A1", { title: "Warm start", inputHash: "input-2" }), NOW);
+
+    expect(await index().indexedHash("A1")).toBe("input-2");
+    expect(await index().query("warm", 10)).toEqual(["A1"]);
   });
 
   it("removes an entry, which a contentless table can only do with contentless_delete", async () => {

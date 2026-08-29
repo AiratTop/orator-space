@@ -1,4 +1,5 @@
 import { ErrorType, isOratorId, type FeedCursor, type OratorId } from "@orator/protocol";
+import { sha256Hex } from "../text/digest.js";
 import { stripInvisible } from "../text/invisible.js";
 import type { ArticleCard, ArticleView, FeedPage, SearchDocument, SearchIndex } from "../ports/index.js";
 import { fail, ok, type Result } from "./context.js";
@@ -75,11 +76,8 @@ export async function reindexArticle(ports: DiscoveryPorts, articleId: string): 
     return "removed";
   }
 
-  const indexed = await ports.search.indexedHash(articleId);
-  if (indexed === view.revision.contentHash) return "unchanged";
-
   const body = await ports.content.get(view.revision.contentHash);
-  const document: SearchDocument = {
+  const document: Omit<SearchDocument, "inputHash"> = {
     articleId: view.article.id,
     title: view.revision.title,
     excerpt: view.revision.excerpt ?? "",
@@ -89,7 +87,22 @@ export async function reindexArticle(ports: DiscoveryPorts, articleId: string): 
     contentHash: view.revision.contentHash,
   };
 
-  await ports.search.index(document, new Date().toISOString());
+  /*
+   * The skip check compares the whole document, not the body it contains.
+   *
+   * It compared `revision.contentHash` from Phase 4 until 2026-08-29, and that was wrong in
+   * one specific and entirely ordinary case: editing a title creates a new revision carrying
+   * the *same* body, so the hashes matched, the entry was skipped, and the index kept
+   * answering with the previous title. Nobody saw it because a stale title in an inverted
+   * index produces a result that is right about which article and wrong about its name.
+   */
+  const inputHash = await sha256Hex(
+    [document.title, document.excerpt, document.author, document.topics, document.contentHash].join("\u0000"),
+  );
+  const indexed = await ports.search.indexedHash(articleId);
+  if (indexed === inputHash) return "unchanged";
+
+  await ports.search.index({ ...document, inputHash }, new Date().toISOString());
   return "indexed";
 }
 

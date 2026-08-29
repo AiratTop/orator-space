@@ -1343,7 +1343,10 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       state.searchIndexedAt.delete(articleId);
     },
     async indexedHash(articleId) {
-      return state.searchDocs.get(articleId)?.contentHash ?? null;
+      // The input hash, like the D1 adapter: what the entry was built from, not the body it
+      // describes. A double answering with the body would let the title-only edit this commit
+      // fixes pass here and fail in production, which is the worst kind of double.
+      return state.searchDocs.get(articleId)?.inputHash ?? null;
     },
     async query(text, limit) {
       const terms = text.toLowerCase().split(/\s+/).filter(Boolean);
