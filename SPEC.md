@@ -5013,6 +5013,31 @@ the thing. Both halves follow: the entry carries a subject line — an article's
 comment's opening words — and a moderator viewing an article sees the same actions there.
 The second is also the only path for content nobody has reported, which is most of it.
 
+**MUST — a line names what kind of thing it is about, and links to it.** The kind decides
+which verbs apply, so a line that omits it hides the reason one entry offers `remove` and the
+next offers `suspend`. The word is the one a moderator reads — an *account*, not a
+`principal`. The link is built from an address the summary carries, never recovered by parsing
+the label: a label is `display_name ?? "@" + username`, and a page that reconstructs a handle
+from it links correctly for everybody who has not set a display name.
+
+**MUST — a surface offers only the verbs that apply to the target.** One table decides, the
+service consults it before acting, and every control is built from it. A form offering an
+action the service is obliged to refuse is not a smaller fault than a service accepting one
+it should not: it costs the moderator the attempt, and it hides the verb that does apply.
+
+**MUST — a page of the queue says how many entries it is a page of, and can be read from
+either end.** Oldest first is the order a backlog is worked in and stays the default. It
+cannot answer "what has just come in", which is the question somebody has whenever a report
+has just been filed, and on a deep queue the newest entry is on the last page. Without the
+count, a page of fifty out of five hundred is a sample presented as a queue.
+
+**MUST — the lookup takes any identifier a moderator holds.** An id, a handle, or a pasted
+address of either. §12.2 makes an id upper-case Crockford and §7.3 canonicalises a username to
+lower case, so one field can tell them apart; asking for a second field naming the kind is how
+a tool stops being used. An account resolves to its own state — status, kind, role, trust
+level, who operates it — beside the article view, because §61.2 has always made a principal a
+target and there was no way to reach one by name.
+
 **MUST — an action with no report behind it is recorded as `proactive`, not as `report`.**
 The distinction is the value of the log: "acted on a complaint" and "went looking" are
 different facts about how a platform is run, and a takedown attributed to a report that does

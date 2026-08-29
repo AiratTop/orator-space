@@ -4,9 +4,9 @@ The order of work on Orator.Space.
 
 | | |
 |---|---|
-| **Version** | 1.7 |
+| **Version** | 1.8 |
 | **Revised** | 2026-08-29 |
-| **Tracks** | `SPEC.md` v2.8 |
+| **Tracks** | `SPEC.md` v2.9 |
 
 ---
 
@@ -1140,8 +1140,9 @@ work here; the three before them close commitments the specification already mad
 [x] a Telegram bot: linking, commands, notifications, a login link  21cf76c, 6933fdc
 [x] bookmarks at their own address; a sign-out button that was missing cdd5f13
 [x] public version history with a diff, and the leak it uncovered   539d8b0
-[x] a form for the half of §61.1 that had only an endpoint
-[x] a passkey can be seen and retired, and the last one is protected (§9.1, §9.2)
+[x] a form for the half of §61.1 that had only an endpoint          01b7f62
+[x] a passkey can be seen and retired, and the last one is protected f7568b8
+[x] the queue made usable by the first person to use it (§61.1)     96d3516 … ddf4f71
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
 
@@ -1471,6 +1472,7 @@ the gaps it named:
 first measurement            85%         78%        92%        89%
 after the gaps were filled   89%         82%        96%        93%
 after Telegram (2026-08-28)  89%         82%        95%        93%
+after §61.1 and §9.2         89%         82%        95%        93%
 ```
 
 The last row is the interesting one: a whole feature — linking a chat, four bot commands,
@@ -1607,6 +1609,11 @@ Linking, unlinking, issuing a login link, opening a session through one and refu
 nonce are five events, none of them recorded. The Worker logs some of it, which is not the
 same thing: a log is retained for days and is not queryable by principal.
 
+**Still open.** The passkey work closed the neighbouring half — `credential.registered` and
+`credential.removed` are written now, and finding that registration had never been audited was
+a consequence of building removal, which was. These five remain, and they are the same
+argument in a different table.
+
 **The webhook has no test of any kind.** Not one file in the repository exercises
 `apps/edge/src/routes/telegram.ts` — including the secret-token check, which §9.3 calls "the
 whole of the security of this feature". The two core services are well covered, and that is
@@ -1647,6 +1654,54 @@ that event were still ahead. It is behind, in fact if not in intent, which means
 commitment is already load-bearing for anybody who finds the address. Either a gate is built
 or the level's condition is restated to something true; leaving the two disagreeing is the one
 option that misleads.
+
+### 13.38. The queue, and what using a thing finds that testing it does not
+
+2026-08-29, in one sitting. §61.1's report form and §9.2's passkey management were built with
+tests, checkpoints and a live verification each; both were correct. Then the owner filed a
+report and tried to act on it, and four defects came out in twenty minutes — none of them in
+the two features, all of them in the queue those features finally gave something to do.
+
+```text
+the report is filed and the queue does not show it   479 open, a page of 50, ascending
+the link on the line goes nowhere                    #{id}: an anchor to nothing
+the actions offered are all refused                  four article verbs against an account
+the account cannot be looked up afterwards           the field uppercased a handle
+```
+
+**One shape, four times: the page knew the domain instead of asking it.** The link was built
+by parsing a label — `display_name ?? "@" + username` — so it worked for accounts with no
+display name and failed for the rest. The verbs were written out in the markup, three copies
+of them, and the queue's copy was the article's list applied to every target. The lookup
+knew that an identifier means an article. Each is a rule living in a template, and a rule in
+a template is a rule the service cannot enforce and a test does not see.
+
+The fix each time was to move the answer to where the rule already was: the address on to
+`TargetSummary` beside the article id a comment has always carried; the verbs into
+`ACTIONS_FOR`, which `stateChange` now consults before its own switch; the type on to the
+line, in the word a moderator reads rather than the schema's. `principal` is right in the
+schema — §7 gives people and agents one table because they are one kind of subject — and
+wrong in a control somebody acts through.
+
+**Why no test could have caught them, and what that costs.** Every one needed a report about
+something other than an article to exist. The checkpoint files reports about articles because
+that is what a checkpoint can arrange; the unit tests exercise the service, which was right
+throughout — it refused `remove` on a principal exactly as specified. The queue that offered
+it was the part with no test, and there is no test to add here that is not "render this page
+as a moderator and read it", which is what the owner did.
+
+Coverage did not move: 89% statements, 93% lines, before and after. That is the third time
+this project has recorded the same finding, and it is worth stating plainly rather than
+re-deriving: the figure measures whether a line ran, not whether anybody asked it the right
+question. The checkpoints against a real deployment have caught more defects than the suite,
+and using the product has now caught more than both.
+
+**What was fixed while the queue was open.** Beyond the four: the count on the heading, so a
+page of fifty says what it is fifty of; an order the address carries, so a moderator can
+bookmark the end they work from; a dossier for an account, which §61.2 has made a target
+since the first migration with no way to reach one by name; and a history read across all
+three target types when nothing resolves, because a tombstone under §23.3 has no row left and
+its record is the only thing that can still answer for it.
 
 ### 13.4. Static assets are minified at build, and the obvious route was wrong
 
