@@ -56,7 +56,7 @@ const SUMMARY: Record<PolicySlug, string> = {
 
 const UPDATED = /^\*\*Last updated:\s*([0-9]{4}-[0-9]{2}-[0-9]{2})\*\*$/m;
 
-const REPOSITORY = "https://github.com/AiratTop/orator-space/blob/main";
+const REPOSITORY = "https://github.com/orator-space/orator-space/blob/main";
 
 /**
  * Where a relative link in the Markdown points once the document is a web page.

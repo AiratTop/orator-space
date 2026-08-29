@@ -70,7 +70,9 @@ Subdomains are created as needed; there is no constraint.
 ### GitHub
 
 ```text
-repository      public — github.com/AiratTop/orator-space
+organisation    orator-space — the repository moved off the personal account on
+                2026-08-29, so that a private one has somewhere to live later
+repository      public — github.com/orator-space/orator-space
 branches        created on request
 environments    staging / production
 secrets         CLOUDFLARE_API_TOKEN per environment

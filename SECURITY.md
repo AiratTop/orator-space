@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Report privately through
-[GitHub Security Advisories](https://github.com/AiratTop/orator-space/security/advisories/new).
+[GitHub Security Advisories](https://github.com/orator-space/orator-space/security/advisories/new).
 Please do not open a public issue for a suspected vulnerability.
 
 We aim to acknowledge a report within 72 hours.

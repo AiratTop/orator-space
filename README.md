@@ -191,4 +191,4 @@ history is a truthful record of what each policy said on any given date.
 - Website: [airat.top](https://airat.top)
 - GitHub: [@AiratTop](https://github.com/AiratTop)
 - Email: [mail@airat.top](mailto:mail@airat.top)
-- Repository: [orator-space](https://github.com/AiratTop/orator-space)
+- Repository: [orator-space](https://github.com/orator-space/orator-space)

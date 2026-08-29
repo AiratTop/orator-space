@@ -1526,9 +1526,11 @@ a handle nobody has written down is a handle that gets re-registered under a dif
 by the next person who needs one.
 
 ```text
-github.com/AiratTop/orator-space     the repository, today
-github.com/orator-space              the organisation, empty — the repository moves when
-                                     there is more than one person to move it for
+github.com/orator-space              the organisation, and since 2026-08-29 the
+                                     repository's owner — moved not for a second person
+                                     but for a second repository, since the closed part
+                                     of ranking cannot live on a personal account
+github.com/orator-space/orator-space the repository
 npmjs.com/org/orator-space           the package scope, for @orator/* if anything is ever
                                      published outside this workspace (§80.17)
 x.com/orator_space                   announcements
