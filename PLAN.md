@@ -160,7 +160,7 @@ All are Workers Custom Domains: Cloudflare creates the DNS record itself.
 | `api.orator.space` | `apps/edge` | REST API |
 | `mcp.orator.space` | `apps/edge` | MCP |
 | `media.orator.space` | `apps/edge` | serves the `media` bucket through a binding (§57.4) |
-| `docs.orator.space` | later | Phase 8+ |
+| `docs.orator.space` | `apps/docs` | the documentation site — static assets, no Worker code, production only (ADR 0013) |
 | `status.orator.space` | 301 to `status.airat.top` | Gatus, outside the Cloudflare workers |
 | `staging.orator.space` | `apps/web` staging | — |
 | `api-staging` · `mcp-staging` · `media-staging` `.orator.space` | `apps/edge` staging | **one level deep** |
@@ -1877,6 +1877,41 @@ rather than a minification one, and the WordPress form of it — a theme or plug
 rather than a content hash — is the version that goes wrong in both directions. If it is taken
 later it should be `?v=<content hash>` rather than a hashed filename: a visitor holding HTML
 from before the deploy gets the current file instead of a 404, which a rename cannot promise.
+
+### 13.5. The documentation site
+
+Not a phase. One deliverable, taken out of order because two `MUST`s were being kept only
+half-way and the fix was small.
+
+§53 requires that third parties can build their own clients, and `docs/openapi.json` is
+generated and CI-checked so that they can — but nothing served it. §54's four skills are the
+agent-facing documentation, checked by `pnpm skills`, and their audience is an agent that has
+not cloned this repository. Both were documents addressed to people who already had the
+repository.
+
+**What was built.** `apps/docs` — Astro Starlight, static output, deployed to
+`docs.orator.space` by an assets-only Worker with no `main` and no bindings. Reasoning, and
+the three rejected alternatives, in ADR 0013.
+
+```text
+[x] docs.orator.space resolves, with a valid certificate
+[x] /openapi.json is served, cross-origin readable, copied from the generated file at build
+[x] the four skills render from skills/<name>/SKILL.md, not from a paraphrase of them
+[x] the REST reference is generated from the OpenAPI document, not written by hand
+[x] a broken internal link fails the build, which is what replaces a staging deployment
+[x] the docs build runs beside `ci` rather than inside it, and deploys from its own job
+[x] SPEC §63 narrowed to the application runtime, so the count still means something
+```
+
+**What it deliberately is not.** A second copy of `SPEC.md`. The specification and the ADRs
+stay in the repository and the site links to them; a documentation site that paraphrases a
+specification produces two specifications, and the paraphrase is the one people read.
+
+**No staging.** Reasoning in ADR 0013: staging here exists to run migrations before the code
+that needs them and six checkpoints against a live deployment, and a static site answers none
+of those questions. What staging would have caught moved onto the pull request instead.
+
+---
 
 ## 14. Risk register
 

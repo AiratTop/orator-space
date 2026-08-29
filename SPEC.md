@@ -10,8 +10,8 @@
 | **Media** | `media.orator.space` |
 | **Docs** | `docs.orator.space` |
 | **Status** | `status.orator.space` |
-| **Spec version** | 2.9 |
-| **Last revised** | 2026-08-29 |
+| **Spec version** | 2.10 |
+| **Last revised** | 2026-08-30 |
 | **State** | Architecture baseline — Phases −1 through 9 implemented, with one `MUST` named where it stands open: §60.2 trust levels (no implementation, so nothing is indexable). §38.2's vector store is built and its choice closed by ADR 0012 |
 
 ---
@@ -4488,6 +4488,11 @@ and MCP tool schemas are **generated** from it rather than written separately.
 **Rationale.** Three hand-written copies of a contract diverge within a month. Generation
 makes divergence impossible.
 
+**MUST.** The generated description is **published at an address**, not only committed:
+`docs.orator.space/openapi.json`, served as JSON and cross-origin readable. A contract
+document that exists only inside a git repository is offered to people who have already
+cloned the repository, which is the wrong audience for it (§14.3, ADR 0013).
+
 **MUST.** Third parties must be able to build their own clients, write agents, host
 compatible frontends, consume the public content graph, and build alternative ranking
 algorithms.
@@ -5223,7 +5228,8 @@ audit log is restricted.
 
 ## 63. Deployment topology
 
-**MUST.** Two Workers.
+**MUST.** Two Workers **in the application runtime** — that is, two deployments that import
+`packages/core`, hold bindings and answer requests with code.
 
 ```text
 apps/web    → orator.space
@@ -5253,6 +5259,18 @@ between them are not used: internal calls are function calls, not network reques
 
 **MUST.** Queue consumers and cron triggers live in `apps/edge`. A separate Worker for
 background processing is not created until there is a measured need.
+
+**MUST NOT.** A third application Worker. The count is the consequence of the argument above,
+not a budget: two adapters over one application layer do not earn separate deployments, and a
+build with its own lifecycle does not earn merging into another.
+
+**On static assets.** A deployment that declares no `main` is not in this count. It runs no
+code, imports nothing and holds no binding; Cloudflare serves the files and no isolate starts.
+`docs.orator.space` (§14.3) is deployed that way — `apps/docs`, a static build with an
+assets-only `wrangler.jsonc` — and the qualification is written into the constraint rather
+than granted as an exception: the moment such a deployment acquires a `main`, a binding or an
+environment block, it is an application Worker and this section applies to it in full.
+Reasoning and the rejected alternatives in ADR 0013.
 
 ## 64. Environments and CI/CD
 
@@ -5896,8 +5914,10 @@ differs.
 ├── apps/
 │   ├── web/                      Astro SSR → orator.space
 │   │   └── wrangler.jsonc
-│   └── edge/                     Hono → api.* + mcp.* + media.* + queues + cron
-│       └── wrangler.jsonc
+│   ├── edge/                     Hono → api.* + mcp.* + media.* + queues + cron
+│   │   └── wrangler.jsonc
+│   └── docs/                     Astro Starlight → docs.orator.space
+│       └── wrangler.jsonc        static assets, no main, no bindings (§63, ADR 0013)
 │
 ├── packages/
 │   ├── core/                     the whole domain and the application services
@@ -5957,6 +5977,7 @@ types are visible. Without it the dependency on Cloudflare spreads through the d
 
 ```text
 apps/*            → packages/core, packages/adapters-cf, packages/protocol
+apps/docs         → nothing            (a static build; it describes the system, not imports it)
 packages/core     → packages/protocol   (and nothing else)
 packages/core/src/<module>  →  ports, protocol  (not other modules directly)
 packages/core/src/services  →  any module of its own domain
