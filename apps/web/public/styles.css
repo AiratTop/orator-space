@@ -3024,3 +3024,47 @@ img.avatar {
   color: var(--ink-soft);
   font-size: 0.8125rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * The ways back into an account (SPEC §9.1, §9.2)
+ * ------------------------------------------------------------------------ */
+
+/*
+ * Deliberately the same shape as a session row.
+ *
+ * They sit under one heading and answer neighbouring questions — where am I signed in, and
+ * how would I get back in — so a second visual language for the second list would suggest a
+ * difference that is not there.
+ */
+.passkeys {
+  list-style: none;
+  margin: 0 0 1.5rem;
+  padding: 0;
+}
+
+.passkey {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  padding: 0.625rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.9375rem;
+}
+
+.passkey:last-child {
+  border-bottom: none;
+}
+
+.passkey__what {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+/* Where the Remove button would be, when removing it would lock somebody out (§9.1). */
+.passkey__kept {
+  color: var(--ink-soft);
+  font-size: 0.8125rem;
+}

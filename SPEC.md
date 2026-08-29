@@ -10,9 +10,9 @@
 | **Media** | `media.orator.space` |
 | **Docs** | `docs.orator.space` |
 | **Status** | `status.orator.space` |
-| **Spec version** | 2.8 |
+| **Spec version** | 2.9 |
 | **Last revised** | 2026-08-29 |
-| **State** | Architecture baseline — Phases −1 through 9 implemented, with four `MUST`s named where they stand open: §38.2 Vectorize (designed, deliberately not built), §60.2 trust levels (no implementation, so nothing is indexable), §61.1's report form, and §9.2's passkey management |
+| **State** | Architecture baseline — Phases −1 through 9 implemented, with two `MUST`s named where they stand open: §38.2 Vectorize (designed, deliberately not built) and §60.2 trust levels (no implementation, so nothing is indexable) |
 
 ---
 
@@ -890,8 +890,8 @@ CREATE INDEX ix_sessions_principal ON sessions(principal_id, id DESC);
 
 **MUST.** A user may hold several passkeys. Deleting the last one is refused unless a
 backup sign-in method is configured; otherwise the account becomes unreachable. The backup
-method is §9.3's Telegram binding — until this rule has something to refuse, there is no way
-to delete a passkey at all (§9.2).
+method is §9.3's Telegram binding, and the refusal lives in the service rather than in the
+page that renders the control (§9.2).
 
 **MUST.** The session cookie is `HttpOnly`, `Secure`, `SameSite=Lax`, with a bounded
 lifetime, and its value is stored only as a hash.
@@ -923,14 +923,25 @@ POST   /auth/signout                    ends the session. POST, so no page can s
 Sessions are listed and revoked from `/settings` against the account service, not through an
 auth endpoint of their own; §9.1's `sessions` table is what both read.
 
-**Not built — listing and removing one passkey.** A person can add a second passkey and
-cannot see or delete either, so a lost or compromised authenticator can only be dealt with by
-closing the account. What is missing is a list carrying the label, the date it was last used
-and a delete, and a repository method to remove one credential: `CredentialRepo` today has
-`listFor` (used only inside the ceremony, to exclude what is already registered) and
-`deleteAllFor` (account closure). §9.1's refusal to delete the last passkey becomes
-implementable in the same change, because §9.3 is now the backup sign-in method it requires.
-Adding and removing a credential are both `audit_log` events under §62.
+**Listing and removing a credential is `/settings`, not an endpoint of its own.** Sessions
+are administered there against the account service and passkeys are the same question asked
+about a different table — where am I signed in, and how would I get back in — so a second
+mechanism for the second list would be a second set of rules to remember.
+
+**MUST — a credential row is never shown by its identifier.** The list carries the label, the
+dates it arrived and was last used, and whether it is synced to a keychain or bound to one
+device. Neither the credential id nor the public key is secret and neither tells a person
+anything: printing them asks somebody to compare two base64url strings in order to decide
+which authenticator to retire.
+
+**MUST — removal is refused for the last credential unless §9.3 is connected.** This is §9.1's
+rule, which had nothing to point at until the Telegram binding existed. It is enforced in the
+service, not by withholding the control: a page that hides a button has hidden a button.
+
+**MUST — registering and removing a credential are `audit_log` events (§62).** A new way into
+an account coming into existence is precisely what that table is for, and the asymmetry is
+what makes it obvious: an account whose credentials had only ever been added would have a log
+that begins in the middle.
 
 ### 9.3. The Telegram bot
 
@@ -6042,9 +6053,9 @@ indicator that cannot be measured says so rather than reporting `ok`.
 the six checkpoint scripts against a real deployment on every push, and the test suite in CI —
 and a row is not ticked on somebody's recollection. What remains before a public launch is in
 `PLAN.md` §11 and §13: §60.2 has no implementation, so no article on any deployment is
-indexable; §9.2 cannot list or remove a passkey; branch protection on `main` is deliberately
-off; and nothing gates registration, so the `[L]` level's own trigger — "public registration
-opening" — is an event these documents treat as future and the deployment treats as past.
+indexable; branch protection on `main` is deliberately off; and nothing gates registration, so
+the `[L]` level's own trigger — "public registration opening" — is an event these documents
+treat as future and the deployment treats as past.
 
 ## 78. Development phases
 

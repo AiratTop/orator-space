@@ -116,6 +116,17 @@ export interface CredentialRepo {
   insert(credential: Omit<CredentialRecord, "lastUsedAt">): PendingWrite;
   /** SPEC §42.2 — a sign count that fails to advance is the cloned-authenticator signal. */
   recordUse(id: string, signCount: number, at: string): PendingWrite;
+
+  /**
+   * Removes one credential (SPEC §9.1, §9.2).
+   *
+   * Scoped by principal in the statement rather than by a check before it. The service does
+   * establish ownership from the listing — that is where the "is this yours" answer belongs —
+   * and this is the second lock: a row this principal does not own cannot be deleted by this
+   * write however it is called, which is the property worth having in the one operation that
+   * can lock somebody out of their own account.
+   */
+  deleteOne(id: string, principalId: string): PendingWrite;
   /**
    * SPEC §23.5 — removed outright on account closure, not revoked.
    *

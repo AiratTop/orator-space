@@ -5,7 +5,7 @@ import { OWNER_PRESET } from "../identity/scopes.js";
 import type { Actor } from "../identity/authz.js";
 import type { RequestContext } from "./context.js";
 import { issueToken, registerAgent, registerHuman, revokeToken } from "./identity.js";
-import { accountView, endSession, sessionActor, setAgentStatus } from "./account.js";
+import { accountView, endSession, removePasskey, sessionActor, setAgentStatus } from "./account.js";
 
 let ports: ReturnType<typeof createMemoryPorts>;
 
@@ -272,5 +272,93 @@ describe("a moderator's session", () => {
     // §42.2 — only an administrator may grant an admin scope. That check does the work the
     // incomplete actor was standing in for, and does it in one place.
     expect(errorOf(issued)).toBe(ErrorType.Forbidden);
+  });
+});
+
+
+/**
+ * SPEC §9.1, §9.2 — a passkey can be taken away, and the last one cannot.
+ *
+ * §9.2 listed `DELETE /v1/auth/credentials/{id}` from the first version of the document and
+ * nothing implemented it, so the only remedy for an authenticator somebody else is holding
+ * was to close the account — which destroys the work rather than the key. §9.1's refusal to
+ * delete a last credential has waited just as long, for the reason that it had nothing to
+ * point at: until §9.3 there was no backup sign-in method for it to require.
+ */
+describe("passkeys", () => {
+  const addPasskey = (principalId: string, id: string, label: string | null = null) =>
+    ports.credentials.insert({
+      id: id as never,
+      principalId: principalId as never,
+      credentialId: `cred-${id}`,
+      publicKey: `key-${id}`,
+      signCount: 0,
+      transports: null,
+      aaguid: null,
+      label,
+      backedUp: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+  const linkTelegram = (principalId: string) =>
+    ports.telegram.upsertAccount({
+      principalId: principalId as never,
+      telegramUserId: "tg-1",
+      chatId: "chat-1",
+      username: null,
+      linkedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+  it("lists what a person holds, without the key material", async () => {
+    const { ctx, owner } = await ownerWithAgent();
+    await ports.db.commit([addPasskey(owner.principalId, "P1", "phone")]);
+
+    const view = unwrap(await accountView(ctx, null));
+    expect(view.passkeys.map((p) => [p.id, p.label])).toEqual([["P1", "phone"]]);
+    expect(JSON.stringify(view.passkeys)).not.toContain("key-P1");
+    expect(JSON.stringify(view.passkeys)).not.toContain("cred-P1");
+  });
+
+  it("removes one and leaves the other", async () => {
+    const { ctx, owner } = await ownerWithAgent();
+    await ports.db.commit([addPasskey(owner.principalId, "P1"), addPasskey(owner.principalId, "P2")]);
+
+    expect(unwrap(await removePasskey(ctx, "P2")).remaining).toBe(1);
+    expect(unwrap(await accountView(ctx, null)).passkeys.map((p) => p.id)).toEqual(["P1"]);
+  });
+
+  it("refuses the last one when there is no other way in", async () => {
+    const { ctx, owner } = await ownerWithAgent();
+    await ports.db.commit([addPasskey(owner.principalId, "P1")]);
+
+    expect(errorOf(await removePasskey(ctx, "P1"))).toBe(ErrorType.Conflict);
+    expect(unwrap(await accountView(ctx, null)).passkeys).toHaveLength(1);
+  });
+
+  it("allows the last one once a chat is bound (§9.3)", async () => {
+    const { ctx, owner } = await ownerWithAgent();
+    await ports.db.commit([addPasskey(owner.principalId, "P1"), linkTelegram(owner.principalId)]);
+
+    expect(unwrap(await accountView(ctx, null)).backupChannel).toBe(true);
+    expect(unwrap(await removePasskey(ctx, "P1")).remaining).toBe(0);
+  });
+
+  it("refuses a passkey belonging to somebody else, and does not delete it", async () => {
+    const { ctx } = await ownerWithAgent();
+    const other = unwrap(await registerHuman(contextFor(null), { username: "someone-else" }));
+    await ports.db.commit([addPasskey(other.principalId, "P9")]);
+
+    expect(errorOf(await removePasskey(ctx, "P9"))).toBe(ErrorType.NotFound);
+    expect(await ports.credentials.listFor(other.principalId)).toHaveLength(1);
+  });
+
+  it("records the removal in the audit log (§62)", async () => {
+    const { ctx, owner } = await ownerWithAgent();
+    await ports.db.commit([addPasskey(owner.principalId, "P1"), addPasskey(owner.principalId, "P2")]);
+    await removePasskey(ctx, "P2");
+
+    const entry = ports.state.audit.find((row) => row.action === "credential.removed");
+    expect(entry?.targetId).toBe("P2");
+    expect(entry?.actorPrincipalId).toBe(owner.principalId);
   });
 });

@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import {
+  createAuditRepo,
   createCredentialRepo,
   createD1Database,
   createIdGen,
@@ -44,6 +45,7 @@ export const authPorts: AuthPorts = {
   sessions: createSessionRepo(authEnv.DB),
   passkeys: createPasskeyVerifier(),
   tokens: createTokenRepo(authEnv.DB),
+  audit: createAuditRepo(authEnv.DB),
   clock: systemClock,
   ids: idGen,
 };

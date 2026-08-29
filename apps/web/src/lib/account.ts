@@ -73,6 +73,9 @@ export const accountPorts: AccountPorts = {
   quota: createQuotaGate(accountEnv.QUOTA),
   sessions: createSessionRepo(accountEnv.DB),
   credentials: createCredentialRepo(accountEnv.DB),
+  // §9.1 — read for one question: does this account have a second way in, so that removing
+  // the last passkey is a decision rather than a lockout.
+  telegram: createTelegramRepo(accountEnv.DB),
   reading: createReadingRepo(accountEnv.DB),
   readingList: createReadingListRepo(accountEnv.DB),
   clock: systemClock,

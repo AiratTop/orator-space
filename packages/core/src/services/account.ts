@@ -54,12 +54,37 @@ export interface SessionView extends OpenSession {
  * now (ADR 0011, §49.2): a page that lists the articles does not need to be told how many
  * there are, and this saved a query on every load of a page about credentials.
  */
+/**
+ * A passkey as the person holding it sees it (SPEC §9.1, §9.2).
+ *
+ * No public key and no credential id. Neither is a secret and neither tells a person
+ * anything — what tells them which authenticator this is are the dates, whether it is
+ * synced to a keychain or bound to one device, and the label if one was given. A page that
+ * printed the credential id would be inviting somebody to compare two base64url strings in
+ * order to decide which of them to delete.
+ */
+export interface PasskeyView {
+  id: OratorId;
+  label: string | null;
+  /** Synced to a provider's keychain, rather than living on one device only. */
+  backedUp: boolean;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 export interface AccountView {
   principal: PrincipalRecord;
   tokens: TokenSummary[];
   agents: AgentView[];
   sessions: SessionView[];
-
+  passkeys: PasskeyView[];
+  /**
+   * Whether a second way in exists (SPEC §9.1, §9.3).
+   *
+   * The page needs it for the same reason the service does: a control that would be refused
+   * should say so before it is pressed, not after.
+   */
+  backupChannel: boolean;
 }
 
 /**
@@ -139,12 +164,14 @@ export async function accountView(
   }
 
   const now = ctx.ports.clock.now();
-  const [ownTokens, owned, sessions] = await Promise.all([
+  const [ownTokens, owned, sessions, credentials, telegram] = await Promise.all([
     ctx.ports.tokens.listFor(principal.id),
     // Suspended agents included: this is the owner's view, and an agent that has been
     // stopped is exactly the row its owner needs to see in order to start it again.
     ctx.ports.principals.listAgentsOwnedBy(principal.id),
     ctx.ports.sessions.listFor(principal.id),
+    ctx.ports.credentials.listFor(principal.id),
+    ctx.ports.telegram.findByPrincipal(principal.id),
   ]);
 
   const agents = await Promise.all(
@@ -167,7 +194,63 @@ export async function accountView(
     sessions: sessions
       .filter((session) => Date.parse(session.expiresAt) > now.getTime())
       .map((session) => ({ ...session, current: session.id === currentSessionId })),
+    passkeys: credentials.map((credential) => ({
+      id: credential.id,
+      label: credential.label,
+      backedUp: credential.backedUp,
+      createdAt: credential.createdAt,
+      lastUsedAt: credential.lastUsedAt,
+    })),
+    backupChannel: telegram !== null,
   });
+}
+
+/**
+ * Removes one passkey (SPEC §9.1, §9.2, §62).
+ *
+ * §9.2 listed this endpoint from the beginning and nothing implemented it, so the only
+ * answer to a lost or compromised authenticator was to close the account. That is the wrong
+ * shape of answer: the credential keeps existing on a device somebody else may be holding,
+ * and closing the account destroys the work rather than the key.
+ *
+ * **The last one is refused unless a second way in exists.** §9.1 says so, and until §9.3
+ * there was no second way for the rule to point at — which is why the rule has waited. A
+ * person who deletes their only credential with no chat bound has no path back into the
+ * account, and no support desk here to ask.
+ *
+ * Ownership comes from the listing, like `endSession` above: a credential that is not in
+ * this principal's list is not this principal's, so no argument to this function can reach
+ * somebody else's key. The write is scoped again on the way out.
+ */
+export async function removePasskey(
+  ctx: AccountContext,
+  credentialId: string,
+): Promise<Result<{ remaining: number }>> {
+  const actor = ctx.actor;
+  if (actor === null) return fail(ErrorType.Unauthenticated, "Authentication required");
+
+  const credentials = await ctx.ports.credentials.listFor(actor.principalId);
+  if (!credentials.some((credential) => credential.id === credentialId)) {
+    return fail(ErrorType.NotFound, "Passkey not found");
+  }
+
+  if (credentials.length === 1) {
+    const telegram = await ctx.ports.telegram.findByPrincipal(actor.principalId);
+    if (telegram === null) {
+      return fail(
+        ErrorType.Conflict,
+        "That is the only way into this account",
+        "Add a second passkey, or connect Telegram, before removing this one. There is no " +
+          "way to restore an account whose last credential is gone.",
+      );
+    }
+  }
+
+  await ctx.ports.db.commit([
+    ctx.ports.credentials.deleteOne(credentialId, actor.principalId),
+    journal(ctx, "credential.removed", { type: "credential", id: credentialId }, "success", null),
+  ]);
+  return ok({ remaining: credentials.length - 1 });
 }
 
 /**

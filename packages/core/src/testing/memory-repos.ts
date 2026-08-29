@@ -1810,6 +1810,14 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     insert: (credential) =>
       asWrite(() => void state.credentials.push({ ...credential, lastUsedAt: null })),
     recordUse: () => asWrite(() => 1),
+    deleteOne: (id, principalId) =>
+      asWrite(() => {
+        const before = state.credentials.length;
+        state.credentials = state.credentials.filter(
+          (record) => !(record.id === id && record.principalId === principalId),
+        );
+        return before - state.credentials.length;
+      }),
     deleteAllFor: (principalId) =>
       asWrite(() => {
         const before = state.credentials.length;

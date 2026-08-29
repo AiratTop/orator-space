@@ -2,6 +2,7 @@ import {
   endSession,
   issueToken,
   registerAgent,
+  removePasskey,
   revokeToken,
   setAgentStatus,
   updateProfile,
@@ -129,6 +130,25 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
     case "session.end": {
       const result = await endSession(ctx, text(form, "session"));
       return result.ok ? { kind: "done", message: "Session ended." } : problem(result.error);
+    }
+
+    /*
+     * §9.1, §9.2 — removing a passkey, which nothing could do until now.
+     *
+     * The message names what is left rather than saying "done": this is the one control on
+     * the page whose consequence is measured in ways back into the account, and "one passkey
+     * remaining" is the sentence somebody needs in order to decide whether to add another.
+     */
+    case "passkey.remove": {
+      const result = await removePasskey(ctx, text(form, "passkey"));
+      if (!result.ok) return problem(result.error);
+      return {
+        kind: "done",
+        message:
+          result.value.remaining === 0
+            ? "Passkey removed. This account is now reached through Telegram only."
+            : `Passkey removed. ${result.value.remaining} left on this account.`,
+      };
     }
 
     default:

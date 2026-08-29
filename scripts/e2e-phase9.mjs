@@ -1197,7 +1197,115 @@ check("the open session is listed", typeof sessionId === "string", String(sessio
  */
 check("the account page offers a way to sign out", withSessions.html.includes('action="/auth/signout"'));
 
-const ended = await submit({ action: "session.end", session: sessionId });
+/*
+ * §9.2 — the credentials themselves, which this page could add and never show.
+ *
+ * The endpoint list in §9.2 has always named a way to see and remove a passkey, and nothing
+ * implemented it: an account could gain a second credential and never retire the first, so
+ * the only answer to an authenticator somebody else is holding was to close the account.
+ */
+const passkeyId = (withSessions.html.match(/name="passkey" value="([0-9A-Z]{26})"/) ?? [])[1];
+check(
+  "the passkeys are listed, not only the sessions",
+  withSessions.html.includes("Ways back in"),
+);
+
+/*
+ * §9.1 — the last one is refused unless there is a second way in, and this account has none.
+ *
+ * Asserted twice on purpose. The page withholds the button, which is courtesy; the service
+ * refuses the act, which is the rule. A control that is merely absent from a page is absent
+ * from that page.
+ */
+check(
+  "and the only passkey is not offered a Remove button",
+  passkeyId === undefined && withSessions.html.includes("the only way in"),
+  String(passkeyId),
+);
+
+const forcedRemoval = await submit({ action: "passkey.remove", passkey: "06GXXXXXXXXXXXXXXXXXXXXXXX" });
+check(
+  "posting a removal for a passkey that is not this account's is refused",
+  /Passkey not found/.test(forcedRemoval.html),
+);
+
+const onlyOne = (withSessions.html.match(/name="action" value="passkey.remove"/g) ?? []).length;
+check("and no removal form exists on the page at all", onlyOne === 0, String(onlyOne));
+
+/*
+ * A second device, and then the first one retired — the whole reason §9.2 lists this.
+ *
+ * A second authenticator is a second credential, which is what the person who has lost a
+ * phone actually does: add the replacement, then remove the one they are no longer holding.
+ * Until this existed the second half was impossible and the remedy was closing the account.
+ */
+const secondDevice = await createVirtualAuthenticator({ rpId, origin: webOrigin });
+const secondOptions = await webJson("/auth/passkey/register-options");
+const secondAttestation = await secondDevice.register(secondOptions.body.challenge);
+const secondRegistered = await webJson("/auth/passkey/register", { body: secondAttestation });
+check(
+  "a second passkey can be added from the page",
+  secondRegistered.status === 200 || secondRegistered.status === 201,
+  String(secondRegistered.status),
+);
+
+const withTwo = await page("/settings?tab=sessions");
+const removable = [...withTwo.html.matchAll(/name="passkey" value="([0-9A-Z]{26})"/g)].map((m) => m[1]);
+check(
+  "and both are now listed, each with a way to remove it",
+  removable.length === 2 && !withTwo.html.includes("the only way in"),
+  String(removable.length),
+);
+
+const passkeyRemoved = await submit({ action: "passkey.remove", passkey: removable[0] });
+check(
+  "removing one says how many ways back in are left",
+  /1 left on this account/.test(passkeyRemoved.html),
+);
+
+const withOneAgain = await page("/settings?tab=sessions");
+check(
+  "and the last one is protected again, without a second way in",
+  withOneAgain.html.includes("the only way in") &&
+    !withOneAgain.html.includes('value="passkey.remove"'),
+);
+
+/*
+ * §9.1 — and the one that is left still opens a session, which is the property that matters.
+ *
+ * Removing a credential must retire that credential and nothing else. A test that only reads
+ * the page cannot tell "the row is gone" from "both rows are gone", and the second is the
+ * failure nobody would notice until they tried to sign in.
+ */
+const survivorOptions = await webJson("/auth/passkey/login-options");
+const survivorAssertion = await secondDevice.authenticate(survivorOptions.body.challenge);
+const survivorLogin = await webJson("/auth/passkey/login", { body: survivorAssertion });
+check(
+  "and the surviving passkey still signs the account in",
+  survivorLogin.status === 200,
+  String(survivorLogin.status),
+);
+
+/*
+ * The session id is re-read here, not reused from above.
+ *
+ * Signing in with the surviving passkey opened a *second* session, which is what signing in
+ * does — so the id captured before that is no longer the one this browser is holding, and
+ * ending it would revoke a session nobody is using while the checkpoint asserted a sign-out.
+ * The current row is the one carrying "this browser", which is how the page marks it.
+ */
+const nowSignedIn = await page("/settings?tab=sessions");
+const currentRow = nowSignedIn.html
+  .split('<li class="session"')
+  .find((row) => row.includes("this browser"));
+const currentSessionId = (currentRow?.match(/name="session" value="([0-9A-Z]{26})"/) ?? [])[1];
+check(
+  "the session opened by the surviving passkey is the one marked as this browser",
+  typeof currentSessionId === "string" && currentSessionId !== sessionId,
+  `${currentSessionId} was ${sessionId}`,
+);
+
+const ended = await submit({ action: "session.end", session: currentSessionId });
 check("ending the current session redirects away", ended.status === 303 && ended.headers.get("location") === "/");
 check("and clears the cookie rather than leaving a revoked one", !cookies.has("orator_session"));
 

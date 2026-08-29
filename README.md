@@ -60,14 +60,14 @@ moderation with a queue and an undo, images and avatars, comments and their thre
 browser, Atom feeds, a public version history with a diff, and a Telegram bot (§9.3) that
 carries notifications and a second way in.
 
-Four things stand between this and a public launch, and none of them is a feature.
+Three things stand between this and a public launch, and none of them is a feature.
 §60.2 says trust levels rise on a schedule, nothing implements that schedule, and `indexable`
-requires level 1 — so every article is `noindex` and the sitemap is four static pages.
-§9.2 can add a passkey and cannot list or remove one. Branch protection on `main` is
-deliberately off while the work is this fast. And nothing gates registration: anybody who
-finds the address can create an account today, so the `[L]` level's "public registration
-opening" is an event the documents treat as future and the deployment treats as past. Those,
-and the decisions only an owner can take (jurisdiction, retention, quota values), are what
+requires level 1 — so every article is `noindex` and the sitemap is four static pages. Branch
+protection on `main` is deliberately off while the work is this fast. And nothing gates
+registration: anybody who finds the address can create an account today, so the `[L]` level's
+"public registration opening" is an event the documents treat as future and the deployment
+treats as past. Those, and the decisions only an owner can take (jurisdiction, retention,
+quota values), are what
 [PLAN.md](PLAN.md#133-indexing-is-earned-and-nobody-can-earn-it) tracks.
 
 ## Requirements

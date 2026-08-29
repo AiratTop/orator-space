@@ -129,6 +129,15 @@ export type AccountPorts = Pick<
   | "quota"
   | "sessions"
   | "credentials"
+  /**
+   * Read here for one question only: does this account have a second way in (§9.1)?
+   *
+   * §9.1 refuses the deletion of a last passkey "unless a backup sign-in method is
+   * configured", and §9.3 is that method. A service cannot enforce a rule it cannot ask
+   * about, and the alternative — passing the answer in from the page — puts the condition
+   * in the one place §68 says a rule must not live, where a second call site gets it wrong.
+   */
+  | "telegram"
   | "reading"
   | "readingList"
   | "clock"

@@ -3,12 +3,14 @@ import { generateSessionToken, sha256Hex } from "../identity/tokens.js";
 import { canonicalizeUsername } from "../identity/username.js";
 import { ConstraintViolation } from "../ports/index.js";
 import type {
+  AuditRepo,
   AuthenticationOptions,
   Clock,
   CredentialRepo,
   Database,
   IdGen,
   PasskeyVerifier,
+  PendingWrite,
   PrincipalRepo,
   RegistrationOptions,
   SessionRepo,
@@ -33,6 +35,16 @@ export interface AuthPorts {
   credentials: CredentialRepo;
   sessions: SessionRepo;
   passkeys: PasskeyVerifier;
+  /**
+   * SPEC §62 — "key and token operations" includes the key a person signs in with.
+   *
+   * This flow wrote no audit row at all until §9.2 gained a way to remove a credential, and
+   * the asymmetry is what made the absence obvious: removal is recorded, so an account whose
+   * credentials had only ever been added had a log that began in the middle. Registering a
+   * passkey is the moment a new way into an account comes into existence, which is exactly
+   * the class of event §62 exists for.
+   */
+  audit: AuditRepo;
   /** Read-only, and only to resolve the first token a new account holds (§42.2). */
   tokens: TokenRepo;
   clock: Clock;
@@ -52,6 +64,35 @@ export interface AuthContext {
 /** SPEC §9.1 — long enough to be usable, short enough that a stolen cookie expires. */
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
 export const CHALLENGE_LIFETIME_MS = 5 * 60 * 1000;
+
+/**
+ * The row that says a new way into an account exists (SPEC §62).
+ *
+ * In the same commit as the credential, never after it. §35 is the reason and it is not a
+ * style preference: a credential that exists with no record of its arrival is precisely the
+ * artefact an attacker who registered one would like to leave behind.
+ */
+function credentialAudit(
+  ctx: AuthContext,
+  principalId: string,
+  credentialId: OratorId,
+  at: string,
+): PendingWrite {
+  return ctx.ports.audit.record({
+    id: ctx.ports.ids.next(),
+    actorPrincipalId: principalId as OratorId,
+    actorTokenId: null,
+    action: "credential.registered",
+    targetType: "credential",
+    targetId: credentialId,
+    outcome: "success",
+    reason: null,
+    ipHash: ctx.ipHash,
+    userAgent: ctx.userAgent,
+    requestId: ctx.requestId,
+    createdAt: at,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Registration
@@ -121,6 +162,7 @@ export async function completePasskeyRegistration(
       backedUp: verified.backedUp,
       createdAt: now,
     }),
+    credentialAudit(ctx, principal.id, id, now),
   ]);
 
   return ok({ id, credentialId: verified.credentialId });
@@ -251,6 +293,8 @@ export async function completeSignup(
   const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS).toISOString();
   const displayName = input.displayName?.trim();
 
+  const credentialId = ctx.ports.ids.next();
+
   try {
     // The whole account, in one commit. A partial one would be an account that exists and
     // cannot be reached, which is the state §7.3 makes permanent.
@@ -267,7 +311,7 @@ export async function completeSignup(
       // address collected because a form could is data §23 would then have to protect.
       ctx.ports.principals.insertHumanAccount(principalId, null, createdAt),
       ctx.ports.credentials.insert({
-        id: ctx.ports.ids.next(),
+        id: credentialId,
         principalId,
         credentialId: verified.credentialId,
         publicKey: verified.publicKey,
@@ -278,6 +322,10 @@ export async function completeSignup(
         backedUp: verified.backedUp,
         createdAt,
       }),
+      // §62 — the account's first credential is audited like every one after it. The id is
+      // minted above rather than inline, because an audit row that names a different id than
+      // the row it describes is worse than no audit row.
+      credentialAudit(ctx, principalId, credentialId, createdAt),
       ctx.ports.sessions.insert({
         id: ctx.ports.ids.next(),
         principalId,

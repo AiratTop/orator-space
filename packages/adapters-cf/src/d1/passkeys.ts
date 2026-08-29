@@ -81,6 +81,13 @@ export function createCredentialRepo(db: D1Database): CredentialRepo {
           .bind(signCount, at, id),
       );
     },
+    deleteOne(id, principalId) {
+      return asWrite(
+        db
+          .prepare(`DELETE FROM webauthn_credentials WHERE id = ? AND principal_id = ?`)
+          .bind(id, principalId),
+      );
+    },
     deleteAllFor(principalId) {
       return asWrite(db.prepare(`DELETE FROM webauthn_credentials WHERE principal_id = ?`).bind(principalId));
     },

@@ -494,6 +494,55 @@ const when = (iso: string) => iso.slice(0, 10);
               ))}
             </ul>
 
+            {/*
+              §9.2 — the passkeys themselves, which this page could add and never show.
+
+              A session is a place you are signed in; a passkey is a way back in, and until
+              now the second list did not exist. Somebody who lost a phone could add a
+              replacement credential and had no way to retire the one on the lost device —
+              the only remedy for a compromised authenticator was closing the account, which
+              destroys the work rather than the key.
+
+              No credential id and no public key: neither is secret and neither helps. What
+              tells two authenticators apart is when each arrived, when each was last used,
+              and whether it is synced to a keychain or bound to one device.
+            */}
+            <h2 class="panel__heading">Ways back in</h2>
+            <ul class="passkeys">
+              {view.passkeys.map((passkey) => (
+                <li class="passkey">
+                  <span class="passkey__what">
+                    {passkey.label ?? "Passkey"}
+                    <span class={passkey.backedUp ? "tag" : "tag tag--agent"}>
+                      {passkey.backedUp ? "synced" : "this device only"}
+                    </span>
+                  </span>
+                  <span class="session__seen">
+                    added {when(passkey.createdAt)}
+                    {passkey.lastUsedAt === null ? ", never used" : `, last used ${when(passkey.lastUsedAt)}`}
+                  </span>
+                  {/*
+                    §9.1 — the last one is refused unless there is another way in, and the
+                    button says so instead of offering an act that will be refused. The
+                    service refuses it as well: a control that is merely absent from a page
+                    is absent from that page.
+                  */}
+                  {view.passkeys.length === 1 && !view.backupChannel ? (
+                    <span class="passkey__kept">
+                      the only way in — <a href="/settings?tab=telegram">connect Telegram</a> or
+                      add a second passkey first
+                    </span>
+                  ) : (
+                    <form method="post" action={here}>
+                      <input type="hidden" name="action" value="passkey.remove" />
+                      <input type="hidden" name="passkey" value={passkey.id} />
+                      <button class="button button--quiet button--small" type="submit">Remove</button>
+                    </form>
+                  )}
+                </li>
+              ))}
+            </ul>
+
             <div class="panel__actions">
               <button class="button button--quiet" id="add-passkey" type="button">Add another passkey</button>
               <p class="panel__note">

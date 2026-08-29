@@ -58,6 +58,15 @@ export function createMemoryAuthPorts(options: { now?: Date } = {}): MemoryAuth 
     async listFor(principalId) {
       return [...credentialStore.values()].filter((c) => c.principalId === principalId);
     },
+    deleteOne: (id, principalId) =>
+      asWrite(() => {
+        // Scoped like the SQL it stands for. A double that deletes on the id alone is a
+        // double that agrees with the adapter until the day somebody passes the wrong one.
+        const record = credentialStore.get(id);
+        if (record === undefined || record.principalId !== principalId) return 0;
+        credentialStore.delete(id);
+        return 1;
+      }),
     deleteAllFor: (principalId) =>
       asWrite(() => {
         for (const [id, record] of credentialStore) {
@@ -177,6 +186,7 @@ export function createMemoryAuthPorts(options: { now?: Date } = {}): MemoryAuth 
       sessions,
       passkeys: verifier,
       tokens: base.tokens,
+      audit: base.audit,
       clock: base.clock,
       ids: base.ids,
     },

@@ -1141,6 +1141,7 @@ work here; the three before them close commitments the specification already mad
 [x] bookmarks at their own address; a sign-out button that was missing cdd5f13
 [x] public version history with a diff, and the leak it uncovered   539d8b0
 [x] a form for the half of §61.1 that had only an endpoint
+[x] a passkey can be seen and retired, and the last one is protected (§9.1, §9.2)
 [ ] Vectorize — designed, deliberately not built (§38.2)
 ```
 
@@ -1582,11 +1583,23 @@ are recorded here rather than acted on, because acting on them is the next secti
 re-deriving them costs more than writing them down.
 
 **`/v1/auth/credentials` never existed.** §9.2 listed seven endpoints under `/v1/auth/*` and
-not one of them is implemented anywhere — the ceremony has always lived on the site origin,
+not one of them was implemented anywhere — the ceremony has always lived on the site origin,
 for ADR 0004's reason, and nothing ever noticed the specification describing a different
-platform. Two of the seven are a real absence rather than a wrong address: a person can add a
-passkey and cannot see or delete one, so a lost authenticator has no answer short of closing
-the account. §9.2 now says what is there and what is missing.
+platform. Two of the seven were a real absence rather than a wrong address: a person could add
+a passkey and could not see or delete one, so a lost authenticator had no answer short of
+closing the account.
+
+Built on 2026-08-29, in `/settings` beside the sessions rather than as an endpoint of its own,
+because they answer neighbouring questions about the same account. §9.1's refusal to delete a
+last credential is now enforceable and enforced — it had waited since the first draft for the
+thing it points at, a backup sign-in method, which §9.3 became. The refusal lives in the
+service and not merely in the withheld button, and the checkpoint asserts both: the page does
+not offer it, and posting the form anyway is refused.
+
+It also closed a third of the audit gap below. Removal is journalled by the account service,
+which has always had `audit`; registration was not, because `AuthPorts` had no audit repo at
+all — an account whose credentials had only ever been added had a log that began in the
+middle. Both are `credential.registered` and `credential.removed` now.
 
 **Nothing about Telegram reaches `audit_log`.** §62 requires credential operations and
 authorisation denials, and the settings page itself calls the binding a credential (§42.2).
