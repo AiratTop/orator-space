@@ -1,0 +1,21 @@
+{
+  "name": "@orator/docs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node ../../scripts/sync-docs.mjs && astro dev --port 4323",
+    "build": "node ../../scripts/sync-docs.mjs && astro build",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.3",
+    "@astrojs/starlight": "^0.41.10",
+    "astro": "^7.2.4",
+    "starlight-links-validator": "^0.25.3",
+    "starlight-openapi": "^0.26.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10"
+  }
+}

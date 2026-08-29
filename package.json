@@ -8,8 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
-    "build": "pnpm --filter \"./apps/*\" build",
+    "dev": "pnpm --parallel --filter \"./apps/*\" --filter \"!@orator/docs\" dev",
+    "build": "pnpm --filter \"./apps/*\" --filter \"!@orator/docs\" build",
     "typecheck": "tsc -p tsconfig.json && pnpm --filter @orator/web typecheck",
     "lint": "eslint .",
     "boundaries": "node scripts/check-boundaries.mjs",
@@ -20,6 +20,7 @@
     "seed": "node scripts/seed.mjs",
     "openapi": "node --import ./scripts/lib/register-ts.mjs scripts/generate-openapi.mjs",
     "openapi:check": "node --import ./scripts/lib/register-ts.mjs scripts/generate-openapi.mjs --check",
+    "docs:check": "pnpm --filter @orator/docs typecheck && pnpm --filter @orator/docs build",
     "coverage": "vitest run --project domain --coverage.enabled --coverage.provider=v8 --coverage.include='packages/core/src/**' --coverage.exclude='**/*.test.ts' --coverage.exclude='**/testing/**' --coverage.reporter=text"
   },
   "devDependencies": {

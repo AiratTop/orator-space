@@ -1,0 +1,63 @@
+/*
+ * The documentation site's palette, taken from apps/web/public/styles.css.
+ *
+ * Copied rather than imported: the two sites are separate builds with no shared package
+ * (ADR 0013), and a package existing only to hold seven colours would be a boundary with no
+ * rule behind it (SPEC §27, §73). The values are few, they change rarely, and a drift here
+ * is visible to anyone who opens both sites — which is not true of most duplication.
+ *
+ * Starlight's own tokens are the accent ramp and the grey ramp; setting those two is enough
+ * to make it look like the same product, and leaves its contrast work intact.
+ */
+
+:root {
+  --orator-accent: #1a56c4;
+  --orator-ink: #16181d;
+  --orator-paper: #ffffff;
+  --sl-font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    sans-serif;
+  --sl-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Light. */
+:root[data-theme="light"] {
+  --sl-color-accent-low: #d7e2f7;
+  --sl-color-accent: #1a56c4;
+  --sl-color-accent-high: #123a86;
+  --sl-color-white: #16181d;
+  --sl-color-gray-1: #23262d;
+  --sl-color-gray-2: #3d434e;
+  --sl-color-gray-3: #5b6270;
+  --sl-color-gray-4: #8c94a3;
+  --sl-color-gray-5: #e2e5ea;
+  --sl-color-gray-6: #f6f7f9;
+  --sl-color-gray-7: #fbfbfc;
+  --sl-color-black: #ffffff;
+}
+
+/*
+ * Dark, and lighter than a black page for the reason apps/web gives: contrast is a ratio,
+ * and a near-black background pushes it past legibility into glare.
+ */
+:root[data-theme="dark"] {
+  --sl-color-accent-low: #16294d;
+  --sl-color-accent: #3f74d8;
+  --sl-color-accent-high: #8fb6ff;
+  --sl-color-white: #e7eaf0;
+  --sl-color-gray-1: #dfe3eb;
+  --sl-color-gray-2: #c3c9d5;
+  --sl-color-gray-3: #a7aebc;
+  --sl-color-gray-4: #6b7280;
+  --sl-color-gray-5: #363c47;
+  --sl-color-gray-6: #232830;
+  --sl-color-black: #1b1e24;
+}
+
+/* Prose set at the width apps/web reads at, rather than the full column. */
+.sl-markdown-content {
+  --sl-text-code: var(--sl-text-sm);
+}
+
+.sl-markdown-content :is(h2, h3) {
+  letter-spacing: -0.01em;
+}

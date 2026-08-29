@@ -1,0 +1,20 @@
+# Served by Cloudflare's static asset handler, not by a Worker (ADR 0013).
+#
+# No Content-Security-Policy, deliberately, and the omission is worth stating rather than
+# leaving to be noticed. Starlight sets the colour theme with an inline script so the page
+# does not flash the wrong one, so `script-src 'self'` — the policy apps/web holds to
+# (SPEC §57.2) — would break this site, and a policy relaxed to `unsafe-inline` announces a
+# protection it does not provide. This site renders no user content and holds no credential,
+# which is what makes that trade acceptable here and not on the main site.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+
+# The generated API description (SPEC §53). Served as JSON so a client can fetch it, and
+# cross-origin so a schema explorer running somewhere else can read it — it is a public
+# document generated from a public repository.
+/openapi.json
+  Content-Type: application/json; charset=utf-8
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=300, must-revalidate

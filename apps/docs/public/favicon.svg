@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Orator.Space">
+  <!--
+    Temporary. A solid tile rather than a glyph on transparency, because a favicon is shown
+    at 16px against a tab strip whose colour is the browser's business, and a thin mark on
+    nothing disappears into half of them.
+  -->
+  <rect width="32" height="32" rx="7" fill="#1a56c4"/>
+  <circle cx="16" cy="16" r="8" fill="none" stroke="#ffffff" stroke-width="3.25"/>
+</svg>

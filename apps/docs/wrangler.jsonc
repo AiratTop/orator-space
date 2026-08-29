@@ -1,0 +1,37 @@
+{
+  /*
+   * The documentation site (ADR 0013).
+   *
+   * No `main`. This is an assets-only deployment: Cloudflare serves the files and never
+   * starts an isolate, so no request here runs code, reads a binding or costs a Worker
+   * invocation. SPEC §63's "two Workers" counts the application runtime, and this is not in
+   * it — the day this file grows a `main`, a binding or an `env` block, that is no longer
+   * true and ADR 0013 has to be reopened rather than amended in passing.
+   *
+   * One environment, and it is production. There is no `docs-staging`: staging exists to run
+   * migrations before the code that needs them and to put six checkpoints against a live
+   * deployment (see .github/workflows/ci.yml), and a static site with no database, no
+   * bindings and no environment-dependent content answers none of those questions. A second
+   * environment that verifies nothing is not a safety net, it is a second way to deploy to
+   * the wrong place — which is how production was overwritten on 2026-08-29. The checks that
+   * would have run there run in CI instead, on the pull request.
+   */
+  "name": "orator-docs",
+  "compatibility_date": "2026-08-01",
+
+  // §50 — documentation reachable on a second hostname is duplicate content. `workers_dev`
+  // is off for the same reason it is off for apps/web; preview URLs are off because without
+  // a staging environment they are the obvious place to look at a draft, and they are
+  // indexable.
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "assets": {
+    "directory": "./dist",
+    // Astro emits 404.html; without this a missing page returns the asset handler's bare
+    // 404 instead of the site's own.
+    "not_found_handling": "404-page"
+  },
+
+  "routes": [{ "pattern": "docs.orator.space", "custom_domain": true }]
+}

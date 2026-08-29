@@ -24,6 +24,11 @@ const ALLOWED = {
   "@orator/adapters-cf": ["@orator/protocol", "@orator/core", "@orator/db"],
   "@orator/edge": ["@orator/protocol", "@orator/core", "@orator/adapters-cf"],
   "@orator/web": ["@orator/protocol", "@orator/core", "@orator/adapters-cf"],
+  // The documentation site (ADR 0013). An empty list rather than an omission: it depends on
+  // no workspace package and must not start to. A docs page that imported the domain would
+  // be a static build reaching into an application layer to describe it, and the first
+  // refactor would break the prose.
+  "@orator/docs": [],
 };
 
 /** Packages that must never see the runtime (SPEC §28.1). */

@@ -1,0 +1,5 @@
+# Written by scripts/sync-docs.mjs at build time from the artefacts that own them —
+# docs/openapi.json and skills/*/SKILL.md. Not committed: a committed copy is one that can
+# be edited, and an edit to it is a divergence nothing reports (SPEC §53).
+public/openapi.json
+src/content/docs/agents/
