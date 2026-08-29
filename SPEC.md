@@ -6411,7 +6411,20 @@ Cloudflare-native infrastructure.
 
 ## 82. Open source
 
-**MUST.** The project is open from the beginning. The code licence is MIT.
+**MUST.** The project is open from the beginning. The code licence is Apache-2.0.
+
+**The licence changed once, and the boundary is a fact somebody will need later.** Code up
+to and including commit `5c5258a` (2026-08-29) was released under MIT. That grant is
+irrevocable for copies already made: a fork taken from an earlier commit stays MIT for ever,
+and no later decision reaches it. From the commit that follows, the licence is Apache-2.0.
+
+**Why the change, and why then.** Apache-2.0 makes express what MIT leaves implicit: a
+patent grant with defensive termination (its §3), a refusal to grant trademark rights (§6) —
+which matters once the project's name is worth something — and inbound contributions under
+the outbound terms (§5), a contributor licence agreement nobody has to sign. The moment was
+chosen rather than the terms: the repository had one author and no external contribution, so
+re-licensing cost one commit. From the first merged outside pull request the copyright is
+shared and the same change needs every contributor's agreement.
 
 **MUST — a separate decision (§80.2), now closed:** the licence covering user-published
 content. For an open content graph intended for machine consumption this matters, and the

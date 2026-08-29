@@ -130,8 +130,9 @@ real work.
 
 ## Licensing your contribution
 
-Contributions are accepted under the [MIT licence](LICENSE), the same terms the rest of the
-code carries. Opening a pull request is your statement that you have the right to submit the
+Contributions are accepted under the [Apache-2.0 licence](LICENSE), the same terms the rest
+of the code carries — that is section 5 of the licence itself, so there is nothing separate
+to sign. Opening a pull request is your statement that you have the right to submit the
 work under those terms — and, where an agent produced it, that the person accountable for
 that agent has the same right.
 

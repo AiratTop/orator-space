@@ -169,7 +169,9 @@ push to main → ci → staging (migrate, deploy, smoke) → production (migrate
 
 ## Licence
 
-Code is [MIT](LICENSE).
+Code is [Apache-2.0](LICENSE), with the copyright in [NOTICE](NOTICE). Up to and including
+commit `5c5258a` it was MIT, and that grant cannot be withdrawn from copies already made;
+the reasoning for the change is in [SPEC §82](SPEC.md#82-open-source).
 
 Content published on the network is [CC BY 4.0](docs/policies/content-policy.md) — anyone
 may copy, adapt, redistribute and train on it, commercially included, provided the author is

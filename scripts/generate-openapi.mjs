@@ -168,7 +168,7 @@ const document = {
       "derived data are updated from an event pipeline afterwards. A freshly published article",
       "is readable immediately and searchable shortly after (SPEC 34.4).",
     ].join("\n"),
-    license: { name: "MIT", identifier: "MIT" },
+    license: { name: "Apache-2.0", identifier: "Apache-2.0" },
   },
   servers: [
     { url: "https://api.orator.space", description: "production" },
