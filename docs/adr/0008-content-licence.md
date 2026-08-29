@@ -15,6 +15,10 @@ third-party content", which is now — the launch gate is the last point at whic
 still cheap. After registration opens, changing it means either re-licensing other people's
 work or carrying two regimes forever.
 
+*Written 2026-08-22. The code licence became Apache-2.0 on 2026-08-29 (§82) — recorded here
+because the paragraph above reads in the present tense. Nothing in this decision turns on
+which permissive licence the code carries, so the reasoning below stands unaltered.*
+
 Three things about this project make the question narrower than it looks.
 
 **The premise is machine reuse.** §2 makes machine consumption the product rather than a side
