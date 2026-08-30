@@ -44,14 +44,34 @@ export const oratorId = z
  * two dates compared as strings order correctly only if both are in this exact shape.
  * Neither of those is fixable at the point of use. This is where it is fixable.
  *
- * The shape and then the value: the pattern rejects `2026-13-45T99:00:00.000Z`, and
- * `Date.parse` rejects `2026-02-30T00:00:00.000Z`, which is well-formed and is not a day.
+ * The shape, and then the day. The pattern rejects `2026-13-45T99:00:00.000Z`; it cannot
+ * reject `2026-02-30T00:00:00.000Z`, which is well formed and is not a day.
+ *
+ * Nor can `Date.parse`, which is what this used to lean on and what an earlier version of
+ * this comment claimed. It does not answer `NaN` for an impossible day — it *rolls over*:
+ *
+ *   2026-02-30T00:00:00.000Z  ->  2026-03-02T00:00:00.000Z
+ *   2026-04-31T00:00:00.000Z  ->  2026-05-01T00:00:00.000Z
+ *   2025-02-29T00:00:00.000Z  ->  2025-03-01T00:00:00.000Z
+ *   2026-01-01T24:00:00.000Z  ->  2026-01-02T00:00:00.000Z
+ *
+ * So a parse that succeeds proves nothing about the string, and the value stored would have
+ * been the caller's impossible one rather than the date the platform agreed to. The check is
+ * therefore the round trip: parse it, render it back, and require the same bytes. A day that
+ * had to be normalised comes back different and is refused; 2024-02-29 is a real day, comes
+ * back unchanged, and is kept.
  */
 const RFC3339_UTC_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+const isRealInstant = (value: string): boolean => {
+  const at = Date.parse(value);
+  return !Number.isNaN(at) && new Date(at).toISOString() === value;
+};
+
 export const timestamp = z
   .string()
   .regex(RFC3339_UTC_MS, "not an RFC 3339 UTC timestamp with milliseconds (2026-08-30T12:00:00.000Z)")
-  .refine((value) => !Number.isNaN(Date.parse(value)), "not a date that exists")
+  .refine(isRealInstant, "not a date that exists — check the day of the month and the hour")
   .describe("RFC 3339, UTC, milliseconds");
 
 export const username = z.string().min(3).max(32);
