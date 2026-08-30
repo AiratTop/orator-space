@@ -1,7 +1,7 @@
-import type { Context } from "hono";
+import type { Context, Next } from "hono";
 import type { z } from "zod";
 import { ErrorType, problem, RETRYABLE, STATUS, type ErrorTypeName } from "@orator/protocol";
-import type { Result, ServiceError } from "@orator/core";
+import { MAX_CONTENT_BYTES, type Result, type ServiceError } from "@orator/core";
 
 const RETRY_AFTER: Partial<Record<ErrorTypeName, number>> = {
   "rate-limited": 60,
@@ -96,3 +96,99 @@ export function requireIdempotencyKey(c: Context) {
   }
   return { key } as const;
 }
+
+/**
+ * The size of a JSON request body, decided before it is parsed (SPEC §44.2).
+ *
+ * Twice the article cap plus room for the rest of the envelope. The body is markdown at
+ * most 1 MB (§44.2), and JSON escaping cannot do worse than double it — control characters
+ * are refused outright (`validateContent`) and UTF-8 passes through `JSON.stringify`
+ * unchanged, so `"` and `\` are the whole of the expansion. The remainder covers a title, a
+ * canonical URL and the bounded `metadata`.
+ */
+export const MAX_JSON_BODY_BYTES = 2 * MAX_CONTENT_BYTES + 64 * 1024;
+
+const concat = (chunks: readonly Uint8Array[], total: number): Uint8Array => {
+  const out = new Uint8Array(total);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return out;
+};
+
+/**
+ * Reads a body up to a limit, or gives up on it.
+ *
+ * Not `Content-Length` alone. The header is a claim, it is absent from a chunked request,
+ * and a caller that means to exhaust a Worker's memory is exactly the caller who will lie in
+ * it — so the declared length is a cheap early refusal and this is the one that holds. The
+ * bytes are buffered rather than passed through, which is what `c.req.json()` did anyway;
+ * the difference is that the amount is now bounded and the refusal is a 413 rather than
+ * whatever the runtime does when it runs out of room.
+ */
+async function readAtMost(body: ReadableStream<Uint8Array>, limit: number): Promise<Uint8Array | null> {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return concat(chunks, total);
+}
+
+/**
+ * Refuses an oversized request body before anything parses it (SPEC §44.2, §45.1).
+ *
+ * `await c.req.json()` reads and parses the whole body first and the 1 MB limit was checked
+ * afterwards, in the domain — so a caller could hand the Worker an arbitrarily large
+ * document and have it materialised twice, as bytes and as objects, before anything said no.
+ * The published limit is only a limit at the point where exceeding it stops costing
+ * something, which is here.
+ *
+ * The uploaded-bytes route is exempt: it streams to R2 without buffering and carries its own
+ * much larger limit (§21.1), checked on the declared length for the same reason.
+ */
+export const bodyLimit =
+  (limit = MAX_JSON_BODY_BYTES) =>
+  async (c: Context, next: Next): Promise<Response | void> => {
+    const method = c.req.method;
+    if (method === "GET" || method === "HEAD" || method === "OPTIONS") return next();
+
+    const tooLarge = () =>
+      problemResponse(
+        c,
+        {
+          type: ErrorType.PayloadTooLarge,
+          title: "Request body is larger than the limit",
+          detail: `The limit is ${limit} bytes. An article body is capped at 1 MB of markdown (§44.2).`,
+          extra: { limit_bytes: limit },
+        },
+        new URL(c.req.url).pathname,
+      );
+
+    const declared = Number(c.req.header("content-length") ?? Number.NaN);
+    if (Number.isFinite(declared) && declared > limit) return tooLarge();
+
+    const body = c.req.raw.body;
+    if (body === null) return next();
+
+    const bytes = await readAtMost(body, limit);
+    if (bytes === null) return tooLarge();
+
+    // Handed back as bytes, so every route downstream still reads it with `c.req.json()`.
+    c.req.raw = new Request(c.req.raw, { body: bytes });
+    return next();
+  };

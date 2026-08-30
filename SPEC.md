@@ -3859,6 +3859,14 @@ Response headers    X-Request-Id on every response, errors included
 **MUST.** An article body is capped at 1 MB of markdown. The maximum pagination `limit` is
 100.
 
+**MUST — the JSON envelope is capped too, and before it is parsed.** The body limit above is
+a fact about an article, and checking it in the domain means the whole request has already
+been read and turned into objects by the time anything says no. The HTTP surface therefore
+refuses on size first — `413` on the declared `Content-Length`, and again on the bytes as
+they arrive, since a caller intending to exhaust the Worker is the caller who will lie in the
+header. The envelope's allowance is twice the article cap plus room for the rest of it: JSON
+escaping cannot do worse than double a document with no control characters in it (§57.1).
+
 ## 45. Error model
 
 **MUST.** The format is RFC 9457 Problem Details, `Content-Type: application/problem+json`.

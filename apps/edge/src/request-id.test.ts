@@ -20,6 +20,15 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 
 const suffix = () => Math.random().toString(36).slice(2, 8);
 
+/**
+ * A correlation id a caller could plausibly have generated — §12's shape, since §66.1 says
+ * UUIDv7 and the edge now checks it rather than echoing whatever arrived.
+ */
+const callerId = () => {
+  const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  return Array.from({ length: 26 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
+};
+
 let ownerToken: string;
 let agentToken: string;
 
@@ -49,8 +58,9 @@ beforeAll(async () => {
 
 describe("X-Request-Id (SPEC §66.1)", () => {
   it("echoes the id the caller chose", async () => {
-    const response = await app.request("/health", { headers: { "x-request-id": "chosen-by-caller" } }, env);
-    expect(response.headers.get("x-request-id")).toBe("chosen-by-caller");
+    const chosen = callerId();
+    const response = await app.request("/health", { headers: { "x-request-id": chosen } }, env);
+    expect(response.headers.get("x-request-id")).toBe(chosen);
   });
 
   it("invents one when the caller sends none, so a response is always traceable", async () => {
@@ -59,18 +69,19 @@ describe("X-Request-Id (SPEC §66.1)", () => {
   });
 
   it("puts it on an error response too, which is where it matters most (§45)", async () => {
-    const response = await app.request("/v1/tokens", { headers: { "x-request-id": "failing-call" } }, env);
+    const failing = callerId();
+    const response = await app.request("/v1/tokens", { headers: { "x-request-id": failing } }, env);
     expect(response.status).toBe(401);
-    expect(response.headers.get("x-request-id")).toBe("failing-call");
+    expect(response.headers.get("x-request-id")).toBe(failing);
 
     const body = (await response.json()) as { request_id?: string };
     // In the header and in the problem document: a client logging the body alone still has
     // the value to quote back.
-    expect(body.request_id).toBe("failing-call");
+    expect(body.request_id).toBe(failing);
   });
 
   it("travels from the request into the outbox row it caused (§35)", async () => {
-    const requestId = `trace-${suffix()}`;
+    const requestId = callerId();
     const created = await app.request(
       "/v1/articles",
       json(
@@ -107,7 +118,7 @@ describe("X-Request-Id (SPEC §66.1)", () => {
   });
 
   it("reaches the queue message the consumer will receive (§35.3)", async () => {
-    const requestId = `trace-${suffix()}`;
+    const requestId = callerId();
     const created = await app.request(
       "/v1/articles",
       json(
@@ -154,15 +165,16 @@ describe("X-Request-Id (SPEC §66.1)", () => {
     }
   });
 
-  it("keeps the id out of anything that identifies a person (§62)", async () => {
-    // The id is a correlation handle, not a session or a token. Nothing derives from it,
-    // which is why accepting one from the caller is safe.
-    const response = await app.request(
-      "/health",
-      { headers: { "x-request-id": "../../etc/passwd" } },
-      env,
-    );
-    expect(response.headers.get("x-request-id")).toBe("../../etc/passwd");
-    expect(response.status).toBe(200);
+  it("replaces a header that is not an id, rather than writing it to the audit log", async () => {
+    // The id reaches `audit_log`, every outbox payload and every log line (§66.1), so what
+    // arrives in the header is checked against §12 before it is believed. Replaced and not
+    // refused: a malformed correlation header is not a reason to fail the request.
+    for (const offered of ["../../etc/passwd", "", "x".repeat(4096), "0123456789abcdefghjkmnpqrs"]) {
+      const response = await app.request("/health", { headers: { "x-request-id": offered } }, env);
+      const returned = response.headers.get("x-request-id");
+      expect(response.status).toBe(200);
+      expect(returned).not.toBe(offered);
+      expect(returned).toMatch(/^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$/);
+    }
   });
 });

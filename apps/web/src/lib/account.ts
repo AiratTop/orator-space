@@ -1,4 +1,5 @@
 import { env } from "cloudflare:workers";
+import { isOratorId } from "@orator/protocol";
 import type { QuotaCounter } from "@orator/adapters-cf";
 import {
   createArticleRepo,
@@ -92,12 +93,23 @@ export const accountPorts: AccountPorts = {
  * is the difference between "she did this in a browser" and "something holding her
  * credential did this" (§62).
  */
+/**
+ * The same rule the API applies (§66.1): the caller's id if it is one, or one minted here.
+ *
+ * Checked and not merely accepted, for the reason the edge Worker checks it — the value ends
+ * up in `audit_log` and in every outbox payload, and a header nobody validated is caller-
+ * chosen text in both. A browser sends no such header, so in practice this mints; the check
+ * is for everything else that can reach a page.
+ */
+function requestIdOf(request: Request): string {
+  const offered = request.headers.get("x-request-id");
+  return offered !== null && isOratorId(offered) ? offered : ids.next();
+}
+
 export function accountContext(request: Request, principal: PrincipalRecord): AccountContext {
   return {
     ports: accountPorts,
-    // The same rule the API applies: an id supplied by the caller, or one minted here. It
-    // is what ties an audit row to the request that produced it (§66.1).
-    requestId: request.headers.get("x-request-id") ?? ids.next(),
+    requestId: requestIdOf(request),
     actor: sessionActor(principal),
     tokenId: null,
     ipHash: null,
@@ -222,7 +234,7 @@ export async function reportContext(
 ): Promise<ModerationContext> {
   return {
     ports: moderationPorts,
-    requestId: request.headers.get("x-request-id") ?? ids.next(),
+    requestId: requestIdOf(request),
     actor: principal === null ? null : sessionActor(principal),
     tokenId: null,
     ipHash: await hashAddress(request.headers.get("cf-connecting-ip")),

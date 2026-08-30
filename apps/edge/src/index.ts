@@ -9,6 +9,7 @@ import { Hono, type Context, type Next } from "hono";
 import {
   createIdGen,
   createMetricsQuery,
+  createOutboxRepo,
   createSloRepo,
   createWorkersAiClassifier,
   createWorkersAiModerator,
@@ -16,11 +17,11 @@ import {
   recordDeadLetter,
   systemClock,
 } from "@orator/adapters-cf";
-import { problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
+import { isOratorId, problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
 import type { RequestContext } from "@orator/core";
 import { contextFor } from "./context.js";
 import { deepHealth } from "@orator/core";
-import { problemResponse } from "./http.js";
+import { bodyLimit, problemResponse } from "./http.js";
 import { identityRoutes } from "./routes/identity.js";
 import { articleRoutes } from "./routes/articles.js";
 import { socialRoutes } from "./routes/social.js";
@@ -155,12 +156,41 @@ type Vars = { requestId: string; ctx: RequestContext };
 
 const app = new Hono<{ Bindings: Env; Variables: Vars }>();
 
-/** SPEC §66.1 — a request id exists from the first middleware and travels to the consumer. */
+/**
+ * SPEC §66.1 — a request id exists from the first middleware and travels to the consumer.
+ *
+ * A caller's own id is honoured, because a client correlating its side of a conversation with
+ * ours is the whole point of returning one — but only if it is an id. §66.1 says UUIDv7, and
+ * this value is written to `audit_log`, into every outbox payload and into every log line: an
+ * unchecked header puts caller-chosen text in all three, at whatever length and cardinality
+ * the caller likes. Anything else is replaced rather than rejected, since a malformed
+ * correlation header is not a reason to refuse a publish.
+ */
 app.use("*", async (c, next) => {
-  const requestId = c.req.header("x-request-id") ?? idGen.next();
+  const offered = c.req.header("x-request-id");
+  const requestId = offered !== undefined && isOratorId(offered) ? offered : idGen.next();
   c.set("requestId", requestId);
   await next();
   c.header("x-request-id", requestId);
+});
+
+/*
+ * SPEC §44.2 — the body's size is settled before anything parses it.
+ *
+ * Second, right behind the request id, and ahead of everything that costs something:
+ * `resolveContext` reads the database and the flood guard spends a rate-limit token, and
+ * neither should be spent on a request whose body already disqualifies it. On `*` rather
+ * than per route, because the reason is the runtime's memory rather than any one endpoint's
+ * contract — the Telegram webhook and MCP are as reachable by a stranger as `/v1` is.
+ *
+ * `PUT /v1/media/:id/content` is the exception: it streams to R2 without buffering and
+ * carries its own much larger limit (§21.1).
+ */
+const UPLOAD_PATH = /^\/v1\/media\/[^/]+\/content$/;
+
+app.use("*", async (c, next) => {
+  if (c.req.method === "PUT" && UPLOAD_PATH.test(new URL(c.req.url).pathname)) return next();
+  return bodyLimit()(c, next);
 });
 
 /**
@@ -208,7 +238,25 @@ app.use("*", async (c, next) => {
   c.header("x-robots-tag", "noindex, nofollow");
 });
 
-/** SPEC §66.4 — shallow check: are the dependencies reachable at all. */
+/**
+ * SPEC §66.4 — shallow check: are the dependencies reachable at all.
+ *
+ * §66.4 names three, D1, R2 and Queue, and the third was missing. It is also the one that
+ * cannot be probed the way the other two are: a Queues binding is a producer, so "is it
+ * reachable" is only answerable by sending something — and a public unauthenticated GET that
+ * writes to the queue is a flood amplifier with a URL, which is a worse thing to have than
+ * an unchecked dependency.
+ *
+ * So the queue is judged by its consequence instead, from the table in §66.4 itself: an
+ * unreachable queue does not fail a publish, it stops the outbox draining (§35.2), and a
+ * backlog over 100 rows or older than five minutes is exactly the alert that names. One
+ * indexed read, no writes, and it goes red for the failure a producer ping would be standing
+ * in for. What a ping would add — that the whole pipeline runs end to end — is `/health/deep`
+ * (§66.7), which writes and therefore requires a credential.
+ */
+const BACKLOG_DEPTH = 100;
+const BACKLOG_AGE_MS = 5 * 60 * 1000;
+
 app.get("/health", async (c) => {
   const checks: Record<string, boolean> = {};
   try {
@@ -222,6 +270,15 @@ app.get("/health", async (c) => {
     checks.r2 = true;
   } catch {
     checks.r2 = false;
+  }
+  try {
+    const backlog = await createOutboxRepo(c.env.DB).pendingStats();
+    const oldestMs =
+      backlog.oldestCreatedAt === null ? 0 : Date.now() - Date.parse(backlog.oldestCreatedAt);
+    checks.queue = backlog.count <= BACKLOG_DEPTH && oldestMs <= BACKLOG_AGE_MS;
+  } catch {
+    // D1 is already reported above; an unreadable outbox says nothing about the queue.
+    checks.queue = false;
   }
   const healthy = Object.values(checks).every(Boolean);
   return c.json(

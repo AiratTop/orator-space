@@ -89,6 +89,17 @@ export async function fromEdgeCache(request: Request): Promise<Response | null> 
   const hit = await edgeCache.match(keyFor(request.url));
   if (hit === undefined) return null;
 
+  /*
+   * The policy the reader was always meant to get.
+   *
+   * What the cache holds is narrowed — `freshnessOnly` below strips `stale-while-revalidate`
+   * so the shared cache cannot serve an unpublished article for a day. That narrowing is for
+   * the cache and not for the browser, and serving the stored header verbatim leaked it: a
+   * hit and a miss of the same page answered with two different policies, so whether a reader
+   * got background revalidation came down to which colo they landed in.
+   */
+  const policy = hit.headers.get("x-orator-cache-control") ?? hit.headers.get("cache-control");
+
   const etag = hit.headers.get("etag");
   const ifNoneMatch = request.headers.get("if-none-match");
   if (etag !== null && ifNoneMatch !== null) {
@@ -101,7 +112,7 @@ export async function fromEdgeCache(request: Request): Promise<Response | null> 
         status: 304,
         headers: {
           etag,
-          "cache-control": hit.headers.get("cache-control") ?? CACHE.article,
+          "cache-control": policy ?? CACHE.article,
           ...(hit.headers.get("last-modified") === null
             ? {}
             : { "last-modified": hit.headers.get("last-modified")! }),
@@ -113,6 +124,8 @@ export async function fromEdgeCache(request: Request): Promise<Response | null> 
 
   const response = new Response(hit.body, hit);
   response.headers.set("x-orator-cache", "hit");
+  if (policy !== null) response.headers.set("cache-control", policy);
+  response.headers.delete("x-orator-cache-control");
   return response;
 }
 
@@ -124,8 +137,13 @@ export async function fromEdgeCache(request: Request): Promise<Response | null> 
  * wrong — and a `cache.put` that throws must never turn a good page into a 500.
  */
 export function toEdgeCache(context: ExecutionContext, request: Request, response: Response): void {
+  const policy = response.headers.get("cache-control");
   const stored = new Response(response.clone().body, response);
-  stored.headers.set("cache-control", freshnessOnly(response.headers.get("cache-control")));
+  stored.headers.set("cache-control", freshnessOnly(policy));
+  // Carried alongside the narrowed one so a hit can answer with the policy a miss answered
+  // with. Stripped again on the way out — it is bookkeeping between this Worker and its own
+  // cache, and means nothing to a client.
+  if (policy !== null) stored.headers.set("x-orator-cache-control", policy);
   stored.headers.delete("x-orator-cache");
 
   context.waitUntil(
@@ -144,7 +162,8 @@ export function toEdgeCache(context: ExecutionContext, request: Request, respons
  * article for a day after it stopped being publishable — and unpublishing is supposed to
  * take effect (§23.1), which is a correctness property rather than a latency one.
  *
- * The browser still receives the full policy; only the copy the edge keeps is narrowed to
+ * The browser still receives the full policy — `fromEdgeCache` restores it from
+ * `x-orator-cache-control` on the way out — and only the copy the edge keeps is narrowed to
  * its freshness lifetime. Sixty seconds of staleness is the bound §33.1 chose deliberately.
  */
 function freshnessOnly(cacheControl: string | null): string {
