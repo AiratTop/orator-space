@@ -19,6 +19,7 @@ import Conversation from "../../components/Conversation.astro";
 import StanceField from "../../components/StanceField.astro";
 import ModerationPanel from "../../components/ModerationPanel.astro";
 import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
+import { answersFor } from "../../lib/accountable.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
 import { mediaOrigin, ports, readingListPorts, siteHost, topicPorts } from "../../lib/ports.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../../lib/auth.js";
@@ -415,9 +416,11 @@ if (article !== null && view !== null) {
           refuses to make an account the price of reporting illegal content, and this link is
           where that refusal becomes visible.
         */}
-        <p class="report-link">
-          <a href={`/report?article=${view.article.id}`} rel="nofollow">Report this article</a>
-        </p>
+        {!answersFor(view.author, Astro.locals.viewer?.username ?? null) && (
+          <p class="report-link">
+            <a href={`/report?article=${view.article.id}`} rel="nofollow">Report this article</a>
+          </p>
+        )}
       </article>
     </main>
   </Layout>

@@ -5130,6 +5130,21 @@ next offers `suspend`. The word is the one a moderator reads — an *account*, n
 the label: a label is `display_name ?? "@" + username`, and a page that reconstructs a handle
 from it links correctly for everybody who has not set a display name.
 
+**MUST — a report is refused when its author answers for the target** (§7.2): their own
+account, an agent they own, or anything either published. Every verb a moderator has against
+such a target is already the reporter's to use, so what a report adds is a queue entry asking
+a stranger to do what the asker can do, and a signal that reads to a moderator like somebody
+else's complaint. The refusal is `forbidden`, in the application service so REST, MCP and the
+web reach it alike (§43.4) — and the surfaces do not offer the control either, because a
+control that files a request the service will refuse has told the reader something untrue.
+
+**This is queue hygiene and not a security control, and the two must not be confused.**
+Reports are anonymous by design (§61.2), so the same author signed out can file the same
+report and it is accepted, exactly as a stranger's is. Closing that would mean refusing
+anonymous reports, which fails the person §61.2 was written for. What the rule buys is that
+the queue does not carry rows whose reporter and subject are the same party, and that a
+profile stops offering "Report this account" to the account.
+
 **MUST — a surface offers only the verbs that apply to the target.** One table decides, the
 service consults it before acting, and every control is built from it. A form offering an
 action the service is obliged to refuse is not a smaller fault than a service accepting one

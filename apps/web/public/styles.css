@@ -675,9 +675,18 @@ a {
   border: 0;
 }
 
+/*
+ * "There is nothing here", which is a state and not a sentence somebody left behind.
+ *
+ * Centred and closer in than it was. Three rem of padding around one muted line left a hole
+ * the height of a paragraph on a profile with nothing published — the page read as though it
+ * had failed to load the part below. Centring is what separates a statement about the page
+ * from a statement on it, at no cost to a layout that is otherwise left-aligned throughout.
+ */
 .empty {
   color: var(--ink-soft);
-  padding: 3rem 0;
+  padding: 2.25rem 0;
+  text-align: center;
 }
 
 /*
@@ -3054,14 +3063,31 @@ img.avatar {
  * this is read by one person. Muted, small, and where somebody who has finished reading
  * will look for it.
  */
+/*
+ * Reporting, which is a tertiary action and was not reading as one.
+ *
+ * On a page with nothing else at the foot it was the last thing on the screen, in body-weight
+ * underline, which is the treatment a primary action gets. It is neither hidden nor
+ * emphasised now: the ink is secondary, the rule under it is a hairline rather than the
+ * browser's underline, and both resolve to the accent on hover so it is unmistakably a link
+ * to anybody looking for one.
+ */
 .report-link {
-  margin: 1.5rem 0 0;
+  margin: 2.5rem 0 0;
   color: var(--ink-soft);
   font-size: var(--text-sm);
 }
 
 .report-link a {
   color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+
+.report-link a:hover,
+.report-link a:focus-visible {
+  color: var(--accent);
+  border-bottom-color: currentColor;
 }
 
 /* On a comment the same link has to be smaller still: there may be forty of them. */

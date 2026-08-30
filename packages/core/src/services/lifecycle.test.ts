@@ -259,9 +259,12 @@ describe("reporting content (SPEC §61)", () => {
     expect(ports.state.reports[0]?.reporterPrincipalId).toBeNull();
   });
 
+  // `stranger`, not `owner`: §7.2 makes the author the accountable party for their own
+  // article, and a report from them is refused. What this test is about is where a signed-in
+  // reporter is recorded, so any signed-in reporter who is not the author will do.
   it("records who reported in the audit log, not in the public activity feed (§20.3)", async () => {
     const id = await published();
-    unwrap(await createReport(ctxFor(owner), { targetType: "article", targetId: id, category: "spam" }));
+    unwrap(await createReport(ctxFor(stranger), { targetType: "article", targetId: id, category: "spam" }));
 
     expect(ports.state.audit.some((row) => row.action === "report.created")).toBe(true);
     expect(ports.state.events.some((row) => row.type === "report.created")).toBe(false);

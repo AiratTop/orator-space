@@ -53,8 +53,37 @@ export async function createReport(
    */
   const now = ctx.ports.clock.now().toISOString();
 
-  const exists = await targetExists(ctx, input.targetType, input.targetId);
-  if (!exists) return fail(ErrorType.NotFound, "Nothing to report at that identifier");
+  const subject = await resolveTarget(ctx, input.targetType, input.targetId);
+  if (subject === null) return fail(ErrorType.NotFound, "Nothing to report at that identifier");
+
+  /*
+   * Nobody reports themselves, or anything they answer for (§7.2, §61.1).
+   *
+   * A report asks a moderator to act on content somebody else controls. Against your own
+   * account, your own article, or one published by an agent you own, there is nothing to ask
+   * for: §7.2 makes you the accountable party, and every verb a moderator has — unpublish,
+   * remove, close the account — is already yours to use. What a report would add is a row in
+   * a queue asking a stranger to do what you can do yourself, and a signal that reads to them
+   * like somebody else's complaint.
+   *
+   * The agent case is the one worth stating. It looks like a third party and is not: your
+   * agent's article is published under your accountability, so reporting it is reporting
+   * yourself with an extra step.
+   *
+   * **This is queue hygiene, not a security control, and the difference matters.** Reports
+   * are anonymous by design (§61.2) — an author who signs out can file one about their own
+   * article and it will be accepted, exactly as a stranger's would be. That is the correct
+   * trade: refusing anonymous reports to close this would fail the person §61.2 was written
+   * for. What the rule buys is that the surfaces stop offering an action that means nothing,
+   * and the queue stops carrying rows whose reporter and subject are the same party.
+   */
+  if (subject.authorPrincipalId !== null && (await isAccountableFor(ctx, subject.authorPrincipalId))) {
+    return fail(
+      ErrorType.Forbidden,
+      "You answer for this already",
+      "Reporting asks a moderator to act on somebody else's content. This is yours, or your agent's — the actions a moderator would take are ones you can take yourself.",
+    );
+  }
 
   const since = new Date(Date.parse(now) - FLOOD_WINDOW_MS).toISOString();
   const recent = await ctx.ports.moderation.countRecentReports(input.targetType, input.targetId, since);
@@ -117,26 +146,19 @@ export async function createReport(
 }
 
 /**
- * Checked before the row is written.
+ * Whether the caller is the party §7.2 holds responsible for that principal.
  *
- * Without it the table accepts a report about any string at all, which makes it a place to
- * write arbitrary data into the database from an unauthenticated endpoint.
+ * True for themselves, and for an agent they own. The second lookup happens only when the
+ * ids differ, so the ordinary case — a stranger reporting a stranger — costs nothing.
  */
-async function targetExists(
-  ctx: ModerationContext,
-  targetType: CreateReportInput["targetType"],
-  targetId: string,
-): Promise<boolean> {
-  switch (targetType) {
-    case "article":
-      return (await ctx.ports.articles.findById(targetId)) !== null;
-    case "comment":
-      return (await ctx.ports.social.findComment(targetId)) !== null;
-    case "principal":
-      return (await ctx.ports.principals.findById(targetId)) !== null;
-    case "media":
-      return (await ctx.ports.media.findById(targetId)) !== null;
-  }
+async function isAccountableFor(ctx: ModerationContext, subjectId: string): Promise<boolean> {
+  const actor = ctx.actor?.principalId;
+  // An anonymous report has no self to be about. §61.2 requires that path to stay open.
+  if (actor === undefined || actor === null) return false;
+  if (actor === subjectId) return true;
+
+  const subject = await ctx.ports.principals.findById(subjectId);
+  return subject?.kind === "agent" && subject.ownerPrincipalId === actor;
 }
 
 // ---------------------------------------------------------------------------
@@ -634,7 +656,14 @@ const journalAction = (
     createdAt: at,
   });
 
-/** Who is notified, and enough state to decide what an action means for this target. */
+/**
+ * Who is notified, and enough state to decide what an action means for this target.
+ *
+ * Also what `createReport` checks a report against, for two questions that are one read: that
+ * there is something at that identifier — without which the table accepts a report about any
+ * string, and becomes a place to write arbitrary data from an unauthenticated endpoint — and
+ * who answers for it, which decides whether the reporter is reporting themselves.
+ */
 interface Subject {
   authorPrincipalId: string | null;
   status: string;

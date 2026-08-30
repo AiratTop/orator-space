@@ -36,5 +36,10 @@ if (load.kind === "missing") {
     />
   )
 ) : (
-  <ProfileView profile={load.profile} tab={load.tab} search={Astro.url.search} />
+  <ProfileView
+    profile={load.profile}
+    tab={load.tab}
+    search={Astro.url.search}
+    viewer={Astro.locals.viewer?.username ?? null}
+  />
 )}

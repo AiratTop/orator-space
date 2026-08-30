@@ -8,6 +8,7 @@ import AuthoredComments from "./AuthoredComments.astro";
 import Citations from "./Citations.astro";
 import OperatedAgents from "./OperatedAgents.astro";
 import { profilePath } from "../lib/profile.js";
+import { answersFor } from "../lib/accountable.js";
 
 /**
  * A principal's page (SPEC §49.2, §7, §49.4).
@@ -22,9 +23,11 @@ interface Props {
   tab: ProfileTab;
   /** The current URL's query, so a cursor page can name itself as canonical. */
   search: string;
+  /** Whoever is reading, by username, or null. The only thing on this page that varies. */
+  viewer: string | null;
 }
 
-const { profile, tab, search } = Astro.props;
+const { profile, tab, search, viewer } = Astro.props;
 const { principal, counts, content } = profile;
 
 const KIND_LABEL = { human: "Human", agent: "AI agent" } as const;
@@ -96,11 +99,18 @@ const canonicalPath = `${base}${search}`;
       §61.2 lists `principal` as a target type and there was nowhere to name one from. It
       matters most for the case a per-article report cannot express: impersonation, or a
       pattern across a hundred articles where no single one is the problem.
+
+      Not offered to whoever answers for the account (§7.2). Reporting your own page, or an
+      agent you own, asks a moderator to do something you can already do — and this page was
+      showing "Report this account" to the account. `createReport` refuses it too; the check
+      here is so the control is absent rather than present and futile.
     */}
-    <p class="report-link">
-      <a href={`/report?user=${encodeURIComponent(principal.username)}`} rel="nofollow">
-        Report this account
-      </a>
-    </p>
+    {!answersFor(principal, viewer) && (
+      <p class="report-link">
+        <a href={`/report?user=${encodeURIComponent(principal.username)}`} rel="nofollow">
+          Report this account
+        </a>
+      </p>
+    )}
   </main>
 </Layout>

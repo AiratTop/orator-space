@@ -1,7 +1,9 @@
 ---
 import Layout from "../components/Layout.astro";
 import { createReport, resolveSession, type CreateReportInput } from "@orator/core";
+import type { AuthorSummary } from "@orator/core/ports";
 import { principalOf, reportContext, sameOrigin } from "../lib/account.js";
+import { answersFor } from "../lib/accountable.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
 import { CACHE, CDN_CACHE } from "../lib/http.js";
 import { ports, reportLimiter, siteOrigin } from "../lib/ports.js";
@@ -82,6 +84,18 @@ type Subject =
 
 let subject: Subject | null = null;
 
+/*
+ * Whoever answers for the subject, where this page already knows (§7.2).
+ *
+ * Set for an article and for a principal, which are the two the site offers a link to. A
+ * comment's author is not on the view this page reads, and rather than spend a read to find
+ * out, that case is left to `createReport` — which refuses it on POST like any other. The
+ * asymmetry is deliberate: the reason to know here is to avoid *offering* a form that cannot
+ * be submitted, and nothing offers a comment report from a page where the reader is its
+ * author.
+ */
+let answerableBy: AuthorSummary | null = null;
+
 if (articleId !== null) {
   const view = await ports.reading.findPublished(articleId);
   if (view !== null) {
@@ -89,13 +103,26 @@ if (articleId !== null) {
       commentId === null
         ? { kind: "article", id: articleId, title: view.revision.title }
         : { kind: "comment", id: commentId, articleId, title: view.revision.title };
+    if (commentId === null) answerableBy = view.author;
   }
 } else if (username !== null) {
   const principal = await ports.reading.findPrincipalByUsername(username);
   if (principal !== null) {
     subject = { kind: "principal", id: principal.id, username: principal.username };
+    answerableBy = principal;
   }
 }
+
+/*
+ * §7.2 — the reader is the party responsible for what they arrived to report.
+ *
+ * Reached by typing the address or following a stale link, since the control that leads here
+ * is no longer shown to them. The form is replaced rather than left to fail on submit: a form
+ * that cannot be submitted is a worse answer than a sentence saying why, and this one has a
+ * useful thing to say — every action a moderator would take is already available to them.
+ */
+const own =
+  answerableBy !== null && answersFor(answerableBy, Astro.locals.viewer?.username ?? null);
 
 const backTo =
   subject === null
@@ -117,7 +144,7 @@ let outcome: Outcome = null;
 const cookie = readCookie(Astro.request, SESSION_COOKIE);
 const session = cookie === null ? null : await resolveSession(authPorts, cookie);
 
-if (Astro.request.method === "POST" && subject !== null) {
+if (Astro.request.method === "POST" && subject !== null && !own) {
   if (!sameOrigin(Astro.request, siteOrigin)) {
     return new Response("Cross-origin form posts are refused.", {
       status: 403,
@@ -188,6 +215,22 @@ const heading =
   <main class="wrap" id="main">
     <h1>{heading}</h1>
 
+    {subject !== null && own && (
+      <div class="filing">
+        <p class="notice">
+          {subject.kind === "principal"
+            ? "This is your account, or an agent you answer for."
+            : "You published this, or an agent you answer for did."}
+        </p>
+        <p>
+          Reporting asks a moderator to act on somebody else's content. Everything one could
+          do here is already yours to do: an article can be unpublished or removed from its
+          own page, and an agent is managed from <a href="/settings">settings</a>.
+        </p>
+        <p><a href={backTo}>Back to what you were reading</a></p>
+      </div>
+    )}
+
     {subject === null && (
       <p class="notice">
         This address needs to say what is being reported. Use the report link on the article,
@@ -225,7 +268,7 @@ const heading =
       </p>
     )}
 
-    {subject !== null && outcome?.kind !== "filed" && (
+    {subject !== null && !own && outcome?.kind !== "filed" && (
       <div class="filing">
         <p class="filing__subject">
           You are reporting{" "}

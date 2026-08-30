@@ -736,3 +736,90 @@ describe("what the moderation section reads (§61.1)", () => {
     expect(log.items.map((one) => one.action)).toEqual(["hide", "unindex"]);
   });
 });
+
+/**
+ * SPEC §61.1, §7.2 — nobody reports what they answer for.
+ *
+ * The failure this closes was visible on the site: a profile page offered "Report this
+ * account" to the account. Underneath it, the service accepted the row — so the moderation
+ * queue could fill with reports whose reporter and subject were the same party, asking a
+ * stranger to take actions the reporter already had.
+ *
+ * The agent case is the one worth a test of its own. It looks like a third party and is not:
+ * §7.2 makes the owner accountable for what their agent publishes, so an owner reporting
+ * their agent's article is reporting themselves with a step in between.
+ */
+describe("reporting something you answer for (§61.1, §7.2)", () => {
+  it("refuses a report against your own account", async () => {
+    const result = await createReport(ctxFor(moderator({ principalId: OWNER, platformRole: "user" })), {
+      targetType: "principal",
+      targetId: OWNER,
+      category: "spam",
+    });
+    expect(errorOf(result)).toBe(ErrorType.Forbidden);
+  });
+
+  it("refuses a report against an agent you own", async () => {
+    const result = await createReport(ctxFor(moderator({ principalId: OWNER, platformRole: "user" })), {
+      targetType: "principal",
+      targetId: AUTHOR,
+      category: "spam",
+    });
+    expect(errorOf(result)).toBe(ErrorType.Forbidden);
+  });
+
+  it("refuses a report against your own article", async () => {
+    const article = await publishedArticle();
+    const result = await createReport(ctxFor(actorFor(AUTHOR)), {
+      targetType: "article",
+      targetId: article,
+      category: "spam",
+    });
+    expect(errorOf(result)).toBe(ErrorType.Forbidden);
+  });
+
+  it("refuses a report against an article your agent published", async () => {
+    const article = await publishedArticle();
+    const result = await createReport(ctxFor(moderator({ principalId: OWNER, platformRole: "user" })), {
+      targetType: "article",
+      targetId: article,
+      category: "spam",
+    });
+    expect(errorOf(result)).toBe(ErrorType.Forbidden);
+  });
+
+  it("accepts a report from anybody else", async () => {
+    const article = await publishedArticle();
+    const stranger = await createReport(ctxFor(moderator({ principalId: MOD, platformRole: "user" })), {
+      targetType: "article",
+      targetId: article,
+      category: "spam",
+    });
+    expect(stranger.ok).toBe(true);
+  });
+
+  /*
+   * §61.2 keeps the anonymous path open, and this rule does not close it. An author who signs
+   * out can file a report about their own article and it is accepted, exactly as a stranger's
+   * would be — the rule is queue hygiene, not a security control, and a test that pretended
+   * otherwise would be documenting a guarantee the system does not make.
+   */
+  it("still accepts an anonymous report about anything that exists", async () => {
+    const article = await publishedArticle();
+    const anonymous = await createReport(ctxFor(null), {
+      targetType: "article",
+      targetId: article,
+      category: "illegal",
+    });
+    expect(anonymous.ok).toBe(true);
+  });
+
+  it("says nothing different about a target that does not exist", async () => {
+    const result = await createReport(ctxFor(actorFor(AUTHOR)), {
+      targetType: "article",
+      targetId: "NOSUCHARTICLE",
+      category: "spam",
+    });
+    expect(errorOf(result)).toBe(ErrorType.NotFound);
+  });
+});

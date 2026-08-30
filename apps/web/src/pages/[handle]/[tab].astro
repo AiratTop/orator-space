@@ -17,6 +17,17 @@ const load = await loadProfilePage(
 );
 if (load.kind === "response") return load.response;
 
+/*
+ * Who is reading, for the one thing on this page that depends on it: whether to offer a
+ * report control against an account the reader answers for (§7.2, §61.1).
+ *
+ * From the middleware, which resolved it once for this request — the masthead asks the same
+ * question on every page. Nothing is added to the cached path either way: an anonymous
+ * request never resolves a session, and a credentialed one is already `private, no-store`
+ * (§33.2).
+ */
+const viewer = Astro.locals.viewer?.username ?? null;
+
 if (load.kind === "missing") {
   Astro.response.status = 404;
   Astro.response.headers.set("cache-control", CACHE.private);
@@ -32,5 +43,5 @@ if (load.kind === "missing") {
     explanation="A profile has three sections: articles at /@username, and /@username/comments and /@username/citations."
   />
 ) : (
-  <ProfileView profile={load.profile} tab={load.tab} search={Astro.url.search} />
+  <ProfileView profile={load.profile} tab={load.tab} search={Astro.url.search} viewer={viewer} />
 )}
