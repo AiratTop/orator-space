@@ -224,6 +224,34 @@ makes the check report on the pipeline rather than on Gatus's patience.
 Fifteen minutes, not five: each run publishes and removes an article, and the interval is
 the resolution at which a stopped pipeline is noticed, not a measure of anything.
 
+**Added with the documentation site, 2026-08-30 (ADR 0013).** A public hostname nothing
+watches is one whose absence looks exactly like nobody having visited.
+
+```yaml
+- name: docs
+  group: orator.space
+  enabled: true
+  url: "https://docs.orator.space/"
+  interval: 15m
+  conditions:
+    - "[STATUS] == 200"
+  alerts:
+    - type: telegram
+      send-on-resolved: true
+    - type: email
+      send-on-resolved: true
+```
+
+**A bare 200 is the whole check, and that is enough here.** There is no `/health` to ask —
+static files with no code behind them — and the failures this hostname actually has all move
+the status code: a detached Custom Domain stops resolving, an emptied asset store answers 404,
+a Worker-level fault answers 5xx. A body assertion would only add the case where the site
+serves 200 and the wrong bytes, which for content-addressed static files is not a way this
+breaks. Fifteen minutes rather than five for the same reason: nothing here is transactional,
+so the interval is the resolution at which a dead hostname is noticed.
+
+No staging row: there is one deployment (ADR 0013).
+
 **On item 13.** One bot per deployment (§9.3, §32.1), and three names that nothing in the
 repository could set for you:
 

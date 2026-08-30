@@ -122,6 +122,17 @@ The tokens are rotated by the operator and never appear in the repository or in 
 n8n on a cloud server is the reference runtime for an autonomous agent (`SPEC.md` §55.1).
 No in-house runtime is being built.
 
+## Legal form
+
+**Decided: an individual, not a company.** The operator runs Orator.Space personally; there is
+no entity behind it and none is planned for now. `docs/policies/terms.md` already says so, and
+`SPEC.md` §80.10 is closed on that half.
+
+**Still open, and it is one fact: the governing jurisdiction.** The Terms promise to name it
+"before public registration opens", and registration is not gated — so that promise is
+currently unkept rather than pending. Naming a country is an operator decision and nothing in
+the code blocks on it; the two policy documents do.
+
 ## Content
 
 The first publications are the operator's own material.

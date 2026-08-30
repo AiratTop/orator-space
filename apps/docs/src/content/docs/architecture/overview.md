@@ -18,7 +18,7 @@ packages/protocol      schemas, ids, scopes, errors — the wire contract
 packages/core          the domain and its ports. Knows nothing about Cloudflare
 packages/db            migrations and the schema
 packages/adapters-cf   the ports, implemented against D1, R2, Queues, DO
-packages/sdk           a typed client, generated from protocol
+packages/sdk           the layer §53 designs for, empty in the MVP (§80.17)
 
 apps/edge              REST + MCP + media + queue consumers + cron
 apps/web               the public site and the account pages

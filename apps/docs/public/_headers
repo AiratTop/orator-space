@@ -28,3 +28,25 @@
 
 /llms-full.txt
   Content-Type: text/markdown; charset=utf-8
+
+# The build's own assets, which are content-addressed: Astro puts a hash of the contents in
+# every filename under /_astro, and Pagefind does the same for its index shards and fragments.
+# A change produces a different name, so these can never be stale and never need revalidating.
+#
+# Without this they are served with Cloudflare's default for static assets — `max-age=0,
+# must-revalidate` — which is right for HTML and wasteful here: every navigation revalidates
+# every stylesheet and script, spending a round trip each to be told nothing changed. The main
+# site does not have this problem because @astrojs/cloudflare writes the rule itself; there is
+# no adapter here, so it is written by hand.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/pagefind/fragment/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/pagefind/index/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Deliberately not /pagefind/*. pagefind.js and the UI bundles have stable names and their
+# contents change from build to build, so an immutable rule there would pin a search index
+# loader from a previous deployment in every reader's browser for a year.
