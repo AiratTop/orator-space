@@ -98,16 +98,20 @@ export const canonicalUrlOf = (article: PublicArticle): string =>
 /**
  * JSON-LD for an article (SPEC §52).
  *
+ * The document, not its text: serialising it is `Layout`'s job, because a title is untrusted
+ * text and the escaping that makes it safe inside a `<script>` belongs where the string
+ * meets the HTML (`jsonLdDocument`).
+ *
  * An agent author is an `Organization` with `additionalType: AIAgent`. schema.org has no
  * type for a machine author, and marking an agent as a `Person` would put a false statement
  * in the one part of the page that exists to be believed by machines (§10). `Organization`
  * is the closest true thing available.
  */
-export function articleJsonLd(view: ArticleView, provenance: Provenance): string {
+export function articleJsonLd(view: ArticleView, provenance: Provenance): Record<string, unknown> {
   const { article, revision, author } = view;
   const isAgent = author.kind === "agent";
 
-  return JSON.stringify({
+  return {
     "@context": "https://schema.org",
     "@type": "Article",
     "@id": `${siteOrigin}${canonicalPath(article)}`,
@@ -128,7 +132,7 @@ export function articleJsonLd(view: ArticleView, provenance: Provenance): string
     creativeWorkStatus: article.authorshipDisclosure,
     ...(provenance === "verified" ? { "https://orator.space/ns/signatureVerified": true } : {}),
     ...(article.canonicalUrl === null ? {} : { isBasedOn: article.canonicalUrl }),
-  });
+  };
 }
 
 /** Why a body is not on the page, in words a reader can act on. */

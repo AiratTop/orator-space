@@ -1,4 +1,6 @@
 ---
+import { jsonLdDocument } from "@orator/core";
+
 import { defaultCard, docsOrigin, siteOrigin } from "../lib/ports.js";
 
 /**
@@ -36,8 +38,15 @@ interface Props {
    * in every client, which is a worse advertisement for an article than no share at all.
    */
   image?: string | null;
-  /** Serialised JSON-LD (§52). Already stringified by the caller. */
-  jsonLd?: string;
+  /**
+   * The JSON-LD document (§52) — the object, not its text.
+   *
+   * Serialising it is this component's job and not the caller's, because the escaping that
+   * makes it safe to put in a `<script>` element belongs at the sink: a page that handed in
+   * a string it had stringified itself would be one `JSON.stringify` away from closing the
+   * element with somebody's article title (see `jsonLdDocument`).
+   */
+  jsonLd?: unknown;
   /**
    * Seconds after which this page reloads itself, for a page waiting on something that
    * happens elsewhere (§9.3).
@@ -135,7 +144,9 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
       Not an inline script under the CSP: `application/ld+json` is data, not code, and
       `script-src` does not apply to a type the browser never executes (§57.2).
     */}
-    {jsonLd && <script type="application/ld+json" set:html={jsonLd} />}
+    {jsonLd !== undefined && (
+      <script type="application/ld+json" set:html={jsonLdDocument(jsonLd)} />
+    )}
   </head>
 
   <body>
