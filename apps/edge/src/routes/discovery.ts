@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { feed, search, searchPrincipals, type RequestContext } from "@orator/core";
 import { decodeFeedCursor, encodeFeedCursor, schemas } from "@orator/protocol";
 import { semanticFor } from "../context.js";
-import { parseQuery, problemResponse, respond } from "../http.js";
+import { page, parseQuery, problemResponse, respond } from "../http.js";
 import { cardView, topicView } from "../views.js";
 import type { Env } from "../index.js";
 
@@ -110,12 +110,15 @@ discoveryRoutes.get("/v1/topics/:slug/articles", async (c) => {
     return problemResponse(c, { type: "not-found", title: "Topic not found" });
   }
   const limit = parsed.data.limit ?? 20;
-  const cards = await ctx.ports.topics.listArticles(topic.id, limit, parsed.data.cursor ?? null);
+  const { rows: cards, nextCursor } = page(
+    await ctx.ports.topics.listArticles(topic.id, limit + 1, parsed.data.cursor ?? null),
+    limit,
+  );
   return respond(c, {
     ok: true,
     value: {
       items: cards.map(cardView),
-      next_cursor: cards.length === limit ? (cards.at(-1)?.id ?? null) : null,
+      next_cursor: nextCursor,
     },
   });
 });

@@ -12,7 +12,7 @@ import {
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
-import { parse, parseQuery, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { page, parse, parseQuery, problemResponse, requireIdempotencyKey, respond } from "../http.js";
 import { commentCreatedView, commentView, edgeView } from "../views.js";
 import type { Env } from "../index.js";
 
@@ -52,12 +52,16 @@ socialRoutes.get("/v1/articles/:id/comments", async (c) => {
 
   const ctx = c.get("ctx");
   const limit = parsed.data.limit ?? 50;
-  const comments = await ctx.ports.social.listComments(c.req.param("id"), limit, parsed.data.cursor ?? null);
+  // One more than asked for, so the end of the collection is observed rather than inferred.
+  const { rows: comments, nextCursor } = page(
+    await ctx.ports.social.listComments(c.req.param("id"), limit + 1, parsed.data.cursor ?? null),
+    limit,
+  );
   return respond(c, {
     ok: true,
     value: {
       items: comments.map((comment) => commentView(comment, originOf(c.req.url))),
-      next_cursor: comments.length === limit ? (comments.at(-1)?.id ?? null) : null,
+      next_cursor: nextCursor,
     },
   });
 });
@@ -121,12 +125,15 @@ socialRoutes.get("/v1/articles/:id/edges", async (c) => {
 
   const ctx = c.get("ctx");
   const limit = parsed.data.limit ?? 50;
-  const edges = await ctx.ports.social.listEdgesFor(c.req.param("id"), limit, parsed.data.cursor ?? null);
+  const { rows: edges, nextCursor } = page(
+    await ctx.ports.social.listEdgesFor(c.req.param("id"), limit + 1, parsed.data.cursor ?? null),
+    limit,
+  );
   return respond(c, {
     ok: true,
     value: {
       items: edges.map(edgeView),
-      next_cursor: edges.length === limit ? (edges.at(-1)?.id ?? null) : null,
+      next_cursor: nextCursor,
     },
   });
 });

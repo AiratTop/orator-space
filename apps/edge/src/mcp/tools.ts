@@ -41,6 +41,7 @@ import {
   revisionCreatedView,
   topicView,
 } from "../views.js";
+import { page } from "../http.js";
 
 /**
  * What each tool does (SPEC §47).
@@ -182,15 +183,11 @@ const HANDLERS: Record<string, Handler> = {
 
   async get_related_articles({ ctx }, args) {
     const limit = Math.min(num(args, "limit") ?? 50, 100);
-    const edges = await ctx.ports.social.listEdgesFor(
-      str(args, "article_id"),
+    const { rows: edges, nextCursor } = page(
+      await ctx.ports.social.listEdgesFor(str(args, "article_id"), limit + 1, text(args, "cursor") ?? null),
       limit,
-      text(args, "cursor") ?? null,
     );
-    return ok({
-      items: edges.map(edgeView),
-      next_cursor: edges.length === limit ? (edges.at(-1)?.id ?? null) : null,
-    });
+    return ok({ items: edges.map(edgeView), next_cursor: nextCursor });
   },
 
   async get_topics({ ctx }) {
@@ -202,9 +199,8 @@ const HANDLERS: Record<string, Handler> = {
       return { ok: false, error: { type: ErrorType.Unauthenticated, title: "Authentication required" } };
     }
     const limit = num(args, "limit") ?? 50;
-    const rows = await ctx.ports.events.listForAudience(
-      ctx.actor.principalId,
-      text(args, "since") ?? null,
+    const { rows, nextCursor } = page(
+      await ctx.ports.events.listForAudience(ctx.actor.principalId, text(args, "since") ?? null, limit + 1),
       limit,
     );
     const wanted = text(args, "type");
@@ -213,7 +209,7 @@ const HANDLERS: Record<string, Handler> = {
       items: events.map(eventView),
       // The cursor is the last row examined, not the last returned: a filter matching
       // nothing on a page must still advance, or the caller stalls forever.
-      next_cursor: rows.length === limit ? (rows.at(-1)?.id ?? null) : null,
+      next_cursor: nextCursor,
     });
   },
 

@@ -228,3 +228,61 @@ describe("query parameters (§44.2, §67)", () => {
     }
   });
 });
+
+/**
+ * The end of a collection is observed, not inferred (SPEC §44.2, §67).
+ *
+ * The envelope's own promise is that `next_cursor` is "null at the end of a collection, so a
+ * client never guesses from the page size" — and every route computed it by guessing from
+ * the page size. A collection whose length is an exact multiple of the page requested handed
+ * back a cursor to an empty page. Twenty comments and `?limit=20` is not an unusual pair.
+ */
+describe("the last page says it is the last (§44.2)", () => {
+  let articleId: string;
+
+  beforeAll(async () => {
+    const created = await app.request(
+      "/v1/articles",
+      json({ title: "Exactly a page", content: "# Exactly a page\n\nA body.\n" }, authed()),
+      env,
+    );
+    articleId = ((await created.json()) as { id: string }).id;
+
+    // Three revisions, so a request for exactly three is a full page with nothing after it.
+    for (const n of [1, 2]) {
+      await app.request(
+        `/v1/articles/${articleId}/revisions`,
+        json({ title: `Revision ${n}`, content: `# Revision ${n}\n\nA body.\n` }, authed()),
+        env,
+      );
+    }
+  });
+
+  it("returns null when the page is full and the collection is exhausted", async () => {
+    const response = await app.request(`/v1/articles/${articleId}/revisions?limit=3`, {}, env);
+    const body = (await response.json()) as { items: unknown[]; next_cursor: string | null };
+
+    expect(body.items).toHaveLength(3);
+    expect(body.next_cursor).toBeNull();
+  });
+
+  it("returns a cursor when there is genuinely more, and it leads somewhere", async () => {
+    const first = await app.request(`/v1/articles/${articleId}/revisions?limit=2`, {}, env);
+    const firstPage = (await first.json()) as { items: { id: string }[]; next_cursor: string | null };
+
+    expect(firstPage.items).toHaveLength(2);
+    expect(firstPage.next_cursor).not.toBeNull();
+
+    const second = await app.request(
+      `/v1/articles/${articleId}/revisions?limit=2&cursor=${firstPage.next_cursor}`,
+      {},
+      env,
+    );
+    const secondPage = (await second.json()) as { items: { id: string }[]; next_cursor: string | null };
+
+    // The page a cursor leads to is never empty, which is the whole of the promise.
+    expect(secondPage.items.length).toBeGreaterThan(0);
+    expect(secondPage.next_cursor).toBeNull();
+    expect(secondPage.items.map((i) => i.id)).not.toEqual(firstPage.items.map((i) => i.id));
+  });
+});

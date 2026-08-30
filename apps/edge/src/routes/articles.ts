@@ -14,7 +14,7 @@ import {
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
-import { parse, parseQuery, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { page, parse, parseQuery, problemResponse, requireIdempotencyKey, respond } from "../http.js";
 import {
   activityView,
   articleCreatedView,
@@ -232,16 +232,19 @@ articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
    * filter, which skips every draft-shaped gap.
    */
   const limit = parsed.data.limit ?? 50;
-  const revisions = await ctx.ports.articles.listRevisions(c.req.param("id"), {
+  const { rows: revisions, nextCursor } = page(
+    await ctx.ports.articles.listRevisions(c.req.param("id"), {
+      limit: limit + 1,
+      cursor: parsed.data.cursor ?? null,
+      publishedOnly: !canSeeDrafts,
+    }),
     limit,
-    cursor: parsed.data.cursor ?? null,
-    publishedOnly: !canSeeDrafts,
-  });
+  );
 
   return respond(c, {
     ok: true,
     value: {
-      next_cursor: revisions.length === limit ? (revisions.at(-1)?.id ?? null) : null,
+      next_cursor: nextCursor,
       items: revisions.map((revision) => ({
         id: revision.id,
         title: revision.title,
@@ -290,15 +293,19 @@ articleRoutes.get("/v1/events", async (c) => {
    * short, so the cursor is the last row *examined* rather than the last returned —
    * otherwise a filter that matches nothing on a page would stall the caller forever.
    */
-  const rows = await ctx.ports.events.listForAudience(ctx.actor.principalId, since, limit);
+  const { rows, nextCursor } = page(
+    await ctx.ports.events.listForAudience(ctx.actor.principalId, since, limit + 1),
+    limit,
+  );
   const events = wanted === undefined ? rows : rows.filter((event) => event.type === wanted);
 
   return respond(c, {
     ok: true,
     value: {
       items: events.map(eventView),
-      // Null at the end of the feed, so a caller never has to guess from the page size.
-      next_cursor: rows.length === limit ? (rows.at(-1)?.id ?? null) : null,
+      // The cursor is over `rows`, the examined page, not over `events` — which is the same
+      // rule as above and is why `page` is applied before the filter rather than after it.
+      next_cursor: nextCursor,
     },
   });
 });

@@ -72,6 +72,28 @@ export function parse<T>(c: Context, schema: z.ZodType<T>, body: unknown) {
 }
 
 /**
+ * One page of a collection, and whether there is another (SPEC §44.2, §67).
+ *
+ * The envelope promises that `next_cursor` is "null at the end of a collection, so a client
+ * never guesses from the page size". Every route computed it by guessing from the page size:
+ * `rows.length === limit ? last.id : null`. On a collection whose length is an exact
+ * multiple of the page size — twenty comments, `?limit=20`, which is not an unusual pair —
+ * the last full page carried a cursor to an empty one. Not fatal, and precisely the kind of
+ * thing a client works around once and then depends on.
+ *
+ * So the caller asks the store for `limit + 1` and hands the answer here: one extra row is
+ * the cheapest possible proof that another page exists, and it is proof rather than
+ * inference. The row itself is dropped.
+ */
+export function page<T extends { id: string }>(
+  rows: readonly T[],
+  limit: number,
+): { rows: T[]; nextCursor: string | null } {
+  const kept = rows.slice(0, limit);
+  return { rows: kept, nextCursor: rows.length > limit ? (kept.at(-1)?.id ?? null) : null };
+}
+
+/**
  * Validates the whole query string against a protocol schema (SPEC §44.2).
  *
  * The whole of it, and that is the point. §44.2's "unknown fields in a request → 422" is
