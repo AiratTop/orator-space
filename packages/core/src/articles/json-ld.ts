@@ -29,11 +29,21 @@
  * The escapes are `\uXXXX` sequences, which JSON defines for any character in a string, so
  * the document a parser reads back is identical to the one that went in.
  */
-export function jsonLdDocument(value: Record<string, unknown>): string {
-  return JSON.stringify(value)
+/**
+ * The escaping, separately from the serialising, so the property can be stated about it.
+ *
+ * `jsonLdDocument` is not idempotent and cannot be — applying it twice would stringify a
+ * string. This is the part that is: everything it emits is `\uXXXX`, which contains none of
+ * the characters it looks for.
+ */
+export const escapeForHtmlScript = (json: string): string =>
+  json
     .replace(/&/g, "\\u0026")
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
     .replace(/\u2028/g, "\\u2028")
     .replace(/\u2029/g, "\\u2029");
+
+export function jsonLdDocument(value: Record<string, unknown>): string {
+  return escapeForHtmlScript(JSON.stringify(value));
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { jsonLdDocument } from "./json-ld.js";
+import { escapeForHtmlScript, jsonLdDocument } from "./json-ld.js";
 
 describe("jsonLdDocument", () => {
   it("cannot close the script element it is written into", () => {
@@ -32,14 +32,14 @@ describe("jsonLdDocument", () => {
     expect(JSON.parse(jsonLdDocument(value))).toEqual(value);
   });
 
-  it("escapes what it emits to nothing further, so a second pass changes nothing", () => {
-    // Note what this does *not* claim: `jsonLdDocument(jsonLdDocument(v))` is not the
-    // identity, because the outer call would stringify a string. It is the escaping step
-    // that is closed under itself, which is what matters if the text ever meets a second
-    // sink — the escaped output contains no `<`, `>` or `&` left to escape again.
-    const once = jsonLdDocument({ headline: "</script> & <b>5 > 3</b>", excerpt: "a\u2028b" });
+  it("escapes to a fixed point, so a second pass changes nothing", () => {
+    // The property applies to the escaping step and not to `jsonLdDocument`, which is not
+    // idempotent and cannot be: applying it twice would stringify a string. Stated about
+    // the function it is true of, and by running it twice rather than by re-deriving the
+    // replacements — a test that repeats the implementation only checks the copy.
+    const once = escapeForHtmlScript(JSON.stringify({ headline: "</script> & <b>5 > 3</b>", excerpt: "a\u2028b" }));
 
+    expect(escapeForHtmlScript(once)).toBe(once);
     expect(once).not.toMatch(/[<>&\u2028\u2029]/);
-    expect(JSON.parse(once)).toEqual(JSON.parse(once));
   });
 });

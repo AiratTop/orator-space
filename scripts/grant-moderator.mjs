@@ -16,7 +16,7 @@
  * requires (§43.1). Grant it to as few principals as the deployment can operate with.
  */
 import { spawnSync } from "node:child_process";
-import { newId } from "./lib/orator-id.mjs";
+import { isOratorId, newId } from "./lib/orator-id.mjs";
 
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
@@ -35,6 +35,23 @@ if (principalId === undefined || environment === null) {
 }
 if (role !== "moderator" && role !== "admin") {
   console.error(`unknown role: ${role}. One of moderator, admin.`);
+  process.exit(2);
+}
+/*
+ * Both of the values that reach SQL are checked against a closed set before they get there.
+ *
+ * `role` was already; `environment` and `principalId` were not, and this script interpolates
+ * all three into a statement it hands to `wrangler d1 execute`. There is no parameter binding
+ * on that path — `--command` takes a string — so the check *is* the defence, and it has to be
+ * a whitelist rather than an escape. An id is 26 characters from a 32-character alphabet
+ * containing no quote; an environment is one of two words.
+ */
+if (environment !== "staging" && environment !== "production") {
+  console.error(`unknown environment: ${environment}. One of staging, production.`);
+  process.exit(2);
+}
+if (!isOratorId(principalId)) {
+  console.error(`not an identifier: ${principalId}. 26 Crockford base32 characters (§12).`);
   process.exit(2);
 }
 
@@ -83,14 +100,62 @@ const prefix = token.slice(0, 20);
 const now = new Date();
 const tokenId = newId(now);
 
+/** One `wrangler d1 execute`, returning parsed rows. */
+function d1(sql, { json = false } = {}) {
+  const argv = ["--filter", "@orator/edge", "exec", "wrangler", "d1", "execute", "DB", "--env", environment, "--remote", "--command", sql];
+  if (json) argv.push("--json");
+  const result = spawnSync("pnpm", argv, { encoding: "utf8", stdio: json ? ["ignore", "pipe", "pipe"] : "inherit" });
+  if (result.status !== 0) {
+    throw new Error(`wrangler d1 execute failed: ${(result.stderr ?? "").slice(0, 600)}`);
+  }
+  if (!json) return null;
+  const out = result.stdout ?? "";
+  const at = out.indexOf("[");
+  if (at === -1) throw new Error(`unexpected wrangler output: ${out.slice(0, 300)}`);
+  return JSON.parse(out.slice(at, out.lastIndexOf("]") + 1))[0].results;
+}
+
+/*
+ * Read the target first, and refuse anything that is not exactly one active human (§7.2).
+ *
+ * This used to go straight to the writes and lean on `WHERE kind = 'human'` to make an agent
+ * id a no-op. It is a no-op for the UPDATE and was never one for the INSERT: an agent id
+ * changed no role and still minted a token carrying `admin:moderate`, after which the script
+ * printed it as a success. The domain checks the platform role as well as the scope (§43.4),
+ * so nothing was escalated — but the operator was told a moderator existed who did not, and
+ * a live administrative credential was left behind for an account nobody had appointed.
+ */
+console.log(`\nAppointing ${principalId} as ${role} in ${environment}.\n`);
+
+const [target] = d1(`SELECT id, kind, status, platform_role, username FROM principals WHERE id = '${principalId}';`, { json: true });
+
+if (target === undefined) {
+  console.error(`No principal ${principalId} in ${environment}. Nothing was written.\n`);
+  process.exit(1);
+}
+if (target.kind !== "human") {
+  console.error(`${principalId} is @${target.username}, a ${target.kind}. Only a human holds a platform role (§7.2). Nothing was written.\n`);
+  process.exit(1);
+}
+if (target.status !== "active") {
+  console.error(`@${target.username} is ${target.status}. Nothing was written.\n`);
+  process.exit(1);
+}
+console.log(`  target: @${target.username} (${target.kind}, ${target.status}, role ${target.platform_role ?? "none"})\n`);
+
+/*
+ * The INSERT selects its own precondition rather than trusting the UPDATE that precedes it.
+ * `wrangler d1 execute` runs several statements in one call but gives no transaction to roll
+ * back, so the token's existence has to depend on the role being grantable in the same
+ * statement that creates it.
+ */
 const sql = [
-  `UPDATE principals SET platform_role = '${role}' WHERE id = '${principalId}' AND kind = 'human';`,
+  `UPDATE principals SET platform_role = '${role}' WHERE id = '${principalId}' AND kind = 'human' AND status = 'active';`,
   `INSERT INTO api_tokens (id, principal_id, name, token_hash, prefix, scopes, created_at)`,
-  `VALUES ('${tokenId}', '${principalId}', '${role}', '${tokenHash}', '${prefix}',`,
-  `        '${JSON.stringify(SCOPES)}', '${now.toISOString()}');`,
+  `SELECT '${tokenId}', '${principalId}', '${role}', '${tokenHash}', '${prefix}', '${JSON.stringify(SCOPES)}', '${now.toISOString()}'`,
+  `WHERE EXISTS (SELECT 1 FROM principals WHERE id = '${principalId}' AND kind = 'human' AND platform_role = '${role}');`,
 ].join("\n");
 
-console.log(`\nAppointing ${principalId} as ${role} in ${environment}.\n`);
 console.log(sql);
 
 if (dryRun) {
@@ -98,18 +163,29 @@ if (dryRun) {
   process.exit(0);
 }
 
-const result = spawnSync(
-  "pnpm",
-  ["--filter", "@orator/edge", "exec", "wrangler", "d1", "execute", "DB", "--env", environment, "--remote", "--command", sql],
-  { stdio: "inherit" },
-);
+try {
+  d1(sql);
+} catch (error) {
+  console.error(`\n${error.message}\n\nThe token was never printed and nothing depends on it.\n`);
+  process.exit(1);
+}
 
-if (result.status !== 0) {
-  console.error("\nThe statements were not applied. The token above is worthless; run again.\n");
+/*
+ * Postconditions, before the token is shown. A credential printed on the strength of an exit
+ * code is a credential printed on the strength of nothing in particular.
+ */
+const [after] = d1(`SELECT platform_role FROM principals WHERE id = '${principalId}';`, { json: true });
+const [minted] = d1(`SELECT id FROM api_tokens WHERE id = '${tokenId}';`, { json: true });
+
+if (after?.platform_role !== role) {
+  console.error(`\nThe role was not granted — @${target.username} is ${after?.platform_role ?? "unchanged"}. The token was not created either; nothing to revoke.\n`);
+  process.exit(1);
+}
+if (minted === undefined) {
+  console.error(`\nThe role is now ${role}, and the token was not created. Re-run to mint one.\n`);
   process.exit(1);
 }
 
 console.log(`\n  ${token}\n`);
 console.log("Shown once. Nothing stored it and nothing can show it again (§42.2).");
-console.log("Only a human principal can hold a platform role: the UPDATE above says so, and");
-console.log("an agent id will have changed nothing while still minting a token (§7.2).\n");
+console.log(`Verified: @${target.username} holds ${role}, and token ${tokenId} exists.\n`);
