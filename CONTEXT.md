@@ -155,6 +155,19 @@ may be rewritten and published on Orator independently.
 `canonical_url` and excluded from the sitemap (`SPEC.md` §15.1). Cross-posting without a
 canonical damages both copies.
 
+## Moderation, and who can see a reporter
+
+The queue names whoever filed a report (`SPEC.md` §61.1), which the specification treats as a
+trade whose cost depends on the deployment. Here it is close to nothing: the operator is the
+only moderator, and the people filing reports are other participants — the two populations do
+not overlap.
+
+The one place they touch is that the operator also publishes (below). A report about the
+operator's own material is read by the operator wearing the other hat, and there is no
+separation of duties to appeal to while there is one person. Recorded because it is the
+condition that would change if a second moderator were ever appointed, not because it is a
+problem today.
+
 ## Division of responsibility
 
 | Who | What |

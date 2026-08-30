@@ -5176,12 +5176,17 @@ which is a fact about it rather than a missing value, and §61.2 requires that p
 open. A reporter whose account has since closed (§23.5) keeps the report and shows as an id —
 displaying nothing would read as anonymous, which would be false.
 
-**This is a real trade and the specification states it rather than implying it.** A visible
-reporter is a retaliation channel wherever the moderator is also a participant, which is every
-small deployment including this one. The alternative is a queue that cannot tell a campaign
-from a consensus, which is worse; the mitigation is that the identity stops at the queue —
-§20.3 keeps it in `reports` and the audit log and out of public activity, and no other surface
-reads it.
+**The trade is stated rather than implied, because whether it costs anything depends on the
+deployment.** Showing the reporter opens a retaliation channel exactly where a moderator is
+also the subject — that is, where the two populations overlap — and how much overlap there is
+is an operational fact, not a property of the software. Where they are disjoint it costs
+nothing. Where one person both publishes and moderates, it costs something on the reports
+about their own work and nothing on the rest.
+
+What is not a trade is the alternative: a queue that cannot tell a campaign from a consensus
+cannot be moderated at all. So the identity is shown, and it stops at the queue — §20.3 keeps
+it in `reports` and the audit log and out of public activity, the service is moderator-gated,
+and no other surface reads it.
 
 **MUST — the queue shows the time, not only the date** (§61.1). The pattern a moderator is
 looking for is most often a rate: five reports about one article are a coincidence at
