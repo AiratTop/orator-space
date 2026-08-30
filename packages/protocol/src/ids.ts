@@ -39,8 +39,34 @@ export function decodeId(id: string): Uint8Array {
 }
 
 const ID_PATTERN = new RegExp(`^[${CROCKFORD}]{${ID_LENGTH}}$`);
-export const isOratorId = (value: unknown): value is OratorId =>
-  typeof value === "string" && ID_PATTERN.test(value);
+
+/**
+ * SPEC §12 — is this an identifier this platform could have issued?
+ *
+ * The alphabet and the length are the cheap half, and were for a while the whole of it. Added
+ * to them: the encoding has to be canonical. `encodeId` pads 128 bits out to 130, so the low
+ * two bits of the last character are always zero, and a string that sets them decodes to the
+ * *same sixteen bytes* as a real id. That is a second spelling of one entity, which is what
+ * §12's "one id per entity" exists to prevent, and the round trip is what rejects it.
+ *
+ * **What is deliberately not checked: the UUIDv7 version and variant bits.** §12 says
+ * UUIDv7, `createIdGen` emits one, and checking for it here would be the obvious next step —
+ * except that `scripts/lib/orator-id.mjs` did not set those bits until 2026-08-30, and the
+ * two scripts that use it write rows directly. The staging canary (§66.7) is one such row:
+ * `06G2NJ9TMHSJW1VEPDFDJX64J0`, variant `00`. §11 makes an identifier immutable and forbids
+ * reuse, so that row cannot be corrected and the principal cannot be re-minted — a validator
+ * that demanded the bits would permanently refuse an account this project created, and
+ * refuse it at `POST /v1/tokens`, which is where the canary's credential comes from.
+ *
+ * The generator is fixed forward. Tightening this is a §65 contract step for after the last
+ * such row is gone, not a hardening to slip in now.
+ *
+ * Cheap enough to run per request: sixteen bytes of shifting, no allocation worth naming.
+ */
+export const isOratorId = (value: unknown): value is OratorId => {
+  if (typeof value !== "string" || !ID_PATTERN.test(value)) return false;
+  return encodeId(decodeId(value)) === value;
+};
 
 /** Milliseconds since epoch encoded in the leading 48 bits of a UUIDv7. */
 export function idTimestamp(id: OratorId): number {

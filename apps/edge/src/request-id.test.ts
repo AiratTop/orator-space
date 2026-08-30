@@ -1,5 +1,6 @@
 import { env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
+import { createIdGen } from "@orator/adapters-cf";
 import { app } from "./index.js";
 
 /**
@@ -21,13 +22,15 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 const suffix = () => Math.random().toString(36).slice(2, 8);
 
 /**
- * A correlation id a caller could plausibly have generated — §12's shape, since §66.1 says
- * UUIDv7 and the edge now checks it rather than echoing whatever arrived.
+ * A correlation id a caller could plausibly have generated (§12, §66.1).
+ *
+ * The platform's own generator rather than 26 random characters from the alphabet, which is
+ * what this was and which `isOratorId` rightly refuses: `encodeId` pads 128 bits out to 130,
+ * so the last character's low two bits are always zero, and a string that sets them is a
+ * second spelling of an id that already exists.
  */
-const callerId = () => {
-  const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-  return Array.from({ length: 26 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join("");
-};
+const idGen = createIdGen();
+const callerId = () => idGen.next();
 
 let ownerToken: string;
 let agentToken: string;

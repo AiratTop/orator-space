@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isOratorId } from "./ids.js";
 
 /**
  * The wire contract (SPEC §53).
@@ -25,14 +26,21 @@ import { z } from "zod";
 /**
  * SPEC §12 — the identifier, checked as one rather than counted.
  *
- * A length check accepts 26 spaces. The alphabet matters here beyond tidiness: an id is
- * pasted into a URL, a log line and a `WHERE` clause, and `isOratorId` is the same pattern
- * the domain uses — the wire and the domain agreeing on what an id is means a value that
- * passes validation is one `decodeId` will accept.
+ * A length check accepts 26 spaces. This defers to `isOratorId`, so the wire and the domain
+ * answer "is this an id" the same way and a value that passes here is one every reader
+ * downstream will also accept — including the canonical-encoding check, which rejects the
+ * second spelling of an id that decodes to bytes a real one already owns.
+ *
+ * `isOratorId` stops short of the UUIDv7 version and variant bits, and says why: an account
+ * this project created predates the generator fix and does not carry them.
+ *
+ * The pattern stays in the JSON Schema for OpenAPI's sake — a generated client can check the
+ * alphabet and the length, which is most of the value, and cannot express the rest.
  */
 export const oratorId = z
   .string()
   .regex(/^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$/, "not a Crockford base32 identifier")
+  .refine(isOratorId, "not an identifier this platform issues (§12)")
   .describe("A 26-character Crockford base32 identifier");
 
 /**
