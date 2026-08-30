@@ -101,6 +101,24 @@ value rather than a missing one — so it is recorded here instead.
 Rotating it is a deliberate loss of correlation with every pseudonym stored before it, which
 is the point: the case that calls for a rotation is the pepper having leaked.
 
+**Set both from one value, in one sitting.** `scripts/check-secrets.mjs` runs on every deploy
+and can only see that each Worker holds *a* secret under that name — Cloudflare does not
+disclose values, correctly, so nothing automated can confirm the two match. A mismatch is
+silent and produces one caller appearing in `audit_log` as two people. The procedure is the
+control:
+
+```sh
+# one value, both Workers, per environment — not two `openssl rand` calls
+PEPPER=$(openssl rand -base64 32)
+cd apps/edge && printf %s "$PEPPER" | npx wrangler secret put IP_PEPPER --env <env>
+cd ../web   && printf %s "$PEPPER" | npx wrangler secret put IP_PEPPER --name orator-web[-staging]
+unset PEPPER
+```
+
+`--name` for the web Worker rather than `--env`: after a build, `apps/web/dist/server/
+wrangler.json` is a flattened production configuration and `--env` has nothing to apply to
+(CLAUDE.md, "The web Worker's environment is chosen at *build* time").
+
 ### The staging export in the git history
 
 `apps/edge/.restore-drill/dump.sql.gz` was committed to this public repository in `b95bddc`

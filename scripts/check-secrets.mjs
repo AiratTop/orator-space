@@ -13,7 +13,15 @@
  * boolean. This runs after the deploy that could have broken it, with the credential that
  * can see the answer, and fails the release rather than the request path.
  *
- * It reads names and never values — `wrangler secret list` returns no value to read.
+ * **What it establishes, and what it does not.** It reads names — `wrangler secret list`
+ * returns no values, by design — so it proves each Worker holds *a* secret under that name.
+ * It cannot prove the two hold the *same* value, which is what §62 actually requires of the
+ * pair, and no amount of care here will: the platform does not disclose the values and
+ * should not. Closing that would mean either setting both from one CI secret, which moves
+ * the pepper into GitHub and out of the operator's hands, or having each Worker publish a
+ * digest of its own — a second endpoint on the reader-facing host, which is the thing this
+ * exists to avoid. The mismatch it cannot see is recorded in CONTEXT.md as an operator
+ * procedure instead: set both from one value, in one sitting.
  *
  *   node scripts/check-secrets.mjs --env staging
  */
@@ -54,7 +62,7 @@ const REQUIRED = [
 let failures = 0;
 
 for (const { worker, name, why } of REQUIRED) {
-  const result = spawnSync("npx", ["wrangler", "secret", "list", "--name", worker], {
+  const result = spawnSync("npx", ["wrangler", "secret", "list", "--name", worker, "--format", "json"], {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -65,10 +73,25 @@ for (const { worker, name, why } of REQUIRED) {
     continue;
   }
 
-  // The listing is JSON on recent wrangler and a table on older ones. The name is what
-  // matters and it appears in both, so this looks for the name rather than parsing a shape
-  // that has changed once already.
-  if (result.stdout.includes(name)) {
+  /*
+   * Parsed, not searched. `stdout.includes("IP_PEPPER")` is satisfied by `OLD_IP_PEPPER`,
+   * and a check that passes on a secret nobody reads is worse than no check — it reports
+   * that the thing is configured while the Worker falls back.
+   *
+   * `--format json` on wrangler 4; the array-of-objects shape is what it returns, and a
+   * failure to parse is a failure rather than a fall-through to a substring search.
+   */
+  let names;
+  try {
+    const out = result.stdout.slice(result.stdout.indexOf("["), result.stdout.lastIndexOf("]") + 1);
+    names = JSON.parse(out).map((entry) => entry.name);
+  } catch {
+    console.error(`  FAIL  ${worker}: could not parse the secret listing — ${result.stdout.trim().slice(0, 200)}`);
+    failures += 1;
+    continue;
+  }
+
+  if (names.includes(name)) {
     console.log(`  ok    ${worker}  ${name}`);
   } else {
     console.error(`  FAIL  ${worker}  ${name} is not set\n        ${why}`);
