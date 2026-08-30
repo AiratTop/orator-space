@@ -269,6 +269,36 @@ describe("erasing an article (SPEC §23.3)", () => {
     expect(outcome.escalated).toBe(false);
   });
 
+  /**
+   * The second erasure of the same bytes finishes the job the first could not (§23.3).
+   *
+   * Two articles, identical text, therefore one object. Erasing the first correctly declines
+   * to delete it and escalates. Erasing the second used to decline as well — the reference
+   * count included the first article's blanked revisions, whose `content_hash` §23.3 keeps
+   * as the trace — so both articles were erased, nothing referenced the object any more, and
+   * it stayed in the store for good with no error anywhere.
+   */
+  it("deletes the shared body once the last live reference is erased (§23.3)", async () => {
+    const mine = await published();
+    const theirs = unwrap(
+      await createArticle(ctxFor({ ...stranger, kind: "human" }), { title: "Same words", content: BODY }),
+    );
+    const hash = ports.state.revisions.get(ports.state.articles.get(mine)!.publishedRevisionId!)!.contentHash;
+
+    const first = unwrap(await eraseArticle(ctxFor(owner), mine, { confirm: "erase" }));
+    expect(first.contentDeleted).toBe(false);
+    expect(first.escalated).toBe(true);
+    expect(await ports.content.get(hash)).toBe(BODY);
+
+    const second = unwrap(
+      await eraseArticle(ctxFor({ ...stranger, kind: "human" }), theirs.id, { confirm: "erase" }),
+    );
+
+    expect(second.escalated).toBe(false);
+    expect(second.contentDeleted).toBe(true);
+    expect(await ports.content.get(hash)).toBeNull();
+  });
+
   it("requires the confirmation verbatim", async () => {
     const id = await published();
     expect(errorOf(await eraseArticle(ctxFor(owner), id, { confirm: "yes" }))).toBe("validation-failed");

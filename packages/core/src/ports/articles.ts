@@ -281,6 +281,34 @@ export interface ArticleRepo {
   eraseRevision(revisionId: string, at: string): PendingWrite;
 
   /**
+   * SPEC §23.3, steps 1-3 — every body this article uses, and who else still points at it.
+   *
+   * One query rather than a `COUNT(*)` per distinct hash: an article with two hundred and
+   * fifty different bodies produced two hundred and fifty round trips to D1 inside a single
+   * request, which is a shape that works in a memory double and not against a database.
+   *
+   * `elsewhere` counts **live** references only — a revision whose `content_ref` has already
+   * been blanked is not pointing at anything. Counting them was how two articles with
+   * identical bytes kept the object forever: erasing the first left its rows in place, and
+   * erasing the second then saw those rows as an outside reference and declined to delete.
+   * Both articles erased, the bytes still there, and nothing reporting a problem.
+   */
+  contentReferences(articleId: string): Promise<{ contentHash: string; mine: number; elsewhere: number }[]>;
+
+  /**
+   * SPEC §32.2 — bodies no live revision references any more.
+   *
+   * The collector's input. Erasure leaves these behind by design: §23.3 step 3 refuses to
+   * delete an object another revision still points at, so the object outlives the first
+   * erasure and becomes collectable only when the last live reference goes. Without this
+   * nothing ever looked again, and "collected later" was a sentence in a comment.
+   *
+   * A hash is returned only when *every* revision carrying it has been blanked — which is
+   * the same reference rule as §23.3, asked about the store rather than about one article.
+   */
+  listUnreferencedContent(limit: number): Promise<string[]>;
+
+  /**
    * SPEC §23.3 — blanks every revision of one article, in one statement.
    *
    * Not `listRevisions` and a write per row. Erasure has to cover the whole history or it
@@ -294,11 +322,7 @@ export interface ArticleRepo {
    */
   eraseRevisionsOf(articleId: string, at: string): PendingWrite;
 
-  /**
-   * The distinct bodies an article's history refers to, with how many of its revisions use
-   * each — the left-hand side of §23.3's reference check, for a history of any length.
-   */
-  contentHashesOf(articleId: string): Promise<{ contentHash: string; revisions: number }[]>;
+
   attachSignature(revisionId: string, signature: string, keyId: string): PendingWrite;
 }
 

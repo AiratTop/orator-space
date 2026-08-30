@@ -570,13 +570,28 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return n;
       });
     },
-    async contentHashesOf(articleId) {
-      const counts = new Map<string, number>();
+    async listUnreferencedContent(limit) {
+      const live = new Map<string, number>();
       for (const revision of state.revisions.values()) {
-        if (revision.articleId !== articleId) continue;
-        counts.set(revision.contentHash, (counts.get(revision.contentHash) ?? 0) + 1);
+        const current = live.get(revision.contentHash) ?? 0;
+        live.set(revision.contentHash, current + (revision.contentRef === "" ? 0 : 1));
       }
-      return [...counts].map(([contentHash, revisions]) => ({ contentHash, revisions }));
+      return [...live].filter(([, n]) => n === 0).map(([hash]) => hash).slice(0, limit);
+    },
+
+    async contentReferences(articleId) {
+      const hashes = new Set(
+        [...state.revisions.values()].filter((r) => r.articleId === articleId).map((r) => r.contentHash),
+      );
+      return [...hashes].map((contentHash) => {
+        const sharing = [...state.revisions.values()].filter((r) => r.contentHash === contentHash);
+        return {
+          contentHash,
+          mine: sharing.filter((r) => r.articleId === articleId).length,
+          // Live references only: a blanked revision points at nothing.
+          elsewhere: sharing.filter((r) => r.articleId !== articleId && r.contentRef !== "").length,
+        };
+      });
     },
     eraseRevision(revisionId, at) {
       return asWrite(() => {

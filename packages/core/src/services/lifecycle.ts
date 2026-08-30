@@ -205,6 +205,14 @@ export type EraseOutcome = {
   contentDeleted: boolean;
   /** §23.3 step 4 — someone else's revision is byte-identical, and a person must look. */
   escalated: boolean;
+  /**
+   * Bodies that acquired a live reference between the reference check and the delete.
+   *
+   * Not a failure and not `escalated`: content is addressed by hash, so a publisher of the
+   * same bytes arriving mid-erasure is an ordinary race with nobody to escalate to. The
+   * pointers are blanked either way; the object is left for §32's collector.
+   */
+  raced: number;
 };
 
 /**
@@ -261,18 +269,15 @@ export async function eraseArticle(
    * so step 3 refused to delete the R2 object as well. A partial erasure that answers 200 is
    * worse than a failure, because the demand it exists to satisfy is a legal one.
    */
-  const bodies = await ctx.ports.articles.contentHashesOf(article.id);
+  const bodies = await ctx.ports.articles.contentReferences(article.id);
   const now = ctx.ports.clock.now().toISOString();
 
   let escalated = false;
   const deletable: string[] = [];
 
-  // Steps 1-3 of §23.3, per distinct body. A revision history usually shares few hashes,
-  // so this is a handful of counts rather than one per revision.
-  for (const { contentHash, revisions: mine } of bodies) {
-    const references = await ctx.ports.articles.countRevisionsWithContent(contentHash);
-
-    if (references === mine) {
+  // Steps 1-3 of §23.3, in one query rather than a count per distinct body.
+  for (const { contentHash, elsewhere } of bodies) {
+    if (elsewhere === 0) {
       deletable.push(contentHash);
       continue;
     }
@@ -283,7 +288,7 @@ export async function eraseArticle(
     escalated = true;
   }
 
-  const erasedCount = bodies.reduce((total, body) => total + body.revisions, 0);
+  const erasedCount = bodies.reduce((total, body) => total + body.mine, 0);
 
   const writes = [
     ctx.ports.articles.eraseRevisionsOf(article.id, now),
@@ -325,11 +330,47 @@ export async function eraseArticle(
    * meantime. The other order trades a recoverable orphan for a live article pointing at
    * bytes that are not there.
    */
+  /*
+   * Re-checked after the commit, because the check that chose these hashes ran before it.
+   *
+   * Content is addressed by hash (§16.2), so between deciding and deleting, somebody else
+   * publishing byte-identical text acquires a live reference to the very object about to be
+   * destroyed — and they would be left with an article pointing at bytes that are not there.
+   * The window is small and the consequence is somebody else's article, so it is worth one
+   * more query.
+   *
+   * This narrows the window rather than closing it: nothing here holds a lock over a hash,
+   * and the last word on that is §32's collector, which finds an object no live revision
+   * references and removes it later. The order below is the other half — the pointers are
+   * already blanked, so a failure leaves a collectable orphan rather than a live article
+   * with no body.
+   */
+  const stillUnreferenced = new Set(
+    (await ctx.ports.articles.contentReferences(article.id))
+      .filter((body) => body.elsewhere === 0)
+      .map((body) => body.contentHash),
+  );
+
   let contentDeleted = false;
+  let raced = 0;
   for (const hash of deletable) {
+    if (!stillUnreferenced.has(hash)) {
+      /*
+       * Somebody published the same bytes while this ran, and their article now points at
+       * the object. It stays.
+       *
+       * Counted rather than folded into `escalated`: that flag went into the outbox event
+       * inside the commit above and is already delivered, and it means something specific —
+       * §23.3 step 4, a byte-identical revision that needs a person to look. This is a
+       * scheduling accident with nobody to escalate to, and §32's collector is what removes
+       * the object once that new reference goes away.
+       */
+      raced += 1;
+      continue;
+    }
     await ctx.ports.content.delete(hash);
     contentDeleted = true;
   }
 
-  return ok({ id: article.id, revisions: erasedCount, contentDeleted, escalated });
+  return ok({ id: article.id, revisions: erasedCount, contentDeleted, escalated, raced });
 }

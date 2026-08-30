@@ -471,12 +471,46 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
       );
     },
 
-    async contentHashesOf(articleId) {
+    async listUnreferencedContent(limit) {
+      // Every revision carrying the hash has been blanked, so nothing points at the object.
       const { results } = await db
-        .prepare(`SELECT content_hash, COUNT(*) AS n FROM revisions WHERE article_id = ? GROUP BY content_hash`)
+        .prepare(
+          `SELECT content_hash
+             FROM revisions
+            GROUP BY content_hash
+           HAVING SUM(CASE WHEN content_ref <> '' THEN 1 ELSE 0 END) = 0
+            LIMIT ?`,
+        )
+        .bind(limit)
+        .all<{ content_hash: string }>();
+      return results.map((row) => row.content_hash);
+    },
+
+    async contentReferences(articleId) {
+      /*
+       * One aggregate over the revisions sharing any of this article's hashes.
+       *
+       * `elsewhere` counts live references — `content_ref <> ''` — because a blanked
+       * revision points at nothing. An erased article's rows keep their `content_hash`
+       * (§23.3 keeps it as the trace), and counting those as references is what made a
+       * second erasure of the same bytes decline to delete the object.
+       */
+      const { results } = await db
+        .prepare(
+          `SELECT content_hash,
+                  SUM(CASE WHEN article_id = ?1 THEN 1 ELSE 0 END) AS mine,
+                  SUM(CASE WHEN article_id <> ?1 AND content_ref <> '' THEN 1 ELSE 0 END) AS elsewhere
+             FROM revisions
+            WHERE content_hash IN (SELECT content_hash FROM revisions WHERE article_id = ?1)
+            GROUP BY content_hash`,
+        )
         .bind(articleId)
-        .all<{ content_hash: string; n: number }>();
-      return results.map((row) => ({ contentHash: row.content_hash, revisions: row.n }));
+        .all<{ content_hash: string; mine: number; elsewhere: number }>();
+      return results.map((row) => ({
+        contentHash: row.content_hash,
+        mine: row.mine,
+        elsewhere: row.elsewhere,
+      }));
     },
 
     eraseRevision(revisionId, at) {
