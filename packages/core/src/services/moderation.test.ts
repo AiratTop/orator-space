@@ -823,3 +823,110 @@ describe("reporting something you answer for (§61.1, §7.2)", () => {
     expect(errorOf(result)).toBe(ErrorType.NotFound);
   });
 });
+
+/**
+ * SPEC §61.1 — one open report per reporter per target.
+ *
+ * The flood counter bounds a target and cannot see one account filing about it over and over:
+ * twenty rows from one person sit under that ceiling, and a moderator opening the queue then
+ * sees a target that looks widely complained about and is not. A report's weight comes from
+ * independent people noticing the same thing, so the row count has to mean that.
+ */
+describe("reporting the same thing twice (§61.1)", () => {
+  const reporter = () => moderator({ principalId: MOD, platformRole: "user" });
+
+  it("returns the first report rather than filing a second", async () => {
+    const article = await publishedArticle();
+    const first = unwrap(
+      await createReport(ctxFor(reporter()), { targetType: "article", targetId: article, category: "spam" }),
+    );
+    const second = unwrap(
+      await createReport(ctxFor(reporter()), { targetType: "article", targetId: article, category: "illegal" }),
+    );
+
+    expect(second.id).toBe(first.id);
+    expect(second.createdAt).toBe(first.createdAt);
+    expect(ports.state.reports.filter((row) => row.targetId === article)).toHaveLength(1);
+  });
+
+  it("leaves the first report's category and details untouched", async () => {
+    const article = await publishedArticle();
+    unwrap(
+      await createReport(ctxFor(reporter()), {
+        targetType: "article",
+        targetId: article,
+        category: "spam",
+        details: "the first thing said",
+      }),
+    );
+    unwrap(
+      await createReport(ctxFor(reporter()), {
+        targetType: "article",
+        targetId: article,
+        category: "illegal",
+        details: "a second, different thing",
+      }),
+    );
+
+    expect(ports.state.reports[0]?.category).toBe("spam");
+    expect(ports.state.reports[0]?.details).toBe("the first thing said");
+  });
+
+  it("does not collapse two people reporting the same target", async () => {
+    const article = await publishedArticle();
+    const other = "OTHER-H";
+    ports.state.principals.set(other, principal(other, "other"));
+
+    unwrap(await createReport(ctxFor(reporter()), { targetType: "article", targetId: article, category: "spam" }));
+    unwrap(
+      await createReport(ctxFor(moderator({ principalId: other, platformRole: "user" })), {
+        targetType: "article",
+        targetId: article,
+        category: "spam",
+      }),
+    );
+
+    expect(ports.state.reports).toHaveLength(2);
+  });
+
+  it("does not collapse one person's reports about different targets", async () => {
+    const first = await publishedArticle();
+    const second = await publishedArticle();
+    unwrap(await createReport(ctxFor(reporter()), { targetType: "article", targetId: first, category: "spam" }));
+    unwrap(await createReport(ctxFor(reporter()), { targetType: "article", targetId: second, category: "spam" }));
+    expect(ports.state.reports).toHaveLength(2);
+  });
+
+  /*
+   * Once a moderator has closed it the state of the world has changed — the content may have
+   * been revised, or the verdict may have been wrong — so a second report is a new statement
+   * rather than a repeat. A rule that never let the same person speak again would make a
+   * rejected report a permanent silencing.
+   */
+  it("allows a new report once the first has been closed", async () => {
+    const article = await publishedArticle();
+    const first = unwrap(
+      await createReport(ctxFor(reporter()), { targetType: "article", targetId: article, category: "spam" }),
+    );
+    unwrap(await reviewReport(ctxFor(moderator()), { reportId: first.id, status: "rejected" }));
+
+    const again = unwrap(
+      await createReport(ctxFor(reporter()), { targetType: "article", targetId: article, category: "illegal" }),
+    );
+    expect(again.id).not.toBe(first.id);
+    expect(ports.state.reports).toHaveLength(2);
+  });
+
+  /*
+   * §61.2 keeps the anonymous path open and this rule cannot reach it: an anonymous report
+   * has nobody to be the same person as. They are bounded by the per-target flood counter and,
+   * on the web, by the per-address limiter the form applies — and the test says so rather than
+   * leaving somebody to assume the deduplication covers everything.
+   */
+  it("does not deduplicate anonymous reports, which have no reporter to compare", async () => {
+    const article = await publishedArticle();
+    unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: article, category: "spam" }));
+    unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: article, category: "spam" }));
+    expect(ports.state.reports).toHaveLength(2);
+  });
+});

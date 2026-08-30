@@ -1941,6 +1941,17 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       ).length;
     },
 
+    async findOpenReportBy(reporterPrincipalId, targetType, targetId) {
+      const open = state.reports.filter(
+        (report) =>
+          report.targetType === targetType &&
+          report.targetId === targetId &&
+          report.reporterPrincipalId === reporterPrincipalId &&
+          (report.status === "open" || report.status === "reviewing"),
+      );
+      return open[open.length - 1] ?? null;
+    },
+
     async listReports(query) {
       // The cursor compares in the direction the page runs, exactly as the SQL does. A
       // double that always walks forwards agrees with the adapter until somebody pages back.

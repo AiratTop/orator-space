@@ -2521,10 +2521,17 @@ a {
   color: var(--ink-soft);
 }
 
+/*
+ * When a report or an action landed. Tabular figures, because a column of timestamps is read
+ * by comparing digits in the same position — proportional ones make 11:05 and 17:50 different
+ * widths and the comparison stops being free.
+ */
 .report__when {
   margin-left: auto;
   color: var(--ink-soft);
   font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .report__details {

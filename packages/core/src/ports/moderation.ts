@@ -104,6 +104,24 @@ export interface ModerationRepo {
   countRecentReports(targetType: string, targetId: string, since: string): Promise<number>;
 
   /**
+   * A report this reporter already has open against this target (SPEC §61.1).
+   *
+   * `countRecentReports` bounds how often a *target* can be reported and cannot see one
+   * person filing about it repeatedly — twenty rows from one reporter is under that ceiling
+   * and is the shape abuse takes. This answers the other question, and only for a reporter
+   * with an account: an anonymous report has nobody to be the same person as.
+   *
+   * Open, not ever: once a moderator has closed it, the state of the world has changed —
+   * the content may have been revised, or the verdict may have been wrong — and a second
+   * report is a new statement rather than a repeat of the old one.
+   */
+  findOpenReportBy(
+    reporterPrincipalId: string,
+    targetType: string,
+    targetId: string,
+  ): Promise<ReportRecord | null>;
+
+  /**
    * The queue itself (SPEC §61.1).
    *
    * Oldest first by default, because that is the order a backlog is worked in. `newest`

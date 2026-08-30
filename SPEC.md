@@ -5138,6 +5138,28 @@ else's complaint. The refusal is `forbidden`, in the application service so REST
 web reach it alike (§43.4) — and the surfaces do not offer the control either, because a
 control that files a request the service will refuse has told the reader something untrue.
 
+**MUST — one open report per reporter per target.** A second from the same account, while
+the first is still `open` or `reviewing`, returns the first rather than filing another. The
+per-target flood ceiling cannot see this: twenty rows from one person sit under it, and a
+moderator opening the queue then sees a target that looks widely complained about and is not
+— a report's weight comes from independent people noticing the same thing, so the row count
+has to mean that.
+
+**It answers with the existing report rather than an error**, because no code in §45.1 fits.
+`conflict` and `rate-limited` are both documented retryable and retrying will not help, so
+either would put a lie in the contract an agent acts on. The first report's `created_at` is
+what a caller sees, which is the one fact that distinguishes the two cases for a client that
+cares. Once a moderator closes the report the rule lifts: the content may have been revised
+or the verdict may have been wrong, so a further report is a new statement rather than a
+repeat — a rule that never let the same person speak again would make a rejected report a
+permanent silencing.
+
+**MUST — the queue shows the time, not only the date** (§61.1). The pattern a moderator is
+looking for is most often a rate: five reports about one article are a coincidence at
+five-hour intervals and a campaign at five-minute ones, and a date truncates away the only
+column that tells them apart. In UTC and labelled as such — a queue whose author, reporter
+and incident are in three time zones needs one clock.
+
 **This is queue hygiene and not a security control, and the two must not be confused.**
 Reports are anonymous by design (§61.2), so the same author signed out can file the same
 report and it is accepted, exactly as a stranger's is. Closing that would mean refusing

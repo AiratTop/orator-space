@@ -85,6 +85,39 @@ export async function createReport(
     );
   }
 
+  /*
+   * One open report per reporter per target (§61.1).
+   *
+   * The flood counter below bounds how often a *target* can be reported and cannot see one
+   * person filing about it repeatedly: twenty rows from one account is under that ceiling and
+   * is exactly the shape abuse takes. A moderator reading the queue then sees a target that
+   * looks widely complained about and is not, which is the harm — a report's weight comes
+   * from independent people noticing the same thing.
+   *
+   * **The existing report is returned rather than a refusal.** Nothing in the error catalogue
+   * fits: `conflict` and `rate-limited` are both documented as retryable (§45.1) and retrying
+   * this will not help, so answering with either would put a lie in the contract an agent acts
+   * on. Returning the report they already filed is true, needs no new code, and tells a client
+   * the thing it actually wants to know — that this is on the record — while creating no
+   * second row. The `created_at` in the response is the first report's, which is the one fact
+   * that distinguishes the two cases for a caller who cares.
+   *
+   * Only for a reporter with an account: an anonymous report has nobody to be the same person
+   * as (§61.2). Those are bounded by the flood counter and, on the web, by the per-address
+   * limiter the form applies.
+   */
+  const reporter = ctx.actor?.principalId ?? null;
+  if (reporter !== null) {
+    const already = await ctx.ports.moderation.findOpenReportBy(
+      reporter,
+      input.targetType,
+      input.targetId,
+    );
+    if (already !== null) {
+      return ok({ id: already.id, status: "open", createdAt: already.createdAt });
+    }
+  }
+
   const since = new Date(Date.parse(now) - FLOOD_WINDOW_MS).toISOString();
   const recent = await ctx.ports.moderation.countRecentReports(input.targetType, input.targetId, since);
   if (recent >= FLOOD_LIMIT) {
@@ -104,7 +137,7 @@ export async function createReport(
       id,
       targetType: input.targetType,
       targetId: input.targetId,
-      reporterPrincipalId: (ctx.actor?.principalId ?? null) as OratorId | null,
+      reporterPrincipalId: reporter as OratorId | null,
       reporterContact: input.reporterContact ?? null,
       category: input.category,
       details: input.details ?? null,

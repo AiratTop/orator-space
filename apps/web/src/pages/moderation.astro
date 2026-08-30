@@ -323,7 +323,21 @@ function subjectOf(target: { targetType: string; targetId: string }): {
 const nameOf = (target: { targetType: string; targetId: string }): string =>
   subjectOf(target).label ?? `${target.targetType} that is no longer here`;
 
-const when = (iso: string) => iso.slice(0, 10);
+/*
+ * A timestamp a moderator can reason about, which a date alone is not.
+ *
+ * The queue is where a pattern is spotted, and the pattern that matters most is rate: five
+ * reports about one article are a coincidence at five-hour intervals and a campaign at
+ * five-minute ones. Truncating to the day threw away the only column that distinguishes them.
+ *
+ * UTC, and it says so. A moderator reading a queue with an author, a reporter and an incident
+ * in three time zones needs one clock, not their own — and a bare "14:32" that silently means
+ * something different on somebody else's screen is worse than a longer string.
+ */
+const when = (iso: string) => `${iso.slice(0, 10)} ${iso.slice(11, 16)}Z`;
+
+/** The machine-readable form for `<time datetime>`, which is the stored value verbatim. */
+const stamp = (iso: string) => iso;
 
 /** Which actions are undone by `restore`, and which were never a state to undo. */
 const REVERSIBLE = new Set(["hide", "remove", "unindex", "suspend"]);
@@ -534,7 +548,7 @@ const undoableIds = new Set<string>();
                     )}
                     <span class="action__source">{action.source}</span>
                     {action.reversedAt !== null && <span class="tag">undone</span>}
-                    <span class="report__when">{when(action.createdAt)}</span>
+                    <time class="report__when" datetime={stamp(action.createdAt)}>{when(action.createdAt)}</time>
                   </div>
                 </li>
               ))}
@@ -657,7 +671,7 @@ const undoableIds = new Set<string>();
                         ) : (
                           <a class="report__target" href={subjectOf(action).href}>{nameOf(action)}</a>
                         )}
-                        <span class="report__when">{when(action.createdAt)}</span>
+                        <time class="report__when" datetime={stamp(action.createdAt)}>{when(action.createdAt)}</time>
                       </div>
 
                       <div class="action__facts">
@@ -754,7 +768,7 @@ const undoableIds = new Set<string>();
                         ) : (
                           <a class="report__target" href={subjectOf(report).href}>{nameOf(report)}</a>
                         )}
-                        <span class="report__when">{when(report.createdAt)}</span>
+                        <time class="report__when" datetime={stamp(report.createdAt)}>{when(report.createdAt)}</time>
                         <code class="report__id">{report.targetId}</code>
                       </div>
 

@@ -134,6 +134,27 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
     },
 
     /**
+     * What this reporter already has open against this target (SPEC §61.1).
+     *
+     * Served by `ix_reports_target`, which leads on `(target_type, target_id)` — so this is
+     * the same index scan the flood counter above does, with two more columns compared. The
+     * status filter is in the query rather than in the caller because "open" here means both
+     * of the live states: a report a moderator has claimed is still that reporter's report.
+     */
+    async findOpenReportBy(reporterPrincipalId, targetType, targetId) {
+      const row = await db
+        .prepare(
+          `SELECT * FROM reports
+            WHERE target_type = ? AND target_id = ? AND reporter_principal_id = ?
+              AND status IN ('open','reviewing')
+            ORDER BY id DESC LIMIT 1`,
+        )
+        .bind(targetType, targetId, reporterPrincipalId)
+        .first<ReportRow>();
+      return row === null ? null : toReport(row);
+    },
+
+    /**
      * The queue, oldest first (SPEC §61.1).
      *
      * Ascending by id, which is creation order (§12.2): a report that has been waiting
