@@ -3315,7 +3315,13 @@ img.avatar {
 /* Syntax highlighting and contents ---------------------------------------- */
 
 /*
- * Prism's token classes, produced on the server by `renderMarkdown` (SPEC §49.1, §57.1).
+ * Prism's classes, produced on the server by `renderMarkdown` and prefixed by it (§49.1, §57.1).
+ *
+ * The prefix is why these read `hl-keyword` rather than `token keyword`. This stylesheet
+ * already had a `.token` — the API-token row on `/settings` — and Prism's unprefixed generic
+ * names collided with it, turning every highlighted word into a full-width grid row. `.tag`
+ * was the next one waiting. `renderMarkdown` renames them at the point it inserts them, so
+ * this file and rendered article content cannot share a name by accident.
  *
  * Named here rather than imported from a theme for two reasons. A downloaded theme brings its
  * own palette, which would be the one place on this site whose colours do not answer to the
@@ -3328,49 +3334,49 @@ img.avatar {
  * all "the language's own words"; `function`, `class-name` and `tag` are all "a name". A
  * reader is scanning for those two categories, not for a taxonomy of nineteen.
  */
-.prose .token.comment,
-.prose .token.prolog,
-.prose .token.cdata {
+.prose .hl-comment,
+.prose .hl-prolog,
+.prose .hl-cdata {
   color: var(--code-comment);
   font-style: italic;
 }
 
-.prose .token.punctuation,
-.prose .token.operator,
-.prose .token.entity {
+.prose .hl-punctuation,
+.prose .hl-operator,
+.prose .hl-entity {
   color: var(--code-punctuation);
 }
 
-.prose .token.keyword,
-.prose .token.atrule,
-.prose .token.selector,
-.prose .token.important,
-.prose .token.rule {
+.prose .hl-keyword,
+.prose .hl-atrule,
+.prose .hl-selector,
+.prose .hl-important,
+.prose .hl-rule {
   color: var(--code-keyword);
 }
 
-.prose .token.string,
-.prose .token.char,
-.prose .token.attr-value,
-.prose .token.regex,
-.prose .token.url {
+.prose .hl-string,
+.prose .hl-char,
+.prose .hl-attr-value,
+.prose .hl-regex,
+.prose .hl-url {
   color: var(--code-string);
 }
 
-.prose .token.number,
-.prose .token.boolean,
-.prose .token.constant,
-.prose .token.symbol {
+.prose .hl-number,
+.prose .hl-boolean,
+.prose .hl-constant,
+.prose .hl-symbol {
   color: var(--code-number);
 }
 
-.prose .token.function,
-.prose .token.class-name,
-.prose .token.tag,
-.prose .token.attr-name,
-.prose .token.property,
-.prose .token.builtin,
-.prose .token.variable {
+.prose .hl-function,
+.prose .hl-class-name,
+.prose .hl-tag,
+.prose .hl-attr-name,
+.prose .hl-property,
+.prose .hl-builtin,
+.prose .hl-variable {
   color: var(--code-name);
 }
 
@@ -3382,14 +3388,14 @@ img.avatar {
  * foreground disappears. It is also why both are kept legible rather than tinted — the
  * content of a removed line is exactly what a reader of an incident write-up came for.
  */
-.prose .token.deleted-sign {
+.prose .hl-deleted-sign {
   color: var(--code-deleted);
   background: var(--code-deleted-bg);
   display: inline-block;
   width: 100%;
 }
 
-.prose .token.inserted-sign {
+.prose .hl-inserted-sign {
   color: var(--code-inserted);
   background: var(--code-inserted-bg);
   display: inline-block;
@@ -3406,20 +3412,20 @@ img.avatar {
  * A grammar that marks removed text without marking a line — Prism uses `deleted` that way
  * outside diffs — still gets the colour, and no band.
  */
-.prose .token.deleted:not(.deleted-sign) {
+.prose .hl-deleted:not(.hl-deleted-sign) {
   color: var(--code-deleted);
 }
 
-.prose .token.inserted:not(.inserted-sign) {
+.prose .hl-inserted:not(.hl-inserted-sign) {
   color: var(--code-inserted);
 }
 
 /* The `-`, `+` or space in the gutter. Present for alignment, not for reading. */
-.prose .token.prefix {
+.prose .hl-prefix {
   opacity: 0.6;
 }
 
-.prose .token.namespace {
+.prose .hl-namespace {
   opacity: 0.7;
 }
 

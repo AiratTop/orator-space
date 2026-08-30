@@ -290,12 +290,51 @@ function highlightCode() {
       // A grammar can throw on input it cannot parse. An article that fails to highlight is
       // an article that renders plainly; it is never an article that fails to render.
       try {
-        node.children = refractor.highlight(source, language).children as HastNode[];
+        const highlighted = refractor.highlight(source, language).children as HastNode[];
+        for (const child of highlighted) prefixClasses(child);
+        node.children = highlighted;
       } catch {
         /* leave the block as it was */
       }
     });
   };
+}
+
+/**
+ * Renames every class the highlighter produced, and the reason is a bug rather than taste.
+ *
+ * Prism emits `class="token keyword"`, `class="token tag"`, `class="token property"` — short,
+ * generic, unprefixed words. This site's stylesheet already had `.token`: the row for an API
+ * token on `/settings`, a four-column grid with a bottom border. So every highlighted word in
+ * every article became a full-width grid row with a rule under it, and a query rendered one
+ * token per line. `.tag` was the next collision waiting, one HTML code block away.
+ *
+ * The fix is not to rename the site's class. §57.1 already says why: this pipeline renders
+ * untrusted content into a page that shares one global stylesheet with the application, and
+ * §58.2 makes the point in the other direction — an arbitrary class on user content is a
+ * handle onto the site's own stylesheet, which is why `narrowCodeClass` allows only
+ * `language-*`. Classes *we* inject into that content are the same hazard from the same
+ * cause, so they carry a prefix that the application's own stylesheet never uses. Then no
+ * class the site adds later can collide with one an article is rendered with, whichever is
+ * written first.
+ *
+ * The bare `token` marker is dropped rather than prefixed: nothing needs it, and every class
+ * that survives here is one more name to keep out of the application's way.
+ */
+function prefixClasses(node: HastNode) {
+  const stack: HastNode[] = [node];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const className = current.properties?.["className"];
+    if (Array.isArray(className)) {
+      const renamed = className
+        .filter((name): name is string => typeof name === "string" && name !== "token")
+        .map((name) => `hl-${name}`);
+      if (renamed.length === 0) delete current.properties!["className"];
+      else current.properties!["className"] = renamed;
+    }
+    for (const child of current.children ?? []) stack.push(child);
+  }
 }
 
 /** Every text node under this one, concatenated. */

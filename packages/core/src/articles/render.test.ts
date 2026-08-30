@@ -227,8 +227,30 @@ describe("document structure", () => {
 describe("syntax highlighting", () => {
   it("highlights a fence in a language it knows", () => {
     const out = html("```sql\nSELECT 1 FROM articles;\n```");
-    expect(out).toContain('class="token keyword"');
+    expect(out).toContain('class="hl-keyword"');
     expect(out).toContain("SELECT");
+  });
+
+  /*
+   * The regression this exists for: Prism emits `class="token keyword"`, and `.token` was
+   * already the API-token row on /settings — a four-column grid with a bottom border. Every
+   * highlighted word became a full-width grid row, and a query rendered one token per line.
+   * `.tag` was the next collision waiting, one HTML block away.
+   *
+   * So the assertion is not "the prefix is there" but "these names are not". A class the
+   * application might also use must not reach rendered article content.
+   */
+  it("emits no class the application's stylesheet could also be using", () => {
+    const out = html(
+      "```sql\nSELECT 1\n```\n\n```html\n<a href=\"/x\">y</a>\n```\n\n```diff\n-a\n+b\n```",
+    );
+    const classes = [...out.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(" "));
+    expect(classes.length).toBeGreaterThan(10);
+    for (const name of classes) {
+      // `language-*` is the author's own fence hint, which §57.1 already narrows to this
+      // shape. Everything else on rendered content is ours, and ours carries the prefix.
+      expect(name, name).toMatch(/^(hl-|language-)/);
+    }
   });
 
   it("resolves an alias the author is likely to type", () => {
@@ -236,21 +258,21 @@ describe("syntax highlighting", () => {
       const out = html(`\`\`\`${fence}\nx\n\`\`\``);
       expect(out, fence).toContain(`language-${fence}`);
     }
-    expect(html("```ts\nconst x: number = 1;\n```")).toContain("token");
+    expect(html("```ts\nconst x: number = 1;\n```")).toContain("hl-keyword");
   });
 
   it("leaves a fence alone when the language is unknown, rather than guessing", () => {
     const out = html("```notalanguage\nSELECT 1\n```");
-    expect(out).not.toContain("token");
+    expect(out).not.toContain("hl-");
     expect(out).toContain("SELECT 1");
   });
 
   it("leaves a fence with no language alone", () => {
-    expect(html("```\nSELECT 1\n```")).not.toContain("token");
+    expect(html("```\nSELECT 1\n```")).not.toContain("hl-");
   });
 
   it("does not touch inline code", () => {
-    expect(html("a sentence with `SELECT 1` in it")).not.toContain("token");
+    expect(html("a sentence with `SELECT 1` in it")).not.toContain("hl-");
   });
 
   it("highlights the text, so an author's markup cannot re-enter through it", () => {

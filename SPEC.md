@@ -4312,6 +4312,16 @@ what everyone else sees. The language comes from the author's fence and is never
 auto-detection on a four-line block produces confidently wrong colours, which is worse than
 none.
 
+**MUST — a class this pipeline puts on rendered content is prefixed.** The application and
+every article share one global stylesheet, and §58.2 already states the hazard in the other
+direction: an arbitrary class on user content is a handle onto the site's own stylesheet,
+which is why §57.1 narrows an author's `<code>` to `language-*`. Classes the platform injects
+are the same hazard from the same cause. Prism's are short generic words — `token`, `tag`,
+`property` — and `.token` was already the API-token row on `/settings`, a four-column grid
+with a bottom border, so every highlighted word became a full-width row and a query rendered
+one token per line. Prefixing at the point of insertion closes it in both directions and for
+whichever class is written first.
+
 **MUST — an article carries its own contents when it is long enough to need one**, built from
 the same pass that renders the body rather than by parsing the result back. Heading ids are
 prefixed, because an id derived from text somebody else wrote must not be able to name an
