@@ -129,6 +129,8 @@ export interface RetentionReport {
   mediaDeleted: number;
   /** §23.4, §32 — `ready` records nothing referenced, with their objects. */
   orphanedMediaDeleted: number;
+  /** §32.2 — bodies under `content/*` that no live revision references any more. */
+  orphanedContentDeleted: number;
   auditPseudonymised: number;
   /** §9.3 — expired nonces, one count per table because they are two credentials. */
   telegramLinksDeleted: number;
@@ -173,6 +175,7 @@ const empty = (): RetentionReport => ({
   idempotencyDeleted: 0,
   mediaDeleted: 0,
   orphanedMediaDeleted: 0,
+  orphanedContentDeleted: 0,
   auditPseudonymised: 0,
   telegramLinksDeleted: 0,
   telegramLoginsDeleted: 0,
@@ -189,6 +192,7 @@ function add(total: RetentionReport, pass: RetentionReport): void {
   total.idempotencyDeleted += pass.idempotencyDeleted;
   total.mediaDeleted += pass.mediaDeleted;
   total.orphanedMediaDeleted += pass.orphanedMediaDeleted;
+  total.orphanedContentDeleted += pass.orphanedContentDeleted;
   total.auditPseudonymised += pass.auditPseudonymised;
   total.telegramLinksDeleted += pass.telegramLinksDeleted;
   total.telegramLoginsDeleted += pass.telegramLoginsDeleted;
@@ -214,6 +218,7 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
     ports,
     before(RETENTION_HOURS.orphanedMedia),
   );
+  const orphanedContentDeleted = await collectOrphanedContent(ports);
   const canaryArticlesDeleted = await collectCanaryArticles(ports, before(RETENTION_HOURS.canaryArticles));
   const deadLettersDeleted = await ports.slo.deleteDeadLettersBefore(
     before(RETENTION_HOURS.deadLetters),
@@ -238,6 +243,7 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
     idempotencyDeleted,
     mediaDeleted,
     orphanedMediaDeleted,
+    orphanedContentDeleted,
     auditPseudonymised,
     telegramLinksDeleted,
     telegramLoginsDeleted,
@@ -261,6 +267,7 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
       sessionsDeleted === RETENTION_BATCH ||
       mediaDeleted === OBJECT_BATCH ||
       orphanedMediaDeleted === OBJECT_BATCH ||
+      orphanedContentDeleted === OBJECT_BATCH ||
       canaryArticlesDeleted === OBJECT_BATCH,
   };
 }
@@ -299,6 +306,51 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
  * The prefix delete covers the variants (§21.2). Deleting `original` alone would leave four
  * derived objects per record behind — which is what "collected" would have quietly meant.
  */
+/**
+ * SPEC §32.2 — "content no revision references" is deleted by the Cron handler.
+ *
+ * The half of §32.2 that was never built. `collectOrphanedMedia` existed; the content store
+ * had nothing, and erasure quietly depended on a collector that did not.
+ *
+ * That dependency is real and not hypothetical. §23.3 step 3 refuses to delete an object
+ * another revision still points at, so a body shared by two articles survives the first
+ * erasure by design. It becomes collectable when the last live reference goes — and until
+ * now nothing ever looked again, so the bytes stayed for good. Two people exercising the
+ * same right, in sequence, and the data outliving both requests.
+ *
+ * No cutoff. The other collectors wait a day because something may still be pointing at what
+ * they remove — a cached page, a link preview. Nothing points at this: every revision
+ * carrying the hash has had its `content_ref` blanked, which is what makes it collectable in
+ * the first place, and a reader reaching a blanked revision gets §23.2's tombstone rather
+ * than a fetch.
+ *
+ * **What it does not find.** An object written to R2 whose revision row never committed is
+ * invisible here — there is no `content_hash` to group by, so it appears in no query over
+ * `revisions`. Finding those needs a listing of the bucket rather than a query, which is a
+ * different operation with a different cost, and §16.2's write order makes them rare: the
+ * object is written first precisely so that a failure leaves an unreferenced object rather
+ * than a revision with no body.
+ */
+async function collectOrphanedContent(ports: Ports): Promise<number> {
+  const orphaned = await ports.articles.listUnreferencedContent(OBJECT_BATCH);
+  if (orphaned.length === 0) return 0;
+
+  let deleted = 0;
+  for (const hash of orphaned) {
+    try {
+      await ports.content.delete(hash);
+      deleted += 1;
+    } catch (error) {
+      // The row keeps its hash either way (§23.3 keeps it as the trace), so a failure here
+      // is retried on the next pass rather than lost.
+      console.error(
+        JSON.stringify({ level: "warn", event: "retention.content.unreferenced", error: String(error) }),
+      );
+    }
+  }
+  return deleted;
+}
+
 async function collectOrphanedMedia(ports: Ports, cutoff: string): Promise<number> {
   const orphaned = await ports.media.listCollectable(cutoff, OBJECT_BATCH);
   if (orphaned.length === 0) return 0;

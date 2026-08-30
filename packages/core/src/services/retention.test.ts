@@ -118,6 +118,90 @@ describe("the audit log (§23.4, twelve months, then pseudonymised)", () => {
   });
 });
 
+/**
+ * SPEC §32.2 — content no revision references (the half that did not exist).
+ *
+ * Erasure depends on this collector and could not say so: §23.3 step 3 refuses to delete an
+ * object another revision still points at, so a shared body survives the first erasure by
+ * design and is meant to be collected once the last live reference goes. Nothing looked, so
+ * it never was.
+ */
+describe("orphaned content (§32.2)", () => {
+  const bodyOf = async (articleId: string, revisionId: string, markdown: string) => {
+    const hash = await ports.content.put(markdown);
+    await ports.db.commit([
+      ports.articles.insertArticle({
+        id: articleId as never,
+        authorPrincipalId: "P" as never,
+        language: "en",
+        authorshipDisclosure: "human_authored",
+        visibility: "public",
+        canonicalUrl: null,
+        createdAt: hoursAgo(1),
+      }),
+      ports.articles.insertRevision({
+        id: revisionId as never,
+        articleId: articleId as never,
+        parentRevisionId: null,
+        title: "A title",
+        excerpt: null,
+        contentRef: ports.content.refFor(hash),
+        contentHash: hash,
+        contentBytes: markdown.length,
+        readingTimeSeconds: 1,
+        metadata: { schema_version: 1 },
+        createdByPrincipalId: "P" as never,
+        viaTokenId: null,
+        createdAt: hoursAgo(1),
+      }),
+    ]);
+    return hash;
+  };
+
+  it("deletes a body once every revision carrying it has been blanked", async () => {
+    const hash = await bodyOf("A-GONE", "R-GONE", "# Erased\n\nBody.\n");
+    await ports.db.commit([ports.articles.eraseRevisionsOf("A-GONE", hoursAgo(1))]);
+
+    expect(await ports.content.get(hash)).not.toBeNull();
+    const report = await runRetention(ports);
+
+    expect(report.orphanedContentDeleted).toBe(1);
+    expect(await ports.content.get(hash)).toBeNull();
+  });
+
+  it("leaves a body one live revision still points at", async () => {
+    const markdown = "# Shared\n\nSame bytes.\n";
+    const hash = await bodyOf("A-ERASED", "R-ERASED", markdown);
+    await bodyOf("A-LIVE", "R-LIVE", markdown);
+    await ports.db.commit([ports.articles.eraseRevisionsOf("A-ERASED", hoursAgo(1))]);
+
+    expect((await runRetention(ports)).orphanedContentDeleted).toBe(0);
+    expect(await ports.content.get(hash)).toBe(markdown);
+  });
+
+  it("collects it on the pass after the last reference goes", async () => {
+    // The sequence §23.3 leaves behind, and the reason this collector has to exist: two
+    // people erase the same bytes, neither erasure may delete the object, and the store is
+    // meant to end up empty regardless.
+    const markdown = "# Shared\n\nSame bytes.\n";
+    const hash = await bodyOf("A-FIRST", "R-FIRST", markdown);
+    await bodyOf("A-SECOND", "R-SECOND", markdown);
+
+    await ports.db.commit([ports.articles.eraseRevisionsOf("A-FIRST", hoursAgo(1))]);
+    expect((await runRetention(ports)).orphanedContentDeleted).toBe(0);
+
+    await ports.db.commit([ports.articles.eraseRevisionsOf("A-SECOND", hoursAgo(1))]);
+    expect((await runRetention(ports)).orphanedContentDeleted).toBe(1);
+    expect(await ports.content.get(hash)).toBeNull();
+  });
+
+  it("leaves a body nothing has erased", async () => {
+    const hash = await bodyOf("A-PUBLISHED", "R-PUBLISHED", "# Published\n\nBody.\n");
+    expect((await runRetention(ports)).orphanedContentDeleted).toBe(0);
+    expect(await ports.content.get(hash)).not.toBeNull();
+  });
+});
+
 /** A `ready` record with bytes, created `hours` ago. The shape both media passes start from. */
 async function ready(id: string, hours: number): Promise<void> {
   await ports.db.commit([
@@ -426,6 +510,7 @@ describe("bounded passes", () => {
       idempotencyDeleted: 0,
       mediaDeleted: 0,
       orphanedMediaDeleted: 0,
+      orphanedContentDeleted: 0,
       auditPseudonymised: 0,
       telegramLinksDeleted: 0,
       telegramLoginsDeleted: 0,
