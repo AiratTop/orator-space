@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMemoryAuthPorts, type MemoryAuth } from "../testing/memory-auth.js";
+import { generateToken } from "../identity/tokens.js";
 import {
   beginPasskeyAuthentication,
+  beginSignup,
+  completeSignup,
+  identify,
   beginPasskeyRegistration,
   completePasskeyAuthentication,
   completePasskeyRegistration,
@@ -76,6 +80,24 @@ async function register(id = "cred-1"): Promise<string> {
     }),
   );
   return id;
+}
+
+/** A live API token for `principalId`, for the one path that accepts either credential. */
+async function issueToken(principalId: string): Promise<string> {
+  const generated = await generateToken();
+  await auth.ports.db.commit([
+    auth.ports.tokens.insert({
+      id: auth.ports.ids.next(),
+      principalId: principalId as never,
+      name: "test",
+      tokenHash: generated.tokenHash,
+      prefix: generated.prefix,
+      scopes: ["articles:read"],
+      expiresAt: null,
+      createdAt: "2026-08-22T12:00:00.000Z",
+    }),
+  ]);
+  return generated.token;
 }
 
 /** Signs in with an already-registered credential, returning the session cookie value. */
@@ -389,5 +411,209 @@ describe("the sealed challenge (ADR 0004)", () => {
     const first = await sealChallenge(SECRET, "the-challenge", NOW);
     const second = await sealChallenge(SECRET, "the-challenge", NOW + 1);
     expect(first).not.toBe(second);
+  });
+});
+
+/**
+ * Signing up (SPEC §42.2, §7.3).
+ *
+ * The whole of this path was untested: `beginSignup`, `completeSignup` and `identify`
+ * accounted for most of the uncovered half of this file. It is also the one path a stranger
+ * can reach without holding anything — the account does not exist yet, so there is no
+ * credential to check and every guard here is the only guard.
+ */
+describe("signing up", () => {
+  const start = async (username = "newcomer", displayName: string | null = null) =>
+    beginSignup(ctx(), { username, ...(displayName === null ? {} : { displayName }) });
+
+  /** Runs the whole ceremony, returning what the caller would be handed. */
+  async function signUp(username = "newcomer", credentialId = "cred-new") {
+    const begun = unwrap(await start(username));
+    auth.verifier.nextRegistration(credential(credentialId));
+    return unwrap(
+      await completeSignup(ctx(), {
+        principalId: begun.principalId,
+        username: begun.username,
+        displayName: null,
+        challenge: begun.options.challenge,
+        response: { id: credentialId },
+      }),
+    );
+  }
+
+  it("creates the account, its credential and its session in one go", async () => {
+    const result = await signUp();
+
+    const created = auth.principals.get(result.principalId);
+    expect(created?.username).toBe("newcomer");
+    expect(created?.kind).toBe("human");
+    expect(created?.status).toBe("active");
+    expect([...auth.credentials.values()].some((c) => c.principalId === result.principalId)).toBe(true);
+    expect(await resolveSession(auth.ports, result.sessionToken)).toMatchObject({
+      principalId: result.principalId,
+      username: "newcomer",
+    });
+  });
+
+  it("mints the id before the ceremony, so the authenticator binds to the account it creates", async () => {
+    // The handle the authenticator stores is the principal id, and it is chosen on the way
+    // out. If `completeSignup` invented a different one the passkey would belong to nobody.
+    const begun = unwrap(await start());
+    auth.verifier.nextRegistration(credential("cred-new"));
+    const done = unwrap(
+      await completeSignup(ctx(), {
+        principalId: begun.principalId,
+        username: begun.username,
+        displayName: null,
+        challenge: begun.options.challenge,
+        response: { id: "cred-new" },
+      }),
+    );
+    expect(done.principalId).toBe(begun.principalId);
+  });
+
+  it("canonicalises the name and refuses one that cannot be a username (§7.3)", async () => {
+    const result = await start("  ");
+    expect(errorOf(result)).toBe("validation-failed");
+  });
+
+  it("refuses a name somebody already holds", async () => {
+    expect(errorOf(await start("reader"))).toBe("conflict");
+  });
+
+  /**
+   * §7.3 — a name that reads as another one is refused by its own error.
+   *
+   * "Taken" would be baffling: the two look different to the person typing and identical to
+   * everyone else, so the message has to name the account it collides with.
+   */
+  it("refuses a name confusable with an existing one, and says which", async () => {
+    // `paypa1` canonicalises to the skeleton `paypal`, which is the collision (§7.3).
+    auth.principals.set("HUMAN-3", principal("HUMAN-3", "paypal"));
+
+    const result = await start("paypa1");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.type).toBe("conflict");
+      expect(JSON.stringify(result.error)).toContain("paypal");
+    }
+  });
+
+  it("excludes nothing on the way out, because the account does not exist yet", async () => {
+    const begun = unwrap(await start());
+    expect(begun.options.excludeCredentials).toEqual([]);
+  });
+
+  it("creates nothing when the ceremony fails to verify", async () => {
+    const begun = unwrap(await start());
+    auth.verifier.nextRegistration(null);
+
+    const result = await completeSignup(ctx(), {
+      principalId: begun.principalId,
+      username: begun.username,
+      displayName: null,
+      challenge: begun.options.challenge,
+      response: { id: "cred-new" },
+    });
+
+    expect(errorOf(result)).toBe("validation-failed");
+    expect(auth.principals.get(begun.principalId)).toBeUndefined();
+    expect(auth.credentials.size).toBe(0);
+  });
+
+  /**
+   * One passkey, one account (§42.2).
+   *
+   * `excludeCredentials` was empty on the way out — there was nothing to exclude for — so an
+   * authenticator that already holds a passkey for this site will happily mint a second. The
+   * refusal has to happen on the way back, where the credential id is finally known.
+   */
+  it("refuses a passkey that already belongs to somebody", async () => {
+    const existing = await register();
+    const begun = unwrap(await start());
+    auth.verifier.nextRegistration(credential(existing));
+
+    const result = await completeSignup(ctx(), {
+      principalId: begun.principalId,
+      username: begun.username,
+      displayName: null,
+      challenge: begun.options.challenge,
+      response: { id: existing },
+    });
+
+    expect(errorOf(result)).toBe("conflict");
+    expect(auth.principals.get(begun.principalId)).toBeUndefined();
+  });
+
+  it("re-checks the name on the way back, since minutes have passed", async () => {
+    // The name was free when the ceremony began. The unique index is what actually decides,
+    // but the check turns a race into a sentence rather than a 500.
+    const begun = unwrap(await start());
+    auth.principals.set("HUMAN-4", principal("HUMAN-4", begun.username));
+    auth.verifier.nextRegistration(credential("cred-new"));
+
+    const result = await completeSignup(ctx(), {
+      principalId: begun.principalId,
+      username: begun.username,
+      displayName: null,
+      challenge: begun.options.challenge,
+      response: { id: "cred-new" },
+    });
+
+    expect(errorOf(result)).toBe("conflict");
+  });
+
+  it("trims a display name and falls back to the username", async () => {
+    const begun = unwrap(await start("newcomer", "   "));
+    // Empty after trimming is not a display name; the authenticator is shown the username.
+    expect(begun.options.user.displayName).toBe("newcomer");
+  });
+});
+
+/**
+ * Who is asking, for the one endpoint that accepts either credential (§42.2, §9.1).
+ *
+ * `identify` is the exception to §9.1's rule that a browser session is never accepted on the
+ * API: attaching a first passkey has to work for somebody who has only ever held a token,
+ * or that account can never reach the browser at all.
+ */
+describe("identify", () => {
+  it("prefers a session, and answers with who holds it", async () => {
+    await register();
+    const cookie = await signIn();
+
+    expect(await identify(auth.ports, { sessionCookie: cookie, bearerToken: null })).toMatchObject({
+      principalId: HUMAN,
+      username: "reader",
+    });
+  });
+
+  it("falls through to a bearer token when the cookie resolves to nothing", async () => {
+    // An expired or revoked cookie is not a refusal on its own: the caller may also be
+    // holding a token, and refusing here would be the dead end §42.2 exists to close.
+    const token = await issueToken(HUMAN);
+    expect(await identify(auth.ports, { sessionCookie: "sess.nonsense", bearerToken: token })).toEqual({
+      principalId: HUMAN,
+      username: "reader",
+    });
+  });
+
+  it("answers nothing when neither credential is offered", async () => {
+    expect(await identify(auth.ports, { sessionCookie: null, bearerToken: null })).toBeNull();
+  });
+
+  it("answers nothing for a token that is not one", async () => {
+    expect(await identify(auth.ports, { sessionCookie: null, bearerToken: "orat_sk_live_nope" })).toBeNull();
+  });
+
+  it("refuses an agent's token: a passkey is a person's (§8.1)", async () => {
+    const token = await issueToken(AGENT);
+    expect(await identify(auth.ports, { sessionCookie: null, bearerToken: token })).toBeNull();
+  });
+
+  it("refuses a suspended account holding a valid token", async () => {
+    const token = await issueToken(HUMAN);
+    auth.principals.set(HUMAN, { ...auth.principals.get(HUMAN)!, status: "suspended" });
+    expect(await identify(auth.ports, { sessionCookie: null, bearerToken: token })).toBeNull();
   });
 });
