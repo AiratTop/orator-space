@@ -26,6 +26,36 @@ early.
 No `Co-Authored-By` trailer (AGENTS.md, "Change discipline"). Restated here
 because some agent harnesses add one by default. Format follows the history.
 
+## Stage the files you touched, by name — this working tree is shared
+
+More than one session works in this checkout at the same time. So:
+
+```sh
+git status --short          # read it, and account for every line
+git add path/one path/two   # the files you edited, named
+```
+
+**Never `git add -A`, `git add .`, `git commit -a`, or `git stash`.** The first three sweep up
+whatever another session has half-finished; `git stash` is worse, because it *removes* their
+work from the tree while they are editing it and the damage is not in the diff you are about
+to read. Both were used freely in this repository until 2026-08-30, when a second session
+turned out to be verifying backups in the same directory.
+
+If `git status` shows something you did not write, leave it alone and say so. It is not
+yours to commit, and pushing to `main` releases (below) — so a stray file is not a messy
+commit, it is a deployment of somebody's unfinished work.
+
+**Two things that collide silently between parallel sessions:**
+
+- **Migration numbers.** `ls packages/db/migrations | tail -1` immediately before creating one,
+  and again before pushing. Two sessions both picking `0024` produces a merge nobody notices
+  until the schema check fails on a deployment.
+- **A migration landing mid-drill.** `restore-drill.mjs` restores an export into a fresh
+  database and compares it. An export taken before your migration will not have your column,
+  and the drill reports a real difference that means something other than what it looks like —
+  not "the backup is broken" but "the schema moved while this was running". Ask before pushing
+  a migration if a drill may be in flight.
+
 ## The checkpoint's model-dependent failures are the local environment, not a regression
 
 `node scripts/e2e-phase9.mjs` against a local dev server fails these, and they are not to be
