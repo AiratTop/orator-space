@@ -6,9 +6,23 @@ on:
   pull_request:
   workflow_dispatch:
 
+# A superseded pull-request run is wasted compute and cancelling it is free. A push to main
+# is a release (README, "Deployment") and cancelling one is not: workflow-level cancellation
+# takes the jobs with it, so `cancel-in-progress: true` here could stop a run between the
+# production migration and the code that reads it, or between the two Workers — a
+# half-deployed production with a green tick on the run that replaced it. Pushes to main
+# therefore queue behind each other rather than replacing each other, and the deploy jobs
+# add a group of their own so two runs cannot deploy at once.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Third-party actions are pinned by commit SHA, with the version in a comment.
+#
+# A tag is a pointer somebody else can move, and `deploy-production` below hands
+# `CLOUDFLARE_API_TOKEN` to whatever the pointer names on the day it runs. Pinning is the
+# difference between trusting a release and trusting an account. Renovate and Dependabot both
+# read the trailing comment and update the pair together, so this is not a manual chore.
 
 env:
   # Not a credential — an identifier. Kept as a repository variable (PLAN.md §1.4).
@@ -20,9 +34,9 @@ jobs:
     name: ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: pnpm
@@ -61,10 +75,16 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: staging
+    # One release at a time. These steps are separately committed — migrations, then the edge
+    # Worker, then the web Worker — and nothing between them can be rolled back, so two runs
+    # interleaving is a deployment nobody chose.
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: pnpm
@@ -112,13 +132,17 @@ jobs:
     needs: deploy-staging
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
+    # As above, and for the larger stake: a production deploy that begins finishes.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
     # Add required reviewers to this environment in GitHub to reinstate a manual gate
     # (SPEC §64.1). Left ungated it still cannot run unless staging deployed cleanly.
     environment: production
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: pnpm
@@ -154,9 +178,9 @@ jobs:
     name: docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: pnpm
@@ -179,9 +203,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
           node-version: 24
           cache: pnpm
