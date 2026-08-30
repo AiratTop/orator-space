@@ -28,6 +28,7 @@ import type {
   SearchIndex,
   EmbeddingLedger,
   SitemapRepo,
+  RetentionCursorRepo,
   SloRepo,
   SocialRepo,
   TokenRepo,
@@ -99,6 +100,8 @@ export interface Ports {
    * need no metrics backend to answer.
    */
   slo: SloRepo;
+  /** SPEC §32.2 — the position of a sweep that outlives one Cron invocation. */
+  retentionCursors: RetentionCursorRepo;
   assets: AssetStore;
   /**
    * SPEC §9.2, §23.5 — browser credentials and sessions.

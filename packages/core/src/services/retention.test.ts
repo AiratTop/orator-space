@@ -126,6 +126,12 @@ describe("the audit log (§23.4, twelve months, then pseudonymised)", () => {
  * design and is meant to be collected once the last live reference goes. Nothing looked, so
  * it never was.
  */
+/** The store's own key: a body's position in the listing is decided by its content. */
+const sha256Of = async (text: string): Promise<string> => {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
 describe("orphaned content (§32.2)", () => {
   const bodyOf = async (articleId: string, revisionId: string, markdown: string) => {
     const hash = await ports.content.put(markdown);
@@ -248,6 +254,105 @@ describe("orphaned content (§32.2)", () => {
     await ports.db.commit([ports.articles.eraseRevisionsOf("A-SECOND", hoursAgo(1))]);
     expect((await runRetention(ports)).orphanedContentDeleted).toBe(1);
     expect(await ports.content.get(hash)).toBeNull();
+  });
+
+  /**
+   * The three shapes that hide an orphan behind a full first page (§32.2).
+   *
+   * Each puts a hundred objects the collector must *not* delete at the head of the listing,
+   * with one it must. The sweep only reaches the orphan by carrying its cursor, so all three
+   * fail against a collector that reads page one and stops — which is what the 250-orphan
+   * test could not detect, every one of its objects being collectable so that the first page
+   * emptied and the second became the first.
+   *
+   * The hashes are content-addressed, so the listing is ordered by digest and the orphan's
+   * position is not something a test can choose. It is found by paging or not at all.
+   */
+  const pageOfLiveBodies = async (count: number): Promise<string> => {
+    let highest = "";
+    for (let n = 0; n < count; n += 1) {
+      const hash = await bodyOf(`A-LIVE-${n}`, `R-LIVE-${n}`, `# Live ${n}\n\nReferenced.\n`);
+      ports.content.setUploadedAt(hash, hoursAgo(5));
+      if (hash > highest) highest = hash;
+    }
+    return highest;
+  };
+
+  /**
+   * A body whose hash sorts after everything already stored, so it is genuinely on page two.
+   *
+   * Without this the tests below proved nothing. A listing is ordered by key and the key is
+   * the digest, so where an object lands is decided by its content — and one object among a
+   * hundred and one falls on the first page a hundred times out of a hundred and one. The
+   * first draft of these tests passed against a collector with the cursor hard-wired to
+   * null, which is exactly the bug they exist to catch. Searching for a suffix that sorts
+   * last is what makes "behind the page" a fact rather than a hope.
+   */
+  const bodyAfter = async (highest: string, label: string): Promise<{ hash: string; markdown: string }> => {
+    for (let n = 0; n < 10_000; n += 1) {
+      const markdown = `# ${label} ${n}\n\nNo row at all.\n`;
+      const hash = await sha256Of(markdown);
+      if (hash > highest) return { hash, markdown };
+    }
+    throw new Error("no body sorted after the page — the search bound is too small");
+  };
+
+  it("reaches an orphan behind a full page of referenced bodies", async () => {
+    const highest = await pageOfLiveBodies(100);
+    const { hash: orphan, markdown } = await bodyAfter(highest, "Orphan");
+    await ports.content.put(markdown);
+    ports.content.setUploadedAt(orphan, hoursAgo(5));
+
+    const report = await runRetention(ports);
+
+    expect(report.orphanedContentDeleted).toBe(1);
+    expect(await ports.content.get(orphan)).toBeNull();
+  });
+
+  it("reaches an old orphan behind a full page of bodies too young to touch", async () => {
+    // The grace period is not a reason to stop: a page of objects that must be left alone is
+    // still a page the sweep has to get past.
+    let highest = "";
+    for (let n = 0; n < 100; n += 1) {
+      const hash = await ports.content.put(`# Young ${n}\n\nJust written.\n`);
+      if (hash > highest) highest = hash;
+    }
+    const { hash: orphan, markdown } = await bodyAfter(highest, "Old orphan");
+    await ports.content.put(markdown);
+    ports.content.setUploadedAt(orphan, hoursAgo(5));
+
+    const report = await runRetention(ports);
+
+    expect(report.orphanedContentDeleted).toBe(1);
+    expect(await ports.content.get(orphan)).toBeNull();
+    expect(ports.content.size()).toBe(100);
+  });
+
+  it("advances past a mixed page where fewer than a full batch were collectable", async () => {
+    // The count is not the signal. A page that yields three deletions still has a next page,
+    // and a collector keyed on `deleted === batch` would call it a day here.
+    let highest = await pageOfLiveBodies(97);
+    for (let n = 0; n < 3; n += 1) {
+      const hash = await ports.content.put(`# Front orphan ${n}\n\nNo row.\n`);
+      ports.content.setUploadedAt(hash, hoursAgo(5));
+      if (hash > highest) highest = hash;
+    }
+    const { hash: behind, markdown } = await bodyAfter(highest, "Behind the page");
+    await ports.content.put(markdown);
+    ports.content.setUploadedAt(behind, hoursAgo(5));
+
+    const report = await runRetention(ports);
+
+    expect(report.orphanedContentDeleted).toBe(4);
+    expect(await ports.content.get(behind)).toBeNull();
+  });
+
+  it("starts a fresh sweep once the listing ends", async () => {
+    // A completed sweep drops its row, so the next invocation begins at the beginning —
+    // which is how an object that became collectable behind the cursor is ever reached.
+    await pageOfLiveBodies(2);
+    await runRetention(ports);
+    expect(ports.state.retentionCursors.get("content")).toBeUndefined();
   });
 
   it("leaves a body nothing has erased", async () => {

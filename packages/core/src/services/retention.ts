@@ -231,9 +231,10 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
     ports,
     before(RETENTION_HOURS.orphanedMedia),
   );
-  const orphanedContentDeleted = await collectOrphanedContent(
+  const contentSweep = await collectOrphanedContent(
     ports,
     before(RETENTION_HOURS.orphanedContent),
+    new Date(now).toISOString(),
   );
   const canaryArticlesDeleted = await collectCanaryArticles(ports, before(RETENTION_HOURS.canaryArticles));
   const deadLettersDeleted = await ports.slo.deleteDeadLettersBefore(
@@ -259,7 +260,7 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
     idempotencyDeleted,
     mediaDeleted,
     orphanedMediaDeleted,
-    orphanedContentDeleted,
+    orphanedContentDeleted: contentSweep.deleted,
     auditPseudonymised,
     telegramLinksDeleted,
     telegramLoginsDeleted,
@@ -283,7 +284,8 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
       sessionsDeleted === RETENTION_BATCH ||
       mediaDeleted === OBJECT_BATCH ||
       orphanedMediaDeleted === OBJECT_BATCH ||
-      orphanedContentDeleted === OBJECT_BATCH ||
+      // Position, not count: a page where nothing was collectable still leaves a next page.
+      contentSweep.more ||
       canaryArticlesDeleted === OBJECT_BATCH,
   };
 }
@@ -347,9 +349,39 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
  * object is written first precisely so that a failure leaves an unreferenced object rather
  * than a revision with no body.
  */
-async function collectOrphanedContent(ports: Ports, cutoff: string): Promise<number> {
-  const { objects } = await ports.content.list({ limit: OBJECT_BATCH });
-  if (objects.length === 0) return 0;
+const CONTENT_SWEEP = "content";
+
+async function collectOrphanedContent(
+  ports: Ports,
+  cutoff: string,
+  now: string,
+): Promise<{ deleted: number; more: boolean }> {
+  /*
+   * Resumed, because a Cron invocation is not where a sweep of a bucket fits.
+   *
+   * The first version read `list({ limit: 100 })` and threw the cursor away, so every run
+   * examined page one and nothing else — a hundred live objects at the head of the listing
+   * hid every orphan behind them permanently. The test that should have caught it passed
+   * because all 250 of its objects were orphans: the first page emptied, the second became
+   * the first, and the sweep appeared to advance. A test that passes for a reason other than
+   * the one it names is worse than no test, and this one is now three tests that each put
+   * something *live* in front of the orphan.
+   */
+  const from = await ports.retentionCursors.read(CONTENT_SWEEP);
+  const { objects, cursor } = await ports.content.list({ cursor: from, limit: OBJECT_BATCH });
+
+  /*
+   * The cursor moves on every pass, whatever was deleted.
+   *
+   * Progress is position, not deletions. Advancing only when something was removed is the
+   * same bug in a different shape: a page of live objects would pin the sweep to it forever.
+   * A null cursor is the end of the listing and drops the row, so the next invocation starts
+   * a fresh sweep from the beginning — which is also how an object that became collectable
+   * behind the cursor is eventually reached.
+   */
+  await ports.db.commit([ports.retentionCursors.write(CONTENT_SWEEP, cursor, now)]);
+
+  if (objects.length === 0) return { deleted: 0, more: cursor !== null };
 
   /*
    * Old enough that a revision row pointing at it would have committed by now.
@@ -360,7 +392,7 @@ async function collectOrphanedContent(ports: Ports, cutoff: string): Promise<num
    * into the cause of the very thing it cleans up. An hour is far beyond any request.
    */
   const candidates = objects.filter((object) => object.uploadedAt < cutoff);
-  if (candidates.length === 0) return 0;
+  if (candidates.length === 0) return { deleted: 0, more: cursor !== null };
 
   // D1 permits 100 bound parameters per query (§31.1), and the whole point of asking in
   // bulk is to not ask once per object.
@@ -371,19 +403,20 @@ async function collectOrphanedContent(ports: Ports, cutoff: string): Promise<num
   }
 
   const orphaned = candidates.filter((object) => !live.has(object.contentHash));
-  if (orphaned.length === 0) return 0;
+  if (orphaned.length === 0) return { deleted: 0, more: cursor !== null };
 
   try {
     await ports.content.deleteMany(orphaned.map((object) => object.contentHash));
   } catch (error) {
-    // Nothing was removed from the database, so the next pass finds the same objects and
-    // tries again. A failure here costs a pass, not an invariant.
+    // The cursor has already moved, so this page is not retried on the next pass — it is
+    // retried on the next sweep. Losing a page of deletions to a transient store failure is
+    // the right trade against a sweep that cannot get past a page it keeps failing on.
     console.error(
       JSON.stringify({ level: "warn", event: "retention.content.unreferenced", error: String(error) }),
     );
-    return 0;
+    return { deleted: 0, more: cursor !== null };
   }
-  return orphaned.length;
+  return { deleted: orphaned.length, more: cursor !== null };
 }
 
 async function collectOrphanedMedia(ports: Ports, cutoff: string): Promise<number> {

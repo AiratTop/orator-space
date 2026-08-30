@@ -210,6 +210,22 @@ export interface PendingOutboxRow extends OutboxEntry {
   attempts: number;
 }
 
+/**
+ * SPEC §32.2 — where a resumable sweep over an external store got to.
+ *
+ * Cron invocations are separate processes with nothing between them, so a handler that pages
+ * through a bucket has to write its position down or start over every time. Starting over is
+ * not merely slow: a full first page of live objects hides everything behind it, for good.
+ *
+ * Absent means "start from the beginning", so a completed sweep deletes its row rather than
+ * storing a null — one state, one representation.
+ */
+export interface RetentionCursorRepo {
+  read(handler: string): Promise<string | null>;
+  /** `null` finishes the sweep and drops the row. */
+  write(handler: string, cursor: string | null, at: string): PendingWrite;
+}
+
 export interface OutboxRepo {
   enqueue(entry: OutboxEntry): PendingWrite;
   /** Oldest first: the id is monotonic, so this is also delivery order. */

@@ -85,6 +85,8 @@ const asWrite = (apply: Apply): PendingWrite => apply as unknown as PendingWrite
 const asApply = (write: PendingWrite): Apply => write as unknown as Apply;
 
 export interface MemoryState {
+  /** §32.2 — where each resumable sweep got to. */
+  retentionCursors: Map<string, string>;
   principals: Map<string, PrincipalRecord>;
   articles: Map<string, ArticleRecord>;
   revisions: Map<string, RevisionRecord>;
@@ -149,6 +151,7 @@ export interface MemoryControls {
 
 export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryControls {
   const state: MemoryState = {
+    retentionCursors: new Map(),
     principals: new Map(),
     articles: new Map(),
     revisions: new Map(),
@@ -2294,6 +2297,18 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     assets,
     events,
     idempotency,
+    retentionCursors: {
+      async read(handler) {
+        return state.retentionCursors.get(handler) ?? null;
+      },
+      write(handler, cursor) {
+        return asWrite(() => {
+          if (cursor === null) state.retentionCursors.delete(handler);
+          else state.retentionCursors.set(handler, cursor);
+          return 1;
+        });
+      },
+    },
     content: createMemoryContentStore(),
     clock,
     ids,

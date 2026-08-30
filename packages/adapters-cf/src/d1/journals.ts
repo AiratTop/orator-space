@@ -5,6 +5,7 @@ import type {
   OutboxEntry,
   OutboxRepo,
   PendingOutboxRow,
+  RetentionCursorRepo,
 } from "@orator/core/ports";
 import { readVersioned, type OratorId } from "@orator/protocol";
 import { asWrite } from "./database.js";
@@ -198,6 +199,39 @@ export function createQueueEventBus(queue: Queue): EventBus {
             payload: entry.payload,
           },
         })),
+      );
+    },
+  };
+}
+
+/**
+ * SPEC §32.2 — the position of a sweep that outlives one Cron invocation.
+ *
+ * Beside the outbox and the audit log because it is the same kind of thing: a small
+ * operational table nothing in a request path touches.
+ */
+export function createRetentionCursorRepo(db: D1Database): RetentionCursorRepo {
+  return {
+    async read(handler) {
+      const row = await db
+        .prepare(`SELECT cursor FROM retention_cursors WHERE handler = ?`)
+        .bind(handler)
+        .first<{ cursor: string }>();
+      return row?.cursor ?? null;
+    },
+
+    write(handler, cursor, at) {
+      // A finished sweep deletes its row: absent means "start from the beginning", and one
+      // state with two representations is how a resume becomes a restart nobody notices.
+      return asWrite(
+        cursor === null
+          ? db.prepare(`DELETE FROM retention_cursors WHERE handler = ?`).bind(handler)
+          : db
+              .prepare(
+                `INSERT INTO retention_cursors (handler, cursor, updated_at) VALUES (?, ?, ?)
+                 ON CONFLICT(handler) DO UPDATE SET cursor = excluded.cursor, updated_at = excluded.updated_at`,
+              )
+              .bind(handler, cursor, at),
       );
     },
   };
