@@ -36,19 +36,41 @@ export function versioned<T extends Record<string, unknown>>(value: T): Versione
 /**
  * Parses a stored blob and hands back its version along with it.
  *
- * A blob written before anything stamped one reads as version `0` — a fact, and one a
- * migration can branch on, rather than an absence each reader rediscovers. A version this
- * build does not know throws: §65 ships a reader before the writer that produces it, so a
- * number from the future means the release order was broken, and guessing at the shape is
- * how that becomes a data migration instead of an error.
+ * Four cases, and they are deliberately not three. The first version of this collapsed every
+ * unusable version onto `0` — `"banana"`, `null`, `-1` all read as "written before we
+ * stamped versions" — which is the one answer that is certainly wrong: absence is a fact
+ * about an old row, and a present-but-nonsense value is a fact about a corrupt one. A reader
+ * that cannot tell them apart will migrate the corrupt row as though it were legacy.
+ *
+ *   absent            legacy, version 0. §46.4 arrived after some rows did
+ *   present, unusable throws. Not a number, not an integer, or negative
+ *   known             read it
+ *   newer than this   throws. §65 ships a reader before the writer that produces it, so a
+ *                     number from the future means the release order was broken, and
+ *                     guessing at the shape is how that becomes a data migration
+ *
+ * The root has to be an object, too. `JSON.parse` is happy to return `[]`, `null` or `7`,
+ * and every caller here spreads the result into a record — a blob holding `null` would have
+ * become `{ schema_version: 0 }` and read as an empty legacy object rather than as the
+ * damage it is.
  */
 export function readVersioned(json: string | null | undefined): Versioned<Record<string, unknown>> | null {
   if (json === null || json === undefined) return null;
-  const parsed = JSON.parse(json) as Record<string, unknown>;
-  const declared = parsed["schema_version"];
-  const version = typeof declared === "number" && Number.isInteger(declared) ? declared : 0;
-  if (version > SCHEMA_VERSION) {
-    throw new RangeError(`schema_version ${version} is newer than this build reads (${SCHEMA_VERSION})`);
+
+  const parsed: unknown = JSON.parse(json);
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new TypeError(`a versioned blob is a JSON object, not ${parsed === null ? "null" : Array.isArray(parsed) ? "an array" : typeof parsed}`);
   }
-  return { ...parsed, schema_version: version };
+
+  const record = parsed as Record<string, unknown>;
+  if (!Object.hasOwn(record, "schema_version")) return { ...record, schema_version: 0 };
+
+  const declared = record["schema_version"];
+  if (typeof declared !== "number" || !Number.isInteger(declared) || declared < 0) {
+    throw new TypeError(`schema_version is not a version: ${JSON.stringify(declared)}`);
+  }
+  if (declared > SCHEMA_VERSION) {
+    throw new RangeError(`schema_version ${declared} is newer than this build reads (${SCHEMA_VERSION})`);
+  }
+  return { ...record, schema_version: declared };
 }
