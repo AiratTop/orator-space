@@ -263,7 +263,7 @@ check("the page carries an ETag", !!etag, etag ?? "");
  *
  * Two requests, because they answer different questions. What the origin says is asserted
  * through a URL the edge has not cached; what a reader receives is asserted on the ordinary
- * one. They differ legitimately in exactly one way, below.
+ * one. They must agree — see below, which is where they used to be allowed not to.
  */
 const fromOrigin = (await web(`${canonical}?cache=${suffix}`)).headers.get("cache-control") ?? "";
 check("the origin states a browser freshness of its own", /(^|[ ,])max-age=60\b/.test(fromOrigin), fromOrigin);
@@ -277,17 +277,43 @@ check(
   cache,
 );
 /*
- * The one legitimate difference: Cloudflare consumes `stale-while-revalidate` rather than
- * forwarding it, so a response served from its cache arrives without the directive. The edge
- * still honours it — that is what `Cloudflare-CDN-Cache-Control` asks for — and the browser
- * revalidates after sixty seconds instead of serving stale. Asserted rather than assumed,
- * because if it ever starts forwarding it the reader's behaviour changes.
+ * One reader, one policy, whichever cache answered.
+ *
+ * This check used to assert the opposite — that a response served from a cache arrives
+ * *without* `stale-while-revalidate` — and explained it as Cloudflare consuming the
+ * directive rather than forwarding it. That explanation was wrong, and the check was
+ * therefore guarding the wrong thing.
+ *
+ * What actually removed it was our own `toEdgeCache`: it narrows the copy it puts in the
+ * Worker's cache to a freshness lifetime, deliberately, because nothing here revalidates a
+ * stale entry in the background. That narrowing is for the stored copy. Serving the stored
+ * header verbatim leaked it to the reader, so a hit and a miss of the same page answered
+ * with two different policies and whether a browser got background revalidation came down
+ * to which colo it landed in. Cloudflare's own cache never needed the header narrowed
+ * either way: it is told separately and explicitly through `Cloudflare-CDN-Cache-Control`,
+ * which carries the same `stale-while-revalidate=86400`.
+ *
+ * So the invariant is the agreement, and the request is repeated until a cache has actually
+ * answered — an assertion about a cache hit that never hit is an assertion about nothing.
  */
 if (!local) {
+  let cached = page;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    if (cached.headers.get("x-orator-cache") === "hit" || cached.headers.get("cf-cache-status") === "HIT") break;
+    cached = await web(canonical);
+  }
+  const layers = `cf=${cached.headers.get("cf-cache-status") ?? "-"} worker=${cached.headers.get("x-orator-cache") ?? "-"}`;
+  const served = cached.headers.get("cache-control") ?? "";
+
   check(
-    "and the edge keeps stale-while-revalidate to itself",
-    !cache.includes("stale-while-revalidate") || page.headers.get("cf-cache-status") !== "HIT",
-    `${page.headers.get("cf-cache-status") ?? "no status"}: ${cache}`,
+    "a cache answers, so the policy it carries is worth asserting",
+    cached.headers.get("x-orator-cache") === "hit" || cached.headers.get("cf-cache-status") === "HIT",
+    layers,
+  );
+  check(
+    "and a reader is given the same policy on a hit as on a miss",
+    served === fromOrigin,
+    `${layers}: ${served}  vs origin: ${fromOrigin}`,
   );
 }
 check(
