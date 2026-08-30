@@ -286,3 +286,25 @@ describe("the last page says it is the last (§44.2)", () => {
     expect(secondPage.items.map((i) => i.id)).not.toEqual(firstPage.items.map((i) => i.id));
   });
 });
+
+describe("an operation with no parameters takes no parameters (§44.2)", () => {
+  it("refuses a query string on an endpoint that declares none", async () => {
+    // The majority of operations. `parseQuery` cannot reach them — there is no schema to
+    // hand the string to — and §44.2 is a rule about the request, not about the endpoints
+    // that happen to have one.
+    const response = await app.request("/v1/tokens?utm_source=x", { headers: authed() }, env);
+    expect(response.status).toBe(422);
+
+    const body = (await response.json()) as { detail: string };
+    expect(body.detail).toContain("utm_source");
+  });
+
+  it("still answers the same endpoint without one", async () => {
+    const response = await app.request("/v1/tokens", { headers: authed() }, env);
+    expect(response.status).toBe(200);
+  });
+
+  it("does not interfere with an endpoint that does declare parameters", async () => {
+    expect((await app.request("/v1/feed?limit=5", {}, env)).status).toBe(200);
+  });
+});

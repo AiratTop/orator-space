@@ -17,7 +17,7 @@ import {
   recordDeadLetter,
   systemClock,
 } from "@orator/adapters-cf";
-import { isMintedId, problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
+import { isMintedId, problem, ErrorType, OPERATIONS, PROTOCOL_VERSION } from "@orator/protocol";
 import type { RequestContext } from "@orator/core";
 import { contextFor } from "./context.js";
 import { deepHealth } from "@orator/core";
@@ -467,6 +467,52 @@ app.get("/health/deep", resolveContext, async (c) => {
 
   c.header("cache-control", "no-store");
   return c.json(result.value, result.value.status === "ok" ? 200 : 503);
+});
+
+/**
+ * SPEC §44.2 — an unknown query parameter is a 422, on every operation and not only the ones
+ * that have parameters.
+ *
+ * `parseQuery` covers the endpoints that declare some. It cannot cover the ones that declare
+ * none, because there is no schema there to hand the query string to — and those were the
+ * majority, silently ignoring `?anything=`. §44.2 says "unknown fields in a request", which
+ * is a rule about the request and not about the endpoints that happen to have a schema.
+ *
+ * So the catalogue answers it: an operation with no `query` accepts no query string. Read
+ * from `OPERATIONS` rather than from a list kept here, so a new operation is covered by
+ * existing, and read at startup rather than per request.
+ *
+ * This is the runtime half. `generate-openapi.mjs` checks the same thing statically and in
+ * both directions — which catches a parameter that is declared and ignored, something no
+ * middleware can see.
+ */
+const NO_QUERY: readonly { method: string; path: RegExp }[] = OPERATIONS.filter(
+  (operation) => operation.query === undefined,
+).map((operation) => ({
+  method: operation.method.toUpperCase(),
+  // `{id}` matches one segment. Built from the catalogue rather than read off `c.req
+  // .routePath`, which is still the middleware's own pattern at this point in the chain.
+  path: new RegExp(`^${operation.path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\{\w+\\\}/g, "[^/]+")}$`),
+}));
+
+app.use("/v1/*", async (c, next) => {
+  const url = new URL(c.req.url);
+  if (url.search === "") return next();
+
+  const declaresNone = NO_QUERY.some(
+    (operation) => operation.method === c.req.method && operation.path.test(url.pathname),
+  );
+  if (!declaresNone) return next();
+
+  return problemResponse(
+    c,
+    {
+      type: ErrorType.ValidationFailed,
+      title: "This endpoint takes no query parameters",
+      detail: `Unexpected: ${[...url.searchParams.keys()].join(", ")}. §44.2 — an unknown field in a request is refused rather than ignored.`,
+    },
+    url.pathname,
+  );
 });
 
 app.use("/v1/*", resolveContext);
