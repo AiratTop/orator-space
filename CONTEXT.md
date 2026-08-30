@@ -101,6 +101,36 @@ value rather than a missing one — so it is recorded here instead.
 Rotating it is a deliberate loss of correlation with every pseudonym stored before it, which
 is the point: the case that calls for a rotation is the pepper having leaked.
 
+### The staging export in the git history
+
+`apps/edge/.restore-drill/dump.sql.gz` was committed to this public repository in `b95bddc`
+on 2026-08-22 and removed from HEAD on 2026-08-30. **It stays in the history: the operator
+decided not to rewrite it**, and the reasoning is recorded here so the next audit that finds
+it does not have to reopen the question.
+
+What is in it, counted rather than remembered:
+
+```text
+staging, not production — restore-drill pulls from backups/staging/
+207 principals · 240 api_tokens · 16 sessions · 16 webauthn_credentials
+434 audit_log rows · 445 events · 149 articles
+no plaintext token   every orat_ string is 20 characters, which is the stored `prefix`;
+                     a whole token is ~59. The secret is held as a SHA-256 digest
+no address, no mailbox   zero email-shaped strings; 17 distinct 32-hex values in the file
+```
+
+So the residual exposure is seventeen IPv4 pseudonyms computed the old way — SHA-256 keyed
+with a public string, therefore enumerable (§62, fixed on 2026-08-30). The population behind
+them is this project's own CI runners and the operator; staging has never had a third-party
+visitor. Production has never been exported and is empty.
+
+Rewriting history would not have removed the file from forks, clones or GitHub's own caches
+anyway, and the recurrence is closed at the cause: the drill now works outside the checkout
+and `.gitignore` covers the name it used.
+
+**Not a precedent.** A database export is never a repository artefact, and if one ever
+contains a real reader this decision does not transfer.
+
 ### Infrastructure outside Cloudflare
 
 Available, but **strictly optional** (`SPEC.md` §66.6). The core must run on Cloudflare alone.
