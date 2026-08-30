@@ -552,6 +552,32 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return 1;
       });
     },
+    eraseRevisionsOf(articleId, at) {
+      return asWrite(() => {
+        let n = 0;
+        for (const [id, revision] of state.revisions) {
+          if (revision.articleId !== articleId) continue;
+          // The hash stays: it is the trace §23.3 keeps, and it is not the content.
+          state.revisions.set(id, {
+            ...revision,
+            contentRef: "",
+            title: "[erased]",
+            excerpt: null,
+            metadata: { schema_version: 1, erased_at: at },
+          });
+          n += 1;
+        }
+        return n;
+      });
+    },
+    async contentHashesOf(articleId) {
+      const counts = new Map<string, number>();
+      for (const revision of state.revisions.values()) {
+        if (revision.articleId !== articleId) continue;
+        counts.set(revision.contentHash, (counts.get(revision.contentHash) ?? 0) + 1);
+      }
+      return [...counts].map(([contentHash, revisions]) => ({ contentHash, revisions }));
+    },
     eraseRevision(revisionId, at) {
       return asWrite(() => {
         const revision = state.revisions.get(revisionId);

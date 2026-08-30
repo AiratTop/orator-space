@@ -279,6 +279,26 @@ export interface ArticleRepo {
    * cannot be erased on a lawful demand, and what remains is the verifiable trace.
    */
   eraseRevision(revisionId: string, at: string): PendingWrite;
+
+  /**
+   * SPEC §23.3 — blanks every revision of one article, in one statement.
+   *
+   * Not `listRevisions` and a write per row. Erasure has to cover the whole history or it
+   * has not happened, and a page of it is a page: the first version of this read two hundred
+   * revisions and blanked those, leaving the older ones with their text, their `content_ref`
+   * and — because those surviving rows still counted as references — an R2 object that the
+   * reference check then refused to delete. The call reported success.
+   *
+   * One statement also keeps the batch a fixed size. A write per revision put the length of
+   * somebody's editing history into a `db.batch()`, which is the other way this fails.
+   */
+  eraseRevisionsOf(articleId: string, at: string): PendingWrite;
+
+  /**
+   * The distinct bodies an article's history refers to, with how many of its revisions use
+   * each — the left-hand side of §23.3's reference check, for a history of any length.
+   */
+  contentHashesOf(articleId: string): Promise<{ contentHash: string; revisions: number }[]>;
   attachSignature(revisionId: string, signature: string, keyId: string): PendingWrite;
 }
 

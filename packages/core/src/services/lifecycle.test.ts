@@ -228,6 +228,47 @@ describe("erasing an article (SPEC §23.3)", () => {
     }
   });
 
+  /**
+   * §23.3 covers the history, not a page of it.
+   *
+   * The erase used to read two hundred revisions and blank those. An article with more kept
+   * the older ones — text, title and `content_ref` intact — and the call answered success
+   * with `revisions: 200`. Worse than the leak itself: those surviving rows counted as
+   * outside references, so step 3 declined to delete the R2 object too, and the one
+   * operation that exists to satisfy a legal demand quietly satisfied none of it.
+   *
+   * 250 rather than 201, so this keeps failing if somebody raises a page size to 200-odd
+   * instead of removing the page.
+   */
+  it("erases a history longer than any page of it (§23.3)", async () => {
+    const id = await published();
+    for (let n = 0; n < 249; n += 1) {
+      unwrap(
+        await createRevision(ctxFor(agent), id, {
+          title: `Revision ${n}`,
+          content: `# Revision ${n}\n\nA body that differs each time.\n`,
+          ifMatch: null,
+        }),
+      );
+    }
+
+    const outcome = unwrap(await eraseArticle(ctxFor(owner), id, { confirm: "erase" }));
+
+    expect(outcome.revisions).toBe(250);
+    const mine = [...ports.state.revisions.values()].filter((revision) => revision.articleId === id);
+    expect(mine).toHaveLength(250);
+    for (const revision of mine) {
+      expect(revision.contentRef, revision.id).toBe("");
+      expect(revision.title, revision.id).toBe("[erased]");
+    }
+
+    // And every body is gone from the store, not only the newest page of them.
+    for (const revision of mine) {
+      expect(await ports.content.get(revision.contentHash), revision.contentHash).toBeNull();
+    }
+    expect(outcome.escalated).toBe(false);
+  });
+
   it("requires the confirmation verbatim", async () => {
     const id = await published();
     expect(errorOf(await eraseArticle(ctxFor(owner), id, { confirm: "yes" }))).toBe("validation-failed");

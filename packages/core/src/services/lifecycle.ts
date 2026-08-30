@@ -252,7 +252,16 @@ export async function eraseArticle(
     );
   }
 
-  const revisions = await ctx.ports.articles.listRevisions(article.id, { limit: 200 });
+  /*
+   * The whole history, and counted rather than listed (§23.3).
+   *
+   * This used to read a page of two hundred revisions and work from that, which is wrong in
+   * a way that reported success: an article with more revisions kept the older ones, text
+   * and `content_ref` intact — and those surviving rows then counted as outside references,
+   * so step 3 refused to delete the R2 object as well. A partial erasure that answers 200 is
+   * worse than a failure, because the demand it exists to satisfy is a legal one.
+   */
+  const bodies = await ctx.ports.articles.contentHashesOf(article.id);
   const now = ctx.ports.clock.now().toISOString();
 
   let escalated = false;
@@ -260,13 +269,11 @@ export async function eraseArticle(
 
   // Steps 1-3 of §23.3, per distinct body. A revision history usually shares few hashes,
   // so this is a handful of counts rather than one per revision.
-  const hashes = [...new Set(revisions.map((revision) => revision.contentHash))];
-  for (const hash of hashes) {
-    const references = await ctx.ports.articles.countRevisionsWithContent(hash);
-    const mine = revisions.filter((revision) => revision.contentHash === hash).length;
+  for (const { contentHash, revisions: mine } of bodies) {
+    const references = await ctx.ports.articles.countRevisionsWithContent(contentHash);
 
     if (references === mine) {
-      deletable.push(hash);
+      deletable.push(contentHash);
       continue;
     }
 
@@ -276,8 +283,10 @@ export async function eraseArticle(
     escalated = true;
   }
 
+  const erasedCount = bodies.reduce((total, body) => total + body.revisions, 0);
+
   const writes = [
-    ...revisions.map((revision) => ctx.ports.articles.eraseRevision(revision.id, now)),
+    ctx.ports.articles.eraseRevisionsOf(article.id, now),
     ctx.ports.articles.setStatus(article.id, "removed", now),
     ctx.ports.audit.record({
       id: ctx.ports.ids.next(),
@@ -322,5 +331,5 @@ export async function eraseArticle(
     contentDeleted = true;
   }
 
-  return ok({ id: article.id, revisions: revisions.length, contentDeleted, escalated });
+  return ok({ id: article.id, revisions: erasedCount, contentDeleted, escalated });
 }

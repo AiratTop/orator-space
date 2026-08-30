@@ -458,6 +458,27 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
      * was erased, without being the thing itself. `content_ref` is blanked because it names
      * an object that no longer exists.
      */
+    eraseRevisionsOf(articleId, at) {
+      return asWrite(
+        db
+          .prepare(
+            `UPDATE revisions
+                SET content_ref = '', title = '[erased]', excerpt = NULL,
+                    metadata_json = json_object('schema_version', 1, 'erased_at', ?)
+              WHERE article_id = ?`,
+          )
+          .bind(at, articleId),
+      );
+    },
+
+    async contentHashesOf(articleId) {
+      const { results } = await db
+        .prepare(`SELECT content_hash, COUNT(*) AS n FROM revisions WHERE article_id = ? GROUP BY content_hash`)
+        .bind(articleId)
+        .all<{ content_hash: string; n: number }>();
+      return results.map((row) => ({ contentHash: row.content_hash, revisions: row.n }));
+    },
+
     eraseRevision(revisionId, at) {
       return asWrite(
         db
