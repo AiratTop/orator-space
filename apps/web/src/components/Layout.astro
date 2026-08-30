@@ -167,7 +167,7 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
         <a class="masthead__brand" href="/">Orator<span class="masthead__tld">.Space</span></a>
 
         {/*
-          Three links, and none of them depends on who is asking.
+          Four links, and none of them depends on who is asking.
 
           §33.2 caches an anonymous GET of public content, so the masthead is part of a
           response that will be served to the next reader as well. A "Sign in" that becomes
@@ -183,14 +183,23 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
           The middleware refuses to let any response to a credentialed request be publicly
           cacheable, so a page carrying a personal link is a page only its reader gets. An
           anonymous request never resolves a session at all, so the cached masthead — the one
-          nearly everybody sees — is three links and no lookup.
+          nearly everybody sees — is four links and no lookup.
 
           The signed-out version says "Account" rather than "Sign in" for the reason it
           always did: it names a destination that is true whether or not somebody has one.
         */}
         <nav class="masthead__nav" aria-label="Site">
-          <a href="/topics">Topics</a>
           <a href="/search">Search</a>
+          <a href="/topics">Topics</a>
+          {/*
+            The one link in the masthead that leaves the site (ADR 0013), and the only place
+            it can be reached from without scrolling to the bottom of an article. A reader
+            who wants the API wants it while reading, not afterwards.
+
+            `rel="noopener"` and no `target`, like its twin in the footer: the documentation
+            is somewhere to go, not a second window to leave open behind this one.
+          */}
+          <a href={`${docsOrigin}/`} rel="noopener">Docs</a>
           {Astro.locals.viewer && <a href="/bookmarks">Bookmarks</a>}
           {Astro.locals.viewer?.moderator && <a class="masthead__moderate" href="/moderation">Moderation</a>}
           {Astro.locals.viewer === undefined ? (
