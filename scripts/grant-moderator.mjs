@@ -148,12 +148,17 @@ console.log(`  target: @${target.username} (${target.kind}, ${target.status}, ro
  * `wrangler d1 execute` runs several statements in one call but gives no transaction to roll
  * back, so the token's existence has to depend on the role being grantable in the same
  * statement that creates it.
+ *
+ * It repeats `status = 'active'` rather than relying on the read above, which is a separate
+ * round trip: an account suspended in between would otherwise be handed an administrative
+ * credential by a check that passed a second earlier. A narrow window on a CLI an operator
+ * runs by hand, and the condition costs nothing.
  */
 const sql = [
   `UPDATE principals SET platform_role = '${role}' WHERE id = '${principalId}' AND kind = 'human' AND status = 'active';`,
   `INSERT INTO api_tokens (id, principal_id, name, token_hash, prefix, scopes, created_at)`,
   `SELECT '${tokenId}', '${principalId}', '${role}', '${tokenHash}', '${prefix}', '${JSON.stringify(SCOPES)}', '${now.toISOString()}'`,
-  `WHERE EXISTS (SELECT 1 FROM principals WHERE id = '${principalId}' AND kind = 'human' AND platform_role = '${role}');`,
+  `WHERE EXISTS (SELECT 1 FROM principals WHERE id = '${principalId}' AND kind = 'human' AND status = 'active' AND platform_role = '${role}');`,
 ].join("\n");
 
 console.log(sql);

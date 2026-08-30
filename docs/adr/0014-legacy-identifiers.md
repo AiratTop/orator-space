@@ -68,13 +68,22 @@ code. In order:
 
 1. **The vocabulary.** Topic ids are not public addresses — the slug is (`/t/{slug}`, §8), and
    ADR 0010 already removed the article slug for related reasons. `article_topics` is derived
-   data, recomputable from revisions (§38.3), which is what makes this cheap: a migration can
-   insert the sixty topics under fresh UUIDv7 ids, repoint `article_topics` and `parent_id`,
-   and drop the old rows. New ids for new rows is not reuse and does not violate §11.
+   data, recomputable from revisions (§38.3), which is what makes this cheap: a migration
+   inserts the sixty topics under fresh UUIDv7 ids, repoints `article_topics` and `parent_id`,
+   and retires the old rows.
+
+   **Retired, not recycled, and the difference is what §11 protects.** The old rows are
+   withdrawn from circulation — `status = 'retired'` rather than `DELETE`, so the identifier
+   stays spoken for and cannot be handed to a later topic. §11 forbids changing an identifier
+   and forbids reusing one, including for a deleted object; it does not forbid a new entity
+   with a new identifier taking over a slug. An earlier draft of this said "drop the old
+   rows", which reads as freeing the ids for reuse and is exactly the thing §11 rules out.
 2. **The canary.** Re-mintable in the same sense, and the earlier note that it was not was too
    strong. §11 forbids changing or reusing an identifier; it does not forbid closing one
    synthetic account and creating another. `create-canary.mjs` makes a new principal with a
-   new id and a new username; the old one is closed (§23.5) and its token revoked.
+   new id and a new username; the old one is closed (§23.5) and its token revoked. The closed
+   principal keeps its row and its id, as every closed account does — closure is a state, not
+   a deletion, and that is what keeps the old identifier from ever being issued again.
 3. **The three tokens.** Revoke and reissue. A token id is not referenced by anything a reader
    sees, and reissuing is the ordinary operation.
 4. Then `isOratorId` becomes `isMintedId`, `isMintedId` is deleted, and this ADR is superseded.
