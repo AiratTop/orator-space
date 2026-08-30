@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { feed, search, searchPrincipals, type RequestContext } from "@orator/core";
 import { decodeFeedCursor, encodeFeedCursor, schemas } from "@orator/protocol";
 import { semanticFor } from "../context.js";
-import { parse, problemResponse, respond } from "../http.js";
+import { parseQuery, problemResponse, respond } from "../http.js";
 import { cardView, topicView } from "../views.js";
 import type { Env } from "../index.js";
 
@@ -19,11 +19,7 @@ type Vars = { requestId: string; ctx: RequestContext };
 export const discoveryRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 
 discoveryRoutes.get("/v1/feed", async (c) => {
-  const parsed = parse(c, schemas.feedQuery, {
-    ...(c.req.query("cursor") === undefined ? {} : { cursor: c.req.query("cursor") }),
-    ...(c.req.query("limit") === undefined ? {} : { limit: c.req.query("limit") }),
-    ...(c.req.query("mode") === undefined ? {} : { mode: c.req.query("mode") }),
-  });
+  const parsed = parseQuery(c, schemas.feedQuery);
   if ("response" in parsed) return parsed.response;
 
   const page = await feed(c.get("ctx").ports, {
@@ -41,11 +37,7 @@ discoveryRoutes.get("/v1/feed", async (c) => {
 });
 
 discoveryRoutes.get("/v1/search", async (c) => {
-  const parsed = parse(c, schemas.searchQuery, {
-    q: c.req.query("q") ?? "",
-    ...(c.req.query("limit") === undefined ? {} : { limit: c.req.query("limit") }),
-    ...(c.req.query("type") === undefined ? {} : { type: c.req.query("type") }),
-  });
+  const parsed = parseQuery(c, schemas.searchQuery);
   if ("response" in parsed) return parsed.response;
 
   const ports = c.get("ctx").ports;

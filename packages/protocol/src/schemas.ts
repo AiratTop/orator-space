@@ -125,8 +125,15 @@ export const metadata = z
     `nested deeper than ${MAX_METADATA_DEPTH} levels`,
   );
 
-/** SPEC §44.2 — one page-size rule for every collection. */
-export const paginationQuery = z.object({
+/**
+ * SPEC §44.2 — one page-size rule for every collection, and one cursor name.
+ *
+ * Strict, like the request bodies and for the same reason: a parameter nobody recognises is
+ * a caller who thinks they asked for something. The difference is that a dropped query
+ * parameter is quieter than a dropped field — a mistyped `cursor` does not fail, it returns
+ * the first page, so a client paging through a collection loops on it without an error.
+ */
+export const paginationQuery = z.strictObject({
   cursor: z.string().max(200).optional().describe("The id of the last item on the previous page"),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).optional(),
 });
@@ -225,6 +232,11 @@ export const registerKeyRequest = z.strictObject({
   label: z.string().max(80).nullish(),
 });
 
+/** SPEC §8.4 — why a key was revoked, recorded alongside the revocation. */
+export const revokeKeyQuery = z.strictObject({
+  reason: z.string().max(500).optional(),
+});
+
 export const keyResponse = z.object({
   id: oratorId,
   public_key: z.string(),
@@ -282,6 +294,22 @@ export const queuedReport = z.object({
 export const reportPage = z.object({
   items: z.array(queuedReport),
   next_cursor: z.string().nullable(),
+});
+
+/**
+ * SPEC §61.1 — the moderation queue's parameters, declared rather than merely accepted.
+ *
+ * The route has read `status`, `limit` and a cursor since it shipped and the catalogue
+ * declared none of them, so `docs/openapi.json` described an endpoint with no documented way
+ * to page through it or filter it. A moderator's client reading the contract could not find
+ * what the endpoint in fact answers to.
+ *
+ * The cursor is `cursor`, as it is on every other collection (§44.2). Here alone it was
+ * `after`, which is the kind of difference nothing detects from either side: a client
+ * sending `cursor` was handed the first page, again, for as long as it kept asking.
+ */
+export const reportsQuery = paginationQuery.extend({
+  status: z.enum(["open", "reviewing", "actioned", "rejected"]).optional(),
 });
 
 export const reviewReportResponse = z.object({
@@ -661,7 +689,7 @@ export const topicResponse = z.object({
 // Events (§20)
 // ---------------------------------------------------------------------------
 
-export const eventsQuery = z.object({
+export const eventsQuery = z.strictObject({
   since: oratorId.optional().describe("The id of the last event received (§20.5)"),
   type: z.string().max(64).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).optional(),

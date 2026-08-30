@@ -7,7 +7,7 @@ import {
   type ReportRecord,
 } from "@orator/core";
 import { schemas } from "@orator/protocol";
-import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { parse, parseQuery, problemResponse, requireIdempotencyKey, respond } from "../http.js";
 import type { Env } from "../index.js";
 
 /**
@@ -39,12 +39,16 @@ const reportView = (report: ReportRecord) => ({
 });
 
 moderationRoutes.get("/v1/moderation/reports", async (c) => {
+  const parsed = parseQuery(c, schemas.reportsQuery);
+  if ("response" in parsed) return parsed.response;
+
   const ctx = c.get("ctx");
-  const status = c.req.query("status");
   const result = await listReports(ctx, {
-    status: (status ?? null) as never,
-    limit: Number(c.req.query("limit") ?? 50),
-    after: c.req.query("after") ?? null,
+    status: parsed.data.status ?? null,
+    limit: parsed.data.limit ?? 50,
+    // `after` is the domain's name for it; `cursor` is the wire's, as on every other
+    // collection (§44.2). The translation is a route's job, which is why it is here.
+    after: parsed.data.cursor ?? null,
   });
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 

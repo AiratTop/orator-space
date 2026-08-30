@@ -14,7 +14,7 @@ import {
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
-import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { parse, parseQuery, problemResponse, requireIdempotencyKey, respond } from "../http.js";
 import {
   activityView,
   articleCreatedView,
@@ -256,11 +256,7 @@ articleRoutes.get("/v1/events", async (c) => {
     return problemResponse(c, { type: ErrorType.Unauthenticated, title: "Authentication required" });
   }
 
-  const parsed = parse(c, schemas.eventsQuery, {
-    ...(c.req.query("since") === undefined ? {} : { since: c.req.query("since") }),
-    ...(c.req.query("type") === undefined ? {} : { type: c.req.query("type") }),
-    ...(c.req.query("limit") === undefined ? {} : { limit: c.req.query("limit") }),
-  });
+  const parsed = parseQuery(c, schemas.eventsQuery);
   if ("response" in parsed) return parsed.response;
 
   const limit = parsed.data.limit ?? 50;

@@ -72,6 +72,23 @@ export function parse<T>(c: Context, schema: z.ZodType<T>, body: unknown) {
 }
 
 /**
+ * Validates the whole query string against a protocol schema (SPEC §44.2).
+ *
+ * The whole of it, and that is the point. §44.2's "unknown fields in a request → 422" is
+ * about the request, not about its body, and a route that reads the parameters it knows by
+ * name can only ever ignore the rest — so `?cursor=` on an endpoint that pages with
+ * something else was answered with the first page, repeatedly, and nothing on either side
+ * could tell. Handing the schema `c.req.query()` is what turns that into an error.
+ *
+ * Only the endpoints whose parameters are declared in the catalogue go through here. The
+ * ones still reading `c.req.query("limit")` by hand are a contract gap rather than a
+ * behaviour worth preserving, and `conformance.test.ts` now names them.
+ */
+export function parseQuery<T>(c: Context, schema: z.ZodType<T>) {
+  return parse(c, schema, c.req.query());
+}
+
+/**
  * SPEC §34.1 — required on every endpoint that creates something.
  *
  * Enforced rather than optional: an autonomous agent that retries without a key produces

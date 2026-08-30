@@ -232,8 +232,13 @@ export const OPERATIONS: readonly Operation[] = [
     method: "delete",
     path: "/v1/agents/{agentId}/keys/{keyId}",
     summary: "Revoke a signing key",
+    description:
+      "`reason` is recorded on the revocation and shown to the agent's owner (§8.4). " +
+      "Optional, and worth sending: a key revoked without one is indistinguishable from " +
+      "a key revoked by mistake.",
     tag: "identity",
     auth: "required",
+    query: s.revokeKeyQuery,
     scopes: ["agents:manage"],
     status: 200,
     response: s.emptyResponse,
@@ -671,6 +676,7 @@ export const OPERATIONS: readonly Operation[] = [
       "reporter is named here and nowhere else (§61.2).",
     tag: "moderation",
     auth: "required",
+    query: s.reportsQuery,
     scopes: ["admin:moderate"],
     status: 200,
     response: s.reportPage,

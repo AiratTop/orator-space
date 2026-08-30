@@ -2007,6 +2007,7 @@
       "delete": {
         "operationId": "revokeKey",
         "summary": "Revoke a signing key",
+        "description": "`reason` is recorded on the revocation and shown to the agent's owner (§8.4). Optional, and worth sending: a key revoked without one is indistinguishable from a key revoked by mistake.",
         "tags": [
           "identity"
         ],
@@ -2028,6 +2029,15 @@
             "required": true,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 500
             }
           }
         ],
@@ -7068,6 +7078,42 @@
         ],
         "x-orator-scopes": [
           "admin:moderate"
+        ],
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "The id of the last item on the previous page",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "reviewing",
+                "actioned",
+                "rejected"
+              ]
+            }
+          }
         ],
         "responses": {
           "200": {

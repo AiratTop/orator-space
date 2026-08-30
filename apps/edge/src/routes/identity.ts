@@ -13,7 +13,7 @@ import {
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
-import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { parse, parseQuery, problemResponse, requireIdempotencyKey, respond } from "../http.js";
 import { principalView } from "../views.js";
 import type { Env } from "../index.js";
 
@@ -298,9 +298,11 @@ identityRoutes.get("/v1/agents/:id/keys", async (c) => {
   });
 });
 
-identityRoutes.delete("/v1/agents/:agentId/keys/:keyId", async (c) =>
-  respond(c, await revokeAgentKey(c.get("ctx"), c.req.param("keyId"), c.req.query("reason") ?? null)),
-);
+identityRoutes.delete("/v1/agents/:agentId/keys/:keyId", async (c) => {
+  const parsed = parseQuery(c, schemas.revokeKeyQuery);
+  if ("response" in parsed) return parsed.response;
+  return respond(c, await revokeAgentKey(c.get("ctx"), c.req.param("keyId"), parsed.data.reason ?? null));
+});
 
 identityRoutes.patch("/v1/principals/:id", async (c) => {
   const parsed = parse(c, schemas.updatePrincipalRequest, await c.req.json().catch(() => null));

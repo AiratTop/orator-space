@@ -16,7 +16,7 @@
  *   node scripts/generate-openapi.mjs            write docs/openapi.json
  *   node scripts/generate-openapi.mjs --check    fail if the committed file is stale
  */
-import { readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import { z } from "zod";
 import { OPERATIONS } from "../packages/protocol/src/api.ts";
 import { ERROR_BASE, ErrorType, RETRYABLE, STATUS } from "../packages/protocol/src/errors.ts";
@@ -226,6 +226,54 @@ const rendered = `${JSON.stringify(document, null, 2)}\n`;
 // Reading it back is the whole reason this is JSON: a document that does not parse cannot
 // reach the repository.
 JSON.parse(rendered);
+
+/*
+ * A parameter the server reads is a parameter the document declares (SPEC §44.2, §53).
+ *
+ * The generated file is only a description of the server if the catalogue is, and nothing
+ * checked the direction that fails silently: `GET /v1/moderation/reports` read `status`,
+ * `limit` and a cursor that the catalogue declared none of, so this document described a
+ * moderation queue with no documented way to page through it. Nothing failed, because an
+ * ignored parameter answers 200 and there is nothing in the response to notice.
+ *
+ * Read out of the source rather than exercised, for that same reason. It lives here and not
+ * in `conformance.test.ts` — where the rest of the catalogue-versus-router checking is —
+ * because those tests run in `workerd`, which has no filesystem to read the routes from.
+ */
+const ROUTE_DIR = "apps/edge/src/routes";
+const declaredQuery = new Map(
+  OPERATIONS.map((operation) => [
+    `${operation.method.toLowerCase()} ${operation.path}`,
+    operation.query === undefined ? [] : Object.keys(strip(jsonSchema(operation.query)).properties ?? {}),
+  ]),
+);
+
+const undeclared = [];
+for (const file of await readdir(ROUTE_DIR)) {
+  if (!file.endsWith(".ts") || file.includes(".test.")) continue;
+  const source = await readFile(`${ROUTE_DIR}/${file}`, "utf8");
+  const marks = [...source.matchAll(/\w*Routes\.(get|post|patch|put|delete)\(\s*"([^"]+)"/g)];
+
+  marks.forEach((mark, index) => {
+    const end = index + 1 < marks.length ? marks[index + 1].index : source.length;
+    const read = [
+      ...new Set([...source.slice(mark.index, end).matchAll(/c\.req\.query\("([^"]+)"\)/g)].map((q) => q[1])),
+    ];
+    const key = `${mark[1].toLowerCase()} ${mark[2].replace(/:(\w+)/g, "{$1}")}`;
+    for (const name of read) {
+      if (!(declaredQuery.get(key) ?? []).includes(name)) undeclared.push(`  ${key} reads ?${name}`);
+    }
+  });
+}
+
+if (undeclared.length > 0) {
+  console.error(
+    `\nopenapi: ${undeclared.length} query parameter(s) are read by a route and declared nowhere:\n\n` +
+      `${undeclared.join("\n")}\n\n` +
+      `Add them to the operation's \`query\` schema in packages/protocol/src/api.ts, or stop reading them.\n`,
+  );
+  process.exit(1);
+}
 
 if (process.argv.includes("--check")) {
   const committed = await readFile(OUT, "utf8").catch(() => null);
