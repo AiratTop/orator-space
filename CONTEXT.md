@@ -85,6 +85,22 @@ variables       CLOUDFLARE_ACCOUNT_ID (an identifier, not a credential)
 deployment      GitHub Actions is the sole orchestrator for production (§64.3)
 ```
 
+### Worker secrets
+
+```text
+IP_PEPPER       set on orator-edge and orator-web, both environments, 2026-08-30 — SPEC §62
+TELEGRAM_*      see Telegram, below
+```
+
+`IP_PEPPER` is what keys the stored address digest, and the two Workers in one environment
+must hold the **same** value: they write to one `audit_log`, so a mismatch is one caller
+appearing as two people, silently and for as long as it lasts. Nothing in the code can
+detect that — the fallback for an unset pepper is the environment name, which is a working
+value rather than a missing one — so it is recorded here instead.
+
+Rotating it is a deliberate loss of correlation with every pseudonym stored before it, which
+is the point: the case that calls for a rotation is the pepper having leaked.
+
 ### Infrastructure outside Cloudflare
 
 Available, but **strictly optional** (`SPEC.md` §66.6). The core must run on Cloudflare alone.
