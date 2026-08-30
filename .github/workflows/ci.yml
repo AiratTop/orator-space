@@ -21,8 +21,9 @@ concurrency:
 #
 # A tag is a pointer somebody else can move, and `deploy-production` below hands
 # `CLOUDFLARE_API_TOKEN` to whatever the pointer names on the day it runs. Pinning is the
-# difference between trusting a release and trusting an account. Renovate and Dependabot both
-# read the trailing comment and update the pair together, so this is not a manual chore.
+# difference between trusting a release and trusting an account. `dependabot.yml` keeps them
+# current — it reads the trailing comment and moves the pin and the version together — so a
+# pin does not quietly become a version nobody has looked at since.
 
 env:
   # Not a credential — an identifier. Kept as a repository variable (PLAN.md §1.4).

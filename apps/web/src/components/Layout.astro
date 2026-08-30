@@ -46,7 +46,7 @@ interface Props {
    * a string it had stringified itself would be one `JSON.stringify` away from closing the
    * element with somebody's article title (see `jsonLdDocument`).
    */
-  jsonLd?: unknown;
+  jsonLd?: Record<string, unknown>;
   /**
    * Seconds after which this page reloads itself, for a page waiting on something that
    * happens elsewhere (§9.3).

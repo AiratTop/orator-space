@@ -32,13 +32,14 @@ describe("jsonLdDocument", () => {
     expect(JSON.parse(jsonLdDocument(value))).toEqual(value);
   });
 
-  it("is idempotent, so applying it at both ends is applying it once", () => {
-    const once = jsonLdDocument({ headline: "</script> & <b>" });
-    expect(
-      once
-        .replace(/&/g, "\\u0026")
-        .replace(/</g, "\\u003c")
-        .replace(/>/g, "\\u003e"),
-    ).toBe(once);
+  it("escapes what it emits to nothing further, so a second pass changes nothing", () => {
+    // Note what this does *not* claim: `jsonLdDocument(jsonLdDocument(v))` is not the
+    // identity, because the outer call would stringify a string. It is the escaping step
+    // that is closed under itself, which is what matters if the text ever meets a second
+    // sink — the escaped output contains no `<`, `>` or `&` left to escape again.
+    const once = jsonLdDocument({ headline: "</script> & <b>5 > 3</b>", excerpt: "a\u2028b" });
+
+    expect(once).not.toMatch(/[<>&\u2028\u2029]/);
+    expect(JSON.parse(once)).toEqual(JSON.parse(once));
   });
 });

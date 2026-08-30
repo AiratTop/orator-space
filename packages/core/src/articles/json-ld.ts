@@ -19,16 +19,17 @@
  *        parser does not leave at the next `</script`
  *   `>`  not dangerous alone; escaped so that no `-->` survives either
  *   `&`  never dangerous in a `<script>`, whose content is raw text and not entity-decoded.
- *        Escaped anyway, because it is what makes this function idempotent: nothing it
- *        emits contains a character it would escape a second time, so applying it twice —
- *        once here, once at the sink — is exactly applying it once.
+ *        Escaped anyway, so that the escaping *step* is closed under itself: nothing it
+ *        emits contains a character it would escape again. That costs nothing and means a
+ *        document that passes through it twice — a second sink, a future caller — is
+ *        unchanged the second time rather than doubly mangled.
  *   U+2028, U+2029  legal in JSON, and line terminators in JavaScript before ES2019. A
  *        document copied into a `<script>` of any other type breaks on them.
  *
  * The escapes are `\uXXXX` sequences, which JSON defines for any character in a string, so
  * the document a parser reads back is identical to the one that went in.
  */
-export function jsonLdDocument(value: unknown): string {
+export function jsonLdDocument(value: Record<string, unknown>): string {
   return JSON.stringify(value)
     .replace(/&/g, "\\u0026")
     .replace(/</g, "\\u003c")

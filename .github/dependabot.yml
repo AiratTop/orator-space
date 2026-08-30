@@ -1,0 +1,23 @@
+# Keeping the pinned SHAs in `workflows/` current (SPEC §74).
+#
+# The pins exist because `deploy-production` hands `CLOUDFLARE_API_TOKEN` to whatever a tag
+# points at on the day it runs, and a tag is a pointer somebody else can move. A pin without
+# an updater, though, is not security — it is a version that stops receiving fixes and that
+# nobody remembers to look at. The comment in `ci.yml` claimed an updater reads the trailing
+# `# v5.1.0` and keeps the pair together; this is the file that makes the claim true.
+#
+# Actions only. npm dependencies are on `pnpm-lock.yaml` with a workspace-wide lockfile, and
+# a bot opening one pull request per package against a monorepo that runs a ten-minute `ci`
+# on each is a worse trade than reviewing them in batches (§74). That is a deliberate
+# omission rather than an oversight, which is why it is written down.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "Pin"
