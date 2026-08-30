@@ -1,5 +1,5 @@
 import type { EventRepo, IdempotencyRecord, IdempotencyRepo, NewEvent } from "@orator/core/ports";
-import type { OratorId } from "@orator/protocol";
+import { readVersioned, type OratorId } from "@orator/protocol";
 import { asWrite } from "./database.js";
 
 interface EventRow {
@@ -22,7 +22,7 @@ const toEvent = (row: EventRow): NewEvent => ({
   subjectId: row.subject_id,
   audiencePrincipalId: row.audience_principal_id as OratorId | null,
   visibility: row.visibility as "public" | "private",
-  payload: JSON.parse(row.payload_json ?? "{}") as NewEvent["payload"],
+  payload: (readVersioned(row.payload_json) ?? { schema_version: 0 }) as NewEvent["payload"],
   createdAt: row.created_at,
 });
 

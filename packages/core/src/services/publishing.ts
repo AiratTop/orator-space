@@ -1,4 +1,4 @@
-import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
+import { ErrorType, SCHEMA_VERSION, versioned, type OratorId } from "@orator/protocol";
 import type { ArticleRecord, Disclosure, RevisionRecord } from "../ports/index.js";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { keyValidAt, revisionSigningInput, verifySignature } from "../identity/keys.js";
@@ -116,7 +116,7 @@ export async function createArticle(
       contentHash,
       contentBytes: validated.contentBytes,
       readingTimeSeconds: validated.readingTimeSeconds,
-      metadata: { schema_version: SCHEMA_VERSION, ...(input.metadata ?? {}) },
+      metadata: versioned(input.metadata ?? {}),
       createdByPrincipalId: actor.principalId as OratorId,
       viaTokenId: ctx.tokenId,
       createdAt,
@@ -212,7 +212,7 @@ export async function createRevision(
       contentHash,
       contentBytes: validated.contentBytes,
       readingTimeSeconds: validated.readingTimeSeconds,
-      metadata: { schema_version: SCHEMA_VERSION, ...(input.metadata ?? {}) },
+      metadata: versioned(input.metadata ?? {}),
       createdByPrincipalId: actor.principalId as OratorId,
       viaTokenId: ctx.tokenId,
       createdAt,
@@ -306,7 +306,18 @@ export async function publishArticle(
    */
   const publishedAt = input.publishedAt ?? now;
   if (input.publishedAt !== undefined && input.publishedAt !== null) {
-    if (publishedAt > now) {
+    const claimed = Date.parse(publishedAt);
+    if (Number.isNaN(claimed)) {
+      return fail(
+        ErrorType.ValidationFailed,
+        "A publication date must be an RFC 3339 UTC timestamp",
+        "For example 2019-03-01T09:00:00.000Z (§44.2).",
+      );
+    }
+    // As dates, not as strings. The two orders agree only while both values are in the one
+    // shape §44.2 names, and a comparison that is correct because of what the validator
+    // happened to accept is a comparison waiting for the validator to be relaxed.
+    if (claimed > ctx.ports.clock.now().getTime()) {
       return fail(
         ErrorType.ValidationFailed,
         "A publication date cannot be in the future",

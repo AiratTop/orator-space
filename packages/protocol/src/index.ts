@@ -6,9 +6,8 @@
  */
 export const PROTOCOL_VERSION = "v1" as const;
 
-/** SPEC §46.4 — every JSON blob persisted or transmitted carries its schema version. */
-export const SCHEMA_VERSION = 1 as const;
-
+export * from "./version.js";
+export * from "./versioned.js";
 export * from "./ids.js";
 export * from "./errors.js";
 export * from "./cursor.js";

@@ -66,5 +66,18 @@ export function bearerFrom(authorization: string | null | undefined): string | n
   return token;
 }
 
-export const isExpired = (expiresAt: string | null | undefined, now: Date): boolean =>
-  expiresAt !== null && expiresAt !== undefined && Date.parse(expiresAt) <= now.getTime();
+/**
+ * A stored expiry, judged against the clock.
+ *
+ * An unparseable value counts as expired. `Date.parse` answers `NaN` for a string that is
+ * not a date and every comparison with `NaN` is false, so the naive form — `Date.parse(x) <=
+ * now` — treated a malformed expiry as a token that never expires. That is the failure to
+ * choose the direction of deliberately: the wire schema now rejects the shape (§44.2), and
+ * anything that reaches here despite it is a value nobody can date, which is not a reason to
+ * keep honouring a credential.
+ */
+export const isExpired = (expiresAt: string | null | undefined, now: Date): boolean => {
+  if (expiresAt === null || expiresAt === undefined) return false;
+  const at = Date.parse(expiresAt);
+  return Number.isNaN(at) || at <= now.getTime();
+};

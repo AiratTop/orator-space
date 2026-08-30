@@ -3951,6 +3951,16 @@ without regard for the version is forbidden.
 migrated: the old shape is indistinguishable from the new one, and correct reading code
 cannot be written.
 
+**MUST — the version is the platform's field, not the caller's.** It is stamped after the
+caller's object and never merged around it. A blob assembled as `{ schema_version, ...input }`
+lets whoever sends the input decide what version the row claims to be, which makes the one
+field a migration has to trust the one field an untrusted party sets.
+
+**MUST — a free-form field is bounded.** `metadata` and `generation_metadata` accept a shape
+nothing validates, so size and depth are the only limits there are: 8 KiB serialised and
+eight levels. They record provenance — a model, a prompt hash, an import source — and
+anything larger is an article, which has a field of its own.
+
 ## 47. MCP
 
 **MUST.** MCP is a first-class interface, not a wrapper over REST.

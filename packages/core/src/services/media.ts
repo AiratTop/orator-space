@@ -1,4 +1,4 @@
-import { ErrorType, SCHEMA_VERSION, type OratorId } from "@orator/protocol";
+import { ErrorType, SCHEMA_VERSION, versioned, type OratorId } from "@orator/protocol";
 import { canCreate, canModify, type DenialReason } from "../identity/authz.js";
 import { looksLikeXml, sniff, type MediaKind } from "../media/sniff.js";
 import type { MediaBody, MediaRecord, MediaSource, Variant } from "../ports/index.js";
@@ -81,7 +81,12 @@ export async function createMedia(
     checksumSha256: null,
     altText: input.altText ?? null,
     source: input.source ?? "upload",
-    generationMetadata: input.generationMetadata ?? null,
+    // §46.4 names `media.generation_metadata` as one of the three blobs that must carry a
+    // version, and it was the one that did not.
+    generationMetadata:
+      input.generationMetadata === undefined || input.generationMetadata === null
+        ? null
+        : versioned(input.generationMetadata),
     createdAt: now,
     finalizedAt: null,
   };

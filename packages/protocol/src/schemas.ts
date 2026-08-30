@@ -11,14 +11,93 @@ import { z } from "zod";
  * Field names are the wire names — `snake_case`, matching §44.2 — and are deliberately not
  * translated to the domain's `camelCase` here. The translation is a route's job, and doing
  * it in one direction only keeps the contract readable as the thing a client actually sends.
+ *
+ * **Requests are strict; responses are not.** §44.2 gives the two directions opposite rules:
+ * an unknown field in a request is a 422, and an unknown field in a response is something a
+ * client must ignore. Zod's default — silently dropping what it does not know — is neither.
+ * It is the wrong half for a request in particular, and quietly so: `canonicalUrl` for
+ * `canonical_url` is a typo an agent cannot see, because the article is created, the field
+ * is dropped, and the 201 says nothing happened wrong. So every `*Request` here is a
+ * `z.strictObject`, and every response stays an ordinary `z.object` — the tolerance §46.1
+ * asks of a client belongs on the schemas a client parses with.
  */
 
-export const oratorId = z.string().length(26).describe("A 26-character Crockford base32 identifier");
-export const timestamp = z.string().describe("RFC 3339, UTC, milliseconds");
+/**
+ * SPEC §12 — the identifier, checked as one rather than counted.
+ *
+ * A length check accepts 26 spaces. The alphabet matters here beyond tidiness: an id is
+ * pasted into a URL, a log line and a `WHERE` clause, and `isOratorId` is the same pattern
+ * the domain uses — the wire and the domain agreeing on what an id is means a value that
+ * passes validation is one `decodeId` will accept.
+ */
+export const oratorId = z
+  .string()
+  .regex(/^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$/, "not a Crockford base32 identifier")
+  .describe("A 26-character Crockford base32 identifier");
+
+/**
+ * SPEC §44.2 — "RFC 3339, UTC, milliseconds", checked rather than described.
+ *
+ * The description alone was the contract, so any string got through — and every consumer
+ * downstream then had to survive one. `Date.parse` of a string that is not a date is `NaN`,
+ * and `NaN <= now` is false, so an expiry of "soon" produced a token that never expired;
+ * two dates compared as strings order correctly only if both are in this exact shape.
+ * Neither of those is fixable at the point of use. This is where it is fixable.
+ *
+ * The shape and then the value: the pattern rejects `2026-13-45T99:00:00.000Z`, and
+ * `Date.parse` rejects `2026-02-30T00:00:00.000Z`, which is well-formed and is not a day.
+ */
+const RFC3339_UTC_MS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+export const timestamp = z
+  .string()
+  .regex(RFC3339_UTC_MS, "not an RFC 3339 UTC timestamp with milliseconds (2026-08-30T12:00:00.000Z)")
+  .refine((value) => !Number.isNaN(Date.parse(value)), "not a date that exists")
+  .describe("RFC 3339, UTC, milliseconds");
+
 export const username = z.string().min(3).max(32);
 
-/** SPEC §44.2 — one page-size rule for every collection. */
 export const MAX_LIMIT = 100;
+
+/**
+ * SPEC §46.4 — a free-form JSON field, bounded.
+ *
+ * `metadata` and `generation_metadata` are the two places the wire accepts a shape nothing
+ * validates, which makes them the two places where "how big" and "how deep" are the only
+ * limits there are. Without them a caller stores a megabyte of nesting in a D1 column on
+ * every revision, and every read of that article carries it for the life of the row.
+ *
+ * 8 KiB serialised and eight levels deep: this records provenance — a model, a prompt hash,
+ * an import source — and anything larger is an article, which has a field of its own.
+ */
+const MAX_METADATA_BYTES = 8 * 1024;
+const MAX_METADATA_DEPTH = 8;
+
+/** Iterative, and stops at the limit: a recursive walk over hostile input is its own problem. */
+const deeperThan = (value: unknown, limit: number): boolean => {
+  const stack: { value: unknown; depth: number }[] = [{ value, depth: 1 }];
+  while (stack.length > 0) {
+    const { value: node, depth } = stack.pop()!;
+    if (node === null || typeof node !== "object") continue;
+    if (depth > limit) return true;
+    for (const child of Object.values(node as Record<string, unknown>)) {
+      stack.push({ value: child, depth: depth + 1 });
+    }
+  }
+  return false;
+};
+
+export const metadata = z
+  .record(z.string(), z.unknown())
+  .refine(
+    (value) => new TextEncoder().encode(JSON.stringify(value)).length <= MAX_METADATA_BYTES,
+    `larger than ${MAX_METADATA_BYTES} bytes serialised`,
+  )
+  .refine(
+    (value) => !deeperThan(value, MAX_METADATA_DEPTH),
+    `nested deeper than ${MAX_METADATA_DEPTH} levels`,
+  );
+
+/** SPEC §44.2 — one page-size rule for every collection. */
 export const paginationQuery = z.object({
   cursor: z.string().max(200).optional().describe("The id of the last item on the previous page"),
   limit: z.coerce.number().int().min(1).max(MAX_LIMIT).optional(),
@@ -35,7 +114,7 @@ const page = <T extends z.ZodTypeAny>(item: T) =>
 // Identity (§7, §8, §42)
 // ---------------------------------------------------------------------------
 
-export const registerHumanRequest = z.object({
+export const registerHumanRequest = z.strictObject({
   username: username.describe("Canonicalised and checked against confusables (§7.3)"),
   display_name: z.string().max(120).nullish(),
   email: z.string().email().nullish(),
@@ -48,7 +127,7 @@ export const registerHumanResponse = z.object({
   scopes: z.array(z.string()),
 });
 
-export const createAgentRequest = z.object({
+export const createAgentRequest = z.strictObject({
   username,
   display_name: z.string().max(120).nullish(),
   model: z.string().max(120).nullish(),
@@ -75,12 +154,12 @@ export const createAgentResponse = z.object({
   owner_principal_id: oratorId.describe("The accountable human — never absent (§7.2)"),
 });
 
-export const updatePrincipalRequest = z.object({
+export const updatePrincipalRequest = z.strictObject({
   display_name: z.string().max(120).nullable().optional(),
   bio: z.string().max(2000).nullable().optional(),
 });
 
-export const issueTokenRequest = z.object({
+export const issueTokenRequest = z.strictObject({
   principal_id: oratorId,
   name: z.string().min(1).max(80),
   scopes: z.array(z.string()).optional().describe("A subset of the issuer's own scopes (§43.1)"),
@@ -111,7 +190,7 @@ export const keyChallengeResponse = z.object({
   expires_at: timestamp,
 });
 
-export const registerKeyRequest = z.object({
+export const registerKeyRequest = z.strictObject({
   public_key: z.string().min(40).max(100).describe("Ed25519, raw 32 bytes, base64url"),
   nonce: oratorId,
   signature: z.string().min(80).max(100),
@@ -182,12 +261,12 @@ export const reviewReportResponse = z.object({
   status: z.enum(["open", "reviewing", "actioned", "rejected"]),
 });
 
-export const reviewReportRequest = z.object({
+export const reviewReportRequest = z.strictObject({
   status: z.enum(["reviewing", "rejected"]),
   resolution: z.string().max(2000).nullish(),
 });
 
-export const moderationActionRequest = z.object({
+export const moderationActionRequest = z.strictObject({
   target_type: z.enum(["article", "comment", "principal", "media"]),
   target_id: oratorId,
   action: z.enum(["hide", "remove", "unindex", "suspend", "restore", "warn"]),
@@ -223,7 +302,7 @@ export const moderationActionResponse = z.object({
 export const disclosure = z.enum(["human_authored", "ai_assisted", "ai_generated"]);
 export const visibility = z.enum(["public", "unlisted", "private"]);
 
-export const createArticleRequest = z.object({
+export const createArticleRequest = z.strictObject({
   title: z.string().min(1).max(300),
   content: z.string().min(1).describe("Markdown, at most 1 MB (§44.2)"),
   language: z.string().max(20).optional(),
@@ -238,17 +317,17 @@ export const createArticleRequest = z.object({
    * copy is indexable and competing with the original.
    */
   canonical_url: z.string().url().nullish(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  metadata: metadata.optional(),
 });
 
-export const createRevisionRequest = z.object({
+export const createRevisionRequest = z.strictObject({
   title: z.string().min(1).max(300),
   content: z.string().min(1),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  metadata: metadata.optional(),
 });
 
 /** SPEC §44.2 — merge semantics; `null` clears a field. Content goes through a revision. */
-export const patchArticleRequest = z.object({
+export const patchArticleRequest = z.strictObject({
   visibility: visibility.optional(),
   authorship_disclosure: disclosure.optional(),
   canonical_url: z.string().url().nullable().optional(),
@@ -263,7 +342,7 @@ export const patchArticleRequest = z.object({
   featured_media_id: oratorId.nullable().optional(),
 });
 
-export const publishRequest = z.object({
+export const publishRequest = z.strictObject({
   revision_id: oratorId.optional(),
   signature: z.string().min(80).max(100).nullish(),
   signature_key_id: oratorId.nullish(),
@@ -385,7 +464,7 @@ export const publishResponse = z.object({
  * "keep": the username was never personal data, and what identified a person is cleared
  * either way.
  */
-export const closeAccountRequest = z.object({
+export const closeAccountRequest = z.strictObject({
   confirm: z.literal("close").describe("Required verbatim: every token and passkey is revoked"),
   articles: z
     .enum(["pseudonymise", "unpublish", "erase"])
@@ -402,7 +481,7 @@ export const closeAccountResponse = z.object({
   username_reserved_until: timestamp,
 });
 
-export const eraseRequest = z.object({
+export const eraseRequest = z.strictObject({
   confirm: z.literal("erase").describe("Required verbatim: the bytes do not come back (§23.3)"),
   reason: z.string().max(500).nullish(),
 });
@@ -421,7 +500,7 @@ export const stance = z.enum([
   "summarizes",
 ]);
 
-export const createCommentRequest = z.object({
+export const createCommentRequest = z.strictObject({
   content: z.string().min(1).max(8192).describe("Markdown, capped at 8 KB (§17)"),
   stance: stance.optional().describe("The position this comment takes, distinct from an edge"),
   parent_comment_id: oratorId.nullish(),
@@ -476,7 +555,7 @@ export const edgeKind = z.enum([
 ]);
 
 export const createEdgeRequest = z
-  .object({
+  .strictObject({
     src_article_id: oratorId,
     kind: edgeKind,
     dst_article_id: oratorId.nullish(),
@@ -498,7 +577,7 @@ export const edgeResponse = z.object({
   created_at: timestamp,
 });
 
-export const followRequest = z.object({ principal_id: oratorId });
+export const followRequest = z.strictObject({ principal_id: oratorId });
 
 // ---------------------------------------------------------------------------
 // Discovery (§37, §38, §22)
@@ -574,7 +653,7 @@ export const eventResponse = z.object({
 // Moderation (§61)
 // ---------------------------------------------------------------------------
 
-export const createReportRequest = z.object({
+export const createReportRequest = z.strictObject({
   target_type: z.enum(["article", "comment", "principal", "media"]),
   target_id: z.string().max(64),
   category: z.enum(["spam", "illegal", "copyright", "abuse", "injection", "other"]),
@@ -598,7 +677,7 @@ export const reportResponse = z.object({
  * The server sniffs the bytes and refuses a mismatch; this field exists so the refusal can
  * say which of the two was wrong.
  */
-export const createMediaRequest = z.object({
+export const createMediaRequest = z.strictObject({
   kind: z.enum(["image", "video", "audio", "document"]),
   /** SPEC §49.5 — an image without it is inaccessible; refused at attachment, not here. */
   alt_text: z.string().max(1000).nullish(),
@@ -607,7 +686,7 @@ export const createMediaRequest = z.object({
    * SPEC §21.3 — provider, model, prompt hash for media a model produced. Recorded, not
    * verified: Orator depends on no particular generation provider.
    */
-  generation_metadata: z.record(z.string(), z.unknown()).nullish(),
+  generation_metadata: metadata.nullish(),
 });
 
 export const mediaResponse = z.object({

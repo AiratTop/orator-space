@@ -6,7 +6,7 @@ import type {
   OutboxRepo,
   PendingOutboxRow,
 } from "@orator/core/ports";
-import type { OratorId } from "@orator/protocol";
+import { readVersioned, type OratorId } from "@orator/protocol";
 import { asWrite } from "./database.js";
 
 /** SPEC §62 — restricted, security-relevant, never the public activity feed. */
@@ -136,7 +136,7 @@ export function createOutboxRepo(db: D1Database): OutboxRepo {
           eventType: row.event_type,
           aggregateType: row.aggregate_type,
           aggregateId: row.aggregate_id,
-          payload: JSON.parse(row.payload_json) as PendingOutboxRow["payload"],
+          payload: (readVersioned(row.payload_json) ?? { schema_version: 0 }) as PendingOutboxRow["payload"],
           requestId: row.request_id,
           createdAt: row.created_at,
           attempts: row.attempts,

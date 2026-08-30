@@ -1,4 +1,5 @@
 import type { MediaRecord, MediaRepo, NewMedia, StoredMedia } from "@orator/core/ports";
+import { readVersioned } from "@orator/protocol";
 import { asWrite } from "./database.js";
 
 /** SPEC §21 over D1. The bytes are the media store's problem; this is the record. */
@@ -31,10 +32,7 @@ const toRecord = (row: Row): MediaRecord => ({
   checksumSha256: row.checksum_sha256,
   altText: row.alt_text,
   source: row.source as MediaRecord["source"],
-  generationMetadata:
-    row.generation_metadata === null
-      ? null
-      : (JSON.parse(row.generation_metadata) as Record<string, unknown>),
+  generationMetadata: readVersioned(row.generation_metadata),
   createdAt: row.created_at,
   finalizedAt: row.finalized_at,
   removedAt: row.removed_at,

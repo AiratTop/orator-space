@@ -18,7 +18,7 @@ import type {
   Stance,
   ThreadComment,
 } from "@orator/core/ports";
-import type { FeedCursor, OratorId } from "@orator/protocol";
+import { readVersioned, type FeedCursor, type OratorId } from "@orator/protocol";
 
 /**
  * The public read model over D1 (SPEC §49, §33.3).
@@ -490,7 +490,7 @@ function toView(row: ViewRow): ArticleView {
     contentHash: row.r_content_hash,
     contentBytes: row.r_content_bytes,
     readingTimeSeconds: row.r_reading_time,
-    metadata: JSON.parse(row.r_metadata) as Record<string, unknown>,
+    metadata: readVersioned(row.r_metadata) ?? { schema_version: 0 },
     createdByPrincipalId: row.r_created_by as OratorId,
     signature: row.r_signature,
     signatureKeyId: row.r_signature_key_id as OratorId | null,

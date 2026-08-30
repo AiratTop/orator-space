@@ -6,7 +6,7 @@ import type {
   NewRevision,
   RevisionRecord,
 } from "@orator/core/ports";
-import type { OratorId } from "@orator/protocol";
+import { readVersioned, type OratorId } from "@orator/protocol";
 import { asWrite } from "./database.js";
 
 interface ArticleRow {
@@ -116,7 +116,8 @@ const toRevision = (row: RevisionRow): RevisionRecord => ({
   contentHash: row.content_hash,
   contentBytes: row.content_bytes,
   readingTimeSeconds: row.reading_time_seconds,
-  metadata: JSON.parse(row.metadata_json) as Record<string, unknown>,
+  // §46.4 — read with regard for the version, never a bare `JSON.parse`.
+  metadata: readVersioned(row.metadata_json) ?? { schema_version: 0 },
   createdByPrincipalId: row.created_by_principal_id as OratorId,
   signature: row.signature,
   signatureKeyId: row.signature_key_id as OratorId | null,
