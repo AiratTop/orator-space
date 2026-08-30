@@ -339,11 +339,10 @@ export async function eraseArticle(
    * The window is small and the consequence is somebody else's article, so it is worth one
    * more query.
    *
-   * This narrows the window rather than closing it: nothing here holds a lock over a hash,
-   * and the last word on that is §32's collector, which finds an object no live revision
-   * references and removes it later. The order below is the other half — the pointers are
-   * already blanked, so a failure leaves a collectable orphan rather than a live article
-   * with no body.
+   * This narrows the window rather than closing it: nothing here holds a lock over a hash, and
+   * closing it takes a state machine rather than a check — ADR 0015 records the protocol and
+   * why it is not built. The order below is the other half: the pointers are already blanked,
+   * so a failure leaves a collectable orphan rather than a live article with no body.
    */
   const stillUnreferenced = new Set(
     (await ctx.ports.articles.contentReferences(article.id))
