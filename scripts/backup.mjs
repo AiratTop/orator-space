@@ -63,6 +63,21 @@ const DERIVED = new Set([
   "search_docs",
   "article_stats",
   "feed_entries",
+  /*
+   * SPEC §38.2, ADR 0012 — the ledger of what has been embedded, and from which text.
+   *
+   * The vectors are in Vectorize and cannot be in this dump; this table is only the claim
+   * that they exist. Restoring it into a deployment whose index is empty — which is the
+   * deployment this backup exists for, one rebuilt after losing the account — tells §35.2's
+   * backlog drain that every article is already embedded, and semantic search answers
+   * nothing for ever, with no error anywhere. Left out, the drain re-embeds the corpus over
+   * the following cron runs, which is exactly the case it was written for.
+   *
+   * `article_classification` is the same shape and is classified the other way, because
+   * what it produced — `article_topics` — is in this dump and the ledger has to agree
+   * with it.
+   */
+  "article_embeddings",
 ]);
 
 /** SQLite's and Cloudflare's own bookkeeping. Not ours to back up or restore. */
@@ -83,6 +98,18 @@ const SOURCE = new Set([
   "webauthn_credentials", "sessions", "articles", "revisions", "comments",
   "edges", "follows", "topics", "article_topics", "media", "events",
   "audit_log", "reports", "moderation_actions", "sitemap_shards",
+  // §22.3 — which articles the classifier has read, from what text and by which
+  // implementation. Not a source of truth about an article, but the only record of how the
+  // restored `article_topics` came to say what it says, and what stops a restore re-running
+  // a non-deterministic model over the whole corpus and churning every topic page.
+  "article_classification",
+  // §49.2, ADR 0011 — one person's private reading list. Nothing derives it and nothing can
+  // reconstruct it; losing it in a restore loses a reader's own notes about their reading.
+  "reading_list",
+  // §9.3 — the binding between a principal and a Telegram chat. Without it a restored
+  // deployment cannot reach anybody through the second channel, and cannot let anybody whose
+  // passkey is gone sign in through the bot. The nonce tables below are not this.
+  "telegram_accounts",
   // Cloudflare's record of which migrations have run. Restoring without it makes the new
   // database re-apply every migration over a schema that already has them.
   "d1_migrations",
@@ -108,6 +135,22 @@ const TRANSIENT = new Set([
    * longer exists, next to a backlog that has already been re-driven.
    */
   "dead_letters",
+  /*
+   * SPEC §9.3 — the two nonce tables, and the record of what the bot has already said.
+   *
+   * `telegram_links` and `telegram_logins` hold credentials that expire in minutes: one
+   * binds a chat to an account, the other opens a session. Either one carried into a
+   * restored database is a live credential from whenever the export ran, which is the single
+   * thing a nonce must not survive. A person links again, or asks the bot again.
+   *
+   * `telegram_deliveries` is idempotency rather than history: it says an event has already
+   * been sent to a chat. `listPendingNotifications` looks only at events newer than its
+   * cutoff, so every row in a week-old dump is about an event a restored deployment will
+   * never consider — and the events themselves are restored, which is where the history is.
+   */
+  "telegram_links",
+  "telegram_logins",
+  "telegram_deliveries",
 ]);
 
 function wrangler(argv, { capture = false } = {}) {

@@ -187,11 +187,14 @@ try {
 
   // --- the derived tables are absent, and that is the design ---------------
   const derived = query(
-    `SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table' AND name IN ('article_fts', 'search_docs', 'feed_entries')`,
+    `SELECT COUNT(*) AS n FROM sqlite_master WHERE type = 'table'
+       AND name IN ('article_fts', 'search_docs', 'feed_entries', 'article_embeddings')`,
   )[0];
   check(
-    "the search index was not restored, because it is rebuilt (§38.1)",
+    "neither search index was restored, because both are rebuilt (§38.1, §38.2)",
     derived.n === 0,
+    // `article_embeddings` for the sharper reason: the vectors live in Vectorize, so the
+    // table restores the claim without the thing it claims, and the drain stops looking.
     "a restore is followed by a reindex, not by trusting a stale index",
   );
 } finally {
