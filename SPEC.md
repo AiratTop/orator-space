@@ -2204,6 +2204,7 @@ Without this clarification the platform is not legally operable in the EU.
 | `ready` media nothing references | 24 hours after the last reference goes |
 | `telegram_links`, `telegram_logins` | 24 hours after the nonce expires |
 | `telegram_deliveries` | 24 hours |
+| `sessions`, revoked or expired | 30 days after they died |
 
 **MUST.** Every table with a bounded retention has a corresponding Cron handler. A table
 with no cleanup handler is a future incident.
@@ -2216,11 +2217,27 @@ ever considers events inside its window, and the events themselves are kept inde
 are where the history lives. Both are held a day rather than an hour, because the cost of
 holding them is one row and the cost of dropping one early is a person told twice.
 
+**MUST — a dead session is deleted, not kept as a record.** Nothing reads a revoked or
+expired session: the lookup checks the clock and the revocation, and the listing answers
+"where am I signed in". What the row holds is a user agent and a hashed address about a
+person, so keeping it past the point of use is holding personal data for no purpose. Thirty
+days, matching the request logs, on the principle that a session should not outlive the
+record of the requests it made. The revocation itself is not lost with the row — it is in the
+audit log (§62), which is where the question is asked.
+
 **MUST — the pass is bounded, not "everything older than".** The first run against a table
 nobody has ever cleaned is the dangerous one: an unbounded `DELETE` inside a cron invocation
 with a wall clock either times out or holds the database while it works. Repeated small
 passes drain the same backlog, and a pass that does not finish is retried on the next
 schedule.
+
+**MUST — an invocation repeats its passes, and says so when they run out.** A bounded pass
+that runs once a day makes the batch size a daily ceiling: a table taking more rows a day
+than one batch removes never catches up, and the report saying so is not a report anybody
+reads. So an invocation repeats while any table keeps filling its batch, up to a fixed number
+of passes, and exhausting them is logged at error level rather than counted. It means the
+backlog is growing faster than the schedule drains it, which is a decision about the schedule
+and not an outcome of a run.
 
 **MUST — the audit log is pseudonymised, never deleted.** It answers "was this account
 compromised, and what did the attacker do" long after anybody remembers the incident.

@@ -788,6 +788,17 @@ export default {
     if (event.cron === "17 4 * * *") {
       const report = await runRetention(ports);
       console.log(JSON.stringify({ level: "info", task: "retention", ...report }));
+      if (report.moreToDo) {
+        /*
+         * §23.4 — the pass ran out of passes, which is a different fact from "there was work".
+         *
+         * `runRetention` keeps going while a table keeps filling its batch, so reaching here
+         * means a backlog is growing faster than a daily invocation drains it. The answer is
+         * a shorter schedule or a larger batch, and both are decisions; what this must not do
+         * is report the number and look successful, which is what it did before.
+         */
+        console.error(JSON.stringify({ level: "error", task: "retention.behind", ...report }));
+      }
       return;
     }
 

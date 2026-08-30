@@ -189,5 +189,27 @@ export function createSessionRepo(db: D1Database): SessionRepo {
           .bind(at, principalId),
       );
     },
+
+    /**
+     * SPEC §23.4 — sessions that are dead by either measure.
+     *
+     * One cutoff bound twice rather than two parameters: "revoked before then" and "expired
+     * before then" are the same question asked of two columns, and a row satisfying either
+     * is a row `findByHash` would refuse and `listFor` would hide.
+     */
+    async deleteDeadBefore(cutoff, limit) {
+      const { meta } = await db
+        .prepare(
+          `DELETE FROM sessions
+            WHERE id IN (
+              SELECT id FROM sessions
+               WHERE (revoked_at IS NOT NULL AND revoked_at < ?) OR expires_at < ?
+               LIMIT ?
+            )`,
+        )
+        .bind(cutoff, cutoff, limit)
+        .run();
+      return meta.changes ?? 0;
+    },
   };
 }

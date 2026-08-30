@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMemoryPorts } from "../testing/memory-repos.js";
-import { RETENTION_HOURS, runRetention } from "./retention.js";
+import { RETENTION_BATCH, RETENTION_HOURS, runRetention } from "./retention.js";
 
 /**
  * SPEC §23.4 — every table with a bounded retention has a handler that enforces it.
@@ -369,6 +369,54 @@ describe("Telegram nonces (§9.3, §23.4, a day past expiry)", () => {
   });
 });
 
+/**
+ * SPEC §23.4, §62 — sessions nobody can use, and nothing reads.
+ *
+ * The table had no bound at all, and what it holds is a user agent and a hashed address: the
+ * material §23.4 makes the audit log give up after a year, kept for ever one table over. The
+ * assertions are about the two ways this goes wrong — collecting a session somebody is still
+ * signed in with, and keeping one they are not.
+ */
+describe("dead sessions (§23.4, thirty days)", () => {
+  const session = (id: string, over: { expiresAt: string; revokedAt?: string }) => ({
+    id: id as never,
+    principalId: "P1" as never,
+    tokenHash: `hash-${id}`,
+    userAgent: "Firefox",
+    ipHash: "abc123",
+    createdAt: hoursAgo(24 * 60),
+    lastSeenAt: hoursAgo(24 * 40),
+    revokedAt: null,
+    ...over,
+  });
+
+  it("collects one revoked and one expired past the window", async () => {
+    await ports.db.commit([
+      ports.sessions.insert(
+        session("S-REVOKED", { expiresAt: hoursAgo(-100), revokedAt: hoursAgo(RETENTION_HOURS.deadSessions + 1) }),
+      ),
+      ports.sessions.insert(session("S-EXPIRED", { expiresAt: hoursAgo(RETENTION_HOURS.deadSessions + 1) })),
+    ]);
+
+    expect((await runRetention(ports)).sessionsDeleted).toBe(2);
+    expect(await ports.sessions.findByHash("hash-S-REVOKED")).toBeNull();
+    expect(await ports.sessions.findByHash("hash-S-EXPIRED")).toBeNull();
+  });
+
+  it("keeps a live one, and one that died recently", async () => {
+    await ports.db.commit([
+      // Signed in right now: the row that must survive every version of this sweep.
+      ports.sessions.insert(session("S-LIVE", { expiresAt: hoursAgo(-24 * 20) })),
+      // Revoked yesterday. Still inside the window the request logs it made are kept for.
+      ports.sessions.insert(session("S-JUST-REVOKED", { expiresAt: hoursAgo(-100), revokedAt: hoursAgo(24) })),
+    ]);
+
+    expect((await runRetention(ports)).sessionsDeleted).toBe(0);
+    expect(await ports.sessions.findByHash("hash-S-LIVE")).not.toBeNull();
+    expect(await ports.sessions.findByHash("hash-S-JUST-REVOKED")).not.toBeNull();
+  });
+});
+
 describe("bounded passes", () => {
   it("does nothing and says so on an empty database", async () => {
     expect(await runRetention(ports)).toEqual({
@@ -382,7 +430,56 @@ describe("bounded passes", () => {
       telegramLinksDeleted: 0,
       telegramLoginsDeleted: 0,
       telegramDeliveriesDeleted: 0,
+      sessionsDeleted: 0,
+      passes: 1,
       moreToDo: false,
     });
+  });
+
+  /**
+   * The batch is a per-pass ceiling, not a per-day one.
+   *
+   * `moreToDo` was returned, logged and read by nobody, which quietly capped retention at one
+   * batch per table per day — the cron runs once. These two prove the loop: it comes back for
+   * what a full batch left behind, and when the passes run out it says so instead of looking
+   * like a clean run.
+   */
+  /**
+   * The batch is a per-pass ceiling, not a per-day one.
+   *
+   * `moreToDo` was returned, logged and read by nobody, which quietly capped retention at one
+   * batch per table per day — the cron runs once. These two drive the real constant rather
+   * than a shrunken double, because what is being tested is the loop around it.
+   */
+  const staleOutbox = async (count: number) => {
+    const ids = Array.from({ length: count }, (_, n) => `OLD-${n}`);
+    await ports.db.commit(
+      ids.map((id) => ports.outbox.enqueue(outboxRow(id, hoursAgo(RETENTION_HOURS.outbox + 1)))),
+    );
+    await ports.db.commit([ports.outbox.markSent(ids, NOW.toISOString())]);
+  };
+
+  it("comes back for what a full batch left behind", async () => {
+    await staleOutbox(RETENTION_BATCH + 3);
+
+    const report = await runRetention(ports);
+
+    expect(report.outboxDeleted).toBe(RETENTION_BATCH + 3);
+    // Two passes: the first fills its batch and says so, the second finds three and stops.
+    expect(report.passes).toBe(2);
+    expect(report.moreToDo).toBe(false);
+  });
+
+  it("stops after the pass ceiling and admits it is behind", async () => {
+    await staleOutbox(RETENTION_BATCH * 2 + 1);
+
+    const report = await runRetention(ports, 2);
+
+    // `moreToDo` meaning what it now means: the passes ran out with a table still full. The
+    // cron logs that at error level, because it is a fact about the schedule rather than a
+    // count of work done.
+    expect(report.outboxDeleted).toBe(RETENTION_BATCH * 2);
+    expect(report.passes).toBe(2);
+    expect(report.moreToDo).toBe(true);
   });
 });

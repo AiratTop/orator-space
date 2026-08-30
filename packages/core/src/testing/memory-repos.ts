@@ -1942,6 +1942,16 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         }
         return n;
       }),
+    async deleteDeadBefore(cutoff, limit) {
+      const dead = state.sessions.filter(
+        (session) =>
+          (session.revokedAt !== null && session.revokedAt < cutoff) || session.expiresAt < cutoff,
+      );
+      for (const session of dead.slice(0, limit)) {
+        state.sessions.splice(state.sessions.indexOf(session), 1);
+      }
+      return Math.min(dead.length, limit);
+    },
   };
 
   /** The same filter the listing and the count share in SQL, for the same reason. */

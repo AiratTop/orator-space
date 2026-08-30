@@ -125,6 +125,18 @@ export function createMemoryAuthPorts(options: { now?: Date } = {}): MemoryAuth 
         }
         return changed;
       }),
+    async deleteDeadBefore(cutoff, limit) {
+      let deleted = 0;
+      for (const [id, session] of sessionStore) {
+        if (deleted >= limit) break;
+        const dead =
+          (session.revokedAt !== null && session.revokedAt < cutoff) || session.expiresAt < cutoff;
+        if (!dead) continue;
+        sessionStore.delete(id);
+        deleted += 1;
+      }
+      return deleted;
+    },
   };
 
   let registration: VerifiedRegistration | null = null;

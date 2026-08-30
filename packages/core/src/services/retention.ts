@@ -72,6 +72,17 @@ export const RETENTION_HOURS = {
    * notification.
    */
   telegramDeliveries: 24,
+  /**
+   * SPEC §23.4, §62 — a session that is revoked or expired, counted from when it died.
+   *
+   * Thirty days, which is the retention of the request logs (§23.4) and deliberately the same
+   * number: a dead session should not outlive the record of the requests it made. Nothing
+   * reads these rows — `findByHash` checks the clock and the revocation, `listFor` answers
+   * "where am I signed in" — so what is kept is a `user_agent` and an `ip_hash` about a
+   * person, in a table that had no bound at all. The revocation itself survives as
+   * `session.revoked` in the audit log, which is where §62 asks that question.
+   */
+  deadSessions: 30 * 24,
 } as const;
 
 /**
@@ -83,7 +94,32 @@ export const RETENTION_HOURS = {
  * drain the same backlog, and a pass that does not finish is simply retried on the next
  * schedule.
  */
-const BATCH = 500;
+export const RETENTION_BATCH = 500;
+
+/**
+ * The ceiling for the passes that read a list before acting on it.
+ *
+ * Media and canary articles are not one statement: each row is an object in R2 (or several,
+ * §21.2) deleted before the row is. A hundred of those in a pass is a different unit of work
+ * from five hundred `DELETE`s, and giving it its own number says so rather than hiding it in
+ * a literal.
+ */
+const OBJECT_BATCH = 100;
+
+/**
+ * How many times one invocation will go round.
+ *
+ * `moreToDo` used to be returned, logged and read by nobody, which made every ceiling above a
+ * hard limit of `RETENTION_BATCH` rows per table per *day* — the cron runs at 04:17 and nothing else
+ * calls this. That is fine until a table takes more than five hundred rows a day, at which
+ * point retention silently stops keeping up and the report says so in a field no one is
+ * watching. Ten passes is 5,000 rows a table, drains any backlog this deployment can plausibly
+ * build, and still bounds the invocation.
+ *
+ * A pass that fills its batch means there is more; the loop stops on the first pass that does
+ * not, so a quiet night costs exactly one pass.
+ */
+const MAX_PASSES = 10;
 
 export interface RetentionReport {
   canaryArticlesDeleted: number;
@@ -98,22 +134,80 @@ export interface RetentionReport {
   telegramLinksDeleted: number;
   telegramLoginsDeleted: number;
   telegramDeliveriesDeleted: number;
-  /** Rows left over because a batch filled up. Non-zero means "run again sooner". */
+  /** §23.4, §62 — revoked or expired sessions, with the person's agent and address in them. */
+  sessionsDeleted: number;
+  /** How many passes it took. `MAX_PASSES` with `moreToDo` means it ran out of passes. */
+  passes: number;
+  /**
+   * Work left after the last pass.
+   *
+   * True here is not "there was a lot to do" — the loop keeps going while there is. It means
+   * `MAX_PASSES` was spent and a table was still full, which is a backlog growing faster than
+   * a daily invocation drains it and wants looking at rather than logging.
+   */
   moreToDo: boolean;
 }
 
-export async function runRetention(ports: Ports): Promise<RetentionReport> {
+/**
+ * One invocation: passes until nothing fills a batch, or until the passes run out.
+ *
+ * `maxPasses` is a parameter so a test can prove the ceiling holds without writing five
+ * thousand rows; nothing in the application passes it.
+ */
+export async function runRetention(ports: Ports, maxPasses = MAX_PASSES): Promise<RetentionReport> {
+  const total = empty();
+  for (let pass = 1; pass <= maxPasses; pass += 1) {
+    const one = await onePass(ports);
+    add(total, one);
+    total.passes = pass;
+    if (!one.moreToDo) return total;
+  }
+  total.moreToDo = true;
+  return total;
+}
+
+const empty = (): RetentionReport => ({
+  canaryArticlesDeleted: 0,
+  deadLettersDeleted: 0,
+  outboxDeleted: 0,
+  idempotencyDeleted: 0,
+  mediaDeleted: 0,
+  orphanedMediaDeleted: 0,
+  auditPseudonymised: 0,
+  telegramLinksDeleted: 0,
+  telegramLoginsDeleted: 0,
+  telegramDeliveriesDeleted: 0,
+  sessionsDeleted: 0,
+  passes: 0,
+  moreToDo: false,
+});
+
+function add(total: RetentionReport, pass: RetentionReport): void {
+  total.canaryArticlesDeleted += pass.canaryArticlesDeleted;
+  total.deadLettersDeleted += pass.deadLettersDeleted;
+  total.outboxDeleted += pass.outboxDeleted;
+  total.idempotencyDeleted += pass.idempotencyDeleted;
+  total.mediaDeleted += pass.mediaDeleted;
+  total.orphanedMediaDeleted += pass.orphanedMediaDeleted;
+  total.auditPseudonymised += pass.auditPseudonymised;
+  total.telegramLinksDeleted += pass.telegramLinksDeleted;
+  total.telegramLoginsDeleted += pass.telegramLoginsDeleted;
+  total.telegramDeliveriesDeleted += pass.telegramDeliveriesDeleted;
+  total.sessionsDeleted += pass.sessionsDeleted;
+}
+
+async function onePass(ports: Ports): Promise<RetentionReport> {
   const now = ports.clock.now().getTime();
   const before = (hours: number) => new Date(now - hours * 3_600_000).toISOString();
 
-  const outboxDeleted = await ports.outbox.deleteSentBefore(before(RETENTION_HOURS.outbox), BATCH);
+  const outboxDeleted = await ports.outbox.deleteSentBefore(before(RETENTION_HOURS.outbox), RETENTION_BATCH);
   const idempotencyDeleted = await ports.idempotency.deleteBefore(
     before(RETENTION_HOURS.idempotency),
-    BATCH,
+    RETENTION_BATCH,
   );
   const auditPseudonymised = await ports.audit.pseudonymiseBefore(
     before(RETENTION_HOURS.auditIdentity),
-    BATCH,
+    RETENTION_BATCH,
   );
   const mediaDeleted = await collectStaleMedia(ports, before(RETENTION_HOURS.pendingMedia));
   const orphanedMediaDeleted = await collectOrphanedMedia(
@@ -123,14 +217,18 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
   const canaryArticlesDeleted = await collectCanaryArticles(ports, before(RETENTION_HOURS.canaryArticles));
   const deadLettersDeleted = await ports.slo.deleteDeadLettersBefore(
     before(RETENTION_HOURS.deadLetters),
-    BATCH,
+    RETENTION_BATCH,
   );
   const nonceCutoff = before(RETENTION_HOURS.telegramNonces);
-  const telegramLinksDeleted = await ports.telegram.deleteLinksBefore(nonceCutoff, BATCH);
-  const telegramLoginsDeleted = await ports.telegram.deleteLoginsBefore(nonceCutoff, BATCH);
+  const telegramLinksDeleted = await ports.telegram.deleteLinksBefore(nonceCutoff, RETENTION_BATCH);
+  const telegramLoginsDeleted = await ports.telegram.deleteLoginsBefore(nonceCutoff, RETENTION_BATCH);
   const telegramDeliveriesDeleted = await ports.telegram.deleteDeliveriesBefore(
     before(RETENTION_HOURS.telegramDeliveries),
-    BATCH,
+    RETENTION_BATCH,
+  );
+  const sessionsDeleted = await ports.sessions.deleteDeadBefore(
+    before(RETENTION_HOURS.deadSessions),
+    RETENTION_BATCH,
   );
 
   return {
@@ -144,14 +242,26 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
     telegramLinksDeleted,
     telegramLoginsDeleted,
     telegramDeliveriesDeleted,
+    sessionsDeleted,
+    passes: 1,
+    /*
+     * A pass that filled a batch had more to give, whichever table it was.
+     *
+     * The two that read a list first are in here as well, against their own smaller ceiling —
+     * leaving them out is how a hundred orphaned avatars a day became the quiet maximum.
+     */
     moreToDo:
-      outboxDeleted === BATCH ||
-      idempotencyDeleted === BATCH ||
-      auditPseudonymised === BATCH ||
-      deadLettersDeleted === BATCH ||
-      telegramLinksDeleted === BATCH ||
-      telegramLoginsDeleted === BATCH ||
-      telegramDeliveriesDeleted === BATCH,
+      outboxDeleted === RETENTION_BATCH ||
+      idempotencyDeleted === RETENTION_BATCH ||
+      auditPseudonymised === RETENTION_BATCH ||
+      deadLettersDeleted === RETENTION_BATCH ||
+      telegramLinksDeleted === RETENTION_BATCH ||
+      telegramLoginsDeleted === RETENTION_BATCH ||
+      telegramDeliveriesDeleted === RETENTION_BATCH ||
+      sessionsDeleted === RETENTION_BATCH ||
+      mediaDeleted === OBJECT_BATCH ||
+      orphanedMediaDeleted === OBJECT_BATCH ||
+      canaryArticlesDeleted === OBJECT_BATCH,
   };
 }
 
@@ -190,7 +300,7 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
  * derived objects per record behind — which is what "collected" would have quietly meant.
  */
 async function collectOrphanedMedia(ports: Ports, cutoff: string): Promise<number> {
-  const orphaned = await ports.media.listCollectable(cutoff, 100);
+  const orphaned = await ports.media.listCollectable(cutoff, OBJECT_BATCH);
   if (orphaned.length === 0) return 0;
 
   for (const id of orphaned) {
@@ -208,7 +318,7 @@ async function collectOrphanedMedia(ports: Ports, cutoff: string): Promise<numbe
 }
 
 async function collectStaleMedia(ports: Ports, cutoff: string): Promise<number> {
-  const stale = await ports.media.listStalePending(cutoff, 100);
+  const stale = await ports.media.listStalePending(cutoff, OBJECT_BATCH);
   if (stale.length === 0) return 0;
 
   for (const id of stale) {
@@ -235,7 +345,7 @@ async function collectStaleMedia(ports: Ports, cutoff: string): Promise<number> 
  * it existed for seconds — so the tombstone protects nothing and the row is deleted outright.
  */
 async function collectCanaryArticles(ports: Ports, cutoff: string): Promise<number> {
-  const stale = await ports.articles.listSystemArticlesBefore(cutoff, 100);
+  const stale = await ports.articles.listSystemArticlesBefore(cutoff, OBJECT_BATCH);
   if (stale.length === 0) return 0;
   await ports.db.commit(ports.articles.deleteArticles(stale));
   return stale.length;

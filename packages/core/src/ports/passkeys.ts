@@ -152,4 +152,21 @@ export interface SessionRepo {
   touch(id: string, at: string): PendingWrite;
   revoke(id: string, at: string): PendingWrite;
   revokeAllFor(principalId: string, at: string): PendingWrite;
+
+  /**
+   * SPEC §23.4, §62 — a session that can no longer be used, long after it stopped being one.
+   *
+   * Revoked and expired rows are read by nothing: `findByHash` is checked against the clock
+   * and the revocation, and `listFor` answers "where am I signed in" and excludes them. What
+   * they hold is a `user_agent` and an `ip_hash` — the material §23.4 makes the audit log
+   * give up after twelve months — kept for ever by a table nobody thought to bound.
+   *
+   * The revocation itself is not lost with the row: `session.revoked` is written to the audit
+   * log where it happens, which is where "was this account compromised, and what was done
+   * about it" is answered.
+   *
+   * Dead by either measure — revoked before the cutoff, or expired before it — because a
+   * session revoked yesterday and one that expired last year are equally unusable.
+   */
+  deleteDeadBefore(cutoff: string, limit: number): Promise<number>;
 }
