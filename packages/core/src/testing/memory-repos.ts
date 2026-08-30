@@ -67,6 +67,7 @@ import {
 } from "../ports/index.js";
 import { SNIFF_BYTES } from "../media/sniff.js";
 import type { Ports } from "../services/context.js";
+import type { ContentStore } from "../ports/index.js";
 import { createMemoryContentStore } from "./memory-content-store.js";
 
 /**
@@ -130,6 +131,14 @@ export interface MemoryState {
 /** Controls the doubles expose to tests, beyond the ports themselves. */
 export interface MemoryControls {
   state: MemoryState;
+  /**
+   * The content store, with its test-only handles.
+   *
+   * `Ports.content` is the port and stops at what the domain may use. §32.2's grace period
+   * reads an object's own upload time, which nothing in the domain sets — so a test that
+   * needs a body older than an hour reaches for it here rather than through the port.
+   */
+  content: ContentStore & { size(): number; setUploadedAt(contentHash: string, at: string): void };
   /** Moves the clock, for expiry, backoff and validity windows. */
   setNow(date: Date): void;
   /** Batches handed to the event bus, in order. */
@@ -570,13 +579,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return n;
       });
     },
-    async listUnreferencedContent(limit) {
-      const live = new Map<string, number>();
+    async liveContentHashes(contentHashes) {
+      const wanted = new Set(contentHashes);
+      const live = new Set<string>();
       for (const revision of state.revisions.values()) {
-        const current = live.get(revision.contentHash) ?? 0;
-        live.set(revision.contentHash, current + (revision.contentRef === "" ? 0 : 1));
+        if (revision.contentRef !== "" && wanted.has(revision.contentHash)) live.add(revision.contentHash);
       }
-      return [...live].filter(([, n]) => n === 0).map(([hash]) => hash).slice(0, limit);
+      return live;
     },
 
     async contentReferences(articleId) {

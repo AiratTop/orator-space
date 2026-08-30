@@ -2744,6 +2744,20 @@ references — are deleted by a Cron handler (§23.4). A content-addressed objec
 only after confirming no references remain: deduplication means several revisions may point
 at one object.
 
+**MUST — the collector enumerates the store, not the database.** Asking `revisions` which
+hashes look unreferenced is the wrong direction twice over. It cannot name an object whose
+row never committed — there is no `content_hash` to group by — and §16.2 writes the object
+first precisely so that a failure leaves one; for text carrying personal data that is bytes
+stored with no entity through which erasure could be demanded. And it returns the same rows
+on every run, so a collector that deletes them observes no progress, re-reads the same page,
+and never reaches a backlog larger than one batch. Listing the store fixes both: progress is
+the absence of what was collected.
+
+**MUST — a grace period, because the write order guarantees a window.** An object younger
+than the period is left alone: §16.2 puts it in the store before its revision row exists, so
+a recent object with no reference is as likely to be a commit in flight as a commit that
+failed. One hour is far beyond any request.
+
 ## 33. Caching strategy
 
 Version 1.0 held two inconsistent approaches: §21 prescribed lazy filling with no warming,

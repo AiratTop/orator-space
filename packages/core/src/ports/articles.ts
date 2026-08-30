@@ -296,17 +296,16 @@ export interface ArticleRepo {
   contentReferences(articleId: string): Promise<{ contentHash: string; mine: number; elsewhere: number }[]>;
 
   /**
-   * SPEC §32.2 — bodies no live revision references any more.
+   * SPEC §32.2 — which of these bodies a live revision still points at.
    *
-   * The collector's input. Erasure leaves these behind by design: §23.3 step 3 refuses to
-   * delete an object another revision still points at, so the object outlives the first
-   * erasure and becomes collectable only when the last live reference goes. Without this
-   * nothing ever looked again, and "collected later" was a sentence in a comment.
+   * The collector's question, asked about objects it found in the store rather than about
+   * rows it found in the database. That direction is the whole design: the store is the
+   * thing being collected, so it is the thing that must be enumerated, and an object with
+   * no row at all — written before a commit that failed — is invisible from the other side.
    *
-   * A hash is returned only when *every* revision carrying it has been blanked — which is
-   * the same reference rule as §23.3, asked about the store rather than about one article.
+   * Chunked by the caller: D1 permits 100 bound parameters per query.
    */
-  listUnreferencedContent(limit: number): Promise<string[]>;
+  liveContentHashes(contentHashes: readonly string[]): Promise<Set<string>>;
 
   /**
    * SPEC §23.3 — blanks every revision of one article, in one statement.

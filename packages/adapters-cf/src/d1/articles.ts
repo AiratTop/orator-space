@@ -471,19 +471,17 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
       );
     },
 
-    async listUnreferencedContent(limit) {
-      // Every revision carrying the hash has been blanked, so nothing points at the object.
+    async liveContentHashes(contentHashes) {
+      if (contentHashes.length === 0) return new Set();
+      const placeholders = contentHashes.map(() => "?").join(", ");
       const { results } = await db
         .prepare(
-          `SELECT content_hash
-             FROM revisions
-            GROUP BY content_hash
-           HAVING SUM(CASE WHEN content_ref <> '' THEN 1 ELSE 0 END) = 0
-            LIMIT ?`,
+          `SELECT DISTINCT content_hash FROM revisions
+            WHERE content_ref <> '' AND content_hash IN (${placeholders})`,
         )
-        .bind(limit)
+        .bind(...contentHashes)
         .all<{ content_hash: string }>();
-      return results.map((row) => row.content_hash);
+      return new Set(results.map((row) => row.content_hash));
     },
 
     async contentReferences(articleId) {

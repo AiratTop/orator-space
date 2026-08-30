@@ -52,6 +52,27 @@ export function createR2ContentStore(bucket: R2Bucket): ContentStore {
       await bucket.delete(PREFIX + contentHash);
     },
 
+    /** R2 takes up to a thousand keys per call; the callers here batch well below that. */
+    async deleteMany(contentHashes: readonly string[]): Promise<void> {
+      if (contentHashes.length === 0) return;
+      await bucket.delete(contentHashes.map((hash) => PREFIX + hash));
+    },
+
+    async list(options: { cursor?: string | null; limit: number }) {
+      const listing = await bucket.list({
+        prefix: PREFIX,
+        limit: options.limit,
+        ...(options.cursor === null || options.cursor === undefined ? {} : { cursor: options.cursor }),
+      });
+      return {
+        objects: listing.objects.map((object) => ({
+          contentHash: object.key.slice(PREFIX.length),
+          uploadedAt: object.uploaded.toISOString(),
+        })),
+        cursor: listing.truncated ? listing.cursor : null,
+      };
+    },
+
     refFor: contentRef,
   };
 }

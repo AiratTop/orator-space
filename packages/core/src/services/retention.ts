@@ -30,6 +30,16 @@ export const RETENTION_HOURS = {
    * uploading it again — not the same record, but the same day.
    */
   orphanedMedia: 24,
+  /**
+   * §16.2, §32.2 — a body whose revision row may still be on its way.
+   *
+   * Shorter than the media grace period and for a different reason: nothing caches a body by
+   * its hash, so this is not about readers holding a stale reference. It is about the write
+   * order — the object goes to the store before the row goes to the database, so an object
+   * with no row is either a failed commit or a commit in progress, and one hour tells those
+   * apart with room to spare.
+   */
+  orphanedContent: 1,
   /** §23.4 — not deleted. Pseudonymised: the action stays, the person does not. */
   auditIdentity: 365 * 24,
   /**
@@ -105,6 +115,9 @@ export const RETENTION_BATCH = 500;
  * a literal.
  */
 const OBJECT_BATCH = 100;
+
+/** D1 permits 100 bound parameters per query (§31.1); 90 leaves room for the rest of one. */
+const REFERENCE_CHUNK = 90;
 
 /**
  * How many times one invocation will go round.
@@ -218,7 +231,10 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
     ports,
     before(RETENTION_HOURS.orphanedMedia),
   );
-  const orphanedContentDeleted = await collectOrphanedContent(ports);
+  const orphanedContentDeleted = await collectOrphanedContent(
+    ports,
+    before(RETENTION_HOURS.orphanedContent),
+  );
   const canaryArticlesDeleted = await collectCanaryArticles(ports, before(RETENTION_HOURS.canaryArticles));
   const deadLettersDeleted = await ports.slo.deleteDeadLettersBefore(
     before(RETENTION_HOURS.deadLetters),
@@ -331,24 +347,43 @@ async function onePass(ports: Ports): Promise<RetentionReport> {
  * object is written first precisely so that a failure leaves an unreferenced object rather
  * than a revision with no body.
  */
-async function collectOrphanedContent(ports: Ports): Promise<number> {
-  const orphaned = await ports.articles.listUnreferencedContent(OBJECT_BATCH);
+async function collectOrphanedContent(ports: Ports, cutoff: string): Promise<number> {
+  const { objects } = await ports.content.list({ limit: OBJECT_BATCH });
+  if (objects.length === 0) return 0;
+
+  /*
+   * Old enough that a revision row pointing at it would have committed by now.
+   *
+   * §16.2 writes the object before the row, deliberately: a failure that way round leaves an
+   * unreferenced object rather than a revision with no body. It also means a body seconds
+   * old may be one whose row is still in flight, and collecting it would turn this handler
+   * into the cause of the very thing it cleans up. An hour is far beyond any request.
+   */
+  const candidates = objects.filter((object) => object.uploadedAt < cutoff);
+  if (candidates.length === 0) return 0;
+
+  // D1 permits 100 bound parameters per query (§31.1), and the whole point of asking in
+  // bulk is to not ask once per object.
+  const live = new Set<string>();
+  for (let at = 0; at < candidates.length; at += REFERENCE_CHUNK) {
+    const chunk = candidates.slice(at, at + REFERENCE_CHUNK).map((object) => object.contentHash);
+    for (const hash of await ports.articles.liveContentHashes(chunk)) live.add(hash);
+  }
+
+  const orphaned = candidates.filter((object) => !live.has(object.contentHash));
   if (orphaned.length === 0) return 0;
 
-  let deleted = 0;
-  for (const hash of orphaned) {
-    try {
-      await ports.content.delete(hash);
-      deleted += 1;
-    } catch (error) {
-      // The row keeps its hash either way (§23.3 keeps it as the trace), so a failure here
-      // is retried on the next pass rather than lost.
-      console.error(
-        JSON.stringify({ level: "warn", event: "retention.content.unreferenced", error: String(error) }),
-      );
-    }
+  try {
+    await ports.content.deleteMany(orphaned.map((object) => object.contentHash));
+  } catch (error) {
+    // Nothing was removed from the database, so the next pass finds the same objects and
+    // tries again. A failure here costs a pass, not an invariant.
+    console.error(
+      JSON.stringify({ level: "warn", event: "retention.content.unreferenced", error: String(error) }),
+    );
+    return 0;
   }
-  return deleted;
+  return orphaned.length;
 }
 
 async function collectOrphanedMedia(ports: Ports, cutoff: string): Promise<number> {

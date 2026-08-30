@@ -24,6 +24,39 @@ export interface ContentStore {
   get(contentHash: string): Promise<string | null>;
   /** SPEC §23.3 — refcount is checked by the caller before deletion. */
   delete(contentHash: string): Promise<void>;
+
+  /**
+   * SPEC §23.3, §32.2 — the same rule, in one round trip.
+   *
+   * Erasing an article with two hundred and fifty distinct bodies made two hundred and fifty
+   * sequential calls to the store, inside a request somebody is waiting on. The refcount
+   * check is still per hash and still the caller's; this is only the deleting.
+   */
+  deleteMany(contentHashes: readonly string[]): Promise<void>;
+
+  /**
+   * SPEC §32.2 — what is actually in the store, a page at a time.
+   *
+   * The collector reads this rather than asking the database which hashes look unreferenced,
+   * and the difference is two whole classes of bug. A query over `revisions` cannot see an
+   * object whose row never committed — there is no `content_hash` to group by — so a body
+   * written before a failed commit was invisible to collection forever, which for text
+   * containing personal data means it is stored with no entity through which anyone could
+   * demand its erasure. And a query answers the same rows every time: a collector that
+   * deletes them makes no progress it can observe, re-reads the same first hundred on the
+   * next pass, and never reaches the rest.
+   *
+   * Listing the store fixes both, because deleting an object removes it from the listing.
+   * Progress is the absence of what was collected.
+   *
+   * `uploadedAt` is the object's own timestamp, which the grace period needs: §16.2 writes
+   * the object before the revision row, so a body seconds old may be one whose row is still
+   * on its way.
+   */
+  list(options: { cursor?: string | null; limit: number }): Promise<{
+    objects: { contentHash: string; uploadedAt: string }[];
+    cursor: string | null;
+  }>;
   /**
    * The opaque `content_ref` stored on a revision. Only the adapter knows its shape, so
    * moving content elsewhere later changes one implementation rather than the domain.

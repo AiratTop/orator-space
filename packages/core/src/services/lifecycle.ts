@@ -351,7 +351,7 @@ export async function eraseArticle(
       .map((body) => body.contentHash),
   );
 
-  let contentDeleted = false;
+  const removable: string[] = [];
   let raced = 0;
   for (const hash of deletable) {
     if (!stillUnreferenced.has(hash)) {
@@ -368,9 +368,13 @@ export async function eraseArticle(
       raced += 1;
       continue;
     }
-    await ctx.ports.content.delete(hash);
-    contentDeleted = true;
+    removable.push(hash);
   }
+
+  // One call rather than one per body: an article with 250 distinct bodies made 250
+  // sequential round trips to the store, inside a request somebody is waiting on.
+  await ctx.ports.content.deleteMany(removable);
+  const contentDeleted = removable.length > 0;
 
   return ok({ id: article.id, revisions: erasedCount, contentDeleted, escalated, raced });
 }

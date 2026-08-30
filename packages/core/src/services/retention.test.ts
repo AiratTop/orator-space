@@ -129,6 +129,8 @@ describe("the audit log (§23.4, twelve months, then pseudonymised)", () => {
 describe("orphaned content (§32.2)", () => {
   const bodyOf = async (articleId: string, revisionId: string, markdown: string) => {
     const hash = await ports.content.put(markdown);
+    // Past the grace period: these tests are about references, not about the write order.
+    ports.content.setUploadedAt(hash, hoursAgo(5));
     await ports.db.commit([
       ports.articles.insertArticle({
         id: articleId as never,
@@ -167,6 +169,59 @@ describe("orphaned content (§32.2)", () => {
 
     expect(report.orphanedContentDeleted).toBe(1);
     expect(await ports.content.get(hash)).toBeNull();
+  });
+
+  /**
+   * The object a failed commit left behind (§16.2, §32.2).
+   *
+   * §16.2 writes the body before the revision row, so a commit that fails leaves an object
+   * with no row — and therefore no `content_hash` anywhere in the database. The first
+   * version of this collector asked `revisions` which hashes looked unreferenced, so it
+   * could not have named this object under any circumstances. For text carrying personal
+   * data that is the worst shape available: bytes stored with no entity through which
+   * anybody could demand their erasure.
+   */
+  it("deletes a body no row has ever referenced", async () => {
+    const hash = await ports.content.put("# Never committed\n\nBody.\n");
+    ports.content.setUploadedAt(hash, hoursAgo(5));
+
+    expect((await runRetention(ports)).orphanedContentDeleted).toBe(1);
+    expect(await ports.content.get(hash)).toBeNull();
+  });
+
+  it("leaves a body young enough that its row may still be in flight", async () => {
+    // The same write order, from the other side: an object seconds old is as likely to be a
+    // commit in progress as a commit that failed, and collecting it would make this handler
+    // the cause of what it cleans up.
+    const hash = await ports.content.put("# Just written\n\nBody.\n");
+
+    expect((await runRetention(ports)).orphanedContentDeleted).toBe(0);
+    expect(await ports.content.get(hash)).not.toBeNull();
+  });
+
+  /**
+   * Progress, which the first version of this had none of.
+   *
+   * It asked the database for unreferenced hashes and got the same answer every pass:
+   * deleting the objects changed no row, so pass two re-read the same first hundred, deleted
+   * nothing that was not already gone, reported them as collected again, and never reached
+   * the rest. A backlog larger than one batch was permanent, and the report said work was
+   * being done. Listing the store instead makes progress the absence of what was collected.
+   */
+  it("makes progress across passes rather than re-reading the same page", async () => {
+    const hashes: string[] = [];
+    for (let n = 0; n < 250; n += 1) {
+      const hash = await ports.content.put(`# Body ${n}\n\nUnique.\n`);
+      ports.content.setUploadedAt(hash, hoursAgo(5));
+      hashes.push(hash);
+    }
+
+    const report = await runRetention(ports);
+
+    expect(report.orphanedContentDeleted).toBe(250);
+    expect(ports.content.size()).toBe(0);
+    // And the count is of objects actually removed, not of rows looked at twice.
+    expect(report.passes).toBeGreaterThan(1);
   });
 
   it("leaves a body one live revision still points at", async () => {

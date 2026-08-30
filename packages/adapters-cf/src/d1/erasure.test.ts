@@ -58,6 +58,9 @@ async function revision(articleId: string, revisionId: string, markdown: string)
 beforeEach(async () => {
   await env.DB.prepare("DELETE FROM revisions").run();
   await env.DB.prepare("DELETE FROM articles").run();
+  // The bucket persists between tests in one worker, and the listing tests read all of it.
+  const { objects } = await content().list({ limit: 1000 });
+  await content().deleteMany(objects.map((object) => object.contentHash));
 });
 
 describe("the reference check, in SQL (§23.3)", () => {
@@ -110,48 +113,75 @@ describe("the reference check, in SQL (§23.3)", () => {
   });
 });
 
-describe("the orphan collector's input (§32.2)", () => {
-  it("returns a body no live revision points at", async () => {
-    const hash = await revision("A1", "R1", "# Gone\n\nBody.\n");
+describe("the orphan collector's question (§32.2)", () => {
+  it("names the hashes a live revision still points at, and only those", async () => {
+    const gone = await revision("A1", "R1", "# Gone\n\nBody.\n");
+    const kept = await revision("A2", "R2", "# Kept\n\nBody.\n");
     await env.DB.batch([repo().eraseRevisionsOf("A1", AT) as never]);
 
-    expect(await repo().listUnreferencedContent(10)).toEqual([hash]);
+    const live = await repo().liveContentHashes([gone, kept]);
+    expect(live.has(kept)).toBe(true);
+    expect(live.has(gone)).toBe(false);
   });
 
-  it("does not return one that is still referenced anywhere", async () => {
-    const body = "# Shared\n\nSame bytes.\n";
-    await revision("A1", "R1", body);
-    await revision("A2", "R2", body);
-    await env.DB.batch([repo().eraseRevisionsOf("A1", AT) as never]);
-
-    expect(await repo().listUnreferencedContent(10)).toEqual([]);
+  it("says nothing is live about a hash it has never seen", async () => {
+    // The object written before a commit that failed: no row, no `content_hash`, and the
+    // old query over `revisions` could not have returned it at all. This is the direction
+    // that can — the collector enumerates the store and asks about what it found.
+    const orphan = await content().put("# Never committed\n\nBody.\n");
+    expect((await repo().liveContentHashes([orphan])).size).toBe(0);
+    expect(await content().get(orphan)).not.toBeNull();
   });
 
-  it("returns it once the last reference goes, and the object then deletes", async () => {
-    // The sequence §23.3 leaves behind: two erasures, neither of which may delete the
-    // object, and a store that has to end up empty regardless. End to end, on real R2.
-    const body = "# Shared\n\nSame bytes.\n";
-    const hash = await revision("A1", "R1", body);
-    await revision("A2", "R2", body);
-
-    await env.DB.batch([repo().eraseRevisionsOf("A1", AT) as never]);
-    expect(await repo().listUnreferencedContent(10)).toEqual([]);
-    expect(await content().get(hash)).toBe(body);
-
-    await env.DB.batch([repo().eraseRevisionsOf("A2", AT) as never]);
-    expect(await repo().listUnreferencedContent(10)).toEqual([hash]);
-
-    await content().delete(hash);
-    expect(await content().get(hash)).toBeNull();
+  it("takes an empty list without asking the database", async () => {
+    expect((await repo().liveContentHashes([])).size).toBe(0);
   });
 
-  it("respects its limit, so a backlog is drained in passes", async () => {
-    for (let n = 0; n < 5; n += 1) {
-      await revision("A1", `R${n}`, `# Body ${n}\n\nUnique.\n`);
+  it("answers a full chunk in one query", async () => {
+    const hashes: string[] = [];
+    for (let n = 0; n < 90; n += 1) {
+      hashes.push(await revision("A1", `R${String(n).padStart(3, "0")}`, `# Body ${n}\n\nUnique.\n`));
     }
-    await env.DB.batch([repo().eraseRevisionsOf("A1", AT) as never]);
 
-    expect(await repo().listUnreferencedContent(2)).toHaveLength(2);
-    expect(await repo().listUnreferencedContent(10)).toHaveLength(5);
+    const live = await repo().liveContentHashes(hashes);
+    expect(live.size).toBe(90);
+  });
+});
+
+describe("the store's own listing (§32.2)", () => {
+  it("lists what is there, with the timestamps the grace period reads", async () => {
+    const hash = await content().put("# Listed\n\nBody.\n");
+    const page = await content().list({ limit: 10 });
+
+    const found = page.objects.find((object) => object.contentHash === hash);
+    expect(found).toBeDefined();
+    expect(found?.uploadedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("pages, and a deleted object is simply gone from the next listing", async () => {
+    // This is the collector's progress: not a cursor it has to persist between cron runs,
+    // and not a column marking what it did, but the absence of what it collected.
+    const hashes = [];
+    for (let n = 0; n < 5; n += 1) hashes.push(await content().put(`# Body ${n}\n\nUnique.\n`));
+
+    const before = await content().list({ limit: 100 });
+    expect(before.objects.length).toBeGreaterThanOrEqual(5);
+
+    await content().deleteMany(hashes);
+
+    const after = await content().list({ limit: 100 });
+    for (const hash of hashes) {
+      expect(after.objects.some((object) => object.contentHash === hash), hash).toBe(false);
+    }
+  });
+
+  it("deletes a whole erasure's worth of bodies in one call", async () => {
+    const hashes = [];
+    for (let n = 0; n < 250; n += 1) hashes.push(await content().put(`# Body ${n}\n\nUnique.\n`));
+
+    await content().deleteMany(hashes);
+
+    for (const hash of hashes.slice(0, 5)) expect(await content().get(hash)).toBeNull();
+    expect(await content().get(hashes.at(-1)!)).toBeNull();
   });
 });
