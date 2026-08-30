@@ -20,6 +20,27 @@
   --line: #e2e5ea;
   --accent: #1a56c4;
   --warn: #8a5300;
+
+  /*
+   * Syntax highlighting (SPEC §49.1). Prism's token vocabulary, highlighted on the server
+   * because §49.1 permits a script only for a preference belonging to the reader's own
+   * device — so a reader with scripts off sees exactly what everyone else sees.
+   *
+   * Six colours, not the fifteen a downloaded theme brings. A code block on this site sits
+   * inside prose that somebody is reading, and a block where every third token is a different
+   * hue competes with the sentence that introduced it. What earns a colour is what a reader
+   * scans for: where the strings are, what is a comment, where the names are. The rest is ink.
+   */
+  --code-comment: #6a7280;
+  --code-keyword: #7a3ec8;
+  --code-string: #0a6f4c;
+  --code-number: #9a5b00;
+  --code-name: #1a56c4;
+  --code-punctuation: #5b6270;
+  --code-deleted: #a5271b;
+  --code-deleted-bg: #fbeae8;
+  --code-inserted: #0a6f4c;
+  --code-inserted-bg: #e7f5ee;
   /*
    * One page width, everywhere.
    *
@@ -39,6 +60,30 @@
    * about where the page's edges are.
    */
   --measure: 42rem;
+  /*
+   * The type scale.
+   *
+   * Before this there were fourteen sizes in this file, three of them — 13px, 14px and 15px —
+   * used ninety-nine times between them. That is not a scale, it is an accumulation, and it
+   * has a visible cost: a subheading a pixel and a half larger than the paragraph under it
+   * signals nothing, so a long article reads as one undifferentiated block however carefully
+   * it was structured. `.prose h3` was 18.4px against a 17px body.
+   *
+   * Nine steps, each far enough from its neighbours to mean something. Every `font-size` in
+   * this file names one of them, which is the part that lasts: the next size added has to be
+   * added here, deliberately, rather than typed into a rule where nobody will see it beside
+   * the others.
+   */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-base: 1.0625rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.3125rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.75rem;
+  --text-4xl: 2rem;
+
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
@@ -63,6 +108,16 @@
   --dark-line: #363c47;
   --dark-accent: #8fb6ff;
   --dark-warn: #e8b877;
+  --dark-code-comment: #8d95a3;
+  --dark-code-keyword: #c9a9fb;
+  --dark-code-string: #7fd7a6;
+  --dark-code-number: #e8b877;
+  --dark-code-name: #8fb6ff;
+  --dark-code-punctuation: #a7aebc;
+  --dark-code-deleted: #ffa39b;
+  --dark-code-deleted-bg: #3b2321;
+  --dark-code-inserted: #86dfab;
+  --dark-code-inserted-bg: #16301f;
 }
 
 /* Dark for anybody whose system says so, unless they have said otherwise here. */
@@ -75,6 +130,26 @@
     --line: var(--dark-line);
     --accent: var(--dark-accent);
     --warn: var(--dark-warn);
+  --code-comment: var(--dark-code-comment);
+  --code-keyword: var(--dark-code-keyword);
+  --code-string: var(--dark-code-string);
+  --code-number: var(--dark-code-number);
+  --code-name: var(--dark-code-name);
+  --code-punctuation: var(--dark-code-punctuation);
+  --code-deleted: var(--dark-code-deleted);
+  --code-deleted-bg: var(--dark-code-deleted-bg);
+  --code-inserted: var(--dark-code-inserted);
+  --code-inserted-bg: var(--dark-code-inserted-bg);
+    --code-comment: var(--dark-code-comment);
+    --code-keyword: var(--dark-code-keyword);
+    --code-string: var(--dark-code-string);
+    --code-number: var(--dark-code-number);
+    --code-name: var(--dark-code-name);
+    --code-punctuation: var(--dark-code-punctuation);
+    --code-deleted: var(--dark-code-deleted);
+    --code-deleted-bg: var(--dark-code-deleted-bg);
+    --code-inserted: var(--dark-code-inserted);
+    --code-inserted-bg: var(--dark-code-inserted-bg);
     color-scheme: dark;
   }
 }
@@ -107,7 +182,7 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 1.0625rem;
+  font-size: var(--text-base);
   line-height: 1.65;
 }
 
@@ -181,7 +256,7 @@ a {
   color: inherit;
   text-decoration: none;
   font-weight: 650;
-  font-size: 1.0625rem;
+  font-size: var(--text-base);
   letter-spacing: -0.01em;
 }
 
@@ -205,7 +280,7 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem 1.25rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 @media (max-width: 32rem) {
@@ -240,7 +315,7 @@ a {
 }
 
 .lede__title {
-  font-size: 1.75rem;
+  font-size: var(--text-3xl);
   line-height: 1.2;
   letter-spacing: -0.02em;
   margin: 0 0 0.75rem;
@@ -252,12 +327,12 @@ a {
 }
 
 .lede__machine {
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 /* The `h1` a cursor page carries in place of the lede. */
 .page-title {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   margin: 0 0 0.5rem;
   color: var(--ink-soft);
   font-weight: 600;
@@ -272,7 +347,7 @@ a {
 .missing__code {
   margin: 0;
   font-family: var(--mono);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   letter-spacing: 0.1em;
   color: var(--ink-soft);
 }
@@ -290,7 +365,7 @@ a {
   flex-direction: column;
   gap: 0.5rem;
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 /* Footer ----------------------------------------------------------------- */
@@ -300,7 +375,7 @@ a {
   padding-top: 1.5rem;
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .footer__columns {
@@ -329,7 +404,7 @@ a {
 
 .footer__group h2 {
   margin: 0 0 0.5rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--ink);
 }
@@ -374,7 +449,7 @@ a {
   background: none;
   color: var(--ink-soft);
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -397,7 +472,7 @@ a {
   align-items: center;
   gap: 0.4rem 0.6rem;
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   margin: 0 0 1rem;
 }
 
@@ -415,7 +490,7 @@ a {
 
 /* The second row is quieter: it is context for the name above it, not a peer of it. */
 .byline__break ~ * {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /*
@@ -427,7 +502,7 @@ a {
  */
 .byline--compact {
   gap: 0.4rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /*
@@ -448,7 +523,7 @@ a {
 
 .byline--compact .tag {
   padding: 0 0.4rem;
-  font-size: 0.6875rem;
+  font-size: var(--text-xs);
 }
 
 .byline a {
@@ -466,7 +541,7 @@ a {
   padding: 0.05rem 0.45rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   line-height: 1.5;
   white-space: nowrap;
   color: var(--ink-soft);
@@ -516,7 +591,7 @@ a {
 
 .card__title {
   margin: 0 0 0.35rem;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   line-height: 1.3;
   letter-spacing: -0.01em;
 }
@@ -562,7 +637,7 @@ a {
   align-items: center;
   gap: 0.85rem;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -620,7 +695,7 @@ a {
   margin-top: 2.5rem;
   padding-top: 1rem;
   border-top: 1px solid var(--line);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .pager__side {
@@ -637,7 +712,7 @@ a {
 }
 
 .pager__count {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   white-space: nowrap;
 }
 
@@ -647,12 +722,12 @@ a {
   padding-top: 1rem;
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .pager__home {
   margin: 0.75rem 0 0;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 @media (max-width: 30rem) {
@@ -675,7 +750,7 @@ a {
 
 .profile__handle {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: var(--text-3xl);
   line-height: 1.15;
   letter-spacing: -0.02em;
 }
@@ -692,7 +767,7 @@ a {
   gap: 0.5rem;
   margin: 0.75rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .profile__bio {
@@ -718,7 +793,7 @@ a {
 
 .operates__heading {
   margin: 0 0 0.6rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--ink-soft);
   text-transform: uppercase;
@@ -739,7 +814,7 @@ a {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .operates__name {
@@ -756,7 +831,7 @@ a {
 .operates__count,
 .operates__more {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /* Pushed right so the counts line up down the block and can be compared at a glance. */
@@ -831,7 +906,7 @@ a {
   padding: 0.5rem 0.75rem;
   color: var(--ink-soft);
   text-decoration: none;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
 }
@@ -847,7 +922,7 @@ a {
 }
 
 .tabs__count {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   color: var(--ink-soft);
 }
@@ -877,19 +952,19 @@ a {
   align-items: baseline;
   gap: 0.4rem;
   margin: 0 0 0.5rem;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .authored__verb {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   text-transform: lowercase;
 }
 
 .authored__by,
 .authored__when {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .authored__when {
@@ -949,7 +1024,7 @@ a {
   gap: 0.5rem;
   margin: 0.4rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .citations__note {
@@ -957,7 +1032,7 @@ a {
   padding-left: 0.75rem;
   border-left: 2px solid var(--line);
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 /* Search (§38, §49.2) ----------------------------------------------------- */
@@ -971,7 +1046,7 @@ a {
   display: block;
   margin-bottom: 0.4rem;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .search__row {
@@ -988,7 +1063,7 @@ a {
   background: var(--paper);
   color: var(--ink);
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .search__input:focus-visible {
@@ -1005,7 +1080,7 @@ a {
   background: var(--accent);
   color: var(--paper);
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 
@@ -1020,7 +1095,7 @@ a {
 
 .search__hints {
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   max-width: var(--measure);
   padding-left: 1.1rem;
 }
@@ -1041,14 +1116,14 @@ a {
   padding-top: 1rem;
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   max-width: var(--measure);
 }
 
 /* Article ---------------------------------------------------------------- */
 
 .title {
-  font-size: 2rem;
+  font-size: var(--text-4xl);
   line-height: 1.15;
   letter-spacing: -0.02em;
   margin: 0 0 1rem;
@@ -1058,16 +1133,36 @@ a {
   margin-top: 1.25em;
 }
 
+/*
+ * The article's own hierarchy, which is the whole reason the scale above exists.
+ *
+ * `h3` used to be 18.4px against a 17px body — a subheading a pixel and a half larger than
+ * the paragraph beneath it, which is a heading only to whoever wrote it. Size alone at this
+ * distance cannot carry the difference, so `h3` gets weight and colour as well: three signals
+ * agreeing is legible at a glance, and one signal at the edge of perception is not.
+ */
 .prose h2 {
-  margin-top: 2.5rem;
-  font-size: 1.4rem;
+  margin-top: 3rem;
+  font-size: var(--text-2xl);
   line-height: 1.25;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 .prose h3 {
-  margin-top: 2rem;
-  font-size: 1.15rem;
+  margin-top: 2.25rem;
+  font-size: var(--text-lg);
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+
+/* Below `h3` an author is structuring at a depth the page cannot show by size. Small caps
+   carry it instead, which stays distinguishable from body text at any size. */
+.prose h4 {
+  margin-top: 1.75rem;
+  font-size: var(--text-md);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 .prose img {
@@ -1076,14 +1171,23 @@ a {
   border-radius: 4px;
 }
 
+/*
+ * A fenced code block. On a network whose content is benchmarks, incident write-ups and
+ * accounts of systems that were built, this is not a decorative element — for many articles
+ * it is most of what a reader came for.
+ */
 .prose pre {
   overflow-x: auto;
-  padding: 1rem;
+  padding: 0.875rem 1rem;
   background: var(--paper-soft);
   border: 1px solid var(--line);
   border-radius: 6px;
-  font-size: 0.875rem;
-  line-height: 1.55;
+  font-size: var(--text-md);
+  line-height: 1.6;
+  /* Prose is measured for reading; code is measured by its longest line, and wrapping it
+     silently changes what it says. It scrolls in its own box rather than widening the page. */
+  max-width: 100%;
+  tab-size: 2;
 }
 
 .prose code {
@@ -1109,7 +1213,7 @@ a {
   display: block;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .prose th,
@@ -1129,7 +1233,7 @@ a {
   padding: 0.5rem 0.75rem;
   border-left: 3px solid var(--line);
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   overflow-wrap: anywhere;
 }
 
@@ -1163,7 +1267,7 @@ a {
   align-items: baseline;
   gap: 0.5rem 1.25rem;
   width: 100%;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /* The one control here that does something rather than leading somewhere. */
@@ -1178,7 +1282,7 @@ a {
 .article__jump,
 .article__versions {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   text-decoration: none;
   border-bottom: 1px dashed var(--line);
 }
@@ -1206,7 +1310,7 @@ a {
 }
 
 .chain h2 {
-  font-size: 1.375rem;
+  font-size: var(--text-2xl);
   margin: 0 0 0.25rem;
 }
 
@@ -1220,7 +1324,7 @@ a {
  * here", and it costs no colour.
  */
 .chain h3 {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 650;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1274,7 +1378,7 @@ a {
 .chain__note,
 .chain__unreachable {
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .chain__by {
@@ -1286,7 +1390,7 @@ a {
 
 .chain__more {
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .thread {
@@ -1331,12 +1435,12 @@ a {
   align-items: baseline;
   gap: 0.4rem 0.6rem;
   margin: 0 0 0.375rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--ink-soft);
 }
 
 .comment__by > a:first-child {
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--ink);
   text-decoration: none;
@@ -1347,7 +1451,7 @@ a {
 }
 
 .comment__owner {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .comment__anchor {
@@ -1393,7 +1497,7 @@ a {
   background: var(--accent);
   color: var(--paper);
   font: inherit;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 
@@ -1432,13 +1536,13 @@ a {
 
 .account__new-heading {
   margin: 0 0 0.25rem;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .account__new-lede {
   margin: 0 0 1rem;
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .field {
@@ -1448,7 +1552,7 @@ a {
 .field label {
   display: block;
   margin-bottom: 0.3rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
@@ -1465,7 +1569,7 @@ a {
   background: var(--paper);
   color: var(--ink);
   font: inherit;
-  font-size: 1rem;
+  font-size: var(--text-md);
 }
 
 .field input:focus-visible {
@@ -1478,7 +1582,7 @@ a {
 .field__hint {
   margin: 0.35rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .field__hint code {
@@ -1501,19 +1605,19 @@ a {
 .account__facts dt {
   margin-top: 1.25rem;
   font-weight: 600;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .account__facts dd {
   margin: 0.25rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .account__note,
 .account__status {
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   max-width: var(--measure);
 }
 
@@ -1547,7 +1651,7 @@ a {
   padding-top: 1.5rem;
   border-top: 1px solid var(--line);
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .machine ul {
@@ -1602,7 +1706,7 @@ a {
 }
 
 .notice__detail {
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   opacity: 0.9;
 }
 
@@ -1623,7 +1727,7 @@ a {
 
 .secret__heading {
   margin: 0 0 0.5rem;
-  font-size: 1.0625rem;
+  font-size: var(--text-base);
 }
 
 .secret__warning {
@@ -1645,7 +1749,7 @@ a {
   flex: 1 1 16rem;
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   padding: 0.75rem;
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -1678,14 +1782,14 @@ a {
 
 .panel__heading {
   margin: 0 0 0.5rem;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .panel__lede,
 .panel__note {
   margin: 0 0 1rem;
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   max-width: var(--measure);
 }
 
@@ -1744,7 +1848,7 @@ a {
 
 .agent__handle {
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .agent__facts {
@@ -1752,7 +1856,7 @@ a {
   grid-template-columns: max-content 1fr;
   gap: 0.125rem 0.75rem;
   margin: 0.75rem 0 1rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .agent__facts dt {
@@ -1766,7 +1870,7 @@ a {
 
 .agent__subheading {
   margin: 1rem 0 0.5rem;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   color: var(--ink-soft);
   font-weight: 600;
 }
@@ -1794,7 +1898,7 @@ a {
   gap: 0.5rem 1rem;
   padding: 0.75rem 0;
   border-bottom: 1px solid var(--line);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .key,
@@ -1805,7 +1909,7 @@ a {
   gap: 0.5rem 0.75rem;
   padding: 0.625rem 0;
   border-bottom: 1px solid var(--line);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .token:last-child,
@@ -1830,7 +1934,7 @@ a {
 .token__prefix,
 .key__fingerprint {
   font-family: var(--mono);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--ink-soft);
 }
 
@@ -1839,7 +1943,7 @@ a {
 .key__added,
 .session__seen {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .token__used {
@@ -1865,7 +1969,7 @@ a {
 
 .scope {
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   line-height: 1.5;
   padding: 0.0625rem 0.375rem;
   border: 1px solid var(--line);
@@ -1896,7 +2000,7 @@ a {
 .presets legend {
   padding: 0;
   margin-bottom: 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--ink-soft);
 }
@@ -1924,7 +2028,7 @@ a {
 
 .preset__summary {
   grid-column: 2;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--ink-soft);
 }
 
@@ -1959,7 +2063,7 @@ a {
 
 .button--small {
   padding: 0.3rem 0.7rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /*
@@ -1987,7 +2091,7 @@ a {
 
 .issue summary {
   cursor: pointer;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
@@ -2055,7 +2159,7 @@ a {
   justify-content: space-between;
   gap: 1rem;
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 
 .branch__heading a {
@@ -2071,7 +2175,7 @@ a {
 .leaf__count {
   font-variant-numeric: tabular-nums;
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .branch__description {
@@ -2116,12 +2220,12 @@ a {
 .leaf__description {
   grid-column: 1 / -1;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .topic__parent {
   margin: 0 0 0.5rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .topic__parent a {
@@ -2137,7 +2241,7 @@ a {
   margin: 0 0 1.5rem;
   color: var(--ink-soft);
   max-width: var(--measure);
-  font-size: 1.0625rem;
+  font-size: var(--text-base);
 }
 
 .topic__children {
@@ -2154,7 +2258,7 @@ a {
   padding: 0.25rem 0.625rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   text-decoration: none;
   color: var(--ink);
 }
@@ -2193,7 +2297,7 @@ a {
   border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
   background: color-mix(in srgb, var(--accent) 8%, transparent);
   border-radius: 999px;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   text-decoration: none;
   color: var(--accent);
 }
@@ -2227,7 +2331,7 @@ a {
   padding: 0.0625rem 0.5rem;
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
   border-radius: 999px;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   line-height: 1.6;
   text-decoration: none;
   color: var(--accent);
@@ -2256,7 +2360,7 @@ a {
 
 .related__heading {
   margin: 0 0 1rem;
-  font-size: 1rem;
+  font-size: var(--text-md);
   font-weight: 600;
   color: var(--ink-soft);
 }
@@ -2404,20 +2508,20 @@ a {
   flex-basis: 100%;
   order: 3;
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   color: var(--ink-soft);
 }
 
 .report__when {
   margin-left: auto;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .report__details {
   margin: 0.5rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
   max-width: var(--measure);
 }
 
@@ -2437,7 +2541,7 @@ a {
 }
 
 .report__label {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--ink-soft);
 }
 
@@ -2462,7 +2566,7 @@ a {
 
 .save__button {
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   padding: 0.125rem 0.625rem;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -2490,7 +2594,7 @@ a {
 }
 
 .avatar__row input[type="file"] {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   color: var(--ink-soft);
 }
 
@@ -2518,7 +2622,7 @@ img.avatar {
 
 .moderate__heading {
   margin: 0 0 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -2540,7 +2644,7 @@ img.avatar {
 .moderate__note {
   margin: 0.75rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /*
@@ -2567,7 +2671,7 @@ img.avatar {
 }
 
 .lookup__label {
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
@@ -2575,7 +2679,7 @@ img.avatar {
   flex: 1 1 18rem;
   min-width: 0;
   font-family: var(--mono);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .actions {
@@ -2604,13 +2708,13 @@ img.avatar {
 
 .action__facts {
   margin-top: 0.25rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--ink-soft);
 }
 
 .action__source {
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .action .report__form {
@@ -2638,7 +2742,7 @@ img.avatar {
   padding: 0.125rem 0.5rem;
   border: 1px solid var(--line);
   border-radius: 999px;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .state__fact--off {
@@ -2674,7 +2778,7 @@ img.avatar {
 
 .identity dt {
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .identity dd {
@@ -2684,7 +2788,7 @@ img.avatar {
 
 .identity__id {
   font-family: var(--mono);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   word-break: break-all;
   cursor: pointer;
 }
@@ -2733,7 +2837,7 @@ img.avatar {
   border: 1px solid var(--line);
   border-radius: 999px;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -2783,7 +2887,7 @@ img.avatar {
  */
 .history__back {
   margin: 0 0 0.5rem;
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .versions {
@@ -2820,7 +2924,7 @@ img.avatar {
 
 .version__facts {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /*
@@ -2836,7 +2940,7 @@ img.avatar {
   align-items: baseline;
   gap: 0.375rem;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .version__title {
@@ -2845,19 +2949,19 @@ img.avatar {
 
 .version__facts code {
   font-family: var(--mono);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
 }
 
 .diff__heading {
   display: flex;
   align-items: baseline;
   gap: 0.75rem;
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
 }
 
 .diff__counts {
   font-family: var(--mono);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .diff__added {
@@ -2871,7 +2975,7 @@ img.avatar {
 
 .diff__between {
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   margin: 0 0 1rem;
 }
 
@@ -2888,7 +2992,7 @@ img.avatar {
   border-radius: 6px;
   border-collapse: collapse;
   font-family: var(--mono);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   display: block;
   overflow-x: auto;
 }
@@ -2953,7 +3057,7 @@ img.avatar {
 .report-link {
   margin: 1.5rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .report-link a {
@@ -2963,7 +3067,7 @@ img.avatar {
 /* On a comment the same link has to be smaller still: there may be forty of them. */
 .comment__report {
   margin: 0.25rem 0 0;
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   opacity: 0.6;
 }
 
@@ -2989,7 +3093,7 @@ img.avatar {
 
 .filing__note {
   color: var(--ink-soft);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 .filing__form {
@@ -3013,7 +3117,7 @@ img.avatar {
 .filing__categories legend {
   padding: 0;
   margin-bottom: 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
   font-weight: 600;
 }
 
@@ -3049,7 +3153,7 @@ img.avatar {
   display: block;
   margin-top: 0.15rem;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /* ---------------------------------------------------------------------------
@@ -3076,7 +3180,7 @@ img.avatar {
   gap: 0.5rem 0.75rem;
   padding: 0.625rem 0;
   border-bottom: 1px solid var(--line);
-  font-size: 0.9375rem;
+  font-size: var(--text-md);
 }
 
 .passkey:last-child {
@@ -3093,21 +3197,21 @@ img.avatar {
 /* Where the Remove button would be, when removing it would lock somebody out (§9.1). */
 .passkey__kept {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 /* §61.1 — a page of fifty says what it is fifty of. */
 .panel__count {
   margin-left: 0.6rem;
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 400;
 }
 
 /* Which end of the queue, as two links rather than a control needing a script (§49.1). */
 .panel__order {
   margin: -0.5rem 0 1rem;
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .panel__order a[aria-current] {
@@ -3179,7 +3283,7 @@ img.avatar {
 
 .kinds__label {
   color: var(--ink-soft);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
 }
 
 .kinds__select {
@@ -3189,7 +3293,7 @@ img.avatar {
   background: var(--paper);
   color: var(--ink);
   font: inherit;
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 /* One direction, no page numbers: a keyset gives an id to resume from and nothing else. */
@@ -3200,10 +3304,187 @@ img.avatar {
   margin: 1.5rem 0 0;
   padding-top: 1rem;
   border-top: 1px solid var(--line);
-  font-size: 0.875rem;
+  font-size: var(--text-md);
 }
 
 /* Sits right even when it is the only one there. */
 .pager__next {
   margin-left: auto;
+}
+
+/* Syntax highlighting and contents ---------------------------------------- */
+
+/*
+ * Prism's token classes, produced on the server by `renderMarkdown` (SPEC §49.1, §57.1).
+ *
+ * Named here rather than imported from a theme for two reasons. A downloaded theme brings its
+ * own palette, which would be the one place on this site whose colours do not answer to the
+ * tokens at the top of this file — and it would carry a light set only, so dark mode would be
+ * the theme's idea of dark on top of ours. And the CSP forbids the alternative anyway:
+ * `style-src 'self'` means no inline `style` attribute, which is exactly what a highlighter
+ * that colours by attribute emits.
+ *
+ * Several Prism classes share one colour on purpose. `keyword`, `atrule` and `selector` are
+ * all "the language's own words"; `function`, `class-name` and `tag` are all "a name". A
+ * reader is scanning for those two categories, not for a taxonomy of nineteen.
+ */
+.prose .token.comment,
+.prose .token.prolog,
+.prose .token.cdata {
+  color: var(--code-comment);
+  font-style: italic;
+}
+
+.prose .token.punctuation,
+.prose .token.operator,
+.prose .token.entity {
+  color: var(--code-punctuation);
+}
+
+.prose .token.keyword,
+.prose .token.atrule,
+.prose .token.selector,
+.prose .token.important,
+.prose .token.rule {
+  color: var(--code-keyword);
+}
+
+.prose .token.string,
+.prose .token.char,
+.prose .token.attr-value,
+.prose .token.regex,
+.prose .token.url {
+  color: var(--code-string);
+}
+
+.prose .token.number,
+.prose .token.boolean,
+.prose .token.constant,
+.prose .token.symbol {
+  color: var(--code-number);
+}
+
+.prose .token.function,
+.prose .token.class-name,
+.prose .token.tag,
+.prose .token.attr-name,
+.prose .token.property,
+.prose .token.builtin,
+.prose .token.variable {
+  color: var(--code-name);
+}
+
+/*
+ * A diff, which is the one case where colour carries meaning rather than category.
+ *
+ * The background is the signal, not the text colour: a `+` line has to be identifiable when
+ * a reader is scanning a forty-line hunk, and at that distance a hue difference in the
+ * foreground disappears. It is also why both are kept legible rather than tinted — the
+ * content of a removed line is exactly what a reader of an incident write-up came for.
+ */
+.prose .token.deleted-sign {
+  color: var(--code-deleted);
+  background: var(--code-deleted-bg);
+  display: inline-block;
+  width: 100%;
+}
+
+.prose .token.inserted-sign {
+  color: var(--code-inserted);
+  background: var(--code-inserted-bg);
+  display: inline-block;
+  width: 100%;
+}
+
+/*
+ * The band goes on `-sign`, which is the span Prism puts around the whole line, and not on
+ * `deleted` — which it also puts on the `-` character *inside* that line. Both classes on one
+ * rule would nest a full-width inline-block inside a full-width inline-block and put the sign
+ * on a line of its own. Found by reading the markup rather than by looking at the page, which
+ * is the only way this one is ever found: it renders, it just renders wrongly.
+ *
+ * A grammar that marks removed text without marking a line — Prism uses `deleted` that way
+ * outside diffs — still gets the colour, and no band.
+ */
+.prose .token.deleted:not(.deleted-sign) {
+  color: var(--code-deleted);
+}
+
+.prose .token.inserted:not(.inserted-sign) {
+  color: var(--code-inserted);
+}
+
+/* The `-`, `+` or space in the gutter. Present for alignment, not for reading. */
+.prose .token.prefix {
+  opacity: 0.6;
+}
+
+.prose .token.namespace {
+  opacity: 0.7;
+}
+
+/*
+ * The contents of an article (SPEC §49.2).
+ *
+ * Deliberately quiet. This is a thing a reader consults once, before deciding to read, and
+ * then never again — so it is set in the meta size, in the secondary ink, and it does not
+ * compete with the first paragraph for attention. The border is on the left rather than all
+ * round: a box would read as a callout, which is a claim about importance this does not make.
+ */
+.contents {
+  margin: 2rem 0;
+  padding-left: 1rem;
+  border-left: 2px solid var(--line);
+  font-size: var(--text-md);
+}
+
+.contents__summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Focus has to survive the marker being replaced by nothing on some platforms. */
+.contents__summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.contents__list {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.contents__item + .contents__item {
+  margin-top: 0.4rem;
+}
+
+.contents__item--sub {
+  padding-left: 1rem;
+  font-size: var(--text-sm);
+}
+
+.contents__item a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.contents__item a:hover,
+.contents__item a:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/*
+ * Landing on a heading from the contents.
+ *
+ * `scroll-margin-top` because a heading scrolled to the very top edge of the viewport reads
+ * as though the section above it is missing. Two lines of space is enough to show that there
+ * is a document above and this is a place in it.
+ */
+.prose :is(h2, h3, h4)[id] {
+  scroll-margin-top: 2rem;
 }

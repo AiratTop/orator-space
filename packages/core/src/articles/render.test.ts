@@ -190,12 +190,13 @@ describe("document structure", () => {
   it("demotes headings so the page keeps a single h1 (§50.1)", () => {
     const output = html("# Body heading\n\n## Sub");
     expect(output).not.toMatch(/<h1/);
-    expect(output).toContain("<h2>Body heading</h2>");
-    expect(output).toContain("<h3>Sub</h3>");
+    // The `id` is added by the contents pass, below; the assertion here is about the level.
+    expect(output).toContain('<h2 id="h-body-heading">Body heading</h2>');
+    expect(output).toContain('<h3 id="h-sub">Sub</h3>');
   });
 
   it("does not demote past h6", () => {
-    expect(html("###### deep")).toContain("<h6>deep</h6>");
+    expect(html("###### deep")).toContain('<h6 id="h-deep">deep</h6>');
   });
 
   it("renders GFM tables, strikethrough and task lists", () => {
@@ -212,5 +213,115 @@ describe("document structure", () => {
     const output = html(`![alt](https://media.orator.space/x.png)`);
     expect(output).toContain(`loading="lazy"`);
     expect(output).toContain(`referrerpolicy="no-referrer"`);
+  });
+});
+
+/**
+ * SPEC §49.1, §57.1 — highlighting happens on the server, from the code's own text.
+ *
+ * The threat these cover is not "does it look nice". Highlighting rewrites the children of a
+ * node inside untrusted content, after sanitisation, which is the one place in this pipeline
+ * where markup is *added* rather than removed. So the cases are about what cannot come back:
+ * an author's markup, an author's class, an author-chosen grammar that was never registered.
+ */
+describe("syntax highlighting", () => {
+  it("highlights a fence in a language it knows", () => {
+    const out = html("```sql\nSELECT 1 FROM articles;\n```");
+    expect(out).toContain('class="token keyword"');
+    expect(out).toContain("SELECT");
+  });
+
+  it("resolves an alias the author is likely to type", () => {
+    for (const fence of ["ts", "yml", "sh", "dockerfile", "html"]) {
+      const out = html(`\`\`\`${fence}\nx\n\`\`\``);
+      expect(out, fence).toContain(`language-${fence}`);
+    }
+    expect(html("```ts\nconst x: number = 1;\n```")).toContain("token");
+  });
+
+  it("leaves a fence alone when the language is unknown, rather than guessing", () => {
+    const out = html("```notalanguage\nSELECT 1\n```");
+    expect(out).not.toContain("token");
+    expect(out).toContain("SELECT 1");
+  });
+
+  it("leaves a fence with no language alone", () => {
+    expect(html("```\nSELECT 1\n```")).not.toContain("token");
+  });
+
+  it("does not touch inline code", () => {
+    expect(html("a sentence with `SELECT 1` in it")).not.toContain("token");
+  });
+
+  it("highlights the text, so an author's markup cannot re-enter through it", () => {
+    const out = html('```json\n{"a": "<img src=x onerror=alert(1)>"}\n```');
+    expect(out).not.toContain("<img");
+    expect(out).toContain("&#x3C;img");
+  });
+
+  it("keeps only the language class the author declared", () => {
+    const out = html("```sql\nSELECT 1\n```");
+    expect(out).toContain('class="language-sql"');
+  });
+});
+
+/**
+ * SPEC §49.5 — the contents of an article, collected in the same pass that renders it.
+ *
+ * The prefix is the load-bearing part: an `id` derived from somebody else's text must not be
+ * able to name an element the page needs, which in a browser also means becoming a property
+ * of `document`.
+ */
+describe("headings and contents", () => {
+  const headings = (markdown: string) => {
+    const result = render(markdown);
+    if (!result.ok) throw new Error(`render failed: ${result.reason}`);
+    return result.headings;
+  };
+
+  it("gives every heading an id and reports it, at its rendered depth", () => {
+    expect(headings("## Setup and method\n\n### The p99")).toEqual([
+      { id: "h-setup-and-method", text: "Setup and method", depth: 3 },
+      { id: "h-the-p99", text: "The p99", depth: 4 },
+    ]);
+  });
+
+  it("puts the id on the element as well as in the list", () => {
+    expect(html("## Setup and method")).toContain('id="h-setup-and-method"');
+  });
+
+  it("numbers a repeated heading rather than issuing the same id twice", () => {
+    expect(headings("## Method\n\n## Method\n\n## Method").map((h) => h.id)).toEqual([
+      "h-method",
+      "h-method-2",
+      "h-method-3",
+    ]);
+  });
+
+  it("keeps a non-Latin heading addressable", () => {
+    expect(headings("## Настройка стенда")[0]?.id).toBe("h-настройка-стенда");
+  });
+
+  it("falls back rather than emitting an empty id", () => {
+    expect(headings("## ???")[0]?.id).toBe("h-section");
+  });
+
+  it("cannot produce an id without the prefix, whatever the heading says", () => {
+    for (const text of ["h-", "-", "theme", "body", "__proto__"]) {
+      const [heading] = headings(`## ${text}`);
+      expect(heading?.id.startsWith("h-"), text).toBe(true);
+    }
+  });
+
+  it("flattens markup in the heading text", () => {
+    expect(headings("## A **bold** claim")[0]).toEqual({
+      id: "h-a-bold-claim",
+      text: "A bold claim",
+      depth: 3,
+    });
+  });
+
+  it("reports nothing for an article with no headings", () => {
+    expect(headings("just a paragraph")).toEqual([]);
   });
 });

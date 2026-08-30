@@ -1,0 +1,44 @@
+---
+import type { Heading } from "@orator/core";
+
+/**
+ * An article's contents (SPEC §49.5).
+ *
+ * The list comes from `renderMarkdown`, which assigns the ids in the same pass that renders
+ * the body — so there is one answer to "what are this article's sections" rather than a
+ * second implementation here that parses the HTML back and eventually disagrees.
+ *
+ * **It appears only when it is worth appearing.** Three headings is the floor: below that a
+ * contents list is longer than the thing it summarises, and a reader has to skip it to reach
+ * the article. Depth stops at the second level, because a contents list that mirrors every
+ * `h4` stops being a summary and becomes the document again.
+ *
+ * **No script.** `<details>` opens and closes on its own, which matters here rather than
+ * being a nicety: §49.1 permits a script only for a preference belonging to the reader's own
+ * device, and "I would like to see the contents" is not that. Open by default — a reader who
+ * came for the article should see its shape without asking.
+ */
+interface Props {
+  headings: Heading[];
+}
+
+const { headings } = Astro.props;
+
+// Rendered depth: an author's `##` arrives here as 3 after the §50.1 demotion, so these two
+// levels are what an author wrote as `##` and `###`.
+const shown = headings.filter((heading) => heading.depth <= 4);
+const enough = shown.length >= 3;
+---
+
+{enough && (
+  <details class="contents" open>
+    <summary class="contents__summary">Contents</summary>
+    <ol class="contents__list">
+      {shown.map((heading) => (
+        <li class={heading.depth >= 4 ? "contents__item contents__item--sub" : "contents__item"}>
+          <a href={`#${heading.id}`}>{heading.text}</a>
+        </li>
+      ))}
+    </ol>
+  </details>
+)}

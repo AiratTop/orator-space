@@ -5,6 +5,7 @@ import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
 import { unified } from "unified";
 import { visit } from "unist-util-visit";
+import { ALIASES, refractor } from "./languages.js";
 import { stripInvisible } from "../text/invisible.js";
 
 /**
@@ -48,8 +49,18 @@ export const DEFAULT_LIMITS: RenderLimits = { maxDepth: 24, maxNodes: 15_000, ma
 
 export type RenderFailure = "too-deep" | "too-many-nodes" | "table-too-large";
 
+/** One entry in an article's contents (SPEC §49.5). */
+export interface Heading {
+  /** The `id` put on the heading element, already carrying the collision-safe prefix. */
+  id: string;
+  /** The heading's text, flattened — a contents list is a list of words, not of markup. */
+  text: string;
+  /** As rendered, so after the §50.1 demotion: an author's `#` arrives here as 2. */
+  depth: number;
+}
+
 export type RenderResult =
-  | { ok: true; html: string; externalLinks: number }
+  | { ok: true; html: string; externalLinks: number; headings: Heading[] }
   | { ok: false; reason: RenderFailure };
 
 export interface RenderOptions {
@@ -222,6 +233,139 @@ function narrowCodeClass(node: HastElement) {
 }
 
 /**
+ * Syntax highlighting, after sanitisation and from the code's own text (SPEC §49.1, §57.1).
+ *
+ * §49.1 forbids doing this in the browser: a script may exist only for a preference belonging
+ * to the reader's own device, and a reader with scripts off must lose nothing but the theme
+ * control. So it happens here, once, on the server.
+ *
+ * **Two properties make it safe, and both are about ordering.** It runs *after* the sanitiser,
+ * like `hardenLinks`, so what it produces cannot be filtered away. And it reads the code
+ * block's **text** and replaces the node's children wholesale with markup it generated itself
+ * — nothing of the author's survives into the highlighted output, so there is no escaping
+ * question to get wrong. The classes are `hljs-*` and the site's stylesheet names them; §58.2's
+ * concern about an author reaching the site's own stylesheet does not arise, because the author
+ * chose a language name from a list and nothing else.
+ *
+ * **A language is never guessed.** `lowlight` will happily auto-detect, and auto-detection on
+ * a four-line fence is a coin toss that produces confidently wrong colours. An unrecognised
+ * name renders exactly as it does today.
+ *
+ * Cost is bounded by the page cache (§33.6): a repeat reader never reaches this module, and a
+ * revision is immutable, so the same bytes are highlighted at most once per cache lifetime.
+ */
+interface HastNode {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
+}
+
+/** The fence's language, resolved through the alias table, or null if we do not have it. */
+function languageOf(node: HastNode): string | null {
+  const className = node.properties?.["className"];
+  if (!Array.isArray(className)) return null;
+  for (const name of className) {
+    if (typeof name !== "string" || !name.startsWith("language-")) continue;
+    const raw = name.slice("language-".length).toLowerCase();
+    const resolved = ALIASES[raw] ?? raw;
+    // `registered` honours Prism's own aliases, so `ts` and `yml` resolve without this
+    // module having to know about them.
+    if (refractor.registered(resolved)) return resolved;
+  }
+  return null;
+}
+
+function highlightCode() {
+  return (tree: unknown) => {
+    visit(tree as never, "element", (node: HastNode, _index, parent: HastNode | undefined) => {
+      // Only a fenced block. `<code>` inside a sentence has no language and no business
+      // carrying one.
+      if (node.tagName !== "code" || parent?.tagName !== "pre") return;
+      const language = languageOf(node);
+      if (language === null) return;
+
+      const source = textOf(node);
+      // A grammar can throw on input it cannot parse. An article that fails to highlight is
+      // an article that renders plainly; it is never an article that fails to render.
+      try {
+        node.children = refractor.highlight(source, language).children as HastNode[];
+      } catch {
+        /* leave the block as it was */
+      }
+    });
+  };
+}
+
+/** Every text node under this one, concatenated. */
+function textOf(node: HastNode): string {
+  let out = "";
+  const stack: HastNode[] = [node];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (current.type === "text" && typeof current.value === "string") out += current.value;
+    const children = current.children ?? [];
+    for (let i = children.length - 1; i >= 0; i -= 1) stack.push(children[i]!);
+  }
+  return out;
+}
+
+/**
+ * An `id` on every heading, and the contents list built from the same pass (SPEC §49.5).
+ *
+ * The prefix is not decoration. An `id` derived from text somebody else wrote can collide
+ * with an element the page needs to address, and in a browser a named element becomes a
+ * property of `document` — which is the DOM-clobbering class the sanitiser's own
+ * `clobberPrefix` exists to close. Nothing else on this site uses an `h-` prefix, so nothing
+ * of the author's can name anything of ours.
+ *
+ * Built here rather than by the page, because the page would have to parse the HTML back to
+ * find the headings — and two implementations of "what are this article's sections" would be
+ * two answers waiting to disagree about one.
+ */
+function collectHeadings(into: Heading[]) {
+  const LEVELS = new Set(["h2", "h3", "h4", "h5", "h6"]);
+  const used = new Map<string, number>();
+
+  return () => (tree: unknown) => {
+    visit(tree as never, "element", (node: HastNode) => {
+      if (node.tagName === undefined || !LEVELS.has(node.tagName)) return;
+
+      const text = textOf(node).trim();
+      if (text === "") return;
+
+      const base = slugify(text);
+      const seen = used.get(base) ?? 0;
+      used.set(base, seen + 1);
+      const id = seen === 0 ? `h-${base}` : `h-${base}-${seen + 1}`;
+
+      node.properties = { ...(node.properties ?? {}), id };
+      into.push({ id, text, depth: Number(node.tagName.slice(1)) });
+    });
+  };
+}
+
+/**
+ * Text to the slug half of an id.
+ *
+ * Written here rather than taken from a library, because the requirement is not "a good slug"
+ * — it is a bounded, predictable string that cannot collide with anything of ours. Unicode
+ * letters and digits are kept, so a Russian or Chinese heading gets a readable anchor rather
+ * than an empty one; everything else becomes a separator. An empty result (a heading of pure
+ * punctuation) falls back to `section`, which the de-duplication above then numbers.
+ */
+function slugify(text: string): string {
+  const slug = text
+    .toLowerCase()
+    .replace(/[^\p{Letter}\p{Number}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64)
+    .replace(/-+$/g, "");
+  return slug === "" ? "section" : slug;
+}
+
+/**
  * Renders article markdown to sanitised HTML.
  *
  * Invisible characters are removed before parsing (§58.2), which means they are removed
@@ -232,6 +376,7 @@ function narrowCodeClass(node: HastElement) {
 export function renderMarkdown(markdown: string, options: RenderOptions): RenderResult {
   const limits = options.limits ?? DEFAULT_LIMITS;
   const links = hardenLinks(options.siteHost);
+  const headings: Heading[] = [];
 
   try {
     const file = unified()
@@ -242,11 +387,15 @@ export function renderMarkdown(markdown: string, options: RenderOptions): Render
       // No `allowDangerousHtml`: raw HTML in the source is dropped, not escaped (§57.1.2).
       .use(remarkRehype)
       .use(rehypeSanitize, SCHEMA)
+      // Everything from here down runs after sanitisation, so that what it produces cannot
+      // itself be filtered away — the reason is written out over `hardenLinks`.
       .use(links.plugin)
+      .use(highlightCode)
+      .use(collectHeadings(headings))
       .use(rehypeStringify)
       .processSync(stripInvisible(markdown));
 
-    return { ok: true, html: String(file), externalLinks: links.count() };
+    return { ok: true, html: String(file), externalLinks: links.count(), headings };
   } catch (error) {
     if (error instanceof LimitExceeded) return { ok: false, reason: error.reason };
     throw error;

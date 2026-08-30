@@ -10,7 +10,7 @@
 | **Media** | `media.orator.space` |
 | **Docs** | `docs.orator.space` |
 | **Status** | `status.orator.space` |
-| **Spec version** | 2.10 |
+| **Spec version** | 2.11 |
 | **Last revised** | 2026-08-30 |
 | **State** | Architecture baseline — Phases −1 through 9 implemented, with one `MUST` named where it stands open: §60.2 trust levels (no implementation, so nothing is indexable). §38.2's vector store is built and its choice closed by ADR 0012 |
 
@@ -4292,6 +4292,31 @@ minimal JavaScript · server-rendered · CDN-first
 typography and readability that hold up over long texts
 correct social previews
 ```
+
+**"Typography that holds up over long texts" is a requirement with a test, not a sentiment.**
+Two things it demands that a stylesheet reaches by accident only:
+
+**MUST — one type scale, declared in one place.** Every size on the site names a step in it. A
+stylesheet that accumulates sizes ends with several a pixel or two apart, and at that distance
+a heading signals nothing: the version of this site that prompted the rule had `h3` at 18.4px
+against a 17px body, so a structured article rendered as one undifferentiated block. Three
+steps within two pixels is the symptom; the cause is that a size can be typed into a rule
+where nobody sees it beside the others.
+
+**MUST — fenced code is highlighted, on the server.** §3.1's hypothesis says the content worth
+publishing here is measurements, incident write-ups and accounts of systems that were built,
+which is to say that for many articles the code and the diffs *are* the article. Highlighting
+is subject to §49.1 like everything else — a script may exist only for a preference belonging
+to the reader's own device — so it happens at render time, and a reader with scripts off sees
+what everyone else sees. The language comes from the author's fence and is never guessed:
+auto-detection on a four-line block produces confidently wrong colours, which is worse than
+none.
+
+**MUST — an article carries its own contents when it is long enough to need one**, built from
+the same pass that renders the body rather than by parsing the result back. Heading ids are
+prefixed, because an id derived from text somebody else wrote must not be able to name an
+element the page needs — in a browser a named element becomes a property of `document`, which
+is the DOM-clobbering class §57.1's sanitiser already closes for the content it allows.
 
 ## 50. SEO and indexability
 

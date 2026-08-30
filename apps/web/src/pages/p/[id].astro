@@ -1,4 +1,5 @@
 ---
+import type { Heading } from "@orator/core";
 import {
   isSaved,
   loadBody,
@@ -13,6 +14,7 @@ import NotFound from "../../components/NotFound.astro";
 import Byline from "../../components/Byline.astro";
 import Signals from "../../components/Signals.astro";
 import Feed from "../../components/Feed.astro";
+import Contents from "../../components/Contents.astro";
 import Conversation from "../../components/Conversation.astro";
 import StanceField from "../../components/StanceField.astro";
 import ModerationPanel from "../../components/ModerationPanel.astro";
@@ -114,6 +116,7 @@ const related =
     : await loadRelated(topicPorts, view.article.id, topics);
 
 let html: string | null = null;
+let headings: Heading[] = [];
 let failure: keyof typeof FAILURE_MESSAGE | null = null;
 let provenance: Awaited<ReturnType<typeof verifyProvenance>> = "unsigned";
 let conversation: Awaited<ReturnType<typeof loadConversation>> | null = null;
@@ -132,8 +135,10 @@ if (article !== null && view !== null) {
 
   if (body.ok) {
     const rendered = renderMarkdown(body.value, { siteHost });
-    if (rendered.ok) html = rendered.html;
-    else failure = rendered.reason;
+    if (rendered.ok) {
+      html = rendered.html;
+      headings = rendered.headings;
+    } else failure = rendered.reason;
     provenance = await verifyProvenance(view);
   } else {
     failure = "unavailable";
@@ -280,6 +285,21 @@ if (article !== null && view !== null) {
             ))}
           </ul>
         )}
+
+        {/*
+          §49.5 — the contents of a long article.
+
+          Above the text and inline, not a panel beside it. A sidebar of contents is a
+          reference-document pattern; this is a page somebody reads from the top, and the
+          contents are there to answer "how long is this and what is in it" before they
+          start — a question a reader asks once, not one they keep glancing at.
+
+          Only when there is something to summarise. `<details>` because a reader who does
+          not want it should be able to put it away, and because closing it needs no script:
+          §49.1 permits one only for a preference the server cannot know, and this is not
+          that.
+        */}
+        <Contents headings={headings} />
 
         {html === null ? (
           <p class="notice">

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@orator/protocol": "workspace:*",
+    "refractor": "^5.0.0",
     "rehype-sanitize": "^6.0.0",
     "rehype-stringify": "^10.0.1",
     "remark-gfm": "^4.0.1",
