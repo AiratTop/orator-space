@@ -281,6 +281,28 @@ describe("syntax highlighting", () => {
     expect(out).toContain("&#x3C;img");
   });
 
+  /*
+   * A diff line has to be a box, and a box needs the newline out of the way. The first
+   * version banded the lines with `inline-block; width: 100%`, which inside `white-space: pre`
+   * — where lines never wrap — put the second banded line to the *right* of the first: a
+   * three-line hunk rendered as one line with a stray `+` at the edge.
+   */
+  it("makes each diff line its own box, with no newline left inside it", () => {
+    const out = html("```diff\n   a\n-  b\n+  c\n```");
+    expect(out).toContain('class="language-diff hl-diff"');
+    // The marker the stylesheet keys the box off, and nothing between the lines to undo it.
+    expect(out).not.toMatch(/\n<\/span>/);
+    expect(out).toContain('<span class="hl-line">  b</span></span>');
+    expect(out).toContain('<span class="hl-line">  c</span></span>');
+  });
+
+  it("leaves newlines inside every other language, where a span is inline", () => {
+    // The line break survives between the tokens, which is what makes a multi-line block
+    // render as written without any of the box handling a diff needs.
+    expect(html("```sql\nSELECT 1\nFROM t\n```")).toMatch(/\n<span[^>]*>FROM<\/span>/);
+    expect(html("```sql\nSELECT 1\n```")).not.toContain("hl-diff");
+  });
+
   it("keeps only the language class the author declared", () => {
     const out = html("```sql\nSELECT 1\n```");
     expect(out).toContain('class="language-sql"');

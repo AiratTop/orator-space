@@ -3388,26 +3388,37 @@ img.avatar {
  * foreground disappears. It is also why both are kept legible rather than tinted — the
  * content of a removed line is exactly what a reader of an incident write-up came for.
  */
+/*
+ * A diff, which is the one case where colour carries meaning rather than category, and the
+ * one that needs a box rather than a colour.
+ *
+ * `display: block` on every line, not `inline-block` with a width. Inside `white-space: pre`
+ * lines never wrap, so two full-width inline-blocks sit on one row and the second overflows
+ * to the right — which is how a three-line hunk first shipped as one line with a stray `+` at
+ * the edge. The marker is on the `<code>`, so a line shape Prism produces that this file has
+ * not anticipated still gets a box.
+ *
+ * The newline that ended each line is removed by `renderMarkdown` before it gets here; a
+ * block box supplies the break, and leaving both would put an empty row inside every line.
+ */
+.prose .hl-diff > span {
+  display: block;
+}
+
 .prose .hl-deleted-sign {
   color: var(--code-deleted);
   background: var(--code-deleted-bg);
-  display: inline-block;
-  width: 100%;
 }
 
 .prose .hl-inserted-sign {
   color: var(--code-inserted);
   background: var(--code-inserted-bg);
-  display: inline-block;
-  width: 100%;
 }
 
 /*
  * The band goes on `-sign`, which is the span Prism puts around the whole line, and not on
- * `deleted` — which it also puts on the `-` character *inside* that line. Both classes on one
- * rule would nest a full-width inline-block inside a full-width inline-block and put the sign
- * on a line of its own. Found by reading the markup rather than by looking at the page, which
- * is the only way this one is ever found: it renders, it just renders wrongly.
+ * `deleted` — which it also puts on the `-` character *inside* that line. One rule for both
+ * would put the sign on a row of its own.
  *
  * A grammar that marks removed text without marking a line — Prism uses `deleted` that way
  * outside diffs — still gets the colour, and no band.

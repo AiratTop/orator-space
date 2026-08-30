@@ -292,12 +292,61 @@ function highlightCode() {
       try {
         const highlighted = refractor.highlight(source, language).children as HastNode[];
         for (const child of highlighted) prefixClasses(child);
+        if (language === "diff") markDiffLines(node, highlighted);
         node.children = highlighted;
       } catch {
         /* leave the block as it was */
       }
     });
   };
+}
+
+/**
+ * A diff, where a line has to be a line and the markup does not make it one.
+ *
+ * Prism wraps each line of a diff in a span whose contents end with the newline that ended
+ * that line. For every other language that is exactly right — a span is inline, the newline
+ * inside it breaks the line, and the block renders as written.
+ *
+ * A diff needs more, because the useful thing about one is that a changed line is banded
+ * across the full width and findable while scanning a long hunk. That needs a box, and a box
+ * put on this markup naively is what shipped: `display: inline-block; width: 100%` inside
+ * `white-space: pre`, where lines never wrap — so the second banded line did not move to the
+ * next row, it overflowed to the right of the first, and one hunk rendered as a single line
+ * with a stray `+` at the far edge.
+ *
+ * `display: block` breaks between the lines properly. What then remains is the newline still
+ * sitting *inside* each box, which would render an empty second row within every line. So it
+ * is removed here, at the one place that knows the box is coming — the alternative is CSS
+ * compensating for a character it cannot see, which is how this kind of fix stops being
+ * understandable a month later.
+ *
+ * The marker class goes on the `<code>` rather than on each line: a grammar that emits a
+ * line shape this function has not anticipated still gets the box, instead of losing its
+ * newline and silently running into the line below.
+ */
+function markDiffLines(code: HastNode, lines: HastNode[]) {
+  const className = code.properties?.["className"];
+  code.properties = {
+    ...(code.properties ?? {}),
+    className: Array.isArray(className) ? [...className, "hl-diff"] : ["hl-diff"],
+  };
+
+  for (const line of lines) {
+    if (line.type !== "element") continue;
+    const last = lastTextNode(line);
+    if (last?.value?.endsWith("\n")) last.value = last.value.slice(0, -1);
+  }
+}
+
+/** The last text node in document order under this one, or null if there is none. */
+function lastTextNode(node: HastNode): HastNode | null {
+  const children = node.children ?? [];
+  for (let i = children.length - 1; i >= 0; i -= 1) {
+    const found = children[i]!.type === "text" ? children[i]! : lastTextNode(children[i]!);
+    if (found !== null) return found;
+  }
+  return node.type === "text" ? node : null;
 }
 
 /**
