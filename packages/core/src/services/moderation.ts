@@ -139,6 +139,9 @@ export async function createReport(
       targetId: input.targetId,
       reporterPrincipalId: reporter as OratorId | null,
       reporterContact: input.reporterContact ?? null,
+      // Everything reaching this function came from somebody, signed in or not. The platform's
+      // own screening does not come through here — see `screenArticle`.
+      source: "human",
       category: input.category,
       details: input.details ?? null,
       createdAt: now,
@@ -1009,10 +1012,12 @@ export async function screenArticle(
           id: ports.ids.next(),
           targetType: "article",
           targetId: articleId as OratorId,
-          // Automatic: no principal reported this, and recording one would put a person's
-          // name on a machine's judgement.
+          // No principal reported this, and recording one would put a person's name on a
+          // machine's judgement. `source` is what carries that fact to the queue, which
+          // would otherwise render it as one more anonymous member of the public.
           reporterPrincipalId: null,
           reporterContact: null,
+          source: "automatic",
           category: verdict.categories.includes("prompt_injection") ? "injection" : "spam",
           details: `${provider.name} scored ${verdict.score.toFixed(2)}: ${verdict.categories.join(", ")}`,
           createdAt: now,

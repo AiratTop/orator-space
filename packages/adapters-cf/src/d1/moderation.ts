@@ -18,6 +18,7 @@ interface ReportRow {
   target_id: string;
   reporter_principal_id: string | null;
   reporter_contact: string | null;
+  source: string;
   category: string;
   details: string | null;
   status: string;
@@ -47,6 +48,7 @@ const toReport = (row: ReportRow): ReportRecord => ({
   targetId: row.target_id,
   reporterPrincipalId: row.reporter_principal_id as OratorId | null,
   reporterContact: row.reporter_contact,
+  source: row.source as ReportRecord["source"],
   category: row.category as ReportRecord["category"],
   details: row.details,
   status: row.status as ReportStatus,
@@ -99,8 +101,8 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
           .prepare(
             `INSERT INTO reports
                (id, target_type, target_id, reporter_principal_id, reporter_contact,
-                category, details, status, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
+                source, category, details, status, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
           )
           .bind(
             report.id,
@@ -108,6 +110,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             report.targetId,
             report.reporterPrincipalId,
             report.reporterContact,
+            report.source,
             report.category,
             report.details,
             report.createdAt,
@@ -218,14 +221,14 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
       if (articles.length > 0) {
         const { results } = await db
           .prepare(
-            `SELECT a.id, r.title
+            `SELECT a.id, a.moderation_state, r.title
                FROM articles a
                LEFT JOIN revisions r
                       ON r.id = COALESCE(a.published_revision_id, a.current_revision_id)
               WHERE a.id IN (${holes(articles)})`,
           )
           .bind(...articles)
-          .all<{ id: string; title: string | null }>();
+          .all<{ id: string; title: string | null; moderation_state: string }>();
         for (const row of results) {
           found.set(`article:${row.id}`, {
             targetType: "article",
@@ -233,6 +236,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             label: row.title,
             articleId: row.id,
             username: null,
+            screening: row.moderation_state,
           });
         }
       }
@@ -255,6 +259,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             label: row.opening,
             articleId: row.article_id,
             username: null,
+            screening: null,
           });
         }
       }
@@ -274,6 +279,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             label: row.display_name ?? `@${row.username}`,
             articleId: null,
             username: row.username,
+            screening: null,
           });
         }
       }
@@ -292,6 +298,7 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
             label: null,
             articleId: null,
             username: null,
+            screening: null,
           },
       );
     },

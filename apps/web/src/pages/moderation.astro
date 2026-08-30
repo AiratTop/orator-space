@@ -163,6 +163,10 @@ let dossier:
  */
 const reporters = new Map<string, string>();
 
+/** What screening made of the article a report is about, or null where the question does not apply. */
+const screeningOf = (report: { targetType: string; targetId: string }) =>
+  subjects.get(`${report.targetType}:${report.targetId}`)?.screening ?? null;
+
 const describe = async (targets: readonly { targetType: TargetSummary["targetType"]; targetId: string }[]) => {
   if (targets.length === 0) return;
   const described = await describeTargets(ctx, targets);
@@ -799,7 +803,17 @@ const undoableIds = new Set<string>();
                       */}
                       <p class="report__meta">
                         <code class="report__id">{report.targetId}</code>
-                        {report.reporterPrincipalId === null ? (
+
+                        {report.source === "automatic" ? (
+                          /*
+                            §58.2, §60.1 — the platform's own reader, not a member of the
+                            public. Both arrive with no principal, and calling this one
+                            "anonymous" would read as one more person agreeing, which is the
+                            opposite of what it is: a machine's observation carries no weight
+                            as a second opinion and every bit of its weight as a prompt to look.
+                          */
+                          <span class="report__from report__from--auto">raised by screening</span>
+                        ) : report.reporterPrincipalId === null ? (
                           <span class="report__from report__from--anon">from anonymous</span>
                         ) : reporters.has(report.reporterPrincipalId) ? (
                           <a class="report__from" href={`/@${reporters.get(report.reporterPrincipalId)}`}>
@@ -808,6 +822,22 @@ const undoableIds = new Set<string>();
                         ) : (
                           <span class="report__from report__from--anon">
                             from <code>{report.reporterPrincipalId}</code>
+                          </span>
+                        )}
+
+                        {/*
+                          What the platform's reader made of the article, where there is one.
+
+                          The pairing is the point. A report on a `flagged` article is a second
+                          observation agreeing with the first; on a `passed` one it is a person
+                          seeing what the model missed, which is the more interesting of the
+                          two and looked identical until this line existed. `unchecked` means
+                          there is no verdict to agree or disagree with — screening has not
+                          reached it — which is a third thing again.
+                        */}
+                        {screeningOf(report) !== null && (
+                          <span class={`report__screen report__screen--${screeningOf(report)}`}>
+                            screening: {screeningOf(report)}
                           </span>
                         )}
                       </p>

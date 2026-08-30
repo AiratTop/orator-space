@@ -221,6 +221,9 @@ async function record(
             targetId: articleId,
             reporterPrincipalId: null,
             reporterContact: null,
+            // §60.1 is a machine's observation, not a person's complaint, and the queue says
+            // which it is reading rather than calling it anonymous.
+            source: "automatic",
             category: "other",
             details: `Byte-identical to ${duplicateOf}. Detected automatically (§60.1); the ordering by id says which was published first, not which is the copy.`,
             createdAt: now,

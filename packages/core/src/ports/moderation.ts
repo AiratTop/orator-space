@@ -12,6 +12,14 @@ export interface NewReport {
   /** Null for an anonymous report — §61.2 does not require an account to report. */
   reporterPrincipalId: OratorId | null;
   reporterContact: string | null;
+  /**
+   * A person, or the platform's own screening (§58.2, §61).
+   *
+   * Both arrive with no principal, and until this existed the queue could not tell them apart:
+   * a machine's flag rendered as "from anonymous", which is false and reads as one more member
+   * of the public agreeing. They carry different weight and want different follow-up.
+   */
+  source: "human" | "automatic";
   category: ReportCategory;
   details: string | null;
   createdAt: string;
@@ -71,6 +79,15 @@ export interface TargetSummary extends ReportTarget {
   label: string | null;
   /** For a comment, the article it is on, so the queue can link to where it is read. */
   articleId: string | null;
+  /**
+   * For an article, what screening made of it (§58.2, §61): `passed`, `flagged`, `unchecked`.
+   *
+   * Null for every other kind of target, which has no such column, and for an article that is
+   * gone. On the queue it is the difference between a report that agrees with the platform's
+   * own reader and one that contradicts it — the second is the more interesting of the two and
+   * looked identical to the first until this was carried here.
+   */
+  screening: string | null;
   /**
    * For a principal, the handle its page is addressed by (SPEC §7.3, §61.1).
    *

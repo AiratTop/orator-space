@@ -2546,6 +2546,33 @@ a {
   font-style: italic;
 }
 
+/* The platform's own reader. Not italic — it is not a person who declined to give a name. */
+.report__from--auto {
+  font-style: normal;
+}
+
+/*
+ * What screening made of the article, where the report is about one.
+ *
+ * Colour on `flagged` only. A moderator scans this column for the disagreement — a report on
+ * something the model passed, or on something it never reached — and colouring all three
+ * states would make the column a decoration that has to be read word by word. `passed` and
+ * `unchecked` sit in the same secondary ink as everything else on this line; `flagged` is the
+ * one the eye should catch, because it is the case where two readers already agree.
+ */
+.report__screen {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+.report__screen--flagged {
+  color: var(--warn);
+}
+
+.report__screen--unchecked {
+  font-style: italic;
+}
+
 /*
  * When a report or an action landed. Tabular figures, because a column of timestamps is read
  * by comparing digits in the same position — proportional ones make 11:05 and 17:50 different

@@ -5168,6 +5168,23 @@ or the verdict may have been wrong, so a further report is a new statement rathe
 repeat — a rule that never let the same person speak again would make a rejected report a
 permanent silencing.
 
+**MUST — a report records whether it came from a person or from the platform.** Both arrive
+with no principal: §61.2 keeps human reporting anonymous, and §58.2 item 6 has screening raise
+a report when it flags an article — "recording one would put a person's name on a machine's
+judgement". Those two are not interchangeable to a moderator. An anonymous report is somebody
+saying they saw something; a screening report is the platform's own reader asking for a look,
+and it carries no weight at all as a second opinion. The queue says which it is reading, and
+before this column existed it called a machine's flag "from anonymous" — which reads as one
+more person agreeing, the opposite of what it is.
+
+**MUST — the queue shows what screening made of a reported article**, where the target is one.
+The pairing is what a moderator is actually weighing: a report on a `flagged` article is a
+second observation agreeing with the first; on a `passed` one it is a person seeing what the
+model missed, which is the more interesting of the two and is indistinguishable from the first
+without this; `unchecked` is a third case again, where there is no verdict to agree with. This
+is the whole of what a platform model's output may do to the queue — inform the order a person
+works in. §58.4 is unchanged: it is never the authority for an action.
+
 **MUST — the queue names the reporter, and nothing else ever does.** A moderator cannot
 otherwise make the judgement the queue exists for: whether five reports about one person are
 five people or one. An account is shown as its handle and linked to its profile, because the
