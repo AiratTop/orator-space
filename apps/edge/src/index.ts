@@ -62,6 +62,13 @@ export interface Env {
    */
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_WEBHOOK_SECRET?: string;
+  /**
+   * SPEC §62 — the secret that makes a stored address a pseudonym rather than an encoding.
+   *
+   * A Worker secret, per environment. Optional in the type because a deployment without one
+   * still has to run, and `context.ts` says what it falls back to and what that costs.
+   */
+  IP_PEPPER?: string;
   DB: D1Database;
   CONTENT: R2Bucket;
   MEDIA: R2Bucket;

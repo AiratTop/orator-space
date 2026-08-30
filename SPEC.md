@@ -5381,7 +5381,23 @@ changes to system parameters.
 **MUST NOT.** `audit_log` is not a public activity feed — `events` (§20.3) is. Access to the
 audit log is restricted.
 
-**MUST.** IP addresses are stored only as a salted hash. Retention is per §23.4.
+**MUST.** IP addresses are stored only as a keyed hash. Retention is per §23.4.
+
+**The salt is a secret, and that is the whole of the protection.** IPv4 is thirty-two bits:
+against a salt an attacker can guess — an environment name, a hostname, a constant in a
+public repository — the entire address space is four billion digests, and a database export
+becomes a list of addresses. So the digest is `HMAC-SHA-256(pepper, address)` truncated to
+128 bits, with the pepper held as a Worker secret per environment:
+
+```text
+IP_PEPPER               edge and web Workers, a secret: what the stored digest is keyed with
+```
+
+It is one secret rather than a per-row salt because the value has to be *stable* to be worth
+storing at all: the same caller must produce the same pseudonym, or the audit log cannot
+correlate and the flood key (§59.1) cannot count. Rotating it makes every stored pseudonym
+uncorrelatable with every new one — which is the correct outcome for the case that calls for
+a rotation, the pepper having leaked.
 
 ---
 

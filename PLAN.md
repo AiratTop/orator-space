@@ -261,6 +261,17 @@ apps/edge   TELEGRAM_BOT_TOKEN       wrangler secret put, per env
 apps/edge   TELEGRAM_WEBHOOK_SECRET  wrangler secret put, per env — any long random string
 ```
 
+Plus one that is not Telegram's and belongs on both Workers (§62):
+
+```text
+apps/edge   IP_PEPPER   wrangler secret put, per env — any long random string
+apps/web    IP_PEPPER   the same value in the same environment, or one caller reaching both
+                        surfaces lands in the audit log as two people
+```
+
+Until it is set, both Workers fall back to the environment name and §62's protection is in
+name only — a stored digest of an IPv4 address keyed with a public string is the address.
+
 Then the webhook, once per bot, out of band:
 
 ```bash

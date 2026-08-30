@@ -23,6 +23,7 @@ import {
   systemClock,
 } from "@orator/adapters-cf";
 import {
+  addressPseudonym,
   sessionActor,
   type AccountContext,
   type AccountPorts,
@@ -58,6 +59,8 @@ interface AccountEnv {
    */
   QUOTA: DurableObjectNamespace<QuotaCounter>;
   ENVIRONMENT: string;
+  /** SPEC §62 — the pepper the edge Worker uses, so both surfaces produce one pseudonym. */
+  IP_PEPPER?: string;
 }
 
 const accountEnv = env as unknown as AccountEnv;
@@ -245,14 +248,15 @@ export async function openReportBy(
   return moderationPorts.moderation.findOpenReportBy(reporterPrincipalId, targetType, targetId);
 }
 
-/** SPEC §62 — an address is stored as a hash or not at all. */
-async function hashAddress(address: string | null): Promise<string | null> {
-  if (address === null) return null;
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(accountEnv.ENVIRONMENT + address),
-  );
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
+/**
+ * SPEC §62 — an address is stored as a keyed digest or not at all.
+ *
+ * The same pepper and the same function as the edge Worker (`apps/edge/src/context.ts`), so
+ * one caller reaching both surfaces is one pseudonym in the audit log rather than two. The
+ * fallback to the environment name, and what it costs, is documented there.
+ */
+function hashAddress(address: string | null): Promise<string | null> {
+  return addressPseudonym(address, accountEnv.IP_PEPPER ?? accountEnv.ENVIRONMENT);
 }
 
 

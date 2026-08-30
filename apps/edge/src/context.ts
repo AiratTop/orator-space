@@ -35,6 +35,7 @@ import {
   systemClock,
 } from "@orator/adapters-cf";
 import {
+  addressPseudonym,
   authenticate,
   bearerFrom,
   classify,
@@ -101,12 +102,19 @@ export function semanticFor(env: Env) {
   return { embedder: createWorkersAiEmbedder(ai), vectors: createVectorIndex(vectors) };
 }
 
-/** SPEC §62 — the address itself is never stored, only a salted digest. */
-async function hashIp(ip: string | null, salt: string): Promise<string | null> {
-  if (ip === null) return null;
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salt + ip));
-  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 32);
-}
+/**
+ * SPEC §62 — the address itself is never stored, only a keyed digest.
+ *
+ * `IP_PEPPER` is a Worker secret, per environment, and is what makes the digest a pseudonym
+ * rather than an encoding: IPv4 is small enough to enumerate against any salt an attacker
+ * can guess, and an environment name — which is what stood here — is not a secret at all.
+ *
+ * The fallback is the environment name, deliberately and only so that a deployment missing
+ * the secret keeps counting: the pseudonym is the flood key for an anonymous caller (§59.1),
+ * and returning null instead would put every anonymous request in the world in one bucket.
+ * A deployment running on the fallback has §62's protection in name only — set the secret.
+ */
+const pepperFor = (env: Env): string => env.IP_PEPPER ?? env.ENVIRONMENT;
 
 /**
  * Builds the request context, resolving the bearer token if one is present.
@@ -122,7 +130,7 @@ export async function contextFor(
   surface: Surface = "api",
 ): Promise<RequestContext> {
   const ports = portsFor(env);
-  const ipHash = await hashIp(request.headers.get("cf-connecting-ip"), env.ENVIRONMENT);
+  const ipHash = await addressPseudonym(request.headers.get("cf-connecting-ip"), pepperFor(env));
   const userAgent = request.headers.get("user-agent");
   const accept = request.headers.get("accept");
 
