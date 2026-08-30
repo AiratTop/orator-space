@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed — the problem is recorded; the protocol is not built |
+| **Status** | Proposed — the problem is recorded; the protocol is not built, and the observability it depends on is not either |
 | **Date** | 2026-08-31 |
 | **Phase** | 10 |
 | **Relates to** | `SPEC.md` §16.2 — content addressing; §23.3 — erasure; §32.2 — orphan collection |
@@ -69,9 +69,29 @@ had to leave:
 5. **A publication that arrives after a delete re-uploads**, which content addressing makes
    free to get right: the bytes are the same, so writing them again is idempotent. This is
    the step that makes the whole protocol tolerable — losing the object is recoverable.
-6. **Stranded states have an explicit recovery.** A `writing` claim from a request that died
-   must expire, and the expiry has to be longer than any request and shorter than any
-   patience. This is where the design will be most tempted to hand-wave.
+6. **Stranded states have an explicit recovery — both of them.** A `writing` claim from a
+   request that died must expire, and the expiry has to be longer than any request and
+   shorter than any patience.
+
+   `deleting` is the harder one and the first draft of this ADR omitted it entirely, which is
+   the same hand-waving the sentence above warns about. A collector can die inside it in two
+   places, and they are not symmetric:
+
+   - **before the R2 delete.** The object is intact and the hash is locked. A publisher of
+     those bytes is refused by step 3 for as long as the state stands, so a lease that never
+     expires bars the hash permanently — a body nobody can publish and nobody can collect.
+   - **after the delete, before the state is cleared.** The object is gone and the state is
+     the only thing keeping a writer from committing a reference to it. Expiring this one
+     early is what re-opens the original race.
+
+   So `deleting` is a lease with a TTL rather than a flag, the collector is its owner and
+   renews it while it works, and an expired lease is *reclaimed* rather than deleted: the
+   next collector re-runs the reference check and the R2 delete against a hash whose object
+   may or may not still be there. That is what makes the completion idempotent — deleting an
+   absent object succeeds, so a reclaimed lease converges on the same end state whichever
+   place the previous owner died in. Step 5 is what makes the whole thing survivable: an
+   author republishing the same bytes re-uploads them, so even the worst interleaving costs
+   an object rather than an article.
 
 ## Why it is not built now
 
@@ -80,14 +100,34 @@ transition on the hot path of every publish. Every write would take a conditiona
 storing bytes, which is a second D1 round trip on the operation §64 measures most closely.
 That is a real price for a race nobody has hit.
 
-It is also not a race that silently corrupts: an article whose body is missing renders §23.2's
-failure message rather than wrong text, and the object is re-uploadable from the author's own
-copy. That is the difference between this and the defects that motivated ADR 0014 — those
-were permanent.
+It is also not a race that corrupts: an article whose body is missing shows §23.2's failure
+message rather than wrong text, and the object is re-uploadable from the author's own copy.
+That is the difference between this and the defects that motivated ADR 0014 — those were
+permanent.
 
-So: recorded, with the protocol written down while the analysis is fresh, and left for the
-day the measurement justifies it or a near miss shows up in the logs. `retention.content.*`
-and the `raced` counter on `EraseOutcome` are the two places that would show one.
+**It is, however, quieter than an earlier version of this paragraph claimed.** That version
+said a near miss would show up in `retention.content.*` or in the `raced` counter on
+`EraseOutcome`. Neither is true as written, and the correction belongs here rather than in a
+commit message:
+
+- `retention.content.*` is only written on *failure*. A collector that deletes an object
+  successfully logs nothing at all, which is the case a near miss would come from.
+- `raced` counts hashes that gained a reference between the post-commit re-check and the
+  delete — the window the re-check closes. A reference arriving *after* that check is exactly
+  the window that is still open, and it leaves the counter at zero.
+- and the losing side is silent by construction: a revision whose object has gone still has
+  a `content_ref`, so `readArticle` returns `body: null` and the surfaces above it answer
+  `200` with no body rather than raising anything.
+
+**The observability is therefore a prerequisite of this ADR rather than a consequence of
+it.** Before the protocol is worth building there has to be evidence that the race happens,
+and today nothing would produce that evidence. What is needed is small and independent of
+the state machine: distinguish "this revision was erased on purpose" (`content_ref` is empty)
+from "the object is unexpectedly absent", answer the second with `503` rather than `200` and
+a null body, and log it as `content.missing` — on REST, MCP and the web page alike, since the
+three reach the same read model by three routes.
+
+That is the next thing to build here. The state machine waits for what it produces.
 
 ## Alternatives considered
 
