@@ -2,7 +2,7 @@
 import Layout from "../components/Layout.astro";
 import { createReport, loadConversation, resolveSession, type CreateReportInput } from "@orator/core";
 import type { AuthorSummary } from "@orator/core/ports";
-import { principalOf, reportContext, sameOrigin } from "../lib/account.js";
+import { openReportBy, principalOf, reportContext, sameOrigin } from "../lib/account.js";
 import { answersFor } from "../lib/accountable.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
 import { CACHE, CDN_CACHE } from "../lib/http.js";
@@ -136,6 +136,25 @@ if (articleId !== null) {
 const own =
   answerableBy !== null && answersFor(answerableBy, Astro.locals.viewer?.username ?? null);
 
+/*
+ * §61.1 — a report this reader already has open against this target.
+ *
+ * One per reporter per target, and deliberately not one per *category*. A report is not a
+ * taxonomy exercise: the category routes and prioritises, it does not make a second complaint
+ * out of the same one. The categories also overlap heavily on real content — an article can
+ * honestly be spam and illegal and written to steer a model — so keying on it would let one
+ * person file six defensible rows about one article and reproduce the problem with a ceiling
+ * on it. The row count is what tells a moderator how many *independent* people noticed
+ * something, so it has to count people.
+ *
+ * Anonymous readers are not asked: there is nobody to compare them to (§61.2), and they are
+ * bounded by the per-target counter and the per-address limiter below.
+ */
+const alreadyFiled =
+  subject === null || own || Astro.locals.viewer === undefined
+    ? null
+    : await openReportBy(Astro.locals.viewer.principalId, subject.kind, subject.id);
+
 const backTo =
   subject === null
     ? "/"
@@ -156,7 +175,7 @@ let outcome: Outcome = null;
 const cookie = readCookie(Astro.request, SESSION_COOKIE);
 const session = cookie === null ? null : await resolveSession(authPorts, cookie);
 
-if (Astro.request.method === "POST" && subject !== null && !own) {
+if (Astro.request.method === "POST" && subject !== null && !own && alreadyFiled === null) {
   if (!sameOrigin(Astro.request, siteOrigin)) {
     return new Response("Cross-origin form posts are refused.", {
       status: 403,
@@ -246,6 +265,28 @@ const heading =
       </div>
     )}
 
+    {subject !== null && alreadyFiled !== null && (
+      <div class="filing">
+        <p class="notice" role="status">You have already reported this.</p>
+        <p>
+          Filed{" "}
+          <time datetime={alreadyFiled.createdAt}>
+            {alreadyFiled.createdAt.slice(0, 10)} at {alreadyFiled.createdAt.slice(11, 16)} UTC
+          </time>{" "}
+          as <strong>{CATEGORIES.find((c) => c.value === alreadyFiled.category)?.label ?? alreadyFiled.category}</strong>,
+          reference <code>{alreadyFiled.id}</code>. It is in the queue and a moderator has not
+          closed it yet.
+        </p>
+        <p>
+          A second report from the same person about the same thing does not add to it — what
+          gives a report weight is other people noticing independently. If something has
+          changed, or you have more to say, write to{" "}
+          <a href="mailto:mail@orator.space">mail@orator.space</a> and name the reference.
+        </p>
+        <p><a href={backTo}>Back to what you were reading</a></p>
+      </div>
+    )}
+
     {subject === null && (
       <p class="notice">
         This address needs to say what is being reported. Use the report link on the article,
@@ -283,7 +324,7 @@ const heading =
       </p>
     )}
 
-    {subject !== null && !own && outcome?.kind !== "filed" && (
+    {subject !== null && !own && alreadyFiled === null && outcome?.kind !== "filed" && (
       <div class="filing">
         <p class="filing__subject">
           You are reporting{" "}

@@ -228,6 +228,23 @@ export async function reportContext(
   };
 }
 
+/**
+ * A report this reader already has open against this target (SPEC §61.1).
+ *
+ * The service deduplicates on the same key and answers with the report that already exists,
+ * which is the right behaviour for an API caller and the wrong thing to *only* do for a
+ * person: they would fill in a form, press send, and be shown a confirmation carrying a
+ * timestamp from last week without ever being told why. Asked before the form is drawn, the
+ * same fact becomes an answer instead of a surprise.
+ */
+export async function openReportBy(
+  reporterPrincipalId: string,
+  targetType: string,
+  targetId: string,
+) {
+  return moderationPorts.moderation.findOpenReportBy(reporterPrincipalId, targetType, targetId);
+}
+
 /** SPEC §62 — an address is stored as a hash or not at all. */
 async function hashAddress(address: string | null): Promise<string | null> {
   if (address === null) return null;

@@ -5138,12 +5138,26 @@ else's complaint. The refusal is `forbidden`, in the application service so REST
 web reach it alike (§43.4) — and the surfaces do not offer the control either, because a
 control that files a request the service will refuse has told the reader something untrue.
 
-**MUST — one open report per reporter per target.** A second from the same account, while
+**MUST — one open report per reporter per target, and deliberately not one per category.** A second from the same account, while
 the first is still `open` or `reviewing`, returns the first rather than filing another. The
 per-target flood ceiling cannot see this: twenty rows from one person sit under it, and a
 moderator opening the queue then sees a target that looks widely complained about and is not
 — a report's weight comes from independent people noticing the same thing, so the row count
 has to mean that.
+
+**Not keyed on the category, which is the tempting version and the wrong one.** A report is
+not a taxonomy exercise: the category routes and prioritises, it does not make a second
+complaint out of the same one. §61.2's six also overlap heavily on real content — an article
+can honestly be spam, illegal, and written to steer a model reading it — so keying on the
+category lets one person file six defensible rows about one article, which is the same problem
+with a ceiling on it. The row count exists to say how many *independent* people noticed
+something, so it counts people.
+
+**MUST — a person is told before the form, not after.** The service's answer is right for an
+API caller and is the wrong thing to do only that way for a reader: they would fill a form in,
+press send, and receive a confirmation carrying a timestamp from last week without ever
+learning why. The web surface asks the same question before drawing the form and says what is
+already filed, when, and under which category.
 
 **It answers with the existing report rather than an error**, because no code in §45.1 fits.
 `conflict` and `rate-limited` are both documented retryable and retrying will not help, so
