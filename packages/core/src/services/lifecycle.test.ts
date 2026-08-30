@@ -299,6 +299,56 @@ describe("erasing an article (SPEC §23.3)", () => {
     expect(await ports.content.get(hash)).toBeNull();
   });
 
+  it("refuses a new revision on an article that has been erased", async () => {
+    // The other half of the race below, and the one the domain closes outright: erasure sets
+    // `removed` in the same batch that blanks the revisions, so nothing can be added to the
+    // article afterwards and no new reference to its bodies can appear through it.
+    const id = await published();
+    unwrap(await eraseArticle(ctxFor(owner), id, { confirm: "erase" }));
+
+    const result = await createRevision(ctxFor(agent), id, {
+      title: "After the fact",
+      content: "# After the fact\n\nA body.\n",
+      ifMatch: null,
+    });
+    expect(errorOf(result)).toBe("not-found");
+  });
+
+  /**
+   * A publisher of the same bytes arriving mid-erasure keeps their body (§23.3, §16.2).
+   *
+   * The reference check that chooses what to delete runs before the commit; the delete runs
+   * after it. Content is addressed by hash, so in that window somebody else publishing
+   * byte-identical text acquires a live reference to the very object about to be destroyed —
+   * and would be left with an article pointing at bytes that are not there.
+   *
+   * Simulated by publishing from inside the commit, which is the window itself rather than an
+   * approximation of it.
+   */
+  it("does not delete a body that gained a reference while the erasure ran", async () => {
+    const mine = await published();
+    const hash = ports.state.revisions.get(ports.state.articles.get(mine)!.publishedRevisionId!)!.contentHash;
+
+    const commit = ports.db.commit.bind(ports.db);
+    let raced = false;
+    ports.db.commit = async (writes) => {
+      const result = await commit(writes);
+      if (!raced) {
+        raced = true;
+        // Someone publishes the same text, one instant after the pointers were blanked.
+        unwrap(await createArticle(ctxFor({ ...stranger, kind: "human" }), { title: "Same words", content: BODY }));
+      }
+      return result;
+    };
+
+    const outcome = unwrap(await eraseArticle(ctxFor(owner), mine, { confirm: "erase" }));
+
+    expect(outcome.raced).toBe(1);
+    expect(outcome.contentDeleted).toBe(false);
+    // The other author's article still has its body.
+    expect(await ports.content.get(hash)).toBe(BODY);
+  });
+
   it("requires the confirmation verbatim", async () => {
     const id = await published();
     expect(errorOf(await eraseArticle(ctxFor(owner), id, { confirm: "yes" }))).toBe("validation-failed");
