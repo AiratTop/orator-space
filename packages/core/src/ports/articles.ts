@@ -120,7 +120,17 @@ export interface NewRevision {
 export interface ArticleRepo {
   findById(id: string): Promise<ArticleRecord | null>;
   findRevision(id: string): Promise<RevisionRecord | null>;
-  listRevisions(articleId: string, limit: number): Promise<RevisionRecord[]>;
+  /**
+   * A page of an article's history, newest first (SPEC §44.2, §67).
+   *
+   * `publishedOnly` is a filter and not a caller's convenience: which revisions a viewer may
+   * see is §16.3's rule, and applying it after the page has been read produces a page
+   * shorter than it claims and a cursor that skips. It belongs in the query.
+   */
+  listRevisions(
+    articleId: string,
+    options: { limit: number; cursor?: string | null; publishedOnly?: boolean },
+  ): Promise<RevisionRecord[]>;
   /** Every revision sharing a body — erasure must check this before deleting (SPEC §23.3). */
   countRevisionsWithContent(contentHash: string): Promise<number>;
 

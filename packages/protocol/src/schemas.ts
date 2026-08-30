@@ -639,9 +639,18 @@ export const followRequest = z.strictObject({ principal_id: oratorId });
 // Discovery (§37, §38, §22)
 // ---------------------------------------------------------------------------
 
+/**
+ * SPEC §37.1 — the feed's parameters.
+ *
+ * `language` was declared here and read by nothing, so the generated OpenAPI advertised a
+ * filter that did not exist and the endpoint answered `?language=ru` with every article in
+ * every language. A documented parameter that is ignored is worse than an undocumented one:
+ * a client builds on it and gets a plausible wrong answer rather than an error. Removed
+ * rather than implemented, because filtering the feed by language is a decision about §37.1
+ * and not a gap to be quietly filled in.
+ */
 export const feedQuery = paginationQuery.extend({
   mode: z.enum(["latest"]).optional().describe("Only `latest` in the MVP (§37.1)"),
-  language: z.string().max(20).optional(),
 });
 
 export const articleCardResponse = z.object({
@@ -673,14 +682,41 @@ export const articleCardResponse = z.object({
   }),
 });
 
-export const searchQuery = paginationQuery.extend({
+/**
+ * SPEC §38 — search takes a query and a page size, and no cursor.
+ *
+ * It extended `paginationQuery` and so declared `cursor`, which the route has never passed
+ * to anything: every response carries `next_cursor: null`, and a client following the
+ * documented cursor would have paged forever over page one. Ranked results are not a cursor
+ * problem the way a monotonic id is (§12.2) — the ranking is not stable across queries, so
+ * paging them is a design decision rather than a parameter to wire up. Declaring it before
+ * making it is what turned a missing feature into a wrong one.
+ *
+ * The envelope keeps `next_cursor`, always null: one shape for every collection (§44.1).
+ */
+export const searchQuery = z.strictObject({
   q: z.string().min(1).max(200),
+  limit: z.coerce.number().int().min(1).max(MAX_LIMIT).optional(),
   type: z.enum(["articles", "principals"]).optional(),
 });
 
+/**
+ * SPEC §8, §38.3 — a topic's public address, and therefore a shape rather than any string.
+ *
+ * `/t/{slug}` is a URL this project promises to keep resolving, so the vocabulary migration
+ * fixes slugs deliberately. Lower case, digits and single hyphens: what the sixty in
+ * `0011_topic_vocabulary.sql` already are, written down so a sixty-first cannot be something
+ * that needs escaping in a path.
+ */
+export const topicSlug = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "lower-case words joined by single hyphens");
+
 export const topicResponse = z.object({
   id: oratorId,
-  slug: z.string(),
+  slug: topicSlug,
   label: z.string(),
   description: z.string().nullable(),
 });

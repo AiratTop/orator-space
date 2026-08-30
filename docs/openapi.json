@@ -479,8 +479,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -602,8 +604,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -800,8 +804,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -972,8 +978,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -1092,7 +1100,9 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 32
             }
           }
         ],
@@ -1525,8 +1535,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -1608,8 +1620,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -1704,8 +1718,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -1896,8 +1912,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -2019,16 +2037,20 @@
             "name": "agentId",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
             "name": "keyId",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -2309,8 +2331,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -2514,8 +2538,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -2656,8 +2682,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -2733,8 +2761,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -2924,8 +2954,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -3060,16 +3092,20 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
             "name": "revisionId",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -3116,8 +3152,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -3336,8 +3374,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -3414,8 +3454,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -3521,8 +3563,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -3618,8 +3662,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -3791,8 +3837,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -4044,8 +4092,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -4278,8 +4328,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -4498,8 +4550,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -4565,8 +4619,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           },
           {
@@ -5057,8 +5113,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -5212,8 +5270,10 @@
             "name": "followeeId",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -5303,15 +5363,6 @@
               "enum": [
                 "latest"
               ]
-            }
-          },
-          {
-            "name": "language",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "maxLength": 20
             }
           }
         ],
@@ -5496,12 +5547,12 @@
         "security": [],
         "parameters": [
           {
-            "name": "cursor",
+            "name": "q",
             "in": "query",
-            "required": false,
-            "description": "The id of the last item on the previous page",
+            "required": true,
             "schema": {
               "type": "string",
+              "minLength": 1,
               "maxLength": 200
             }
           },
@@ -5513,16 +5564,6 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 200
             }
           },
           {
@@ -5824,7 +5865,10 @@
                             "description": "A 26-character Crockford base32 identifier"
                           },
                           "slug": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
                           },
                           "label": {
                             "type": "string"
@@ -5884,7 +5928,10 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
             }
           },
           {
@@ -6531,8 +6578,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -6776,8 +6825,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],
@@ -7321,8 +7372,10 @@
             "name": "id",
             "in": "path",
             "required": true,
+            "description": "A 26-character Crockford base32 identifier",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "pattern": "^[0123456789ABCDEFGHJKMNPQRSTVWXYZ]{26}$"
             }
           }
         ],

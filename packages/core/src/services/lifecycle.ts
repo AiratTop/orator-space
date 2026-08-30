@@ -252,7 +252,7 @@ export async function eraseArticle(
     );
   }
 
-  const revisions = await ctx.ports.articles.listRevisions(article.id, 200);
+  const revisions = await ctx.ports.articles.listRevisions(article.id, { limit: 200 });
   const now = ctx.ports.clock.now().toISOString();
 
   let escalated = false;

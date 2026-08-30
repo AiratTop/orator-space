@@ -101,13 +101,16 @@ discoveryRoutes.get("/v1/topics", async (c) => {
 });
 
 discoveryRoutes.get("/v1/topics/:slug/articles", async (c) => {
+  const parsed = parseQuery(c, schemas.paginationQuery);
+  if ("response" in parsed) return parsed.response;
+
   const ctx = c.get("ctx");
   const topic = await ctx.ports.topics.findBySlug(c.req.param("slug"));
   if (topic === null) {
     return problemResponse(c, { type: "not-found", title: "Topic not found" });
   }
-  const limit = Math.min(Number(c.req.query("limit") ?? 20), 100);
-  const cards = await ctx.ports.topics.listArticles(topic.id, limit, c.req.query("cursor") ?? null);
+  const limit = parsed.data.limit ?? 20;
+  const cards = await ctx.ports.topics.listArticles(topic.id, limit, parsed.data.cursor ?? null);
   return respond(c, {
     ok: true,
     value: {

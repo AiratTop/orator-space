@@ -21,6 +21,7 @@ import { z } from "zod";
 import { OPERATIONS } from "../packages/protocol/src/api.ts";
 import { ERROR_BASE, ErrorType, RETRYABLE, STATUS } from "../packages/protocol/src/errors.ts";
 import { PROTOCOL_VERSION } from "../packages/protocol/src/index.ts";
+import * as s from "../packages/protocol/src/schemas.ts";
 
 const OUT = "docs/openapi.json";
 
@@ -40,13 +41,42 @@ const strip = (node) => {
 };
 
 // --- Document ---------------------------------------------------------------
+/**
+ * A path parameter is as typed as the schema that names it (SPEC §12, §53).
+ *
+ * Every one of these was `{ type: "string" }`, which describes nothing a client could check.
+ * The values are not free strings: five of the seven are identifiers, one is a username and
+ * one is a slug, and each of those already has a schema in `packages/protocol` — so the
+ * shapes are read from there rather than restated, and a change to `oratorId` reaches the
+ * document without anybody remembering this function exists.
+ *
+ * It is a description and not a defence. The server binds these values as parameters and
+ * validates them where it uses them; what the pattern buys is a generated client that can
+ * refuse a malformed id before spending a request on it.
+ */
+const PATH_PARAMETER = {
+  id: s.oratorId,
+  agentId: s.oratorId,
+  keyId: s.oratorId,
+  revisionId: s.oratorId,
+  followeeId: s.oratorId,
+  username: s.username,
+  slug: s.topicSlug,
+};
+
 const pathParameters = (path) =>
-  [...path.matchAll(/\{(\w+)\}/g)].map(([, name]) => ({
-    name,
-    in: "path",
-    required: true,
-    schema: { type: "string" },
-  }));
+  [...path.matchAll(/\{(\w+)\}/g)].map(([, name]) => {
+    const schema = PATH_PARAMETER[name];
+    if (schema === undefined) throw new Error(`path parameter {${name}} has no schema — add one to PATH_PARAMETER`);
+    const { description, ...rest } = strip(jsonSchema(schema));
+    return {
+      name,
+      in: "path",
+      required: true,
+      ...(description === undefined ? {} : { description }),
+      schema: rest,
+    };
+  });
 
 function queryParameters(operation) {
   if (operation.query === undefined) return [];
@@ -241,6 +271,19 @@ JSON.parse(rendered);
  * because those tests run in `workerd`, which has no filesystem to read the routes from.
  */
 const ROUTE_DIR = "apps/edge/src/routes";
+
+/**
+ * Declared, validated, and deliberately not acted on — with the reason, because "nobody wired
+ * it up" and "there is nothing to wire" look identical in a diff.
+ */
+const IGNORED_BY_DESIGN = new Map([
+  [
+    "get /v1/feed ?mode",
+    "one value, `latest`, which is the only ordering §37.1 defines. It names the default " +
+      "rather than selecting between alternatives, so validating it and ignoring it is the " +
+      "whole of its behaviour — and a second mode would have to be read.",
+  ],
+]);
 const declaredQuery = new Map(
   OPERATIONS.map((operation) => [
     `${operation.method.toLowerCase()} ${operation.path}`,
@@ -248,29 +291,67 @@ const declaredQuery = new Map(
   ]),
 );
 
-const undeclared = [];
+/** Which exported schema an operation declares, so a route cannot validate with a different one. */
+const declaredSchemaName = new Map(
+  OPERATIONS.filter((operation) => operation.query !== undefined).map((operation) => [
+    `${operation.method.toLowerCase()} ${operation.path}`,
+    Object.keys(s).find((name) => s[name] === operation.query),
+  ]),
+);
+
+/* Both directions. A parameter read and not declared is undocumented; one declared and not
+ * read is worse — the document advertises a filter the server ignores, so a client builds on
+ * it and gets a plausible wrong answer instead of an error. `feedQuery` carried `language`
+ * that way. */
+const drift = [];
 for (const file of await readdir(ROUTE_DIR)) {
   if (!file.endsWith(".ts") || file.includes(".test.")) continue;
   const source = await readFile(`${ROUTE_DIR}/${file}`, "utf8");
   const marks = [...source.matchAll(/\w*Routes\.(get|post|patch|put|delete)\(\s*"([^"]+)"/g)];
 
   marks.forEach((mark, index) => {
-    const end = index + 1 < marks.length ? marks[index + 1].index : source.length;
-    const read = [
-      ...new Set([...source.slice(mark.index, end).matchAll(/c\.req\.query\("([^"]+)"\)/g)].map((q) => q[1])),
-    ];
+    const body = source.slice(mark.index, index + 1 < marks.length ? marks[index + 1].index : source.length);
     const key = `${mark[1].toLowerCase()} ${mark[2].replace(/:(\w+)/g, "{$1}")}`;
+    const declared = declaredQuery.get(key);
+    if (declared === undefined) return; // not in the catalogue at all: a different check's job
+
+    const byName = [...new Set([...body.matchAll(/c\.req\.query\("([^"]+)"\)/g)].map((q) => q[1]))];
+
+    /*
+     * A route that hands the whole query string to a schema validates every key in it, so
+     * "does it read them" cannot be answered by looking at the schema again — that compares
+     * the declaration with itself and passes whatever is in it. What answers it is whether
+     * the parsed value is used: `parsed.data.language` appearing nowhere is how a declared
+     * parameter turns into a filter the server ignores.
+     *
+     * The schema also has to be the one the catalogue declares, or the two describe
+     * different endpoints while both look checked.
+     */
+    const viaSchema = /parseQuery\(c,\s*schemas\.(\w+)\)/.exec(body)?.[1];
+    const used = [...new Set([...body.matchAll(/\bparsed\.data\.(\w+)/g)].map((m) => m[1]))];
+    const read = viaSchema === undefined ? byName : [...new Set([...byName, ...used])];
+
+    if (viaSchema !== undefined && declaredSchemaName.get(key) !== viaSchema) {
+      drift.push(`  ${key} validates with schemas.${viaSchema}, the catalogue declares ${declaredSchemaName.get(key) ?? "none"}`);
+      return;
+    }
     for (const name of read) {
-      if (!(declaredQuery.get(key) ?? []).includes(name)) undeclared.push(`  ${key} reads ?${name}`);
+      if (!declared.includes(name)) drift.push(`  ${key} reads ?${name}, declared nowhere`);
+    }
+    for (const name of declared) {
+      if (read.includes(name) || IGNORED_BY_DESIGN.has(`${key} ?${name}`)) continue;
+      drift.push(`  ${key} declares ?${name}, read by nothing`);
     }
   });
 }
 
-if (undeclared.length > 0) {
+if (drift.length > 0) {
   console.error(
-    `\nopenapi: ${undeclared.length} query parameter(s) are read by a route and declared nowhere:\n\n` +
-      `${undeclared.join("\n")}\n\n` +
-      `Add them to the operation's \`query\` schema in packages/protocol/src/api.ts, or stop reading them.\n`,
+    `\nopenapi: ${drift.length} query parameter(s) drift between the routes and the catalogue:\n\n` +
+      `${drift.join("\n")}\n\n` +
+      `A parameter a route reads must be declared on the operation in packages/protocol/src/api.ts,\n` +
+      `and one declared there must be read — a documented parameter that is ignored is a filter\n` +
+      `a client will build on and never be told about.\n`,
   );
   process.exit(1);
 }

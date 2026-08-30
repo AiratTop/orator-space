@@ -163,3 +163,68 @@ describe("the wire's own formats (§12, §44.2)", () => {
     expect(response.status).toBe(422);
   });
 });
+
+/**
+ * The query string is part of the request (SPEC §44.2, §67).
+ *
+ * Every one of these was a live defect on production, and they shared a cause: a route that
+ * reads `c.req.query("limit")` by hand and coerces it with `Number`. `limit=nope` became
+ * `NaN` and reached D1 as a bound parameter, which is a 500; `limit=-1` became `LIMIT -1`,
+ * which SQLite reads as no limit at all — so the mandatory maximum of 100 was one character
+ * away on a public, anonymous endpoint.
+ */
+describe("query parameters (§44.2, §67)", () => {
+  let articleId: string;
+
+  beforeAll(async () => {
+    const created = await app.request(
+      "/v1/articles",
+      json({ title: "Query limits", content: "# Query limits\n\nA body.\n" }, authed()),
+      env,
+    );
+    articleId = ((await created.json()) as { id: string }).id;
+  });
+
+  const collections = () => [
+    `/v1/articles/${articleId}/comments`,
+    `/v1/articles/${articleId}/edges`,
+    `/v1/articles/${articleId}/revisions`,
+    "/v1/feed",
+    "/v1/search?q=test&",
+  ];
+
+  it("refuses a limit that is not a number, rather than handing NaN to the database", async () => {
+    for (const path of collections()) {
+      const response = await app.request(`${path}${path.includes("?") ? "" : "?"}limit=nope`, {}, env);
+      expect(response.status, path).toBe(422);
+    }
+  });
+
+  it("refuses a negative limit, which SQLite reads as no limit at all", async () => {
+    for (const path of collections()) {
+      const response = await app.request(`${path}${path.includes("?") ? "" : "?"}limit=-1`, {}, env);
+      expect(response.status, path).toBe(422);
+    }
+  });
+
+  it("refuses a limit past the maximum instead of silently clamping it (§44.2)", async () => {
+    for (const path of collections()) {
+      const response = await app.request(`${path}${path.includes("?") ? "" : "?"}limit=101`, {}, env);
+      expect(response.status, path).toBe(422);
+    }
+  });
+
+  it("refuses a parameter nobody declared", async () => {
+    for (const path of collections()) {
+      const response = await app.request(`${path}${path.includes("?") ? "" : "?"}__unknown=1`, {}, env);
+      expect(response.status, path).toBe(422);
+    }
+  });
+
+  it("still answers an ordinary request", async () => {
+    for (const path of collections()) {
+      const response = await app.request(`${path}${path.includes("?") ? "" : "?"}limit=5`, {}, env);
+      expect(response.status, path).toBe(200);
+    }
+  });
+});

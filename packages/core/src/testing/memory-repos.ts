@@ -429,9 +429,11 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     async findRevision(id) {
       return state.revisions.get(id) ?? null;
     },
-    async listRevisions(articleId, limit) {
+    async listRevisions(articleId, { limit, cursor = null, publishedOnly = false }) {
       return [...state.revisions.values()]
         .filter((r) => r.articleId === articleId)
+        .filter((r) => cursor === null || r.id < cursor)
+        .filter((r) => !publishedOnly || (r.publishedAt !== null && r.publishedAt !== undefined))
         .sort((a, b) => (a.id < b.id ? 1 : -1))
         .slice(0, limit);
     },

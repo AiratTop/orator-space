@@ -12,7 +12,7 @@ import {
   type RequestContext,
 } from "@orator/core";
 import { ErrorType, schemas } from "@orator/protocol";
-import { parse, problemResponse, requireIdempotencyKey, respond } from "../http.js";
+import { parse, parseQuery, problemResponse, requireIdempotencyKey, respond } from "../http.js";
 import { commentCreatedView, commentView, edgeView } from "../views.js";
 import type { Env } from "../index.js";
 
@@ -47,9 +47,12 @@ export const socialRoutes = new Hono<{ Bindings: Env; Variables: Vars }>();
 const originOf = (url: string) => new URL(url).origin;
 
 socialRoutes.get("/v1/articles/:id/comments", async (c) => {
+  const parsed = parseQuery(c, schemas.paginationQuery);
+  if ("response" in parsed) return parsed.response;
+
   const ctx = c.get("ctx");
-  const limit = Math.min(Number(c.req.query("limit") ?? 50), 100);
-  const comments = await ctx.ports.social.listComments(c.req.param("id"), limit, c.req.query("cursor") ?? null);
+  const limit = parsed.data.limit ?? 50;
+  const comments = await ctx.ports.social.listComments(c.req.param("id"), limit, parsed.data.cursor ?? null);
   return respond(c, {
     ok: true,
     value: {
@@ -113,9 +116,12 @@ socialRoutes.delete("/v1/comments/:id", async (c) =>
 );
 
 socialRoutes.get("/v1/articles/:id/edges", async (c) => {
+  const parsed = parseQuery(c, schemas.paginationQuery);
+  if ("response" in parsed) return parsed.response;
+
   const ctx = c.get("ctx");
-  const limit = Math.min(Number(c.req.query("limit") ?? 50), 100);
-  const edges = await ctx.ports.social.listEdgesFor(c.req.param("id"), limit, c.req.query("cursor") ?? null);
+  const limit = parsed.data.limit ?? 50;
+  const edges = await ctx.ports.social.listEdgesFor(c.req.param("id"), limit, parsed.data.cursor ?? null);
   return respond(c, {
     ok: true,
     value: {

@@ -136,10 +136,19 @@ export function createArticleRepo(db: D1Database): ArticleRepo {
       return row === null ? null : toRevision(row);
     },
 
-    async listRevisions(articleId, limit) {
+    async listRevisions(articleId, { limit, cursor = null, publishedOnly = false }) {
+      // Ids are monotonic (§12.2), so "after the cursor" in a descending list is "below it".
+      const conditions = ["article_id = ?"];
+      const bindings: unknown[] = [articleId];
+      if (cursor !== null) {
+        conditions.push("id < ?");
+        bindings.push(cursor);
+      }
+      if (publishedOnly) conditions.push("published_at IS NOT NULL");
+
       const { results } = await db
-        .prepare(`SELECT * FROM revisions WHERE article_id = ? ORDER BY id DESC LIMIT ?`)
-        .bind(articleId, limit)
+        .prepare(`SELECT * FROM revisions WHERE ${conditions.join(" AND ")} ORDER BY id DESC LIMIT ?`)
+        .bind(...bindings, limit)
         .all<RevisionRow>();
       return results.map(toRevision);
     },

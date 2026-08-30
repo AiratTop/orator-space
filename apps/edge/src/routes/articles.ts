@@ -203,6 +203,9 @@ articleRoutes.get("/v1/articles/:id", async (c) => {
  * A revision with no `published_at` is a draft, and a draft is its author's.
  */
 articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
+  const parsed = parseQuery(c, schemas.paginationQuery);
+  if ("response" in parsed) return parsed.response;
+
   const ctx = c.get("ctx");
   const article = await ctx.ports.articles.findById(c.req.param("id"));
   if (article === null) {
@@ -215,14 +218,30 @@ articleRoutes.get("/v1/articles/:id/revisions", async (c) => {
     return problemResponse(c, { type: ErrorType.NotFound, title: "Article not found" });
   }
 
-  const all = await ctx.ports.articles.listRevisions(c.req.param("id"), 50);
-  const revisions = canSeeDrafts ? all : all.filter((revision) => revision.publishedAt !== null && revision.publishedAt !== undefined);
+  /*
+   * Paged, which it claims to be and was not (§44.2, §67).
+   *
+   * The catalogue has declared `cursor` and `limit` on this operation since it was written;
+   * the route read neither, took the newest fifty and answered `next_cursor: null` — so an
+   * article with a longer history had one silently truncated, and the envelope said the
+   * opposite. A page that lies about being the last page is worse than an unpaged list,
+   * because a client cannot tell.
+   *
+   * The draft filter goes into the query rather than over the result. Applied afterwards it
+   * would return a page shorter than `limit` and a cursor computed from what survived the
+   * filter, which skips every draft-shaped gap.
+   */
+  const limit = parsed.data.limit ?? 50;
+  const revisions = await ctx.ports.articles.listRevisions(c.req.param("id"), {
+    limit,
+    cursor: parsed.data.cursor ?? null,
+    publishedOnly: !canSeeDrafts,
+  });
+
   return respond(c, {
     ok: true,
     value: {
-      // A page envelope even where the list is bounded: a client that learns one shape
-      // for a collection should not meet a second one (§44.1).
-      next_cursor: null,
+      next_cursor: revisions.length === limit ? (revisions.at(-1)?.id ?? null) : null,
       items: revisions.map((revision) => ({
         id: revision.id,
         title: revision.title,
