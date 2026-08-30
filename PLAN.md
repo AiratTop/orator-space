@@ -1511,16 +1511,17 @@ Measured on 2026-08-28, on the domain profile (`pnpm coverage`), before and afte
 the gaps it named:
 
 ```text
-                         statements   branches   functions   lines
-first measurement            85%         78%        92%        89%
-after the gaps were filled   89%         82%        96%        93%
-after Telegram (2026-08-28)  89%         82%        95%        93%
-after §61.1 and §9.2         89%         82%        95%        93%
+                            statements   branches   functions   lines
+first measurement               85%         78%        92%        89%
+after the gaps were filled      89%         82%        96%        93%
+after Telegram (2026-08-28)     89%         82%        95%        93%
+after §61.1 and §9.2            89%         82%        95%        93%
+after signing up (2026-08-31)   92%         85%        96%        95%
 ```
 
-The last row is the interesting one: a whole feature — linking a chat, four bot commands,
-notification delivery and a login link — arrived without moving the number, because it was
-written with its tests. That is what the figure is for. It is not what the figure proves:
+The `§61.1 and §9.2` row is the interesting one: a whole feature — linking a chat, four bot
+commands, notification delivery and a login link — arrived without moving the number, because
+it was written with its tests. That is what the figure is for. It is not what the figure proves:
 the login link was broken in production the entire time these tests passed, because what
 spent the one-time nonce was Telegram's preview crawler, and no unit test has a preview
 crawler in it.
@@ -1551,6 +1552,33 @@ That is the second in-memory double this week found to be more permissive than t
 stands for — the first ignored `avatarMediaId` entirely. Both were found by writing a test
 that asserted something the double could not get wrong, which is the argument for §68's rule
 that a double is only worth what the real thing agrees with.
+
+**The `auth.ts` line in that table was half right, and the wrong half is the interesting
+one.** The ceremony an existing account goes through is exercised elsewhere. Signing *up* is not:
+`beginSignup`, `completeSignup` and `identify` are reached only from `apps/web`, which has no
+test project at all, so the one path a stranger walks holding nothing — no account, no
+credential, every guard in it the only guard — was covered by nothing anywhere. The figure
+said 62% and the reason given for accepting it did not apply to the three functions that made
+up most of the gap.
+
+```text
+auth.ts      64% → 96%   sixteen cases over signing up and `identify`. The guards that
+                         would have failed open quietly: a passkey that already belongs to
+                         somebody, refused on the way back because `excludeCredentials` was
+                         necessarily empty on the way out; a confusable name refused by its
+                         own error rather than as "taken" (§7.3); the name re-checked after
+                         the ceremony; a failed verification leaving no principal, no
+                         credential and no session
+```
+
+Two of those sixteen failed first against the test's own expectations rather than against the
+code, which is the ordinary way round and worth saying: a file at 62% is not evidence of bugs
+waiting, it is evidence that nobody has looked.
+
+**And the reason to look here rather than somewhere else was not the percentage.** It was
+that the uncovered lines were a whole entry path rather than a scattering of branches. A file
+at 85% whose gaps are error strings is in better shape than one at 62% whose gap is a
+feature, and the summary column cannot tell the two apart.
 
 **What the number does not measure is what this week actually cost.** Both defects the audit
 found — a collector whose premise was wrong, and an in-memory double that ignored a field —
