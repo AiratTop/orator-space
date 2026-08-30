@@ -18,8 +18,9 @@
  * rather than left to surface as an error in front of a reader.
  */
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createReadStream, createWriteStream } from "node:fs";
 import { createGunzip } from "node:zlib";
 import { pipeline } from "node:stream/promises";
@@ -33,14 +34,20 @@ const flag = (name, fallback) => {
 const environment = flag("env", "staging");
 const keep = args.includes("--keep");
 /*
- * Absolute, because `pnpm --filter` runs wrangler with `apps/edge` as its working directory.
+ * Outside the checkout, and absolute.
  *
- * A relative path handed to wrangler therefore resolves somewhere this process is not
- * looking, and the download reports success while the file lands two directories away. It
- * cost one debugging round to find and would have cost the same every time somebody
- * re-derived it.
+ * Absolute because `pnpm --filter` runs wrangler with `apps/edge` as its working directory:
+ * a relative path handed to wrangler resolves somewhere this process is not looking, and the
+ * download reports success while the file lands two directories away. It cost one debugging
+ * round to find and would have cost the same every time somebody re-derived it.
+ *
+ * Outside the checkout because the default used to be `./.restore-drill`, and on 2026-08-22 a
+ * staging export was committed to this public repository from it. A working directory a
+ * `git add` can reach is one a `git add` eventually does reach; `.gitignore` covers the name
+ * that was used and this covers the ones nobody thought of. `--work` still overrides, for a
+ * drill somebody wants to inspect afterwards.
  */
-const work = resolve(flag("work", "./.restore-drill"));
+const work = flag("work") === undefined ? await mkdtemp(join(tmpdir(), "orator-restore-drill-")) : resolve(flag("work"));
 const BUCKET = "orator-backups";
 
 let failures = 0;

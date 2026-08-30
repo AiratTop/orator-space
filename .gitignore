@@ -10,3 +10,9 @@ dist/
 
 # Shared local miniflare state for both dev servers (see apps/web/astro.config.mjs).
 .wrangler-state/
+
+# A database export is never a repository artefact (SPEC §62, §57.5). The restore drill now
+# works in a temporary directory outside the checkout; this covers the name it used before,
+# and anything a `--work` pointed back in here.
+.restore-drill/
+*.sql.gz
