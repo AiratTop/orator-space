@@ -7,6 +7,13 @@ allowBuilds:
   esbuild: true
   workerd: true
 
+# form-data reaches us only through starlight-openapi → httpsnippet, which generates
+# code samples while `apps/docs` builds. GHSA-hmw2-7cc7-3qxx (CRLF injection through
+# unescaped field names) needs untrusted input as a field name; nothing here has one,
+# and none of it runs in a Worker. Pinned forward anyway so the alert stays closed.
+overrides:
+  form-data: ">=4.0.6"
+
 
 # spikes/ are Phase -1 verification harnesses with their own npm installs.
 # They are deliberately outside the workspace — see spikes/README.md.
