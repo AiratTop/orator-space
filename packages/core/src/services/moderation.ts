@@ -275,6 +275,34 @@ export interface ActionInput {
   reportId?: string | null;
 }
 
+/**
+ * Who filed a page of reports (SPEC §61.1, §61.2).
+ *
+ * Moderator-only, like everything else in this file, and that gate is the whole of what makes
+ * it acceptable. The reporter's identity is recorded as a security and legal fact (§20.3 keeps
+ * it in `reports` and the audit log rather than in public activity), and a moderator needs it
+ * for the one judgement they cannot make without it: whether five reports about one person are
+ * five people or one. Nothing else on this platform ever shows it.
+ *
+ * **It is a real trade and worth naming.** A visible reporter is a retaliation channel where
+ * the moderator is also a participant, and this deployment has one moderator who is also its
+ * operator. The alternative — a queue that cannot tell a campaign from a consensus — is worse,
+ * and the honest mitigation is that it stops at the queue rather than that it is hidden here.
+ */
+export async function describeReporters(
+  ctx: ModerationContext,
+  reports: readonly ReportRecord[],
+): Promise<Result<Map<string, string>>> {
+  const gate = moderatorOnly(ctx);
+  if (!gate.ok) return gate;
+
+  const ids = reports.flatMap((report) =>
+    report.reporterPrincipalId === null ? [] : [report.reporterPrincipalId],
+  );
+  const rows = await ctx.ports.moderation.describeReporters(ids);
+  return ok(new Map(rows.map((row) => [row.id, row.username])));
+}
+
 /** SPEC §61.1 — the queue, to a moderator and to nobody else. */
 export async function listReports(
   ctx: ModerationContext,

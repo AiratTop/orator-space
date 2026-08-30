@@ -101,6 +101,19 @@ export interface ModerationRepo {
    * done the obvious way, on a page a moderator opens repeatedly.
    */
   describeTargets(targets: readonly ReportTarget[]): Promise<TargetSummary[]>;
+
+  /**
+   * The handles behind a page of reporters (SPEC §61.1).
+   *
+   * Batched for the reason `describeTargets` is: fifty reports done the obvious way is fifty
+   * queries on a page a moderator opens repeatedly. Distinct ids only, so the parameter count
+   * is bounded by the page size rather than by how many reports one person filed — which
+   * matters, because that is exactly the shape this column exists to make visible.
+   *
+   * An id with no row comes back absent rather than as an error: a reporter whose account was
+   * closed (§23.5) keeps the report they filed, and the queue still has to render the line.
+   */
+  describeReporters(ids: readonly string[]): Promise<{ id: string; username: string }[]>;
   countRecentReports(targetType: string, targetId: string, since: string): Promise<number>;
 
   /**

@@ -1941,6 +1941,13 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       ).length;
     },
 
+    async describeReporters(ids) {
+      return [...new Set(ids)].flatMap((id) => {
+        const principal = state.principals.get(id);
+        return principal === undefined ? [] : [{ id, username: principal.username }];
+      });
+    },
+
     async findOpenReportBy(reporterPrincipalId, targetType, targetId) {
       const open = state.reports.filter(
         (report) =>

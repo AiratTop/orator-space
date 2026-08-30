@@ -5168,6 +5168,21 @@ or the verdict may have been wrong, so a further report is a new statement rathe
 repeat — a rule that never let the same person speak again would make a rejected report a
 permanent silencing.
 
+**MUST — the queue names the reporter, and nothing else ever does.** A moderator cannot
+otherwise make the judgement the queue exists for: whether five reports about one person are
+five people or one. An account is shown as its handle and linked to its profile, because the
+question after "who" is "what else have they done"; an anonymous report shows as anonymous,
+which is a fact about it rather than a missing value, and §61.2 requires that path to stay
+open. A reporter whose account has since closed (§23.5) keeps the report and shows as an id —
+displaying nothing would read as anonymous, which would be false.
+
+**This is a real trade and the specification states it rather than implying it.** A visible
+reporter is a retaliation channel wherever the moderator is also a participant, which is every
+small deployment including this one. The alternative is a queue that cannot tell a campaign
+from a consensus, which is worse; the mitigation is that the identity stops at the queue —
+§20.3 keeps it in `reports` and the audit log and out of public activity, and no other surface
+reads it.
+
 **MUST — the queue shows the time, not only the date** (§61.1). The pattern a moderator is
 looking for is most often a rate: five reports about one article are a coincidence at
 five-hour intervals and a campaign at five-minute ones, and a date truncates away the only

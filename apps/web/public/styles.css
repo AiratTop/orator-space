@@ -2513,12 +2513,37 @@ a {
   -webkit-line-clamp: 2;
 }
 
+/*
+ * The identifying line: what the report is about, and who filed it.
+ *
+ * Its own row under the head rather than inside it. The head is what a moderator reads to
+ * decide *whether* to act — category, kind, subject, when — and these two are what they read
+ * to decide *which rows are these*, which is the question when the same subject appears twice
+ * on a page. `flex-basis: 100%` inside the head produced the same effect by accident; a row of
+ * its own says it on purpose and gives the reporter somewhere to sit.
+ */
+.report__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin: 0.25rem 0 0;
+}
+
 .report__id {
-  flex-basis: 100%;
-  order: 3;
   font-family: var(--mono);
   font-size: var(--text-xs);
   color: var(--ink-soft);
+}
+
+.report__from {
+  font-size: var(--text-xs);
+  color: var(--ink-soft);
+}
+
+/* An anonymous reporter is a fact, not a missing value: it reads in the same ink, unlinked. */
+.report__from--anon {
+  font-style: italic;
 }
 
 /*

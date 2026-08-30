@@ -8,6 +8,7 @@ import { createArticle, publishArticle, readArticle } from "./publishing.js";
 import { createComment } from "./social.js";
 import {
   ACTIONS_FOR,
+  describeReporters,
   applyModerationAction,
   createReport,
   inspectPrincipal,
@@ -928,5 +929,44 @@ describe("reporting the same thing twice (§61.1)", () => {
     unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: article, category: "spam" }));
     unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: article, category: "spam" }));
     expect(ports.state.reports).toHaveLength(2);
+  });
+});
+
+/**
+ * SPEC §61.1, §61.2 — who filed it, to a moderator and to nobody else.
+ *
+ * A moderator needs the reporter for the one judgement they cannot make without it: whether
+ * five reports about one person are five people or one. It is a security and legal fact and
+ * §20.3 keeps it out of public activity, so the gate is the whole of what makes showing it
+ * acceptable — a test that only checked the lookup worked would be checking the easy half.
+ */
+describe("who filed a report (§61.1)", () => {
+  it("resolves the reporters on a page to their handles", async () => {
+    const article = await publishedArticle();
+    unwrap(
+      await createReport(ctxFor(moderator({ principalId: MOD, platformRole: "user" })), {
+        targetType: "article",
+        targetId: article,
+        category: "spam",
+      }),
+    );
+    const page = unwrap(await listReports(ctxFor(moderator()), {}));
+    const named = unwrap(await describeReporters(ctxFor(moderator()), page.items));
+    expect(named.get(MOD)).toBe("moderator");
+  });
+
+  it("is refused to anybody who is not a moderator", async () => {
+    const article = await publishedArticle();
+    unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: article, category: "spam" }));
+    expect(errorOf(await describeReporters(ctxFor(actorFor(AUTHOR)), []))).toBe(ErrorType.Forbidden);
+    expect(errorOf(await describeReporters(ctxFor(null), []))).toBe(ErrorType.Unauthenticated);
+  });
+
+  it("asks about nobody for an anonymous report, and answers with an empty map", async () => {
+    const article = await publishedArticle();
+    unwrap(await createReport(ctxFor(null), { targetType: "article", targetId: article, category: "spam" }));
+    const page = unwrap(await listReports(ctxFor(moderator()), {}));
+    expect(page.items[0]?.reporterPrincipalId).toBeNull();
+    expect(unwrap(await describeReporters(ctxFor(moderator()), page.items)).size).toBe(0);
   });
 });

@@ -296,6 +296,18 @@ export function createModerationRepo(db: D1Database): ModerationRepo {
       );
     },
 
+    async describeReporters(ids) {
+      const distinct = [...new Set(ids)];
+      if (distinct.length === 0) return [];
+      const { results } = await db
+        .prepare(
+          `SELECT id, username FROM principals WHERE id IN (${distinct.map(() => "?").join(", ")})`,
+        )
+        .bind(...distinct)
+        .all<{ id: string; username: string }>();
+      return results;
+    },
+
     async listRecentActions(limit, before) {
       // Keyset on the id, which is time-ordered (§12.2), so paging back through the log costs
       // an index seek rather than an offset scan.

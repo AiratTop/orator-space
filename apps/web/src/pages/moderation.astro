@@ -2,6 +2,7 @@
 import {
   ACTIONS_FOR,
   ACTION_LABEL,
+  describeReporters,
   describeTargets,
   inspectArticle,
   inspectPrincipal,
@@ -153,6 +154,15 @@ let dossier:
     }
   | null = null;
 
+/**
+ * Who filed each report on the page, by handle (§61.1).
+ *
+ * One query for the page rather than one per row, and only for reports with a reporter: an
+ * anonymous report has none, and §61.2 requires that path to stay open — so "anonymous" is a
+ * state the queue displays rather than a gap in the data.
+ */
+const reporters = new Map<string, string>();
+
 const describe = async (targets: readonly { targetType: TargetSummary["targetType"]; targetId: string }[]) => {
   if (targets.length === 0) return;
   const described = await describeTargets(ctx, targets);
@@ -234,6 +244,9 @@ if (moderator) {
       nextCursor = loaded.value.nextCursor;
     }
     await describe(reports.map((one) => ({ targetType: one.targetType, targetId: one.targetId })));
+
+    const named = await describeReporters(ctx, reports);
+    if (named.ok) for (const [id, username] of named.value) reporters.set(id, username);
   }
 }
 
@@ -769,8 +782,35 @@ const undoableIds = new Set<string>();
                           <a class="report__target" href={subjectOf(report).href}>{nameOf(report)}</a>
                         )}
                         <time class="report__when" datetime={stamp(report.createdAt)}>{when(report.createdAt)}</time>
-                        <code class="report__id">{report.targetId}</code>
                       </div>
+
+                      {/*
+                        §61.1 — who said so, which is half of what a moderator is weighing.
+                        
+                        Beside the target's id rather than in the head: the head answers "what
+                        is this about", and both of these answer "which rows are these" — the
+                        pair a moderator scans when the same subject appears twice on a page.
+
+                        An account that filed it is linked, because the next question after
+                        "who" is "what else have they done". A closed account (§23.5) keeps its
+                        report and loses its handle, and shows as an id rather than vanishing:
+                        a report with no visible reporter would read as anonymous, which is a
+                        different fact.
+                      */}
+                      <p class="report__meta">
+                        <code class="report__id">{report.targetId}</code>
+                        {report.reporterPrincipalId === null ? (
+                          <span class="report__from report__from--anon">from anonymous</span>
+                        ) : reporters.has(report.reporterPrincipalId) ? (
+                          <a class="report__from" href={`/@${reporters.get(report.reporterPrincipalId)}`}>
+                            from @{reporters.get(report.reporterPrincipalId)}
+                          </a>
+                        ) : (
+                          <span class="report__from report__from--anon">
+                            from <code>{report.reporterPrincipalId}</code>
+                          </span>
+                        )}
+                      </p>
 
                       {/*
                         §58.1 — a report's details are somebody's text, and a moderator is a
