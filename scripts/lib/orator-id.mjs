@@ -30,6 +30,40 @@ export function encodeId(bytes) {
   return out.join("");
 }
 
+/** The inverse of `encodeId`, for checking that a string a human typed is an id. */
+export function decodeId(id) {
+  if (id.length !== ID_LENGTH) throw new RangeError(`expected ${ID_LENGTH} characters, got ${id.length}`);
+  let value = 0n;
+  for (const char of id) {
+    const index = CROCKFORD.indexOf(char);
+    if (index < 0) throw new RangeError(`invalid Crockford base32 character: ${char}`);
+    value = (value << 5n) | BigInt(index);
+  }
+  value >>= 2n;
+  const bytes = new Uint8Array(16);
+  for (let i = 15; i >= 0; i -= 1) {
+    bytes[i] = Number(value & 255n);
+    value >>= 8n;
+  }
+  return bytes;
+}
+
+/**
+ * Is this an identifier, in the sense `packages/protocol` means (§12)?
+ *
+ * The same three questions and deliberately not a fourth: alphabet, length, and canonical
+ * encoding. Not the UUIDv7 bits, for the reason ADR 0014 gives — rows written before the
+ * generator was fixed would fail, and this is used to check ids that already exist.
+ *
+ * It is also what makes interpolating one into SQL safe below: the alphabet is 32 characters
+ * and none of them is a quote.
+ */
+export function isOratorId(value) {
+  if (typeof value !== "string" || value.length !== ID_LENGTH) return false;
+  if (![...value].every((char) => CROCKFORD.includes(char))) return false;
+  return encodeId(decodeId(value)) === value;
+}
+
 /**
  * A fresh id: 48 bits of time, then a UUIDv7's version and variant, then randomness.
  *
@@ -46,8 +80,9 @@ export function encodeId(bytes) {
  *
  * That row cannot be corrected — §11 makes an identifier immutable and forbids reuse, even
  * for a deleted object — so the fix is forward only: ids minted from here on are UUIDv7, and
- * `isOratorId` deliberately does not check these bits, because a validator that did would
- * refuse a principal this project itself created.
+ * `isOratorId` deliberately does not check these bits. ADR 0014 counts what is affected (it
+ * is not only this script: the topic vocabulary migration wrote sixty more) and carries the
+ * migration that lets the check be tightened.
  */
 export function newId(at = new Date()) {
   const bytes = new Uint8Array(16);

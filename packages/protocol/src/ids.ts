@@ -49,23 +49,39 @@ const ID_PATTERN = new RegExp(`^[${CROCKFORD}]{${ID_LENGTH}}$`);
  * *same sixteen bytes* as a real id. That is a second spelling of one entity, which is what
  * §12's "one id per entity" exists to prevent, and the round trip is what rejects it.
  *
- * **What is deliberately not checked: the UUIDv7 version and variant bits.** §12 says
- * UUIDv7, `createIdGen` emits one, and checking for it here would be the obvious next step —
- * except that `scripts/lib/orator-id.mjs` did not set those bits until 2026-08-30, and the
- * two scripts that use it write rows directly. The staging canary (§66.7) is one such row:
- * `06G2NJ9TMHSJW1VEPDFDJX64J0`, variant `00`. §11 makes an identifier immutable and forbids
- * reuse, so that row cannot be corrected and the principal cannot be re-minted — a validator
- * that demanded the bits would permanently refuse an account this project created, and
- * refuse it at `POST /v1/tokens`, which is where the canary's credential comes from.
+ * **What is deliberately not checked: the UUIDv7 version and variant bits (ADR 0014).** Two
+ * things wrote identifiers here that were not UUIDv7 — `scripts/lib/orator-id.mjs` until
+ * 2026-08-30, and `0011_topic_vocabulary.sql`, whose sixty fixed literals were written by
+ * hand. Sixty-four rows, counted: every topic, three tokens, and the staging canary. §11
+ * makes an identifier immutable, so a validator demanding the bits would refuse every topic
+ * id and refuse the canary at `POST /v1/tokens`, which is where its credential comes from.
  *
- * The generator is fixed forward. Tightening this is a §65 contract step for after the last
- * such row is gone, not a hardening to slip in now.
+ * The generator is fixed forward and ADR 0014 carries the migration that ends this. Until
+ * then `isMintedId` below is the strict form, for values that were never stored rows.
  *
  * Cheap enough to run per request: sixteen bytes of shifting, no allocation worth naming.
  */
 export const isOratorId = (value: unknown): value is OratorId => {
   if (typeof value !== "string" || !ID_PATTERN.test(value)) return false;
   return encodeId(decodeId(value)) === value;
+};
+
+/**
+ * §12 in full: an id this platform's generator could have produced, right now.
+ *
+ * `isOratorId` stops short of the UUIDv7 bits because a stored row predates the fix and §11
+ * forbids changing it. That reasoning is about *stored identifiers*. It does not extend to a
+ * value a caller hands us for something that was never stored — `X-Request-Id` is the case:
+ * §66.1 says UUIDv7, the header is minted fresh by whoever sends it, and there is nothing
+ * for it to be backward-compatible with. Accepting `00000000000000000000000000` there was
+ * the old check being reused where the reason for its leniency did not apply.
+ *
+ * When ADR 0014's migration has run this becomes `isOratorId` and this function goes away.
+ */
+export const isMintedId = (value: unknown): value is OratorId => {
+  if (!isOratorId(value)) return false;
+  const bytes = decodeId(value);
+  return (bytes[6]! >> 4) === 0x7 && (bytes[8]! >> 6) === 0b10;
 };
 
 /** Milliseconds since epoch encoded in the leading 48 bits of a UUIDv7. */

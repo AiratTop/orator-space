@@ -17,7 +17,7 @@ import {
   recordDeadLetter,
   systemClock,
 } from "@orator/adapters-cf";
-import { isOratorId, problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
+import { isMintedId, problem, ErrorType, PROTOCOL_VERSION } from "@orator/protocol";
 import type { RequestContext } from "@orator/core";
 import { contextFor } from "./context.js";
 import { deepHealth } from "@orator/core";
@@ -165,10 +165,15 @@ const app = new Hono<{ Bindings: Env; Variables: Vars }>();
  * unchecked header puts caller-chosen text in all three, at whatever length and cardinality
  * the caller likes. Anything else is replaced rather than rejected, since a malformed
  * correlation header is not a reason to refuse a publish.
+ *
+ * `isMintedId` and not `isOratorId`: the latter tolerates an id without the UUIDv7 bits
+ * because one stored row predates the generator fix and §11 forbids changing it. Nothing
+ * here is stored or compared against that row — the header is minted by the caller for this
+ * request alone — so the strict form applies and `00000000000000000000000000` is refused.
  */
 app.use("*", async (c, next) => {
   const offered = c.req.header("x-request-id");
-  const requestId = offered !== undefined && isOratorId(offered) ? offered : idGen.next();
+  const requestId = offered !== undefined && isMintedId(offered) ? offered : idGen.next();
   c.set("requestId", requestId);
   await next();
   c.header("x-request-id", requestId);

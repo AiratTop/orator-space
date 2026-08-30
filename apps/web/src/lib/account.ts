@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { isOratorId } from "@orator/protocol";
+import { isMintedId } from "@orator/protocol";
 import type { QuotaCounter } from "@orator/adapters-cf";
 import {
   createArticleRepo,
@@ -103,7 +103,7 @@ export const accountPorts: AccountPorts = {
  */
 function requestIdOf(request: Request): string {
   const offered = request.headers.get("x-request-id");
-  return offered !== null && isOratorId(offered) ? offered : ids.next();
+  return offered !== null && isMintedId(offered) ? offered : ids.next();
 }
 
 export function accountContext(request: Request, principal: PrincipalRecord): AccountContext {
