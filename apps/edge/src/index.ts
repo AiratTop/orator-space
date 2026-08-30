@@ -253,6 +253,13 @@ app.use("*", async (c, next) => {
  * indexed read, no writes, and it goes red for the failure a producer ping would be standing
  * in for. What a ping would add — that the whole pipeline runs end to end — is `/health/deep`
  * (§66.7), which writes and therefore requires a credential.
+ *
+ * **The check is named `outbox`, and not `queue`, because that is what it reads.** A broken
+ * binding with an empty backlog answers `true` here for as long as it takes the next publish
+ * to pile up, and a checkname that promised otherwise would make a monitor's green mean
+ * something it does not. The binding's own presence is reported beside it as a separate
+ * fact — cheap, honest about being a configuration check rather than a reachability one, and
+ * the one thing that distinguishes "the queue is fine" from "there is no queue".
  */
 const BACKLOG_DEPTH = 100;
 const BACKLOG_AGE_MS = 5 * 60 * 1000;
@@ -271,14 +278,15 @@ app.get("/health", async (c) => {
   } catch {
     checks.r2 = false;
   }
+  checks.queue_binding = typeof c.env.EVENTS?.send === "function";
   try {
     const backlog = await createOutboxRepo(c.env.DB).pendingStats();
     const oldestMs =
       backlog.oldestCreatedAt === null ? 0 : Date.now() - Date.parse(backlog.oldestCreatedAt);
-    checks.queue = backlog.count <= BACKLOG_DEPTH && oldestMs <= BACKLOG_AGE_MS;
+    checks.outbox = backlog.count <= BACKLOG_DEPTH && oldestMs <= BACKLOG_AGE_MS;
   } catch {
     // D1 is already reported above; an unreadable outbox says nothing about the queue.
-    checks.queue = false;
+    checks.outbox = false;
   }
   const healthy = Object.values(checks).every(Boolean);
   return c.json(

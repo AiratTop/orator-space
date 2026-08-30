@@ -5672,6 +5672,15 @@ raw IPs, or prompt contents.
 **MUST.** A health endpoint checking D1, R2 and Queue availability, behind
 `status.orator.space`.
 
+**On the queue, which cannot be checked the way the other two can.** A Queues binding is a
+producer: "is it reachable" is only answerable by sending something, and a public
+unauthenticated `GET` that writes to the queue is a flood amplifier with a URL. So the
+endpoint reports two facts under their own names rather than one under a name that would
+overstate it — `queue_binding`, that a producer is configured at all, and `outbox`, the
+backlog from the table above, which is the observable consequence of a queue that has
+stopped accepting work (§35.2). End-to-end delivery is `/health/deep`'s job (§66.7), because
+proving it requires a write and therefore a credential.
+
 **MUST — the platform evaluates these about itself, at `/health/slo`.** None of the seven is
 visible to an external prober: a monitor can tell whether an endpoint answers and nothing
 about whether the outbox is draining. So the Worker reads its own numbers, compares them with
