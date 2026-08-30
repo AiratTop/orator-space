@@ -47,8 +47,27 @@ export interface TelegramRepo {
   upsertAccount(account: TelegramAccount): PendingWrite;
   deleteAccount(principalId: string): PendingWrite;
 
-  /** §23.4 — nonces are swept rather than deleted on use, so a second attempt can be told. */
+  /**
+   * §23.4 — nonces are swept rather than deleted on use, so a second attempt can be told.
+   *
+   * The cutoff is compared against `expires_at`, not `created_at`: what makes a row
+   * collectable is that the credential in it is dead, and a row is kept for a while after
+   * that so "already used" and "already expired" remain answerable. Bounded by `limit`,
+   * because §23.4 requires a pass that finishes.
+   */
   deleteLinksBefore(cutoff: string, limit: number): Promise<number>;
+
+  /** §23.4 — the same sweep for the login nonces, which are a credential of their own. */
+  deleteLoginsBefore(cutoff: string, limit: number): Promise<number>;
+
+  /**
+   * §23.4, §9.3 — the record that an event was already said in a chat.
+   *
+   * Idempotency with a horizon rather than history: `deliverNotifications` only ever looks
+   * at events inside its window, so a row older than that guards nothing. The events
+   * themselves are kept indefinitely and are where the history lives.
+   */
+  deleteDeliveriesBefore(cutoff: string, limit: number): Promise<number>;
 
   /**
    * Private events with a chat to deliver them to, not yet delivered (§61.2, §20.5).

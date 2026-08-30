@@ -50,6 +50,28 @@ export const RETENTION_HOURS = {
    * letter is re-emitting the event, never replaying this row.
    */
   deadLetters: 30 * 24,
+  /**
+   * SPEC §9.3, §23.4 — a link or a login nonce, counted from when it expired.
+   *
+   * The credential itself lives ten minutes (`LINK_TTL_MS`, `LOGIN_TTL_MS`), and the row
+   * outlives it on purpose: §9.3 sweeps rather than deletes on use, so a second press can be
+   * told "already used" instead of "never existed". A day is how long that answer is worth
+   * giving. After it the person has asked for another link or given up, and what is left is a
+   * spent credential's shadow in a table nothing else reads — which is precisely the table
+   * §23.4's rule is about, since neither of these had a handler at all until now.
+   */
+  telegramNonces: 24,
+  /**
+   * SPEC §9.3, §61.2 — the record that an event has already been said in a chat.
+   *
+   * Idempotency with a horizon rather than history. `deliverNotifications` looks back one
+   * hour (`NOTIFY_WINDOW_MS`), so a row older than that guards an event no run will select
+   * again; the event itself is kept indefinitely and is where the history is. A day rather
+   * than the hour, because this row is the only thing between a long outage and somebody
+   * being told twice that their article was removed, and a day of that costs one row per
+   * notification.
+   */
+  telegramDeliveries: 24,
 } as const;
 
 /**
@@ -72,6 +94,10 @@ export interface RetentionReport {
   /** §23.4, §32 — `ready` records nothing referenced, with their objects. */
   orphanedMediaDeleted: number;
   auditPseudonymised: number;
+  /** §9.3 — expired nonces, one count per table because they are two credentials. */
+  telegramLinksDeleted: number;
+  telegramLoginsDeleted: number;
+  telegramDeliveriesDeleted: number;
   /** Rows left over because a batch filled up. Non-zero means "run again sooner". */
   moreToDo: boolean;
 }
@@ -99,6 +125,13 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
     before(RETENTION_HOURS.deadLetters),
     BATCH,
   );
+  const nonceCutoff = before(RETENTION_HOURS.telegramNonces);
+  const telegramLinksDeleted = await ports.telegram.deleteLinksBefore(nonceCutoff, BATCH);
+  const telegramLoginsDeleted = await ports.telegram.deleteLoginsBefore(nonceCutoff, BATCH);
+  const telegramDeliveriesDeleted = await ports.telegram.deleteDeliveriesBefore(
+    before(RETENTION_HOURS.telegramDeliveries),
+    BATCH,
+  );
 
   return {
     canaryArticlesDeleted,
@@ -108,11 +141,17 @@ export async function runRetention(ports: Ports): Promise<RetentionReport> {
     mediaDeleted,
     orphanedMediaDeleted,
     auditPseudonymised,
+    telegramLinksDeleted,
+    telegramLoginsDeleted,
+    telegramDeliveriesDeleted,
     moreToDo:
       outboxDeleted === BATCH ||
       idempotencyDeleted === BATCH ||
       auditPseudonymised === BATCH ||
-      deadLettersDeleted === BATCH,
+      deadLettersDeleted === BATCH ||
+      telegramLinksDeleted === BATCH ||
+      telegramLoginsDeleted === BATCH ||
+      telegramDeliveriesDeleted === BATCH,
   };
 }
 

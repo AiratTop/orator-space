@@ -1779,6 +1779,32 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
       }
       return deleted;
     },
+
+    async deleteLoginsBefore(cutoff, limit) {
+      let deleted = 0;
+      for (const [nonce, login] of [...state.telegramLogins.entries()]) {
+        if (deleted >= limit) break;
+        // The expiry alone, as the SQL is: a spent login whose message was never taken back
+        // is collected too, and the double must refuse nothing the real one collects.
+        if (login.expiresAt < cutoff) {
+          state.telegramLogins.delete(nonce);
+          deleted += 1;
+        }
+      }
+      return deleted;
+    },
+
+    async deleteDeliveriesBefore(cutoff, limit) {
+      let deleted = 0;
+      for (const [eventId, sentAt] of [...state.telegramDeliveries.entries()]) {
+        if (deleted >= limit) break;
+        if (sentAt < cutoff) {
+          state.telegramDeliveries.delete(eventId);
+          deleted += 1;
+        }
+      }
+      return deleted;
+    },
   };
 
   const mediaStore: MediaStore = {

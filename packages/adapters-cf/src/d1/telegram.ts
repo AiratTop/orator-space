@@ -275,5 +275,47 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
         .run();
       return meta.changes ?? 0;
     },
+
+    /**
+     * §23.4 — and the login nonces, including the ones whose message was never taken back.
+     *
+     * The condition is the expiry alone, deliberately: a spent login whose message is still
+     * in the chat (`cleaned_at IS NULL`) is deleted like any other once it is a day past
+     * expiry. `cleanSpentLogins` runs on the minute trigger, so a row reaching this sweep
+     * uncleaned has had well over a thousand attempts, and what remains in the chat is a
+     * message holding a link that stopped working ten minutes after it was sent. Keeping the
+     * row would trade a dead link nobody can use for a table that never empties — and 0021
+     * says as much about that message: not a vulnerability, an untidiness.
+     */
+    async deleteLoginsBefore(cutoff, limit) {
+      const { meta } = await db
+        .prepare(
+          `DELETE FROM telegram_logins
+            WHERE nonce IN (SELECT nonce FROM telegram_logins WHERE expires_at < ? LIMIT ?)`,
+        )
+        .bind(cutoff, limit)
+        .run();
+      return meta.changes ?? 0;
+    },
+
+    /**
+     * §23.4, §9.3 — delivery records past the window that could still select their event.
+     *
+     * `sent_at` rather than the event's own timestamp, because this table is about the
+     * sending: it is the only column here, and it is what `listPendingNotifications` is
+     * racing. Deleting a row while its event is still inside `NOTIFY_WINDOW_MS` would send
+     * somebody the same sentence twice, which is why the cutoff handed in is a day rather
+     * than the hour that would technically do.
+     */
+    async deleteDeliveriesBefore(cutoff, limit) {
+      const { meta } = await db
+        .prepare(
+          `DELETE FROM telegram_deliveries
+            WHERE event_id IN (SELECT event_id FROM telegram_deliveries WHERE sent_at < ? LIMIT ?)`,
+        )
+        .bind(cutoff, limit)
+        .run();
+      return meta.changes ?? 0;
+    },
   };
 }

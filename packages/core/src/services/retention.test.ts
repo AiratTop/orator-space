@@ -264,6 +264,111 @@ describe("media whose bytes never arrived (§21.1, §23.4)", () => {
   });
 });
 
+/**
+ * SPEC §9.3, §23.4 — the two nonce tables and the delivery record.
+ *
+ * These are the case §23.4's sentence describes rather than an illustration of it: the D1
+ * sweep for the link nonces existed, was reachable through the port, and nothing called it,
+ * so both nonce tables and `telegram_deliveries` grew without limit from the day the second
+ * channel shipped. The tests below are about the boundary, because the boundary is the only
+ * thing that can be wrong here — a sweep that takes one row too many deletes a live
+ * credential's record, and one that takes too few is what was already happening.
+ */
+describe("Telegram nonces (§9.3, §23.4, a day past expiry)", () => {
+  const link = (nonce: string, expiresAt: string) => ({
+    nonce,
+    principalId: "P1" as never,
+    createdAt: hoursAgo(30),
+    expiresAt,
+  });
+  const login = (nonce: string, expiresAt: string) => ({
+    ...link(nonce, expiresAt),
+    chatId: "C1",
+  });
+
+  it("collects a link nonce a day past its expiry and keeps a fresher one", async () => {
+    await ports.db.commit([
+      ports.telegram.insertLink(link("OLD", hoursAgo(RETENTION_HOURS.telegramNonces + 1))),
+      ports.telegram.insertLink(link("RECENT", hoursAgo(1))),
+    ]);
+
+    const report = await runRetention(ports);
+
+    expect(report.telegramLinksDeleted).toBe(1);
+    expect(await ports.telegram.findLink("OLD")).toBeNull();
+    // Expired an hour ago, so the row still answers "already used" to a second press.
+    expect(await ports.telegram.findLink("RECENT")).not.toBeNull();
+  });
+
+  it("collects a login nonce whose message was never taken back", async () => {
+    await ports.db.commit([
+      ports.telegram.insertLogin(login("SPENT", hoursAgo(RETENTION_HOURS.telegramNonces + 1))),
+    ]);
+    await ports.db.commit([
+      ports.telegram.markLoginUsed("SPENT", hoursAgo(30)),
+      ports.telegram.recordLoginMessage("SPENT", "42"),
+    ]);
+
+    // `cleanSpentLogins` runs every minute, so a row reaching here uncleaned has had over a
+    // thousand attempts. What stays in the chat is a link that stopped working long ago;
+    // keeping the row for it would mean the table never empties.
+    expect((await runRetention(ports)).telegramLoginsDeleted).toBe(1);
+    expect(await ports.telegram.findLogin("SPENT")).toBeNull();
+  });
+
+  it("collects a delivery record only once no run could select its event again", async () => {
+    await ports.db.commit([
+      ports.telegram.markDelivered("E-OLD", hoursAgo(RETENTION_HOURS.telegramDeliveries + 1)),
+      ports.telegram.markDelivered("E-RECENT", hoursAgo(2)),
+    ]);
+
+    expect((await runRetention(ports)).telegramDeliveriesDeleted).toBe(1);
+  });
+
+  it("never lets a swept delivery resurrect a notification", async () => {
+    // The whole risk in this sweep: an event inside §9.3's window whose delivery row was
+    // collected is an event delivered twice. The cutoff is a day and the window is an hour,
+    // so an event still selectable by a run is one whose row this pass cannot reach.
+    ports.state.principals.set("P1", {
+      id: "P1" as never,
+      kind: "human",
+      username: "reader",
+      usernameSkeleton: "reader",
+      displayName: null,
+      bio: null,
+      status: "active",
+      platformRole: "user",
+      systemAccount: false,
+      avatarMediaId: null,
+      createdAt: hoursAgo(48),
+    } as never);
+    ports.state.telegramAccounts.set("P1", {
+      principalId: "P1" as never,
+      telegramUserId: "9",
+      chatId: "C1",
+      username: null,
+      linkedAt: hoursAgo(48),
+    });
+    ports.state.events.push({
+      id: "E-RECENT" as never,
+      type: "comment.created",
+      actorPrincipalId: "P1" as never,
+      subjectType: "article",
+      subjectId: "A1" as never,
+      audiencePrincipalId: "P1" as never,
+      visibility: "private",
+      payload: { schema_version: 1 },
+      createdAt: hoursAgo(0.5),
+    } as never);
+    await ports.db.commit([ports.telegram.markDelivered("E-RECENT", hoursAgo(0.5))]);
+
+    await runRetention(ports);
+
+    const cutoff = new Date(NOW.getTime() - 3_600_000).toISOString();
+    expect(await ports.telegram.listPendingNotifications(cutoff, 10)).toEqual([]);
+  });
+});
+
 describe("bounded passes", () => {
   it("does nothing and says so on an empty database", async () => {
     expect(await runRetention(ports)).toEqual({
@@ -274,6 +379,9 @@ describe("bounded passes", () => {
       mediaDeleted: 0,
       orphanedMediaDeleted: 0,
       auditPseudonymised: 0,
+      telegramLinksDeleted: 0,
+      telegramLoginsDeleted: 0,
+      telegramDeliveriesDeleted: 0,
       moreToDo: false,
     });
   });

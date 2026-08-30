@@ -730,8 +730,9 @@ export default {
      * SPEC §23.4 — the daily pass, on its own schedule.
      *
      * Separated from the minute trigger because the two have opposite requirements. The
-     * drain is a safety net and wants to run constantly; retention touches four tables and
-     * wants to run rarely, at a time when nothing else does. Branching on `event.cron`
+     * drain is a safety net and wants to run constantly; retention sweeps every table §23.4
+     * bounds and wants to run rarely, at a time when nothing else does. A count of them was
+     * written here once and was wrong within two migrations. Branching on `event.cron`
      * rather than on a stored timestamp keeps the schedule in one place — the configuration
      * that declares it.
      */

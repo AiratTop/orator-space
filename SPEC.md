@@ -2202,9 +2202,19 @@ Without this clarification the platform is not legally operable in the EU.
 | request logs (Logpush → R2) | 30 days |
 | `pending` media rows with no bytes | 24 hours |
 | `ready` media nothing references | 24 hours after the last reference goes |
+| `telegram_links`, `telegram_logins` | 24 hours after the nonce expires |
+| `telegram_deliveries` | 24 hours |
 
 **MUST.** Every table with a bounded retention has a corresponding Cron handler. A table
 with no cleanup handler is a future incident.
+
+**MUST — a nonce row outlives its nonce, and only just.** §9.3 marks a link or login nonce
+used rather than deleting it, so that a second press is told "already used" instead of "never
+existed", and that answer is worth giving for about a day. The delivery record is the same
+shape for a different reason: it is idempotency with a horizon, since §9.3's delivery only
+ever considers events inside its window, and the events themselves are kept indefinitely and
+are where the history lives. Both are held a day rather than an hour, because the cost of
+holding them is one row and the cost of dropping one early is a person told twice.
 
 **MUST — the pass is bounded, not "everything older than".** The first run against a table
 nobody has ever cleaned is the dangerous one: an unbounded `DELETE` inside a cron invocation
