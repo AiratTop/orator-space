@@ -327,6 +327,7 @@ if (article !== null && view !== null) {
             articleId={view.article.id}
             canReply={session !== null}
             canModerate={moderator}
+            viewer={Astro.locals.viewer?.username ?? null}
           />
         )}
 

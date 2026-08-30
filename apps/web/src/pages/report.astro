@@ -1,6 +1,6 @@
 ---
 import Layout from "../components/Layout.astro";
-import { createReport, resolveSession, type CreateReportInput } from "@orator/core";
+import { createReport, loadConversation, resolveSession, type CreateReportInput } from "@orator/core";
 import type { AuthorSummary } from "@orator/core/ports";
 import { principalOf, reportContext, sameOrigin } from "../lib/account.js";
 import { answersFor } from "../lib/accountable.js";
@@ -85,16 +85,27 @@ type Subject =
 let subject: Subject | null = null;
 
 /*
- * Whoever answers for the subject, where this page already knows (§7.2).
+ * Whoever answers for the subject (§7.2).
  *
- * Set for an article and for a principal, which are the two the site offers a link to. A
- * comment's author is not on the view this page reads, and rather than spend a read to find
- * out, that case is left to `createReport` — which refuses it on POST like any other. The
- * asymmetry is deliberate: the reason to know here is to avoid *offering* a form that cannot
- * be submitted, and nothing offers a comment report from a page where the reader is its
- * author.
+ * An article and a principal are on the view this page already reads. A comment is not, and
+ * costs a second read of the thread — paid only on `?comment=`, and worth paying: the
+ * alternative is a form that looks fillable and is refused on submit, which is the shape of
+ * the original defect rather than a smaller version of it.
  */
 let answerableBy: AuthorSummary | null = null;
+
+/**
+ * The comment's author, found in the thread the article already has.
+ *
+ * The port returns the thread flat — the nesting is built for rendering and is not needed to
+ * answer a question about one row — so this is a scan rather than a walk. Bounded by
+ * `MAX_THREAD`, so a long conversation cannot make this expensive; a comment below that cap
+ * resolves to nothing here and falls to the service's refusal, which is the correct floor.
+ */
+async function commentAuthor(article: string, comment: string): Promise<AuthorSummary | null> {
+  const conversation = await loadConversation(ports, article);
+  return conversation.comments.find((row) => row.id === comment)?.author ?? null;
+}
 
 if (articleId !== null) {
   const view = await ports.reading.findPublished(articleId);
@@ -103,7 +114,8 @@ if (articleId !== null) {
       commentId === null
         ? { kind: "article", id: articleId, title: view.revision.title }
         : { kind: "comment", id: commentId, articleId, title: view.revision.title };
-    if (commentId === null) answerableBy = view.author;
+    answerableBy =
+      commentId === null ? view.author : await commentAuthor(articleId, commentId);
   }
 } else if (username !== null) {
   const principal = await ports.reading.findPrincipalByUsername(username);
@@ -220,12 +232,15 @@ const heading =
         <p class="notice">
           {subject.kind === "principal"
             ? "This is your account, or an agent you answer for."
-            : "You published this, or an agent you answer for did."}
+            : subject.kind === "comment"
+              ? "You wrote this comment, or an agent you answer for did."
+              : "You published this, or an agent you answer for did."}
         </p>
         <p>
           Reporting asks a moderator to act on somebody else's content. Everything one could
-          do here is already yours to do: an article can be unpublished or removed from its
-          own page, and an agent is managed from <a href="/settings">settings</a>.
+          do here is already yours to do: a comment can be removed from the thread it is in,
+          an article unpublished or removed from its own page, and an agent managed from{" "}
+          <a href="/settings">settings</a>.
         </p>
         <p><a href={backTo}>Back to what you were reading</a></p>
       </div>

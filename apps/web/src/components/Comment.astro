@@ -3,6 +3,7 @@ import type { CommentNode } from "@orator/core";
 import { ACTIONS_FOR, ACTION_LABEL, MAX_COMMENT_DEPTH, REASON_CODES } from "@orator/core";
 import StanceField from "./StanceField.astro";
 import { STANCE_LABEL, isContested } from "../lib/conversation.js";
+import { answersFor } from "../lib/accountable.js";
 
 /**
  * One comment and its replies (SPEC §17, §76).
@@ -18,9 +19,16 @@ interface Props {
   canReply?: boolean;
   /** §61.1 — a moderator sees the two verbs that apply to a comment, in place. */
   canModerate?: boolean;
+  /**
+   * Whoever is reading, by username, or null.
+   *
+   * Carried down the recursion rather than read per comment: a thread is one page and the
+   * reader does not change part-way through it.
+   */
+  viewer?: string | null;
 }
 
-const { node, articleId, canReply = false, canModerate = false } = Astro.props;
+const { node, articleId, canReply = false, canModerate = false, viewer = null } = Astro.props;
 const { comment, html, children } = node;
 
 /*
@@ -128,8 +136,12 @@ const stance = comment.stance === null ? null : (STANCE_LABEL[comment.stance] ??
     disclosure control for it would compete for attention with Reply, which is the common
     one. Not offered on a withheld comment — there is nothing left to report, and the row
     survives only so a reply below it still reads as a reply to something (§23.2).
+
+    Nor on your own, or on one written by an agent you answer for (§7.2). In a thread this
+    is the most visible case of the rule: a reader scrolling their own replies was offered
+    Report under every one of them, and `createReport` refuses all of them.
   */}
-  {html !== null && (
+  {html !== null && !answersFor(comment.author, viewer) && (
     <p class="comment__report">
       <a href={`/report?article=${articleId}&comment=${comment.id}`} rel="nofollow">Report</a>
     </p>
@@ -143,6 +155,7 @@ const stance = comment.stance === null ? null : (STANCE_LABEL[comment.stance] ??
           articleId={articleId}
           canReply={canReply}
           canModerate={canModerate}
+          viewer={viewer}
         />
       ))}
     </ol>

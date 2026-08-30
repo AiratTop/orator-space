@@ -31,9 +31,11 @@ interface Props {
   canReply?: boolean;
   /** §61.1 — whether this reader may act on a comment as well as read it. */
   canModerate?: boolean;
+  /** §7.2 — whoever is reading, so a comment does not offer to report its own author. */
+  viewer?: string | null;
 }
 
-const { conversation, articleId, canReply = false, canModerate = false } = Astro.props;
+const { conversation, articleId, canReply = false, canModerate = false, viewer = null } = Astro.props;
 const { comments, inbound, outbound, truncated } = conversation;
 const roots = threadOf(comments, { siteHost });
 
@@ -75,6 +77,7 @@ const linkSections = [
             articleId={articleId}
             canReply={canReply}
             canModerate={canModerate}
+            viewer={viewer}
           />
         ))}
       </ol>
