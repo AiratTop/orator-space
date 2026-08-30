@@ -7,12 +7,16 @@ import type { ContentStore } from "../ports/index.js";
  * without a bucket, and without Cloudflare types anywhere near it. If a domain test ever
  * needs the real adapter, the ports boundary has been broken.
  */
-export function createMemoryContentStore(
-  now: () => Date = () => new Date(),
-): ContentStore & { size(): number; setUploadedAt(contentHash: string, at: string): void } {
+export function createMemoryContentStore(now: () => Date = () => new Date()): ContentStore & {
+  size(): number;
+  setUploadedAt(contentHash: string, at: string): void;
+  /** Makes the next `list` throw, for the cursor a store has stopped accepting. */
+  failNextList(error: Error | null): void;
+} {
   const objects = new Map<string, string>();
   /** The store's own timestamps, which §32.2's grace period reads. */
   const uploaded = new Map<string, string>();
+  let listFailure: Error | null = null;
 
   const sha256Hex = async (text: string): Promise<string> => {
     const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
@@ -40,6 +44,11 @@ export function createMemoryContentStore(
       }
     },
     async list({ cursor = null, limit }) {
+      if (listFailure !== null) {
+        const error = listFailure;
+        listFailure = null;
+        throw error;
+      }
       // Sorted, so paging is stable — R2 lists lexicographically by key and the collector
       // depends on that to make progress across passes.
       const keys = [...objects.keys()].sort();
@@ -56,5 +65,8 @@ export function createMemoryContentStore(
     refFor: (contentHash) => `r2:content/${contentHash}`,
     size: () => objects.size,
     setUploadedAt: (contentHash, at) => uploaded.set(contentHash, at),
+    failNextList: (error) => {
+      listFailure = error;
+    },
   };
 }

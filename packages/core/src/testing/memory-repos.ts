@@ -140,7 +140,11 @@ export interface MemoryControls {
    * reads an object's own upload time, which nothing in the domain sets — so a test that
    * needs a body older than an hour reaches for it here rather than through the port.
    */
-  content: ContentStore & { size(): number; setUploadedAt(contentHash: string, at: string): void };
+  content: ContentStore & {
+    size(): number;
+    setUploadedAt(contentHash: string, at: string): void;
+    failNextList(error: Error | null): void;
+  };
   /** Moves the clock, for expiry, backoff and validity windows. */
   setNow(date: Date): void;
   /** Batches handed to the event bus, in order. */

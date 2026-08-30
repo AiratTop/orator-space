@@ -368,7 +368,32 @@ async function collectOrphanedContent(
    * something *live* in front of the orphan.
    */
   const from = await ports.retentionCursors.read(CONTENT_SWEEP);
-  const { objects, cursor } = await ports.content.list({ cursor: from, limit: OBJECT_BATCH });
+
+  /*
+   * A stored cursor the store will not accept any more starts the sweep over.
+   *
+   * R2's cursor is an opaque token and nothing promises it survives a bucket being recreated,
+   * a long enough gap, or a change on the platform's side. A checkpoint that has stopped
+   * being valid would otherwise be re-read and re-rejected on every invocation, for good —
+   * a sweep permanently stuck on a value nobody can see, which is the same failure as the
+   * first page but harder to notice because it has no page.
+   *
+   * Dropping it costs one sweep from the beginning, which is a thing this handler does
+   * routinely anyway. Not narrowed to a particular error: nothing distinguishes "bad cursor"
+   * from anything else here, and the recovery is correct for both.
+   */
+  let page;
+  try {
+    page = await ports.content.list({ cursor: from, limit: OBJECT_BATCH });
+  } catch (error) {
+    if (from === null) throw error;
+    console.error(
+      JSON.stringify({ level: "warn", event: "retention.content.cursor.dropped", error: String(error) }),
+    );
+    await ports.db.commit([ports.retentionCursors.write(CONTENT_SWEEP, null, now)]);
+    return { deleted: 0, more: true };
+  }
+  const { objects, cursor } = page;
 
   /*
    * The cursor moves on every pass, whatever was deleted.

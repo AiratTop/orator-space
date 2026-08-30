@@ -347,6 +347,32 @@ describe("orphaned content (§32.2)", () => {
     expect(await ports.content.get(behind)).toBeNull();
   });
 
+  it("drops a checkpoint the store will not accept and starts over", async () => {
+    /*
+     * R2's cursor is opaque and nothing promises it outlives a recreated bucket or a long
+     * enough gap. Kept, a checkpoint that has stopped being valid is re-read and re-rejected
+     * on every invocation for good — the same failure as reading only the first page, and
+     * harder to notice because it has no page at all.
+     */
+    await pageOfLiveBodies(2);
+    // Set directly rather than by running a sweep long enough to leave one: how the
+    // checkpoint got there is not what this is about, and a sweep that finishes clears it.
+    ports.state.retentionCursors.set("content", "a-token-the-store-no-longer-knows");
+
+    ports.content.failNextList(new Error("The cursor is invalid."));
+    const report = await runRetention(ports);
+
+    expect(ports.state.retentionCursors.get("content")).toBeUndefined();
+    // And the pass after the drop reads the head of the listing rather than failing again.
+    expect(report.orphanedContentDeleted).toBe(0);
+  });
+
+  it("does not swallow a failure that has no checkpoint to blame", async () => {
+    // Nothing to recover by dropping, so the error is the answer rather than a silent pass.
+    ports.content.failNextList(new Error("the store is unreachable"));
+    await expect(runRetention(ports)).rejects.toThrow("the store is unreachable");
+  });
+
   it("starts a fresh sweep once the listing ends", async () => {
     // A completed sweep drops its row, so the next invocation begins at the beginning —
     // which is how an object that became collectable behind the cursor is ever reached.
