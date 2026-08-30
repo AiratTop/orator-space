@@ -5681,6 +5681,13 @@ backlog from the table above, which is the observable consequence of a queue tha
 stopped accepting work (§35.2). End-to-end delivery is `/health/deep`'s job (§66.7), because
 proving it requires a write and therefore a credential.
 
+**MUST — the endpoint also reports whether `IP_PEPPER` is set.** Its absence is not an
+outage: both Workers fall back to the environment name, which produces stable pseudonyms and
+passes every test while providing none of §62's protection. A misconfiguration that nothing
+observes is one that lasts, so the one thing that can see it says so. It is not asserted on
+a local run — `wrangler secret` has no local equivalent, and a check that is permanently red
+in development is a check everybody learns to ignore.
+
 **MUST — the platform evaluates these about itself, at `/health/slo`.** None of the seven is
 visible to an external prober: a monitor can tell whether an endpoint answers and nothing
 about whether the outbox is draining. So the Worker reads its own numbers, compares them with

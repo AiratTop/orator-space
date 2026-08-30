@@ -284,6 +284,26 @@ app.get("/health", async (c) => {
     checks.r2 = false;
   }
   checks.queue_binding = typeof c.env.EVENTS?.send === "function";
+  /*
+   * SPEC §62 — whether the address pepper is configured, which nothing else can tell you.
+   *
+   * The fallback for a missing `IP_PEPPER` is the environment name: a working value that
+   * produces stable pseudonyms, passes every test, and provides none of the protection §62
+   * is about. That is the right fallback — the pseudonym is the flood key for an anonymous
+   * caller (§59.1), and returning null would put every anonymous request in one bucket — but
+   * it makes a configuration mistake invisible from outside. Here it is one boolean, and it
+   * fails the endpoint: a deployment serving readers while storing reversible addresses is
+   * not healthy, and this is a value an operator sets once.
+   *
+   * Not asserted on a local run, for the same reason `e2e-read.mjs` does not assert HSTS
+   * there: `wrangler secret` has no local equivalent, so requiring it would make the dev
+   * server and the `workerd` tests permanently red and teach everyone to ignore this
+   * endpoint. Absent from `checks` rather than reported false, because a check that is
+   * listed and does not count is the more confusing of the two.
+   */
+  if (c.env.ENVIRONMENT !== "local") {
+    checks.ip_pepper = typeof c.env.IP_PEPPER === "string" && c.env.IP_PEPPER.length > 0;
+  }
   try {
     const backlog = await createOutboxRepo(c.env.DB).pendingStats();
     const oldestMs =
