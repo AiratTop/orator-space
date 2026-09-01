@@ -1055,6 +1055,25 @@ does not lose the intent and a sweep that runs twice does not ask twice.
 cannot open a session; the other opens a session and cannot bind a chat. Sharing a table
 makes that difference a `WHERE` clause, and a mistake there turns one into the other.
 
+**MUST — every operation on the binding is written to `audit_log` (§62).** §42.2 calls a
+bound chat a credential, and it behaves like one: it receives the platform's private
+notifications and it can ask for a link that opens a session. So issuing a linking nonce,
+binding a chat, refusing to, issuing a sign-in link, spending one and disconnecting are all
+credential operations, and the Worker's log is not a substitute — it is retained for days and
+cannot be queried by principal, which is the only question the account holder afterwards has.
+
+**MUST — the actor on that row is the principal the platform resolved, never the one the
+update claims.** A chat states who it is; the platform believes exactly one thing about that,
+which is the principal a signed-in browser recorded the binding against. A refusal that
+resolved nobody — a nonce that never existed, `/login` from an unbound chat — names nobody,
+and is worth keeping precisely because many of them from many chats is somebody looking for a
+chat that answers.
+
+**MUST NOT — an address pseudonym on a webhook row.** The address an update arrives from
+belongs to Telegram rather than to a person, so §62's column would hold one operator's
+infrastructure under the heading that identifies a caller. The browser half of these
+operations has a real address and carries it.
+
 **MUST — a session opened this way is an ordinary session.** Same lifetime, same row, listed
 and revocable under §9.1. A second way in must not be a second kind of session with rules
 somebody has to remember.

@@ -2,7 +2,7 @@
 import { openSessionFor, redeemTelegramLogin } from "@orator/core";
 import Layout from "../../components/Layout.astro";
 import { authContext, sessionCookie } from "../../lib/auth.js";
-import { telegramPorts } from "../../lib/account.js";
+import { telegramContext } from "../../lib/account.js";
 import { sameOrigin } from "../../lib/account.js";
 import { siteOrigin } from "../../lib/ports.js";
 
@@ -38,7 +38,7 @@ if (Astro.request.method === "POST") {
   const submitted = String(form.get("token") ?? "");
 
   if (/^[0-9A-Z]{8,64}$/.test(submitted)) {
-    const redeemed = await redeemTelegramLogin(telegramPorts, submitted);
+    const redeemed = await redeemTelegramLogin(await telegramContext(Astro.request), submitted);
     if (redeemed.ok) {
       const opened = await openSessionFor(
         authContext(Astro.request, crypto.randomUUID()),

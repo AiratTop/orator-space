@@ -258,6 +258,25 @@ export interface RequestContext {
 }
 
 /**
+ * The least a context has to hold to write an audit row (SPEC §62).
+ *
+ * Structural rather than one of the named contexts, because the surfaces that journal do not
+ * share a port slice: `AccountContext` carries most of `Ports`, and `TelegramContext` carries
+ * three repositories and answers a webhook. Both satisfy this, and both therefore write the
+ * same row through the same function — which is the point of `journal` and was true only for
+ * the ones shaped like an account until the bot needed it (§13.37).
+ */
+export interface JournalContext {
+  ports: Pick<Ports, "audit" | "ids" | "clock">;
+  /** Narrowed to the one field the row takes, so a caller need not construct an `Actor`. */
+  actor: Pick<Actor, "principalId"> | null;
+  tokenId: string | null;
+  ipHash: string | null;
+  userAgent: string | null;
+  requestId: string;
+}
+
+/**
  * An audit row for the change it accompanies, in the same commit (SPEC §35, §62).
  *
  * Here rather than in `identity.ts`, where it was, because `account.ts` needs the identical
@@ -265,9 +284,10 @@ export interface RequestContext {
  * of duplication that stays consistent right up until one of them gains a field.
  */
 export function journal(
-  ctx: AccountContext,
+  ctx: JournalContext,
   action: string,
-  target: { type: string; id: string },
+  /** `id` is null where the action names no object: a nonce nobody ever issued, for one. */
+  target: { type: string; id: string | null },
   outcome: "success" | "denied",
   reason: string | null,
 ): PendingWrite {

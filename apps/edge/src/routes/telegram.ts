@@ -1,7 +1,13 @@
 import { Hono } from "hono";
-import { redeemTelegramLink, startTelegramLogin, unlinkTelegram } from "@orator/core";
-import { createPrincipalRepo, createTelegramRepo, systemClock } from "@orator/adapters-cf";
+import {
+  redeemTelegramLink,
+  startTelegramLogin,
+  unlinkTelegram,
+  type TelegramContext,
+} from "@orator/core";
+import { createAuditRepo, createPrincipalRepo, createTelegramRepo, systemClock } from "@orator/adapters-cf";
 import { createD1Database } from "@orator/adapters-cf";
+import { idGen } from "../context.js";
 import { surfaceFor, type Env } from "../index.js";
 
 /**
@@ -201,6 +207,25 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
 
   const telegramUserId = String(from.id);
   const repo = createTelegramRepo(c.env.DB);
+
+  /*
+   * §62 — what the operations below write their audit row from.
+   *
+   * `ipHash` is null and that is the honest value: the address this request arrived from is
+   * Telegram's, not the person's. The request id is the one the middleware put on the
+   * context, so a row here joins the Worker's own log line for the same update.
+   */
+  const ctx: TelegramContext = {
+    telegram: repo,
+    db: createD1Database(c.env.DB),
+    clock: systemClock,
+    ids: idGen,
+    audit: createAuditRepo(c.env.DB),
+    requestId: c.get("requestId"),
+    ipHash: null,
+    userAgent: null,
+  };
+
   const command = text.trim().split(/\s+/)[0]?.replace(/@\w+$/, "").toLowerCase() ?? "";
   // `/disconnect_confirm` is the same command, confirmed; the check below reads the whole line.
   const isDisconnect = command === "/disconnect" || command === "/disconnect_confirm";
@@ -264,11 +289,10 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
      */
     const random = new Uint8Array(16);
     crypto.getRandomValues(random);
-    const login = await startTelegramLogin(
-      { telegram: repo, db: createD1Database(c.env.DB), clock: systemClock },
-      telegramUserId,
-      { siteOrigin: `https://${c.env.SITE_HOST}`, random },
-    );
+    const login = await startTelegramLogin(ctx, telegramUserId, {
+      siteOrigin: `https://${c.env.SITE_HOST}`,
+      random,
+    });
 
     const messageId = await say(
       token,
@@ -276,7 +300,7 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
       login.ok ? SAID.loginSent(login.value.url, 10) : SAID.notConnected,
     );
     if (login.ok && messageId !== null) {
-      await createD1Database(c.env.DB).commit([repo.recordLoginMessage(login.value.nonce, messageId)]);
+      await ctx.db.commit([repo.recordLoginMessage(login.value.nonce, messageId)]);
     }
     console.log(JSON.stringify({ level: "info", event: "telegram.login.issued", ok: login.ok }));
     return c.text("ok");
@@ -309,10 +333,7 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
       await say(token, chatId, SAID.notConnected);
       return c.text("ok");
     }
-    await unlinkTelegram(
-      { telegram: repo, db: createD1Database(c.env.DB), clock: systemClock },
-      account.principalId,
-    );
+    await unlinkTelegram(ctx, account.principalId, "chat");
     await say(token, chatId, SAID.disconnected);
     console.log(JSON.stringify({ level: "info", event: "telegram.unlinked", from: "chat" }));
     return c.text("ok");
@@ -330,9 +351,7 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
     return c.text("ok");
   }
 
-  const ports = { telegram: repo, db: createD1Database(c.env.DB), clock: systemClock };
-
-  const result = await redeemTelegramLink(ports, {
+  const result = await redeemTelegramLink(ctx, {
     nonce,
     telegramUserId,
     chatId,

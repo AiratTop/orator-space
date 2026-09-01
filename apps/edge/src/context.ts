@@ -46,7 +46,14 @@ import {
 } from "@orator/core";
 import type { Env } from "./index.js";
 
-const idGen = createIdGen();
+/**
+ * One generator for the Worker, exported for the surfaces that build a narrower context.
+ *
+ * `createIdGen` keeps a counter so two ids minted in the same millisecond still sort; a
+ * second instance per request would restart it, which is the property §12 asks for lost for
+ * no gain.
+ */
+export const idGen = createIdGen();
 
 /** Assembles the ports a request may use. The only place adapters are chosen. */
 export function portsFor(env: Env): Ports {

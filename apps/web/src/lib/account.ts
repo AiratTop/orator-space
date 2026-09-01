@@ -35,6 +35,7 @@ import {
   type ModerationContext,
   type ModerationPorts,
   type PrincipalRecord,
+  type TelegramContext,
 } from "@orator/core";
 import { authPorts } from "./auth.js";
 
@@ -295,17 +296,35 @@ export const avatarPorts: AvatarPorts = {
 };
 
 /**
- * What the Telegram link needs, and nothing else (SPEC §9.3, §28).
+ * What the Telegram link needs, and nothing else (SPEC §9.3, §28, §62).
  *
- * Three things: the nonce table, a transaction and a clock. No principals repository — the
- * binding names the principal from the session, and a surface that could look one up could
- * issue a link for somebody else.
+ * Five things: the nonce table, a transaction, a clock, and the two the audit row is made
+ * from. No principals repository — the binding names the principal from the session, and a
+ * surface that could look one up could issue a link for somebody else.
  */
 export const telegramPorts = {
   telegram: createTelegramRepo(accountEnv.DB),
   db: accountPorts.db,
   clock: systemClock,
+  ids,
+  audit: accountPorts.audit,
 };
+
+/**
+ * The same operations as the bot's, asked for from a browser (SPEC §62).
+ *
+ * Which is why the address is hashed here and is null on the webhook: this request came from
+ * the person, and theirs is the address an audit of "who disconnected my recovery channel"
+ * is about.
+ */
+export async function telegramContext(request: Request): Promise<TelegramContext> {
+  return {
+    ...telegramPorts,
+    requestId: requestIdOf(request),
+    ipHash: await hashAddress(request.headers.get("cf-connecting-ip")),
+    userAgent: request.headers.get("user-agent"),
+  };
+}
 
 export function avatarContext(request: Request, principal: PrincipalRecord): AvatarContext {
   return { ...accountContext(request, principal), ports: avatarPorts };

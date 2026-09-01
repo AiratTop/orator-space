@@ -3,6 +3,7 @@ import { ErrorType } from "@orator/protocol";
 import { createMemoryPorts } from "../testing/memory-repos.js";
 import {
   cleanSpentLogins,
+  type TelegramContext,
   LINK_TTL_MS,
   LOGIN_TTL_MS,
   newNonce,
@@ -23,6 +24,8 @@ import {
  */
 
 let ports: ReturnType<typeof createMemoryPorts>;
+/* The same ports, plus what §62 needs to write a row: who asked, and from where. */
+let ctx: TelegramContext;
 const PRINCIPAL = "PERSON-1";
 const OTHER = "PERSON-2";
 const NOW = new Date("2026-08-28T12:00:00.000Z");
@@ -33,7 +36,7 @@ let entropy = 0;
 const random = () => new Uint8Array(16).fill((entropy += 1));
 
 const start = (principalId = PRINCIPAL) =>
-  startTelegramLink(ports, principalId, { botUsername: "orator_space_bot", random: random() });
+  startTelegramLink(ctx, principalId, { botUsername: "orator_space_bot", random: random() });
 
 const unwrap = <T>(r: { ok: true; value: T } | { ok: false; error: unknown }): T => {
   if (!r.ok) throw new Error(`expected success, got ${JSON.stringify(r.error)}`);
@@ -47,7 +50,17 @@ const errorOf = (r: { ok: boolean; error?: { type: string } }) => {
 beforeEach(() => {
   ports = createMemoryPorts();
   ports.setNow(NOW);
+  ctx = { ...ports, requestId: "req-telegram", ipHash: null, userAgent: "a browser" };
 });
+
+/** The audit rows this run produced, in order (SPEC §62). */
+const journalled = () =>
+  ports.state.audit.map((row) => ({
+    action: row.action,
+    actor: row.actorPrincipalId,
+    outcome: row.outcome,
+    reason: row.reason,
+  }));
 
 describe("issuing a link", () => {
   it("points at the bot and carries a nonce nobody supplied", async () => {
@@ -68,7 +81,7 @@ describe("issuing a link", () => {
     const second = unwrap(await start());
     expect(first.nonce).not.toBe(second.nonce);
 
-    const redeemed = await redeemTelegramLink(ports, { nonce: first.nonce, telegramUserId: "42", chatId: "42" });
+    const redeemed = await redeemTelegramLink(ctx, { nonce: first.nonce, telegramUserId: "42", chatId: "42" });
     expect(redeemed.ok).toBe(true);
   });
 });
@@ -77,7 +90,7 @@ describe("redeeming one", () => {
   it("binds the chat to the principal that issued it", async () => {
     const link = unwrap(await start());
     const account = unwrap(
-      await redeemTelegramLink(ports, { nonce: link.nonce, telegramUserId: "42", chatId: "99", username: "reader" }),
+      await redeemTelegramLink(ctx, { nonce: link.nonce, telegramUserId: "42", chatId: "99", username: "reader" }),
     );
 
     expect(account.principalId).toBe(PRINCIPAL);
@@ -89,9 +102,9 @@ describe("redeeming one", () => {
 
   it("works once", async () => {
     const link = unwrap(await start());
-    unwrap(await redeemTelegramLink(ports, { nonce: link.nonce, telegramUserId: "42", chatId: "42" }));
+    unwrap(await redeemTelegramLink(ctx, { nonce: link.nonce, telegramUserId: "42", chatId: "42" }));
 
-    const again = await redeemTelegramLink(ports, { nonce: link.nonce, telegramUserId: "77", chatId: "77" });
+    const again = await redeemTelegramLink(ctx, { nonce: link.nonce, telegramUserId: "77", chatId: "77" });
     expect(errorOf(again)).toBe(ErrorType.Conflict);
     // And the second attempt changed nothing: the first chat still holds the binding.
     expect((await ports.telegram.findByPrincipal(PRINCIPAL))?.telegramUserId).toBe("42");
@@ -100,7 +113,7 @@ describe("redeeming one", () => {
   it("refuses one that has expired", async () => {
     const link = unwrap(await start());
     ports.setNow(new Date(NOW.getTime() + LINK_TTL_MS + 1000));
-    expect(errorOf(await redeemTelegramLink(ports, { nonce: link.nonce, telegramUserId: "42", chatId: "42" }))).toBe(
+    expect(errorOf(await redeemTelegramLink(ctx, { nonce: link.nonce, telegramUserId: "42", chatId: "42" }))).toBe(
       ErrorType.Conflict,
     );
   });
@@ -108,37 +121,37 @@ describe("redeeming one", () => {
   it("refuses a nonce that never existed", async () => {
     // The guessing case. Eight characters of a 32-symbol alphabet is not guessable, and the
     // answer says nothing about which accounts have links outstanding.
-    expect(errorOf(await redeemTelegramLink(ports, { nonce: "NOTANONCE1234567", telegramUserId: "42", chatId: "42" }))).toBe(
+    expect(errorOf(await redeemTelegramLink(ctx, { nonce: "NOTANONCE1234567", telegramUserId: "42", chatId: "42" }))).toBe(
       ErrorType.NotFound,
     );
   });
 
   it("refuses a Telegram account that already belongs to somebody else (§9.3)", async () => {
-    unwrap(await redeemTelegramLink(ports, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
+    unwrap(await redeemTelegramLink(ctx, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
 
     const theirs = unwrap(await start(OTHER));
-    expect(errorOf(await redeemTelegramLink(ports, { nonce: theirs.nonce, telegramUserId: "42", chatId: "42" }))).toBe(
+    expect(errorOf(await redeemTelegramLink(ctx, { nonce: theirs.nonce, telegramUserId: "42", chatId: "42" }))).toBe(
       ErrorType.Conflict,
     );
     expect(await ports.telegram.findByPrincipal(OTHER)).toBeNull();
   });
 
   it("lets the same person re-link the same chat", async () => {
-    unwrap(await redeemTelegramLink(ports, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
+    unwrap(await redeemTelegramLink(ctx, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
     const second = unwrap(await start());
-    expect((await redeemTelegramLink(ports, { nonce: second.nonce, telegramUserId: "42", chatId: "51" })).ok).toBe(true);
+    expect((await redeemTelegramLink(ctx, { nonce: second.nonce, telegramUserId: "42", chatId: "51" })).ok).toBe(true);
     expect((await ports.telegram.findByPrincipal(PRINCIPAL))?.chatId).toBe("51");
   });
 });
 
 describe("disconnecting", () => {
   it("removes the binding, and the chat can then be linked elsewhere (§23.5)", async () => {
-    unwrap(await redeemTelegramLink(ports, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
-    unwrap(await unlinkTelegram(ports, PRINCIPAL));
+    unwrap(await redeemTelegramLink(ctx, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
+    unwrap(await unlinkTelegram(ctx, PRINCIPAL, "settings"));
 
     expect(await ports.telegram.findByPrincipal(PRINCIPAL)).toBeNull();
     const theirs = unwrap(await start(OTHER));
-    expect((await redeemTelegramLink(ports, { nonce: theirs.nonce, telegramUserId: "42", chatId: "42" })).ok).toBe(true);
+    expect((await redeemTelegramLink(ctx, { nonce: theirs.nonce, telegramUserId: "42", chatId: "42" })).ok).toBe(true);
   });
 });
 
@@ -161,17 +174,17 @@ describe("the nonce itself", () => {
  */
 describe("a login link", () => {
   const connect = async () =>
-    unwrap(await redeemTelegramLink(ports, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
+    unwrap(await redeemTelegramLink(ctx, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
 
   it("is refused to a chat that is not connected", async () => {
-    expect(errorOf(await startTelegramLogin(ports, "999", { siteOrigin: ORIGIN, random: random() }))).toBe(
+    expect(errorOf(await startTelegramLogin(ctx, "999", { siteOrigin: ORIGIN, random: random() }))).toBe(
       ErrorType.NotFound,
     );
   });
 
   it("points at this site and carries a nonce", async () => {
     await connect();
-    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
     expect(login.url).toBe(`${ORIGIN}/auth/telegram?token=${login.nonce}`);
   });
 
@@ -179,47 +192,47 @@ describe("a login link", () => {
     // Binding a chat is reversible; this is the account. The lifetime is the window in which
     // a copy of the chat — a shared screen, a forwarded message — is worth anything.
     await connect();
-    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
     expect(Date.parse(login.expiresAt) - NOW.getTime()).toBe(LOGIN_TTL_MS);
   });
 
   it("answers with the principal the chat belongs to", async () => {
     await connect();
-    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
-    expect(unwrap(await redeemTelegramLogin(ports, login.nonce)).principalId).toBe(PRINCIPAL);
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
+    expect(unwrap(await redeemTelegramLogin(ctx, login.nonce)).principalId).toBe(PRINCIPAL);
   });
 
   it("is spent once, and the second attempt is refused", async () => {
     await connect();
-    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
-    unwrap(await redeemTelegramLogin(ports, login.nonce));
-    expect(errorOf(await redeemTelegramLogin(ports, login.nonce))).toBe(ErrorType.NotFound);
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
+    unwrap(await redeemTelegramLogin(ctx, login.nonce));
+    expect(errorOf(await redeemTelegramLogin(ctx, login.nonce))).toBe(ErrorType.NotFound);
   });
 
   it("expires", async () => {
     await connect();
-    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
     ports.setNow(new Date(NOW.getTime() + LOGIN_TTL_MS + 1000));
-    expect(errorOf(await redeemTelegramLogin(ports, login.nonce))).toBe(ErrorType.NotFound);
+    expect(errorOf(await redeemTelegramLogin(ctx, login.nonce))).toBe(ErrorType.NotFound);
   });
 
   it("answers every failure the same way", async () => {
     // A link that never existed and one used a minute ago are the same fact to whoever holds
     // it; telling them apart tells somebody which guesses are close.
-    expect(errorOf(await redeemTelegramLogin(ports, "NEVEREXISTED1234"))).toBe(ErrorType.NotFound);
+    expect(errorOf(await redeemTelegramLogin(ctx, "NEVEREXISTED1234"))).toBe(ErrorType.NotFound);
   });
 
   it("cannot be used as a linking nonce, nor a link as a login", async () => {
     // The two tables exist separately for this: one binds a chat and cannot open a session,
     // the other opens a session and cannot bind a chat.
     await connect();
-    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
-    expect(errorOf(await redeemTelegramLink(ports, { nonce: login.nonce, telegramUserId: "7", chatId: "7" }))).toBe(
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
+    expect(errorOf(await redeemTelegramLink(ctx, { nonce: login.nonce, telegramUserId: "7", chatId: "7" }))).toBe(
       ErrorType.NotFound,
     );
 
     const link = unwrap(await start(OTHER));
-    expect(errorOf(await redeemTelegramLogin(ports, link.nonce))).toBe(ErrorType.NotFound);
+    expect(errorOf(await redeemTelegramLogin(ctx, link.nonce))).toBe(ErrorType.NotFound);
   });
 });
 
@@ -231,11 +244,11 @@ describe("a login link", () => {
  */
 describe("cleaning up after a login", () => {
   const connect = async () =>
-    unwrap(await redeemTelegramLink(ports, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "77" }));
+    unwrap(await redeemTelegramLink(ctx, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "77" }));
 
   const issue = async () => {
     await connect();
-    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
     await ports.db.commit([ports.telegram.recordLoginMessage(login.nonce, "555")]);
     return login;
   };
@@ -249,7 +262,7 @@ describe("cleaning up after a login", () => {
 
   it("removes the message once the link is spent", async () => {
     const login = await issue();
-    unwrap(await redeemTelegramLogin(ports, login.nonce));
+    unwrap(await redeemTelegramLogin(ctx, login.nonce));
 
     const removed: { chat: string; id: string }[] = [];
     expect(await cleanSpentLogins(ports, async (chat, id) => void removed.push({ chat, id }))).toBe(1);
@@ -260,7 +273,7 @@ describe("cleaning up after a login", () => {
     // A message somebody deleted themselves, or one past Telegram's 48-hour window, will
     // never be deletable; retrying it forever is a queue that never drains.
     const login = await issue();
-    unwrap(await redeemTelegramLogin(ports, login.nonce));
+    unwrap(await redeemTelegramLogin(ctx, login.nonce));
 
     await cleanSpentLogins(ports, async () => {
       throw new Error("message to delete not found");
@@ -272,8 +285,128 @@ describe("cleaning up after a login", () => {
 
   it("ignores a login whose message was never sent", async () => {
     await connect();
-    const login = unwrap(await startTelegramLogin(ports, "42", { siteOrigin: ORIGIN, random: random() }));
-    unwrap(await redeemTelegramLogin(ports, login.nonce));
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
+    unwrap(await redeemTelegramLogin(ctx, login.nonce));
     expect(await cleanSpentLogins(ports, async () => undefined)).toBe(0);
+  });
+});
+
+/**
+ * SPEC §62 — a credential operation that leaves no row (§13.37).
+ *
+ * §42.2 calls a bound chat a credential and the five operations on it wrote nothing to
+ * `audit_log`: the Worker's log is kept for days and cannot be queried by principal, so an
+ * account holder asking "who connected this chat, and when was a sign-in link issued" had
+ * nowhere to look. These assertions are about what the row says, not that one exists —
+ * a row naming the wrong principal is worse than no row.
+ */
+describe("what is written down (§62)", () => {
+  it("records the issue of a linking nonce against the account that asked", async () => {
+    await start();
+    expect(journalled()).toEqual([
+      { action: "telegram.link.issued", actor: PRINCIPAL, outcome: "success", reason: null },
+    ]);
+  });
+
+  it("records the binding, in the transaction that makes it", async () => {
+    const link = unwrap(await start());
+    await redeemTelegramLink(ctx, { nonce: link.nonce, telegramUserId: "42", chatId: "99" });
+
+    expect(journalled().at(-1)).toEqual({
+      action: "telegram.linked",
+      actor: PRINCIPAL,
+      outcome: "success",
+      reason: null,
+    });
+  });
+
+  it("names nobody for a nonce that never existed, rather than guessing", async () => {
+    // The chat said who it was; the platform believes that only where a nonce resolves. A
+    // row naming a principal here would be a claim the update made, written down as a fact.
+    await redeemTelegramLink(ctx, { nonce: "NOTANONCE1234567", telegramUserId: "42", chatId: "42" });
+    expect(journalled()).toEqual([
+      { action: "telegram.linked", actor: null, outcome: "denied", reason: "unknown-nonce" },
+    ]);
+  });
+
+  it("distinguishes the refusals, which is the whole content of the row", async () => {
+    const spent = unwrap(await start());
+    unwrap(await redeemTelegramLink(ctx, { nonce: spent.nonce, telegramUserId: "42", chatId: "42" }));
+    await redeemTelegramLink(ctx, { nonce: spent.nonce, telegramUserId: "43", chatId: "43" });
+
+    const expired = unwrap(await start());
+    ports.setNow(new Date(NOW.getTime() + LINK_TTL_MS + 1000));
+    await redeemTelegramLink(ctx, { nonce: expired.nonce, telegramUserId: "44", chatId: "44" });
+    ports.setNow(NOW);
+
+    const theirs = unwrap(await start(OTHER));
+    await redeemTelegramLink(ctx, { nonce: theirs.nonce, telegramUserId: "42", chatId: "42" });
+
+    const denials = journalled().filter((row) => row.outcome === "denied");
+    expect(denials.map((row) => row.reason)).toEqual([
+      "already-used",
+      "expired",
+      "telegram-account-taken",
+    ]);
+    // Every one of them names the account whose nonce it was, which is who would ask.
+    expect(denials.map((row) => row.actor)).toEqual([PRINCIPAL, PRINCIPAL, OTHER]);
+  });
+
+  it("records a sign-in link when it is issued and again when it is spent", async () => {
+    unwrap(await redeemTelegramLink(ctx, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
+    unwrap(await redeemTelegramLogin(ctx, login.nonce));
+
+    expect(journalled().slice(-2)).toEqual([
+      { action: "telegram.login.issued", actor: PRINCIPAL, outcome: "success", reason: null },
+      { action: "telegram.login.used", actor: PRINCIPAL, outcome: "success", reason: null },
+    ]);
+  });
+
+  it("records a second press of a spent link as a denial, though the chat is told nothing", async () => {
+    unwrap(await redeemTelegramLink(ctx, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
+    const login = unwrap(await startTelegramLogin(ctx, "42", { siteOrigin: ORIGIN, random: random() }));
+    unwrap(await redeemTelegramLogin(ctx, login.nonce));
+    await redeemTelegramLogin(ctx, login.nonce);
+
+    expect(journalled().at(-1)).toEqual({
+      action: "telegram.login.used",
+      actor: PRINCIPAL,
+      outcome: "denied",
+      reason: "already-used",
+    });
+  });
+
+  it("records /login from an unconnected chat, naming nobody", async () => {
+    // Ordinarily somebody who found the bot. Many of them, from many chats, is somebody
+    // looking for one that answers — and nothing else keeps that for longer than a log line.
+    expect(errorOf(await startTelegramLogin(ctx, "999", { siteOrigin: ORIGIN, random: random() }))).toBe(
+      ErrorType.NotFound,
+    );
+    expect(journalled()).toEqual([
+      { action: "telegram.login.issued", actor: null, outcome: "denied", reason: "chat-not-connected" },
+    ]);
+  });
+
+  it("says where a disconnection came from, because the two are not the same act", async () => {
+    unwrap(await redeemTelegramLink(ctx, { nonce: unwrap(await start()).nonce, telegramUserId: "42", chatId: "42" }));
+    unwrap(await unlinkTelegram(ctx, PRINCIPAL, "chat"));
+
+    expect(journalled().at(-1)).toEqual({
+      action: "telegram.unlinked",
+      actor: PRINCIPAL,
+      outcome: "success",
+      reason: "from=chat",
+    });
+  });
+
+  it("carries the request id and the user agent the surface handed it", async () => {
+    await start();
+    expect(ports.state.audit[0]).toMatchObject({
+      requestId: "req-telegram",
+      userAgent: "a browser",
+      targetType: "telegram",
+      targetId: PRINCIPAL,
+    });
   });
 });

@@ -74,6 +74,23 @@ const issueNonce = async (owner: string, nonce: string, expiresInMs = 10 * 60 * 
     .run();
 };
 
+/** SPEC §62 — the rows the operations left behind, oldest first. */
+const auditRows = async () => {
+  const { results } = await env.DB.prepare(
+    `SELECT action, actor_principal_id, outcome, reason, ip_hash, request_id, target_type
+       FROM audit_log WHERE action LIKE 'telegram.%' ORDER BY id`,
+  ).all<{
+    action: string;
+    actor_principal_id: string | null;
+    outcome: string;
+    reason: string | null;
+    ip_hash: string | null;
+    request_id: string;
+    target_type: string | null;
+  }>();
+  return results;
+};
+
 const accountRow = (telegramUserId: string) =>
   env.DB.prepare(`SELECT * FROM telegram_accounts WHERE telegram_user_id = ?`)
     .bind(telegramUserId)
@@ -98,6 +115,7 @@ afterEach(async () => {
   await env.DB.prepare(`DELETE FROM telegram_accounts`).run();
   await env.DB.prepare(`DELETE FROM telegram_links`).run();
   await env.DB.prepare(`DELETE FROM telegram_logins`).run();
+  await env.DB.prepare(`DELETE FROM audit_log WHERE action LIKE 'telegram.%'`).run();
 });
 
 describe("the secret token (SPEC §9.3)", () => {
@@ -404,5 +422,98 @@ describe("disconnecting from the chat (SPEC §9.3, §23.5)", () => {
     sender();
     await post(update("/disconnect"));
     expect(said[0]?.text).toContain("not connected");
+  });
+});
+
+describe("what reaches the audit log (SPEC §62, §42.2)", () => {
+  /**
+   * A bound chat is a credential — it receives notifications and can ask for a link that
+   * opens a session — and none of these operations wrote a row until §13.37 counted them.
+   * The Worker's log is not a substitute: it is kept for days and cannot be queried by
+   * principal, which is the one question an account holder asks afterwards.
+   */
+  it("records the binding against the principal whose nonce it was", async () => {
+    sender();
+    await issueNonce(principalId, "NONCE0400");
+    await post(update("/start NONCE0400"));
+
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      action: "telegram.linked",
+      actor_principal_id: principalId,
+      outcome: "success",
+      target_type: "telegram",
+    });
+  });
+
+  it("stores no address for an update, because the address is Telegram's", async () => {
+    // The caller here is a data centre, not the person. A pseudonym of it would put one
+    // operator's infrastructure in the column that exists to identify a caller.
+    sender();
+    await issueNonce(principalId, "NONCE0401");
+    await post(update("/start NONCE0401"));
+
+    expect((await auditRows())[0]?.ip_hash).toBeNull();
+    expect((await auditRows())[0]?.request_id).not.toBe("");
+  });
+
+  it("records a refused nonce without naming anybody", async () => {
+    sender();
+    await post(update("/start NEVEREXISTED"));
+
+    expect((await auditRows())[0]).toMatchObject({
+      action: "telegram.linked",
+      actor_principal_id: null,
+      outcome: "denied",
+      reason: "unknown-nonce",
+    });
+  });
+
+  it("records the sign-in link the chat asked for", async () => {
+    sender();
+    await issueNonce(principalId, "NONCE0402");
+    await post(update("/start NONCE0402"));
+    await post(update("/login"));
+
+    expect((await auditRows()).map((row) => row.action)).toEqual([
+      "telegram.linked",
+      "telegram.login.issued",
+    ]);
+  });
+
+  it("records /login from an unconnected chat as a denial", async () => {
+    sender();
+    await post(update("/login"));
+
+    expect((await auditRows())[0]).toMatchObject({
+      action: "telegram.login.issued",
+      actor_principal_id: null,
+      outcome: "denied",
+      reason: "chat-not-connected",
+    });
+  });
+
+  it("says a disconnection came from the chat, which is not the same act as the page", async () => {
+    sender();
+    await issueNonce(principalId, "NONCE0403");
+    await post(update("/start NONCE0403"));
+    await post(update("/disconnect_confirm"));
+
+    expect((await auditRows()).at(-1)).toMatchObject({
+      action: "telegram.unlinked",
+      actor_principal_id: principalId,
+      outcome: "success",
+      reason: "from=chat",
+    });
+  });
+
+  it("writes nothing for a command that changes nothing", async () => {
+    // `/help` and `/status` are reads. A row for each would be a log of somebody using a
+    // bot, in the table that exists for credential operations.
+    sender();
+    await post(update("/help"));
+    await post(update("/status"));
+    expect(await auditRows()).toHaveLength(0);
   });
 });

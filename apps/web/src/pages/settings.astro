@@ -20,7 +20,7 @@ import {
   type ActionOutcome,
 } from "../lib/settings-actions.js";
 import { removeAvatar, setAvatar, startTelegramLink, unlinkTelegram } from "@orator/core";
-import { telegramPorts } from "../lib/account.js";
+import { telegramContext, telegramPorts } from "../lib/account.js";
 import { telegramBot } from "../lib/origins.js";
 
 /**
@@ -90,7 +90,7 @@ if (Astro.request.method === "POST") {
   if (requestedAction === "telegram.link" && telegramBot !== null) {
     const random = new Uint8Array(16);
     crypto.getRandomValues(random);
-    const started = await startTelegramLink(telegramPorts, principal.id, {
+    const started = await startTelegramLink(await telegramContext(Astro.request), principal.id, {
       botUsername: telegramBot,
       random,
     });
@@ -114,7 +114,7 @@ if (Astro.request.method === "POST") {
     }
     outcome = { kind: "failed", message: started.error.title };
   } else if (requestedAction === "telegram.unlink") {
-    await unlinkTelegram(telegramPorts, principal.id);
+    await unlinkTelegram(await telegramContext(Astro.request), principal.id, "settings");
     outcome = { kind: "done", message: "Telegram is disconnected." };
   } else if (requestedAction === "profile.avatar.remove") {
     const result = await removeAvatar(avatarContext(Astro.request, principal));
