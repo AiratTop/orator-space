@@ -1689,10 +1689,25 @@ Linking, unlinking, issuing a login link, opening a session through one and refu
 nonce are five events, none of them recorded. The Worker logs some of it, which is not the
 same thing: a log is retained for days and is not queryable by principal.
 
-**Still open.** The passkey work closed the neighbouring half — `credential.registered` and
-`credential.removed` are written now, and finding that registration had never been audited was
-a consequence of building removal, which was. These five remain, and they are the same
-argument in a different table.
+**Closed on 2026-09-02**, and it grew a sixth. Seven rows across five actions:
+`telegram.link.issued`, `telegram.linked`, `telegram.login.issued`, `telegram.login.used` and
+`telegram.unlinked`, each carrying its outcome and — on a denial — which one it was. The
+sixth is the issue of a linking nonce, which belongs with the five for the same reason they
+do: a nonce nobody asked for is somebody holding a session they did not open.
+
+Two decisions inside it worth keeping. **The actor is the principal that resolved, never the
+one the update claims** — a chat states who it is, and the platform believes exactly one thing
+about that, so a nonce that never existed names nobody rather than naming whoever the message
+said. Those null-actor rows are the ones worth having: many of them from many chats is
+somebody looking for a chat that answers, and nothing else holds that for longer than a log
+line. And **no address pseudonym on a webhook row**, because the address is Telegram's rather
+than the person's; the browser half of the same operations hashes one, as `reportContext`
+does.
+
+`journal` moved from a named context to a structural one to make it possible. The surfaces
+that write audit rows do not share a port slice — `AccountContext` carries most of `Ports`,
+this one carries three repositories and answers a webhook — so it takes the least a caller has
+to hold, and both write the same row through the same function.
 
 **The webhook has no test of any kind.** Not one file in the repository exercises
 `apps/edge/src/routes/telegram.ts` — including the secret-token check, which §9.3 calls "the
@@ -1703,6 +1718,21 @@ replaced by a controlled sender — wrong secret refused, `/start` links once, `
 `GET` leaves the nonce alone, `POST` spends it, a second `POST` refused, delivery marked only
 after a send.
 
+**Closed on 2026-09-02**, at thirty-six cases through Hono and D1 with the Bot API replaced
+by a controlled sender — half of them read the sentence that arrives in the chat, since that
+is the whole of a bot's interface. A wrong secret is refused before the body is read, so an
+update carrying a valid nonce binds nothing; the route is 404 on the media and MCP hosts and
+on a deployment holding no token; one nonce means one binding; `/login` records the message
+id, without which a spent link can never be taken back; an update with no chat and a body that
+is not JSON are acknowledged rather than left for Telegram to redeliver forever.
+
+**One half of that list stayed where it was**: `GET` leaves the nonce alone and `POST` spends
+it belong to `/auth/telegram`, which is an Astro page, and `apps/web` has no test harness at
+all. The rule is covered in the service — `redeemTelegramLogin` is spent by the write and its
+race is asserted — and the page is covered by the checkpoint against a real deployment.
+Building a container-API harness for one page is a bigger decision than this debt, and it is
+worth taking on its own terms rather than as a footnote to a webhook.
+
 **A blocked bot is called again for every event that follows.** `403` counts as delivered, which
 is right for that one event — the person has said what they want, and leaving it pending would
 carry it for an hour. What is wrong is that the binding survives unchanged, so the next event
@@ -1710,6 +1740,22 @@ calls the Bot API and receives `403` again, for as long as the account exists. T
 writes again, or unlink. Unlinking is simplest and quietly removes a recovery channel from
 somebody who blocked the bot to stop the noise, so the middle one is preferred — and it needs
 a column, which is why it is a decision rather than a patch.
+
+**Taken on 2026-09-02**, as `telegram_accounts.unavailable_since` (migration 0026).
+`Notifier.send` answers `sent | blocked | failed` rather than a boolean, because `403` is
+neither of the two a boolean can say; on `blocked` the event is marked delivered and the
+channel is closed in the same transaction, and the delivery query then stops seeing that chat
+as a recipient. Deliberately not a check at the send: a blocked chat is not a delivery that
+fails, it is a recipient the query does not have.
+
+**What reopens it is the one thing that could.** Telegram does not announce an unblock and
+asking is the call this exists to stop making — so any update from a bound chat clears the
+mark, a plain "hi" included, and so does connecting again. Two details fell out of building
+it: a chat refusing once inside a batch is not called again in that batch, because the query
+ran before the first `403`; and the first refusal dates the outage, since what an operator
+reads as "since" answers "when did this stop". The Telegram tab says so as well, because
+notifications stopping is invisible by nature — there is no failed thing to look at, only an
+absence somebody eventually notices.
 
 **Not taken.** An automated `axe`/Lighthouse pass over the main pages: worth having, not
 before the pages stop moving. Monitoring Telegram as an external dependency: `/health/slo` and
