@@ -1750,8 +1750,26 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         [...state.telegramAccounts.values()].find((one) => one.telegramUserId === telegramUserId) ?? null
       );
     },
-    upsertAccount: (account) => asWrite(() => void state.telegramAccounts.set(account.principalId, account)),
+    // Re-connecting clears the block, as the D1 upsert does: connecting is a message from
+    // the chat, which is the evidence that whatever stopped the last one is over (§9.3).
+    upsertAccount: (account) =>
+      asWrite(() => void state.telegramAccounts.set(account.principalId, { ...account, unavailableSince: null })),
     deleteAccount: (principalId) => asWrite(() => void state.telegramAccounts.delete(principalId)),
+    markChannelUnavailable: (principalId, at) =>
+      asWrite(() => {
+        const account = state.telegramAccounts.get(principalId);
+        // The first refusal dates the outage; a second in the same batch leaves it alone.
+        if (account === undefined || account.unavailableSince !== null) return 0;
+        account.unavailableSince = at;
+        return 1;
+      }),
+    markChannelAvailable: (principalId) =>
+      asWrite(() => {
+        const account = state.telegramAccounts.get(principalId);
+        if (account === undefined) return 0;
+        account.unavailableSince = null;
+        return 1;
+      }),
     async listPendingNotifications(cutoff, limit) {
       const delivered = state.telegramDeliveries;
       return state.events
@@ -1768,7 +1786,8 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
           const audience = state.principals.get(event.audiencePrincipalId!);
           const recipientId = audience?.ownerPrincipalId ?? audience?.id;
           const account = recipientId === undefined ? undefined : state.telegramAccounts.get(recipientId);
-          return account === undefined
+          // A chat that has blocked the bot is not a recipient this query has (§9.3).
+          return account === undefined || account.unavailableSince !== null
             ? []
             : [
                 {

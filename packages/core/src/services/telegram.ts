@@ -220,6 +220,8 @@ export async function redeemTelegramLink(
     chatId: input.chatId,
     username: input.username ?? null,
     linkedAt: now.toISOString(),
+    // A fresh binding is a working channel: the upsert clears any block on the old one.
+    unavailableSince: null,
   };
 
   await ctx.db.commit([

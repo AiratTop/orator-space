@@ -9,6 +9,7 @@ interface AccountRow {
   chat_id: string;
   username: string | null;
   linked_at: string;
+  unavailable_since: string | null;
 }
 
 interface LoginRow {
@@ -37,6 +38,7 @@ const toAccount = (row: AccountRow | null): TelegramAccount | null =>
         chatId: row.chat_id,
         username: row.username,
         linkedAt: row.linked_at,
+        unavailableSince: row.unavailable_since,
       };
 
 export function createTelegramRepo(db: D1Database): TelegramRepo {
@@ -128,7 +130,10 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
                telegram_user_id = excluded.telegram_user_id,
                chat_id = excluded.chat_id,
                username = excluded.username,
-               linked_at = excluded.linked_at`,
+               linked_at = excluded.linked_at,
+               -- Connecting is a message from the chat, so it is also the evidence that
+               -- whatever stopped the last one is over (§9.3).
+               unavailable_since = NULL`,
           )
           .bind(
             account.principalId,
@@ -144,6 +149,27 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
       return asWrite(db.prepare(`DELETE FROM telegram_accounts WHERE principal_id = ?`).bind(principalId));
     },
 
+    markChannelUnavailable(principalId, at) {
+      // `IS NULL` in the WHERE keeps the first refusal's timestamp: a batch that hits two
+      // events for one blocked chat must not move the date an operator reads as "since".
+      return asWrite(
+        db
+          .prepare(
+            `UPDATE telegram_accounts SET unavailable_since = ?
+              WHERE principal_id = ? AND unavailable_since IS NULL`,
+          )
+          .bind(at, principalId),
+      );
+    },
+
+    markChannelAvailable(principalId) {
+      return asWrite(
+        db
+          .prepare(`UPDATE telegram_accounts SET unavailable_since = NULL WHERE principal_id = ?`)
+          .bind(principalId),
+      );
+    },
+
     /**
      * §61.2, §20.5 — private events whose audience has a chat, not yet delivered.
      *
@@ -151,6 +177,11 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
      * Telegram account, and §7.2 makes its owner the person accountable for it. The LEFT JOIN
      * on deliveries and the `IS NULL` is what makes this idempotent — a row leaves the queue
      * by being delivered, not by being read.
+     *
+     * `unavailable_since IS NULL` on the join rather than a check at the send: a chat that
+     * has blocked the bot is not a delivery that fails, it is a recipient the query does not
+     * have. Everything for them stays pending and ages out of the window, which is right —
+     * the events are still in their feed, and none of them was worth a `403` a minute.
      */
     async listPendingNotifications(cutoff, limit) {
       const { results } = await db
@@ -161,6 +192,7 @@ export function createTelegramRepo(db: D1Database): TelegramRepo {
              JOIN principals p        ON p.id = e.audience_principal_id
              LEFT JOIN agents ag      ON ag.principal_id = p.id
              JOIN telegram_accounts t ON t.principal_id = COALESCE(ag.owner_principal_id, p.id)
+                                       AND t.unavailable_since IS NULL
              LEFT JOIN telegram_deliveries d ON d.event_id = e.id
             WHERE e.visibility = 'private'
               AND e.audience_principal_id IS NOT NULL

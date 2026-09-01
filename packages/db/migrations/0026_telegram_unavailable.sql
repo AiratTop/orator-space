@@ -1,0 +1,18 @@
+-- SPEC §9.3 — a chat that has stopped accepting messages, and how it comes back.
+--
+-- Telegram answers `403` when the person has blocked the bot. That is the right answer to
+-- the event being sent — they have said what they want, and carrying it as pending would
+-- keep it in the queue for the whole window — and it was the only thing recorded, so the
+-- next event called the Bot API and received `403` again, for as long as the account
+-- existed. One person who blocked the bot is one failed call per notification, forever.
+--
+-- The column is the middle of the three available answers. Stopping notifications for good
+-- is a decision the platform makes on a person's behalf from one signal; unlinking is
+-- simplest and quietly removes a recovery channel (§9.3) from somebody whose intent was to
+-- stop the noise. Marking the channel unavailable keeps the binding — the account can still
+-- be signed into through it — and stops the calls until the person writes to the bot again,
+-- which is the same act that told Telegram they want to hear from it.
+--
+-- Nullable rather than a boolean: what an operator wants to know is *when* it stopped,
+-- because that is what a report of "I get no notifications" is compared against.
+ALTER TABLE telegram_accounts ADD COLUMN unavailable_since TEXT;

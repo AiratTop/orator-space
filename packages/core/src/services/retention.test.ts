@@ -618,6 +618,7 @@ describe("Telegram nonces (§9.3, §23.4, a day past expiry)", () => {
       chatId: "C1",
       username: null,
       linkedAt: hoursAgo(48),
+      unavailableSince: null,
     });
     ports.state.events.push({
       id: "E-RECENT" as never,

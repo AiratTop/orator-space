@@ -965,17 +965,21 @@ export default {
                 headers: { "content-type": "application/json" },
                 body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: false }),
               });
+              if (response.ok) return "sent";
               /*
                * 403 is somebody who blocked the bot, and it is not a failure to retry: they
-               * have said what they want. It counts as delivered so the queue does not carry
-               * their events for an hour.
+               * have said what they want. Reported as its own outcome rather than as a
+               * delivery, so the channel is closed as well as the event — answering "sent"
+               * left the binding untouched and called the Bot API again for every event that
+               * followed, for as long as the account existed (§9.3).
                */
-              return response.ok || response.status === 403;
+              if (response.status === 403) return "blocked";
+              return "failed";
             } catch (error) {
               console.error(
                 JSON.stringify({ level: "warn", event: "telegram.notify.failed", error: String(error) }),
               );
-              return false;
+              return "failed";
             }
           },
         },
@@ -984,10 +988,10 @@ export default {
         console.error(
           JSON.stringify({ level: "error", event: "telegram.notify.crashed", error: String(error) }),
         );
-        return { sent: 0, failed: 0 };
+        return { sent: 0, failed: 0, blocked: 0 };
       });
 
-      if (delivery.sent > 0 || delivery.failed > 0) {
+      if (delivery.sent > 0 || delivery.failed > 0 || delivery.blocked > 0) {
         console.log(JSON.stringify({ level: "info", task: "telegram.notify", ...delivery }));
       }
 

@@ -618,6 +618,20 @@ const when = (iso: string) => iso.slice(0, 10);
                   {when(telegram.linkedAt)}. This is where you will be told when something
                   happens to your work.
                 </p>
+                {/*
+                  §9.3 — the chat refused a message, and nothing else would ever say so.
+                  Notifications stopping is invisible by nature: there is no failed thing to
+                  look at, only an absence somebody eventually notices. The account page is
+                  where they would come to find out why.
+                */}
+                {telegram.unavailableSince !== null && (
+                  <p class="field__hint">
+                    Nothing has been sent since {when(telegram.unavailableSince)}: the chat
+                    refused a message, which usually means the bot was blocked there. Sending
+                    resumes as soon as you write to it again — any message will do. Signing in
+                    through the chat still works.
+                  </p>
+                )}
                 <form method="post" action={here} class="issue__form">
                   <input type="hidden" name="action" value="telegram.unlink" />
                   <button class="button button--quiet button--small" type="submit">Disconnect</button>

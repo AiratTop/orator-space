@@ -10,6 +10,14 @@ export interface TelegramAccount {
   chatId: string;
   username: string | null;
   linkedAt: string;
+  /**
+   * SPEC §9.3 — when the chat stopped accepting messages, if it has.
+   *
+   * Set when Telegram answers `403`, which is somebody who blocked the bot. The binding
+   * stays: it is still how they sign in, and blocking a bot is not closing an account. What
+   * stops is the sending, until they write to it again.
+   */
+  unavailableSince: string | null;
 }
 
 export interface TelegramLink {
@@ -46,6 +54,16 @@ export interface TelegramRepo {
   findByTelegramUser(telegramUserId: string): Promise<TelegramAccount | null>;
   upsertAccount(account: TelegramAccount): PendingWrite;
   deleteAccount(principalId: string): PendingWrite;
+
+  /**
+   * §9.3 — the chat refused a message, and is not called again until it speaks.
+   *
+   * Idempotent by intent: the first `403` is what dates the outage, and a second one during
+   * the same batch must not move the timestamp an operator is reading.
+   */
+  markChannelUnavailable(principalId: string, at: string): PendingWrite;
+  /** §9.3 — the person wrote to the bot, which is the only evidence the block is over. */
+  markChannelAvailable(principalId: string): PendingWrite;
 
   /**
    * §23.4 — nonces are swept rather than deleted on use, so a second attempt can be told.

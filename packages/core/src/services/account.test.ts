@@ -307,6 +307,7 @@ describe("passkeys", () => {
       chatId: "chat-1",
       username: null,
       linkedAt: "2026-01-01T00:00:00.000Z",
+      unavailableSince: null,
     });
 
   it("lists what a person holds, without the key material", async () => {

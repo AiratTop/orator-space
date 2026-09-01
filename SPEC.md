@@ -1055,6 +1055,23 @@ does not lose the intent and a sweep that runs twice does not ask twice.
 cannot open a session; the other opens a session and cannot bind a chat. Sharing a table
 makes that difference a `WHERE` clause, and a mistake there turns one into the other.
 
+**MUST — a chat that refuses a message stops being sent to, and the binding survives.**
+Telegram answers `403` when the person has blocked the bot. Counting that as a delivery is
+right about the event — they have said what they want, and carrying it as pending would keep
+it in the window for an hour — and wrong about every event after it: with nothing recorded,
+the next notification calls the Bot API and is refused again, for as long as the account
+exists. So the refusal is recorded against the account, and the delivery query stops seeing
+that chat as a recipient. The three available answers are stopping for good, unlinking, and
+this one; unlinking is simplest and quietly removes the recovery channel (§9.1) from somebody
+whose intent was to stop the noise, so the binding stays and only the sending stops.
+
+**MUST — a message from the chat is what makes it available again.** Telegram does not
+announce an unblock, and asking is the call this exists to stop making. What it does deliver
+is the person writing to the bot, which is the same act that made the channel work in the
+first place — so any update from a bound chat clears the mark, and so does connecting again.
+The events that were not sent stay in the feed (§20.5) and age out of the delivery window;
+none of them was worth a refused call a minute.
+
 **MUST — every operation on the binding is written to `audit_log` (§62).** §42.2 calls a
 bound chat a credential, and it behaves like one: it receives the platform's private
 notifications and it can ask for a link that opens a session. So issuing a linking nonce,

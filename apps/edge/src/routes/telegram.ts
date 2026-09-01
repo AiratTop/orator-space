@@ -226,6 +226,25 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
     userAgent: null,
   };
 
+  /*
+   * §9.3 — a message from the chat is the evidence a block is over.
+   *
+   * `deliverNotifications` stops calling a chat that answered `403`, and nothing else could
+   * ever tell it to start again: Telegram does not announce an unblock, and polling for one
+   * is the call this was built to stop making. What it does announce is this — the person
+   * writing to the bot, which is the same act that made the channel work in the first place.
+   *
+   * Before the commands rather than inside them, because any message counts. Somebody who
+   * unblocks the bot types "hi", not `/status`.
+   */
+  const bound = await repo.findByTelegramUser(telegramUserId);
+  if (bound !== null && bound.unavailableSince !== null) {
+    await ctx.db.commit([repo.markChannelAvailable(bound.principalId)]);
+    console.log(
+      JSON.stringify({ level: "info", event: "telegram.channel.restored", since: bound.unavailableSince }),
+    );
+  }
+
   const command = text.trim().split(/\s+/)[0]?.replace(/@\w+$/, "").toLowerCase() ?? "";
   // `/disconnect_confirm` is the same command, confirmed; the check below reads the whole line.
   const isDisconnect = command === "/disconnect" || command === "/disconnect_confirm";
@@ -243,7 +262,7 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
   }
 
   if (command === "/status") {
-    const account = await repo.findByTelegramUser(telegramUserId);
+    const account = bound;
     if (account === null) {
       await say(token, chatId, SAID.notConnected);
       return c.text("ok");
@@ -316,8 +335,7 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
      */
     const confirmed = /^\/disconnect(?:_confirm|(?:@\w+)?\s+(?:yes|confirm))/i.test(text.trim());
     if (!confirmed) {
-      const account = await repo.findByTelegramUser(telegramUserId);
-      await say(token, chatId, account === null ? SAID.notConnected : SAID.confirmDisconnect);
+      await say(token, chatId, bound === null ? SAID.notConnected : SAID.confirmDisconnect);
       return c.text("ok");
     }
 
@@ -328,12 +346,11 @@ telegramRoutes.post("/telegram/webhook", async (c) => {
      * passkey, a device that changed hands. Disconnecting grants nothing — it removes a
      * channel — so the chat is allowed to do it for itself (§23.5).
      */
-    const account = await repo.findByTelegramUser(telegramUserId);
-    if (account === null) {
+    if (bound === null) {
       await say(token, chatId, SAID.notConnected);
       return c.text("ok");
     }
-    await unlinkTelegram(ctx, account.principalId, "chat");
+    await unlinkTelegram(ctx, bound.principalId, "chat");
     await say(token, chatId, SAID.disconnected);
     console.log(JSON.stringify({ level: "info", event: "telegram.unlinked", from: "chat" }));
     return c.text("ok");

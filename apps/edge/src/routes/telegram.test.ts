@@ -517,3 +517,63 @@ describe("what reaches the audit log (SPEC §62, §42.2)", () => {
     expect(await auditRows()).toHaveLength(0);
   });
 });
+
+describe("a chat that blocked the bot, and then wrote to it (SPEC §9.3)", () => {
+  /**
+   * `deliverNotifications` closes the channel on a `403` and nothing else could reopen it:
+   * Telegram does not announce an unblock, and polling for one is the call the column exists
+   * to stop making. A message from the chat is the announcement — it is the same act that
+   * made the channel work in the first place.
+   */
+  const blocked = async (nonce: string) => {
+    await issueNonce(principalId, nonce);
+    await post(update(`/start ${nonce}`));
+    await env.DB.prepare(`UPDATE telegram_accounts SET unavailable_since = ? WHERE principal_id = ?`)
+      .bind("2026-09-01T00:00:00.000Z", principalId)
+      .run();
+    said = [];
+  };
+
+  const since = async () =>
+    (
+      await env.DB.prepare(`SELECT unavailable_since FROM telegram_accounts WHERE principal_id = ?`)
+        .bind(principalId)
+        .first<{ unavailable_since: string | null }>()
+    )?.unavailable_since ?? null;
+
+  it("reopens the channel on any message, not only a command", async () => {
+    sender();
+    await blocked("NONCE0500");
+    expect(await since()).not.toBeNull();
+
+    await post(update("hi"));
+    expect(await since()).toBeNull();
+  });
+
+  it("reopens it on a command too", async () => {
+    sender();
+    await blocked("NONCE0501");
+    await post(update("/status"));
+    expect(await since()).toBeNull();
+  });
+
+  it("leaves an open channel alone", async () => {
+    sender();
+    await issueNonce(principalId, "NONCE0502");
+    await post(update("/start NONCE0502"));
+    await post(update("/status"));
+    expect(await since()).toBeNull();
+  });
+
+  it("reconnecting clears it as well, because connecting is a message", async () => {
+    sender();
+    await blocked("NONCE0503");
+    await env.DB.prepare(`UPDATE telegram_accounts SET unavailable_since = ? WHERE principal_id = ?`)
+      .bind("2026-09-01T00:00:00.000Z", principalId)
+      .run();
+
+    await issueNonce(principalId, "NONCE0504");
+    await post(update("/start NONCE0504"));
+    expect(await since()).toBeNull();
+  });
+});

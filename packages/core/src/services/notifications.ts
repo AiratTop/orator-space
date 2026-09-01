@@ -29,14 +29,28 @@ export const NOTIFY_WINDOW_MS = 60 * 60 * 1000;
 /** One run's ceiling. Telegram allows about thirty messages a second across all chats. */
 export const NOTIFY_BATCH = 20;
 
+/**
+ * What became of one message (SPEC §9.3).
+ *
+ * Three outcomes rather than a boolean, because `403` is neither of the two a boolean can
+ * express. It is not a failure to retry — the person blocked the bot, which is them saying
+ * what they want — and it is not a delivery either. Answering `true` was the first version
+ * and it was right about this event and wrong about every one after it: the binding survived
+ * untouched, so the next notification called the Bot API and was refused again, for as long
+ * as the account existed.
+ */
+export type Delivery = "sent" | "blocked" | "failed";
+
 export interface Notifier {
-  /** Returns false when the message was not delivered, so the event stays pending. */
-  send(chatId: string, text: string): Promise<boolean>;
+  /** `failed` leaves the event pending; `blocked` closes the channel until they write. */
+  send(chatId: string, text: string): Promise<Delivery>;
 }
 
 export interface DeliveryReport {
   sent: number;
   failed: number;
+  /** Chats that refused, each of which cost one call and will not cost a second. */
+  blocked: number;
 }
 
 /**
@@ -90,19 +104,51 @@ export async function deliverNotifications(
 
   let sent = 0;
   let failed = 0;
+  let blocked = 0;
+
+  /*
+   * A chat that refuses once in this batch is not called again in it.
+   *
+   * The query that produced `pending` ran before the first `403`, so it can hold several
+   * events for the same chat. Excluding it here is what makes "one call per block" true of a
+   * batch as well as of the schedule.
+   */
+  const refused = new Set<string>();
 
   for (const notification of pending) {
-    const delivered = await notifier.send(
+    if (refused.has(notification.chatId)) continue;
+
+    const delivery = await notifier.send(
       notification.chatId,
       sentenceFor(notification, options.siteOrigin),
     );
-    if (!delivered) {
+
+    if (delivery === "failed") {
       failed += 1;
       continue;
     }
+
+    if (delivery === "blocked") {
+      /*
+       * Marked delivered as well as blocked, and the two go together.
+       *
+       * This event was carried to somebody who has said they do not want it, and leaving it
+       * pending would keep it in the window for an hour of runs that now skip the chat
+       * anyway. The channel closing is the part that matters, and it is closed for
+       * everything, not for this event.
+       */
+      refused.add(notification.chatId);
+      await ports.db.commit([
+        ports.telegram.markDelivered(notification.eventId, now.toISOString()),
+        ports.telegram.markChannelUnavailable(notification.recipientPrincipalId, now.toISOString()),
+      ]);
+      blocked += 1;
+      continue;
+    }
+
     await ports.db.commit([ports.telegram.markDelivered(notification.eventId, now.toISOString())]);
     sent += 1;
   }
 
-  return { sent, failed };
+  return { sent, failed, blocked };
 }
