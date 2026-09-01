@@ -186,3 +186,29 @@ Production is deployed by GitHub Actions only (CONTEXT.md, §64.3). A local
   need an explicit instruction naming the environment (AGENTS.md)
 - CI feedback — `gh run watch`, `gh run view --log-failed`
 - `wrangler tail` for live Worker logs
+
+## Answers in chat are short and plain
+
+**Replies to the operator only.** Commit messages, `SPEC.md`, `PLAN.md`, ADRs and code
+comments are written for a reader a year from now and are not covered by this.
+
+Answer in whatever language the operator writes in, and write it the way somebody speaks that
+language — not as a translation of an English sentence. Everything below is about the shape of
+the answer and holds in any language.
+
+- **The conclusion first.** The first line says what was done, or what is wrong. Detail
+  follows.
+- **One thought per sentence.** No nested clauses, no chains of em dashes, no sentence that
+  has to be read twice.
+- **Length.** An ordinary answer is 3–10 lines. A report on a large piece of work is headings
+  and short bullets — not a retelling of what the commits already say.
+- **Say a thing once.** The reasoning behind a decision is given in its shortest form; the
+  long version belongs in the commit and in `PLAN.md`.
+- **Caveats and risks go in one block at the end**, not woven through every sentence.
+- File names, commands, tables and columns keep their own spelling, untranslated.
+
+Bad: "Which is exactly what §13.38 describes as the thing using a product finds and testing
+does not — four defects in the queue in twenty minutes, after both features had passed tests,
+checkpoints and a live verification each."
+
+Good: "Not verified by hand yet. §13.38 says that is where the defects turn up."
