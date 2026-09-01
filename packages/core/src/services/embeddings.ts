@@ -308,6 +308,8 @@ export async function drainEmbeddingBacklog(
   const stale = await ports.embeddings.listStale(semantic.embedder.name, limit);
   let embedded = 0;
   let failed = 0;
+  /** Articles this run took out of the backlog: written, found unchanged, or withdrawn. */
+  let resolved = 0;
 
   for (const articleId of stale) {
     const status = await embedArticle(ports, articleId, semantic);
@@ -316,12 +318,28 @@ export async function drainEmbeddingBacklog(
       break;
     }
     if (status === "embedded") embedded += 1;
+    // "skipped" is a revision or a body that could not be read, and leaves the article
+    // exactly as stale as it was; everything else means the predicate no longer selects it.
+    if (status !== "skipped") resolved += 1;
   }
 
   return {
     embedded,
     failed,
-    remaining: await ports.embeddings.countStale(semantic.embedder.name, 1_000),
+    /*
+     * Counted again only when there might be more than this page (migration 0027).
+     *
+     * `countStale` is the same scan as `listStale` and was run unconditionally, so a fully
+     * embedded corpus paid for the whole thing twice every five minutes to print a zero —
+     * 1.03M rows a day in the D1 analytics, on top of the 1.14M the listing itself read.
+     * A short page *is* the count: `listStale` was asked for `limit` and returned fewer, so
+     * the backlog was what came back, and what is left of it is what this run did not
+     * resolve. Only a full page can be hiding a tail worth measuring.
+     */
+    remaining:
+      stale.length < limit
+        ? stale.length - resolved
+        : await ports.embeddings.countStale(semantic.embedder.name, 1_000),
   };
 }
 

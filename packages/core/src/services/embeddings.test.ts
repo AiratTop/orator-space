@@ -359,6 +359,38 @@ describe("the backlog drain", () => {
     expect(drained.remaining).toBe(0);
   });
 
+  /*
+   * The count that was running twice for one answer (migration 0027).
+   *
+   * `countStale` is the same scan as `listStale`, and it used to run on every drain — so a
+   * corpus with nothing to do paid for the scan twice every five minutes to print a zero. A
+   * page that came back short is the count already. Asserted on the call rather than on the
+   * number, because the number is right either way and the point of the change is the scan
+   * that does not happen.
+   */
+  it("does not count the backlog again when the page it was given came back short", async () => {
+    const { semantic } = semanticOf();
+    await publish("First", "A long enough body about serving models.");
+    const counted = vi.spyOn(ports.embeddings, "countStale");
+
+    const drained = await drainEmbeddingBacklog(ports, semantic, 10);
+    expect(drained.embedded).toBe(1);
+    expect(drained.remaining).toBe(0);
+    expect(counted).not.toHaveBeenCalled();
+  });
+
+  it("counts what is left when the page was full, because a tail may be behind it", async () => {
+    const { semantic } = semanticOf();
+    await publish("First", "A long enough body about serving models.");
+    await publish("Second", "Another long enough body about something else entirely.");
+    const counted = vi.spyOn(ports.embeddings, "countStale");
+
+    const drained = await drainEmbeddingBacklog(ports, semantic, 1);
+    expect(drained.embedded).toBe(1);
+    expect(drained.remaining).toBe(1);
+    expect(counted).toHaveBeenCalled();
+  });
+
   it("stops at the first unavailability rather than spending the whole batch", async () => {
     const store = fakeStore();
     let calls = 0;

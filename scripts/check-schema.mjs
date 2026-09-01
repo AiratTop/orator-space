@@ -70,7 +70,7 @@ check(!columnsOf("articles").has("version"), "articles.version present — repla
 // -- §34, §35: reliability primitives exist from day one -------------------------
 check(tables.has("outbox"), "outbox missing — publish and event emission would not be atomic (§35)");
 check(tables.has("idempotency_keys"), "idempotency_keys missing (§34.1)");
-check(indexes.has("ix_outbox_pending"), "no index for the outbox drain (§35.2)");
+check(indexes.has("ix_outbox_drain"), "no index for the outbox drain (§35.2)");
 
 // -- indexes whose absence turns a page into a table scan -------------------------
 check(indexes.has("ix_article_topics_topic"), "no index on article_topics(topic_id) — /t/{slug} scans (§22)");

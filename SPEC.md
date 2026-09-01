@@ -3209,7 +3209,10 @@ CREATE TABLE outbox (
   created_at      TEXT NOT NULL,
   sent_at         TEXT
 );
-CREATE INDEX ix_outbox_pending ON outbox(next_attempt_at, id) WHERE status = 'pending';
+-- Leading on `id`, because the drain orders by it: an index on (next_attempt_at, id) cannot
+-- produce that order, and SQLite answers `ORDER BY id … LIMIT` by walking the primary key —
+-- every delivered row in the table, once a minute, to find out there is nothing to send.
+CREATE INDEX ix_outbox_drain ON outbox(id, next_attempt_at) WHERE status = 'pending';
 ```
 
 **MUST.** The `outbox` row is written by the same `db.batch()` as the domain change. Either

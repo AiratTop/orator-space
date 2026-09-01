@@ -122,6 +122,23 @@ describe("what the drain considers stale", () => {
     expect(await ledger().listStale(MODEL, 10)).toEqual([]);
   });
 
+  /*
+   * What the join to `revisions` used to exclude (migration 0027).
+   *
+   * The predicate reached the ledger through `JOIN revisions r ON r.id = a.published_revision_id`
+   * and then compared against `r.id`, which is that column — so the join bought nothing except
+   * the one row it dropped: an article marked published with no pointer at all. That is a state
+   * nothing writes and `embedArticle` would refuse anyway, and it is now excluded by a NULL
+   * check rather than by an index probe per article on every run. Asserted, because the join
+   * going means this is the only thing holding the behaviour.
+   */
+  it("never one published with no revision to embed", async () => {
+    await article("A1", "REV-1");
+    await env.DB.prepare(`UPDATE articles SET published_revision_id = NULL WHERE id = 'A1'`).run();
+    expect(await ledger().listStale(MODEL, 10)).toEqual([]);
+    expect(await ledger().countStale(MODEL, 100)).toBe(0);
+  });
+
   it("never a duplicate, whatever else is true of it", async () => {
     await article("A1", "REV-1");
     await article("A2", "REV-9", { duplicateOf: "A1" });

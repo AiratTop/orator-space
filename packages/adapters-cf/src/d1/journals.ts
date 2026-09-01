@@ -21,6 +21,15 @@ export function createAuditRepo(db: D1Database): AuditRepo {
      * have emptied (§23.5). What stays is what an investigation needs: what happened, to
      * what, and whether it succeeded.
      */
+    /*
+     * Served by `ix_audit_identity` (migration 0027), and it has to be.
+     *
+     * Retention runs this on every one of its passes, whether or not anything is due, and
+     * without an index the subquery reads the whole journal each time to find out. The index
+     * is partial on the disjunction below, so it holds exactly the rows still carrying an
+     * identity — a row leaves it when this statement clears those columns, which means the
+     * scan shrinks as the sweep works rather than growing with the journal.
+     */
     async pseudonymiseBefore(cutoff, limit) {
       const { meta } = await db
         .prepare(
@@ -118,6 +127,16 @@ export function createOutboxRepo(db: D1Database): OutboxRepo {
       );
     },
 
+    /*
+     * Ordered by `id`, and that is what the index has to lead on (migration 0027).
+     *
+     * `ORDER BY id` is deliberate — §12 makes the id monotonic, so it delivers in the order
+     * the writes happened — but it is also what decides the plan. `ix_outbox_pending` led on
+     * `next_attempt_at` and could not produce that order, so SQLite walked the primary key
+     * instead: every row in the table, delivered ones included, once a minute, to find out
+     * that there was nothing to send. `ix_outbox_drain` leads on `id` and is partial on
+     * `status = 'pending'`, so an empty pipeline costs a seek and a full one stops at `LIMIT`.
+     */
     async listPending(now, limit) {
       const { results } = await db
         .prepare(

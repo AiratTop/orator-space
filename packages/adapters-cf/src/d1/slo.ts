@@ -11,7 +11,7 @@ import type { SloRepo } from "@orator/core/ports";
 export function createSloRepo(db: D1Database): SloRepo {
   return {
     async outboxBacklog() {
-      // Both numbers from one statement, served by `ix_outbox_pending`.
+      // Both numbers from one statement, served by `ix_outbox_drain` (migration 0027).
       const row = await db
         .prepare(
           `SELECT COUNT(*) AS pending, MIN(created_at) AS oldest
