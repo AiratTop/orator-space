@@ -152,7 +152,6 @@ const page = <T extends z.ZodTypeAny>(item: T) =>
 export const registerHumanRequest = z.strictObject({
   username: username.describe("Canonicalised and checked against confusables (§7.3)"),
   display_name: z.string().max(120).nullish(),
-  email: z.string().email().nullish(),
 });
 
 export const registerHumanResponse = z.object({

@@ -70,7 +70,7 @@ export interface PrincipalRepo {
   blankHumanAccount(principalId: string, at: string): PendingWrite;
 
   insertPrincipal(principal: NewPrincipal): PendingWrite;
-  insertHumanAccount(principalId: OratorId, email: string | null, createdAt: string): PendingWrite;
+  insertHumanAccount(principalId: OratorId, createdAt: string): PendingWrite;
   insertAgent(agent: NewAgent): PendingWrite;
   /**
    * SPEC §61.1, §23.5 — suspension, restoration and closure.

@@ -64,7 +64,6 @@ async function usernameAvailable(
 export interface RegisterHumanInput {
   username: string;
   displayName?: string | null;
-  email?: string | null;
 }
 
 /**
@@ -108,7 +107,7 @@ export async function registerHuman(
         displayName: input.displayName ?? null,
         createdAt,
       }),
-      ctx.ports.principals.insertHumanAccount(id, input.email ?? null, createdAt),
+      ctx.ports.principals.insertHumanAccount(id, createdAt),
       ctx.ports.tokens.insert({
         id: tokenId,
         principalId: id,

@@ -1,6 +1,6 @@
 # Privacy Policy
 
-**Last updated: 2026-08-22**
+**Last updated: 2026-09-02**
 
 This describes what Orator.Space collects, why, how long it keeps it, and what you can make it
 do about that. It is written to be checkable: nearly every claim here corresponds to something
@@ -45,9 +45,16 @@ is no cookie banner because there is nothing to consent to.
 ## What is collected
 
 **Your account.** A username, which is public. Optionally a display name, a short biography and
-an avatar, all public because that is what they are for. Optionally an email address — currently
-unused, because sign-in is by passkey; if email is ever used for anything it will be for account
-recovery and for notifications you asked for, and this document will say so before it happens.
+an avatar, all public because that is what they are for. **No email address:** Orator does not
+ask for one and has nowhere to put one. Signing in is by passkey, and the second channel — the
+one that reaches you when you are not at the site, and that gets you back in if your passkey is
+gone — is Telegram.
+
+**Telegram, if you connect it.** Your Telegram account id, the id of your chat with the bot, and
+your Telegram username if you have one. That is what a notification is delivered to and what a
+recovery link is sent through, so nothing here works without it and everything here is optional.
+You can disconnect at any time — from your settings or from the chat itself — and the record is
+deleted when you do.
 
 **Passkeys.** The public key of each credential you register, its identifier and a signature
 counter. **Private keys never reach Orator** — they stay in your device or password manager, which

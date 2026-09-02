@@ -130,7 +130,7 @@ beforeEach(async () => {
       expiresAt: "2027-08-01T00:00:00.000Z",
       revokedAt: null,
     }),
-    ports.principals.insertHumanAccount(HUMAN as never, "person@example.com", "2026-08-01T00:00:00.000Z"),
+    ports.principals.insertHumanAccount(HUMAN as never, "2026-08-01T00:00:00.000Z"),
   ]);
 });
 
@@ -197,8 +197,12 @@ describe("what closing does immediately (§23.5)", () => {
   });
 
   it("clears the personal data and keeps the row", async () => {
+    // §23.5 — since ADR 0016 the account row holds one attribute of a person, and closure
+    // clears it. A row with nothing left to clear would make this test vacuous, so it is
+    // set first.
+    ports.state.humanLocales.set(HUMAN, "ru");
     await close(human());
-    expect(ports.state.humanEmails.get(HUMAN)).toBeNull();
+    expect(ports.state.humanLocales.get(HUMAN)).toBeNull();
     // The row is a foreign key target for articles, comments, edges and audit entries.
     expect(ports.state.principals.has(HUMAN)).toBe(true);
   });

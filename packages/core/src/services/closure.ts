@@ -201,10 +201,10 @@ export async function applyClosureDisposition(
    *
    * The name an article carries is a username, and a username was never personal data — it
    * is the handle the work was published under and the thing citations point at (§7.3).
-   * What made the account identify a person was the email, and that is already gone. So
-   * "keep under a pseudonym" is a description of what has already happened rather than a
-   * further operation: the writing stays, attributed to a name that no longer reaches
-   * anybody.
+   * The account row identifies nobody by itself — it holds no address (ADR 0016) — and what
+   * tied it to a person was the credentials, deleted at step 1. So "keep under a pseudonym"
+   * is a description of what has already happened rather than a further operation: the
+   * writing stays, attributed to a name that no longer reaches anybody.
    */
   if (disposition === "pseudonymise") return { handled: 0, moreToDo: false };
 

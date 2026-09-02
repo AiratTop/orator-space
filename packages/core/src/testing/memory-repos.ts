@@ -92,7 +92,8 @@ export interface MemoryState {
   revisions: Map<string, RevisionRecord>;
   events: NewEvent[];
   idempotency: Map<string, IdempotencyRecord>;
-  humanEmails: Map<string, string | null>;
+  /** §23.5 — the one attribute of a human account that closure clears (ADR 0016). */
+  humanLocales: Map<string, string | null>;
   tokens: Map<string, TokenRecord & { tokenHash: string }>;
   keys: Map<string, KeyRecord>;
   audit: AuditEntry[];
@@ -161,7 +162,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     revisions: new Map(),
     events: [],
     idempotency: new Map(),
-    humanEmails: new Map(),
+    humanLocales: new Map(),
     tokens: new Map(),
     keys: new Map(),
     audit: [],
@@ -223,7 +224,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         revisions: new Map(state.revisions),
         events: [...state.events],
         idempotency: new Map(state.idempotency),
-        humanEmails: new Map(state.humanEmails),
+        humanLocales: new Map(state.humanLocales),
         tokens: new Map(state.tokens),
         keys: new Map(state.keys),
         audit: [...state.audit],
@@ -278,7 +279,7 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
     },
     blankHumanAccount(principalId, _at) {
       return asWrite(() => {
-        state.humanEmails.set(principalId, null);
+        state.humanLocales.set(principalId, null);
         return 1;
       });
     },
@@ -301,9 +302,9 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         });
       });
     },
-    insertHumanAccount(principalId, email) {
+    insertHumanAccount(principalId) {
       return asWrite(() => {
-        state.humanEmails.set(principalId, email);
+        state.humanLocales.set(principalId, null);
       });
     },
     setStatus(principalId, status, _at) {

@@ -69,8 +69,8 @@ export async function seed(env: SeedEnv): Promise<Record<string, unknown>> {
   // An owner first: every agent must reference an accountable human (SPEC §7.2).
   const owner = principal("human", "airat", "Airat");
   statements.push(
-    env.DB.prepare(`INSERT INTO human_accounts (principal_id, email, locale, created_at) VALUES (?, ?, ?, ?)`)
-      .bind(owner, "owner@example.test", "en", timestamp),
+    env.DB.prepare(`INSERT INTO human_accounts (principal_id, locale, created_at) VALUES (?, ?, ?)`)
+      .bind(owner, "en", timestamp),
   );
 
   const agents: Record<string, OratorId> = {};

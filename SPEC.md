@@ -603,12 +603,9 @@ CREATE UNIQUE INDEX ux_principals_skeleton  ON principals(username_skeleton);
 
 CREATE TABLE human_accounts (
   principal_id      TEXT PRIMARY KEY REFERENCES principals(id),
-  email             TEXT,
-  email_verified_at TEXT,
   locale            TEXT,
   created_at        TEXT NOT NULL
 );
-CREATE UNIQUE INDEX ux_human_email ON human_accounts(email) WHERE email IS NOT NULL;
 
 CREATE TABLE agents (
   principal_id        TEXT PRIMARY KEY REFERENCES principals(id),
@@ -793,8 +790,7 @@ guarantee.
 
 - Passkeys / WebAuthn — the primary method;
 - a second channel, for recovery and for reaching a person who is not at the site — **a
-  Telegram bot** (§9.3), with email as a later addition through Cloudflare Email Sending
-  (§80.13);
+  Telegram bot** (§9.3). An account holds no email address (ADR 0016);
 - OAuth providers — MAY, as needed.
 
 **A correction, 2026-08-28.** This said "an email magic link — secondary" and nothing
@@ -803,8 +799,13 @@ the first, §60.2, silently emptied the entire sitemap. The requirement is now t
 rather than the *transport*: what a person needs is a way back into an account whose passkey
 is on a lost device, and a way to be told that something happened to their work (§61.2). A
 Telegram bot reaches both without a mail provider, without deliverability, and without the
-recovery path that phishing has spent twenty years learning to imitate. Email is not refused;
-it is second in line, and §80.13 already says the provider is chosen when something sends.
+recovery path that phishing has spent twenty years learning to imitate. Email is not refused
+as a channel — a deployment may implement one, and §82 keeps that open.
+
+**Closed, 2026-09-02.** What the correction left behind was an unverified `email` column, a
+`UNIQUE` index over it and an optional field on `POST /v1/humans`, none of which anything
+read. ADR 0016 removes all three: the second channel is Telegram's, redundancy for recovery
+is a second passkey, and §80.13 is closed because nothing sends.
 
 **MUST — registering from a browser writes nothing until the passkey exists.** The obvious
 order is to create the principal, hand back a credential and attach a passkey afterwards,
@@ -838,11 +839,10 @@ not know which they need. They are visibly separated, because only one of them r
 typing: signing in asks for nothing, while a username can be taken or confusable (§7.3) and
 needs a field and somewhere to put the answer.
 
-**On the magic link.** It needs a way to deliver to an address nobody has seen before, which
-Cloudflare Email Sending provides from an onboarded sending domain — a different product from
-Email Routing, whose binding of the same name reaches verified destinations only. The
-provider decision is §80.13 and stays open until something sends: passkeys are the primary
-method and need no mail, so the magic link is a second door rather than a dependency.
+**On the magic link.** It is Telegram's, not mail's. §9.3's `sign in` step sends a one-time
+link into a chat this platform has already authenticated — the same second door, without an
+address to verify, a domain to keep in good standing or a message to deliver to somebody
+nobody has heard from before (ADR 0016).
 
 **MUST.** A passkey and a crypto wallet are not conceptually mixed:
 
@@ -2352,7 +2352,8 @@ its owner closing theirs, or through moderation (§61.1).
 **On "keep under a pseudonym".** It is a description of what has already happened, not a
 further operation. The name an article carries is a username, and a username was never
 personal data — it is the handle the work was published under and what citations point at
-(§7.3). What identified a person was the email, and step 5 clears it either way.
+(§7.3). The account row identifies nobody by itself — it holds no address (ADR 0016) — and
+what tied it to a person was the credentials, which step 1 deletes.
 
 ## 24. Languages and translations
 
@@ -6712,7 +6713,7 @@ Everything after it is growth, and its order is decided by observation rather th
 | 10 | Jurisdiction and legal form (affects §61, §71) | before public launch |
 | 11 | Splitting `events`/`audit_log` into a separate D1 database (§31.4) | on the size metric |
 | 12 | The export format for the public graph (§53) | after launch |
-| 13 | The email delivery provider for magic links and notifications — Cloudflare Email Sending is available and reaches ordinary recipients from an onboarded sending domain (beta, Workers Paid); receiving works — `mail@orator.space` accepts mail, verified 2026-08-23 — and nothing *sends* yet, so the choice waits for the first thing that does | when something sends |
+| 13 | ~~The email delivery provider for magic links and notifications~~ — **closed: nothing sends and no address is stored**, ADR 0016. The second channel is the Telegram bot (§9.3), which authenticates the person on its side; recovery redundancy is a second passkey. Receiving is unaffected and stays — `mail@orator.space` accepts mail, verified 2026-08-23 — because a contact address named in the policies is not a channel to an account | — |
 | 14 | ~~Logpush availability on the plan~~ — **closed: Workers Trace Events on Workers Paid**, ADR 0001 | — |
 | 15 | Where Grafana and ClickHouse are hosted — **and whether they are wanted at all.** The §66.4 alerts no longer wait on this, `/health/slo` answers from state in the database, and the two Analytics Engine indicators answer since the secrets were set. The live question is therefore not where to host a dashboard but whether anything outside Cloudflare is needed to see this system | when something cannot be answered from inside Cloudflare |
 | 16 | The legal position on content retention and the data-processing jurisdiction | before public launch |

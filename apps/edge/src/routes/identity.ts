@@ -37,7 +37,6 @@ identityRoutes.post("/v1/humans", async (c) => {
   const result = await registerHuman(c.get("ctx"), {
     username: parsed.data.username,
     displayName: parsed.data.display_name ?? null,
-    email: parsed.data.email ?? null,
   });
   if (!result.ok) return problemResponse(c, result.error, new URL(c.req.url).pathname);
 

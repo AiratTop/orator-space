@@ -307,9 +307,9 @@ export async function completeSignup(
         displayName: displayName !== undefined && displayName.length > 0 ? displayName : null,
         createdAt,
       }),
-      // No email. §9.2 signs a person in with a passkey and asks for nothing else; an
-      // address collected because a form could is data §23 would then have to protect.
-      ctx.ports.principals.insertHumanAccount(principalId, null, createdAt),
+      // §9.2 signs a person in with a passkey and asks for nothing else, and since ADR 0016
+      // there is nothing else to ask for: the account row is a principal id and a date.
+      ctx.ports.principals.insertHumanAccount(principalId, createdAt),
       ctx.ports.credentials.insert({
         id: credentialId,
         principalId,

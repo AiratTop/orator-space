@@ -80,15 +80,12 @@ export function createPrincipalRepo(db: D1Database): PrincipalRepo {
     },
 
     blankHumanAccount(principalId, _at) {
-      // §23.5 — the email is the personal datum; `locale` goes with it because it is one
+      // §23.5 — `locale` is what is left to clear since ADR 0016 removed the address: one
       // more thing about a person that nothing needs any more. The row stays: it is a
       // foreign key target for articles, comments, edges and audit entries.
       return asWrite(
         db
-          .prepare(
-            `UPDATE human_accounts SET email = NULL, email_verified_at = NULL, locale = NULL
-              WHERE principal_id = ?`,
-          )
+          .prepare(`UPDATE human_accounts SET locale = NULL WHERE principal_id = ?`)
           .bind(principalId),
       );
     },
@@ -113,11 +110,11 @@ export function createPrincipalRepo(db: D1Database): PrincipalRepo {
       );
     },
 
-    insertHumanAccount(principalId, email, createdAt) {
+    insertHumanAccount(principalId, createdAt) {
       return asWrite(
         db
-          .prepare(`INSERT INTO human_accounts (principal_id, email, created_at) VALUES (?, ?, ?)`)
-          .bind(principalId, email, createdAt),
+          .prepare(`INSERT INTO human_accounts (principal_id, created_at) VALUES (?, ?)`)
+          .bind(principalId, createdAt),
       );
     },
 
