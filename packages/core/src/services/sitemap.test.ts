@@ -110,6 +110,26 @@ describe("marking a shard (SPEC §51)", () => {
     expect(await ports.sitemap.dirtyShards(10)).toEqual([]);
   });
 
+  it("says nothing about the canary's article, which is not in the sitemap (§66.7)", async () => {
+    // It publishes and removes one every few minutes. Marking on each would leave a shard
+    // dirty at all times, and a rebuild with nothing to do is what makes the cron cheap.
+    const canary = "SYSTEM-CANARY";
+    ports.state.principals.set(
+      canary,
+      principal(canary, "canary-staging", { kind: "agent", ownerPrincipalId: OWNER, systemAccount: true }),
+    );
+    const draft = unwrap(
+      await createArticle({ ...ctx(), actor: { ...actor, principalId: canary, systemAccount: true } }, {
+        title: "Deep health check",
+        content: "# Deep health check\n\nBody.\n",
+      }),
+    );
+    unwrap(await publishArticle({ ...ctx(), actor: { ...actor, principalId: canary, systemAccount: true } }, draft.id));
+
+    expect(await markArticleShard(ports, draft.id)).toBeNull();
+    expect(await ports.sitemap.dirtyShards(10)).toEqual([]);
+  });
+
   it("is idempotent, because queue delivery is at-least-once", async () => {
     const id = await publish("First");
     await markArticleShard(ports, id);
@@ -184,6 +204,35 @@ describe("rebuilding (SPEC §51)", () => {
     await rebuildSitemap(ports, SITE);
 
     expect(ports.state.assets.get("sitemaps/articles-2026-08.xml")).not.toContain(id);
+  });
+
+  it("leaves out the canary's article, however the shard came to be rebuilt (§66.7)", async () => {
+    // The marking is skipped, so the ordinary way this file is written does not include it.
+    // This is the other half: a shard dirtied by a real article must not carry the canary's
+    // URL along with it. §66.7 calls the exclusion a column rather than a convention because
+    // it has to hold in five places, and this is the one a crawler reads.
+    const canaryCtx = { ...ctx(), actor: { ...actor, principalId: "SYSTEM-CANARY", systemAccount: true } };
+    ports.state.principals.set(
+      "SYSTEM-CANARY",
+      principal("SYSTEM-CANARY", "canary-staging", {
+        kind: "agent",
+        ownerPrincipalId: OWNER,
+        systemAccount: true,
+      }),
+    );
+    const probe = unwrap(
+      await createArticle(canaryCtx, { title: "Deep health check", content: "# Deep health check\n\nBody.\n" }),
+    );
+    unwrap(await publishArticle(canaryCtx, probe.id));
+    ports.state.articles.set(probe.id, { ...ports.state.articles.get(probe.id)!, indexable: true });
+
+    const real = await publish("Written by a person");
+    await markArticleShard(ports, real);
+    await rebuildSitemap(ports, SITE);
+
+    const shard = ports.state.assets.get("sitemaps/articles-2026-08.xml")!;
+    expect(shard).toContain(`${SITE}/p/${real}`);
+    expect(shard).not.toContain(probe.id);
   });
 
   it("leaves out a cross-post, whose primary copy is somebody else's (§15.1)", async () => {

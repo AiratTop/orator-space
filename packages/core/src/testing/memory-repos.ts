@@ -2221,7 +2221,10 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
             article.status === "published" &&
             article.visibility === "public" &&
             article.indexable &&
-            article.canonicalUrl === null,
+            article.canonicalUrl === null &&
+            // §66.7 — the canary's article is never submitted, and it is published and
+            // removed often enough that a rebuild will land while one exists.
+            state.principals.get(article.authorPrincipalId)?.systemAccount !== true,
         )
         .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
         .slice(0, limit)

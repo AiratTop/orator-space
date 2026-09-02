@@ -21,6 +21,12 @@ interface ArticleRow {
  * from somewhere else: published and public are §51's, `indexable = 1` is §50.3's earned
  * state, and the missing `canonical_url` is §15.1 — a cross-post's primary copy belongs to
  * somebody else, and submitting ours puts two copies of one text into the same index.
+ *
+ * The last is §66.7's, and it was missing until the canary was first run against staging.
+ * The sitemap is named there as one of the five places the exclusion is enforced, and it is
+ * the one where the omission is worst: the canary publishes every few minutes and removes
+ * what it published within seconds, so a rebuild landing in that window submits a URL to
+ * search engines that is a tombstone by the time anything follows it.
  */
 const ELIGIBLE = `
   status = 'published'
@@ -28,6 +34,9 @@ const ELIGIBLE = `
   AND indexable = 1
   AND canonical_url IS NULL
   AND published_at IS NOT NULL
+  AND EXISTS (SELECT 1 FROM principals
+               WHERE principals.id = articles.author_principal_id
+                 AND principals.system_account = 0)
 `;
 
 export function createSitemapRepo(db: D1Database): SitemapRepo {

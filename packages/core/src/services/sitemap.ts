@@ -3,6 +3,7 @@ import type {
   ArticleRepo,
   AssetStore,
   Clock,
+  PrincipalRepo,
   ShardKey,
   SitemapArticle,
   SitemapRepo,
@@ -27,6 +28,8 @@ export type SitemapPorts = {
   sitemap: SitemapRepo;
   assets: AssetStore;
   articles: ArticleRepo;
+  /** SPEC §66.7 — whether the author is the platform itself, which is not submitted. */
+  principals: Pick<PrincipalRepo, "findById">;
   /** SPEC §51 — which topic pages have earned submission. One query pair per run. */
   topics: Pick<TopicRepo, "indexableCounts">;
   clock: Clock;
@@ -81,6 +84,18 @@ export const shardOf = (publishedAt: string): ShardKey => publishedAt.slice(0, 7
 export async function markArticleShard(ports: SitemapPorts, articleId: string): Promise<ShardKey | null> {
   const article = await ports.articles.findById(articleId);
   if (article === null || article.publishedAt === null) return null;
+
+  /*
+   * §66.7 — the canary is not in the sitemap, so it does not schedule rebuilds of it either.
+   *
+   * The exclusion in the query is what keeps its URL out of the file. This is about the
+   * schedule: the canary publishes and removes an article every few minutes for ever, and
+   * marking the shard on each of those would leave one dirty at all times. A rebuild that
+   * has nothing to do is what makes a five-minute cron cheap, and a deployment whose only
+   * writer is its own health check would have lost that property permanently.
+   */
+  const author = await ports.principals.findById(article.authorPrincipalId);
+  if (author?.systemAccount === true) return null;
 
   const shard = shardOf(article.publishedAt);
   await ports.sitemap.markDirty(shard);

@@ -5951,6 +5951,13 @@ excluded from public feeds, metrics and the sitemap.
 places: the feed, search results, the quota gate, the sitemap and the retention pass. A
 convention is a rule kept by whoever remembers it, and five places is four too many.
 
+**MUST — the canary does not mark a sitemap shard dirty either.** Keeping its URL out of the
+file is one rule; not scheduling the rebuild is the other, and it is about cost rather than
+about what a crawler sees. The canary publishes and removes an article every few minutes for
+ever, so marking on each would leave a shard dirty at all times — and §51's five-minute cron
+is cheap precisely because it usually finds nothing to do. A deployment whose only writer is
+its own health check would otherwise rebuild a file that never changes, indefinitely.
+
 **MUST — the exclusion covers what a reader encounters without asking, and nothing more.**
 The feed, a profile — the canary's own page included, since a username is stable and
 guessable in a way an article id is not — a search result, the sitemap. Not the article's own
