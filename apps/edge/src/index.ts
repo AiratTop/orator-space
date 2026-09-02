@@ -39,6 +39,7 @@ import {
   evaluateIndexability,
   evaluateSlo,
   markArticleShard,
+  noteTokenUse,
   classifyArticle,
   drainEmbeddingBacklog,
   embedArticle,
@@ -349,6 +350,28 @@ const resolveContext = async (c: Context<{ Bindings: Env; Variables: Vars }>, ne
   const surface = surfaceFor(new URL(c.req.url).hostname);
   c.set("ctx", await contextFor(c.req.raw, c.env, c.get("requestId"), surface === "unknown" ? "api" : surface));
   await next();
+
+  /*
+   * SPEC §42.2 — `last_used_at`, asynchronously.
+   *
+   * After the response and inside `waitUntil`, because it is bookkeeping: a request must not
+   * wait for it and must not fail with it. `noteTokenUse` writes at most once per token per
+   * five minutes (§42.2), so the hot path stays a read even under load.
+   */
+  const ctx = c.get("ctx");
+  if (ctx.tokenId !== null) {
+    const noted = noteTokenUse(ctx.ports, ctx.tokenId, ctx.tokenLastUsedAt).catch((error: unknown) => {
+      console.error(
+        JSON.stringify({ level: "warn", event: "token.touch.failed", request_id: ctx.requestId, error: String(error) }),
+      );
+    });
+    try {
+      c.executionCtx.waitUntil(noted);
+    } catch {
+      // Served outside a Worker invocation, so there is nothing to extend. The next request
+      // with this token writes the row instead.
+    }
+  }
 };
 
 /**

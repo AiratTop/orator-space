@@ -166,6 +166,8 @@ export async function contextFor(
     ...base,
     actor,
     tokenId: result.value.tokenId,
+    // §42.2 — read during authentication, spent after the response by `noteTokenUse`.
+    tokenLastUsedAt: result.value.tokenLastUsedAt,
     audience: classify({ surface, actor, hasSession: false, userAgent, accept }),
   };
 }

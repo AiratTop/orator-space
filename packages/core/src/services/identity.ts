@@ -344,8 +344,15 @@ export async function revokeToken(ctx: AccountContext, tokenId: string): Promise
 /**
  * Resolves a bearer token to an actor (SPEC §42.2).
  *
- * `last_used_at` is deliberately not written here: doing so would turn every authenticated
- * read into a database write, on the hottest path in the system (§42.2).
+ * `last_used_at` is not written here: doing so would turn every authenticated read into a
+ * database write, on the hottest path in the system. §42.2 requires it to be written
+ * asynchronously instead, which is `noteTokenUse` below — this function hands back the value
+ * it has just read so that the caller can decide whether a write is due.
+ *
+ * Until that existed the column was never written at all, and it is on the account page and
+ * in the API. Two canary tokens read as never used while a monitor was calling them every
+ * few minutes, and "this credential is dead" is exactly the conclusion the field is there to
+ * support.
  */
 /**
  * Resolves a bearer token to an actor.
@@ -357,7 +364,7 @@ export async function revokeToken(ctx: AccountContext, tokenId: string): Promise
 export async function authenticate(
   ports: Pick<Ports, "tokens" | "principals" | "clock">,
   token: string,
-): Promise<Result<{ actor: Actor; tokenId: OratorId }>> {
+): Promise<Result<{ actor: Actor; tokenId: OratorId; tokenLastUsedAt: string | null }>> {
   const record = await ports.tokens.findByHash(await sha256Hex(token));
   if (record === null) return fail(ErrorType.Unauthenticated, "Invalid token");
   if (record.revokedAt !== null) return fail(ErrorType.Unauthenticated, "Token revoked");
@@ -383,7 +390,45 @@ export async function authenticate(
     systemAccount: principal.systemAccount,
     ...(principal.ownerPrincipalId === undefined ? {} : { ownerPrincipalId: principal.ownerPrincipalId }),
   };
-  return ok({ actor, tokenId: record.id });
+  return ok({ actor, tokenId: record.id, tokenLastUsedAt: record.lastUsedAt });
+}
+
+/**
+ * How coarse `last_used_at` is (SPEC §42.2).
+ *
+ * Asynchronous is not enough on its own: a write per request off the critical path is still
+ * a write per request, and §42.2's objection is to the volume rather than to the latency. So
+ * the value is kept to this resolution — a token in constant use is written once every five
+ * minutes, and a token nobody is calling is not written at all.
+ *
+ * Five minutes because of what the field is used for: deciding whether a credential is still
+ * in service, and how long ago it stopped being. Nothing about that answer changes if it is
+ * accurate to the minute rather than to the second.
+ */
+export const TOKEN_USE_RESOLUTION_MS = 5 * 60 * 1000;
+
+/**
+ * Records that a token was used, if enough time has passed since the last time it was.
+ *
+ * Called after the response, never before it: this is bookkeeping, and a request must not
+ * fail or wait because of it. Returns whether a write was made, which is what a test can
+ * assert on and what a caller may log.
+ */
+export async function noteTokenUse(
+  ports: Pick<Ports, "tokens" | "db" | "clock">,
+  tokenId: string,
+  lastUsedAt: string | null | undefined,
+): Promise<boolean> {
+  const now = ports.clock.now();
+  if (lastUsedAt !== null && lastUsedAt !== undefined) {
+    const since = now.getTime() - Date.parse(lastUsedAt);
+    // A stored value in the future is a clock disagreement, not a fresh write. Writing is
+    // the safe answer: the alternative is a token that stops recording until time catches up.
+    if (since >= 0 && since < TOKEN_USE_RESOLUTION_MS) return false;
+  }
+
+  await ports.db.commit([ports.tokens.touch(tokenId, now.toISOString())]);
+  return true;
 }
 
 /** How long a registration challenge stays valid. */

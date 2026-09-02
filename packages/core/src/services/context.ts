@@ -253,6 +253,15 @@ export interface RequestContext {
   /** Null when the caller is not authenticated. */
   actor: Actor | null;
   tokenId: string | null;
+  /**
+   * When the token that authenticated this request was last recorded as used (SPEC §42.2).
+   *
+   * Carried because authentication has just read the row, and the asynchronous update needs
+   * to know whether a write is due without reading it again. Absent rather than null when
+   * there is nothing to say: a context built by a test, or a surface that authenticates a
+   * session rather than a token.
+   */
+  tokenLastUsedAt?: string | null;
   ipHash: string | null;
   userAgent: string | null;
 }

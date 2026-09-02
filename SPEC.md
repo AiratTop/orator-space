@@ -3688,6 +3688,20 @@ its issuer lacks. Every subsequent token is derived from it and narrower.
 **MUST.** `last_used_at` is updated asynchronously, not inline — otherwise every API call
 becomes a write to D1.
 
+**MUST — and at a coarse resolution, which is the other half of that sentence.** Asynchronous
+alone does not reduce the number of writes, only their position in the request: a write after
+the response is still a write per request. So the value is kept to a few minutes, and a token
+in constant use is written once per window rather than once per call. Nothing the field is
+for — deciding whether a credential is still in service, and how long ago it stopped being —
+needs it accurate to the second.
+
+**On reading it as "not inline" and stopping there.** That is what happened here: the port
+method existed, had no caller, and the column was null for every token that had ever
+authenticated, while the account page and the API showed it. A field that is always empty is
+worse than an absent one, because it answers. Two canary tokens read as never used while a
+monitor was calling them every few minutes, and the conclusion it invited — this credential
+is dead, reissue it — is precisely the one the field exists to support.
+
 ### 42.3. MCP authorisation — two levels
 
 Version 2.1 required a full OAuth 2.1 Authorization Server as an MVP condition. That was

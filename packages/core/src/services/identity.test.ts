@@ -7,6 +7,8 @@ import type { Actor } from "../identity/authz.js";
 import type { RequestContext } from "./context.js";
 import {
   authenticate,
+  noteTokenUse,
+  TOKEN_USE_RESOLUTION_MS,
   createKeyChallenge,
   issueToken,
   registerAgent,
@@ -213,6 +215,61 @@ describe("tokens (SPEC §42.2, §43.1)", () => {
     const issued = unwrap(await issueToken(ctx, { principalId: owner.principalId, name: "cli" }));
     await authenticate(ports, issued.token);
     expect(ports.state.tokens.get(issued.id)?.lastUsedAt).toBeNull();
+  });
+});
+
+describe("recording that a token was used (SPEC §42.2)", () => {
+  /*
+   * The other half of the decision above, and it was missing.
+   *
+   * §42.2 requires `last_used_at` to be written asynchronously rather than inline. It was
+   * read as "not inline", the port method had no caller, and the column was null for every
+   * token that had ever authenticated — on the account page and in the API, where it reads
+   * as "this credential has never been used". Two canary tokens looked dead that way while
+   * a monitor was calling them every few minutes.
+   */
+  async function issued() {
+    const { owner, ctx } = await makeOwner();
+    return unwrap(await issueToken(ctx, { principalId: owner.principalId, name: "cli" }));
+  }
+
+  it("hands the stored value back from authentication, so nothing reads the row twice", async () => {
+    const token = await issued();
+    const session = unwrap(await authenticate(ports, token.token));
+    expect(session.tokenLastUsedAt).toBeNull();
+  });
+
+  it("writes the first time, because nothing is recorded yet", async () => {
+    const token = await issued();
+    ports.setNow(new Date("2026-08-23T12:00:00.000Z"));
+
+    expect(await noteTokenUse(ports, token.id, null)).toBe(true);
+    expect(ports.state.tokens.get(token.id)?.lastUsedAt).toBe("2026-08-23T12:00:00.000Z");
+  });
+
+  it("does not write again within the window, so a busy token is not a write per request", async () => {
+    const token = await issued();
+    const at = "2026-08-23T12:00:00.000Z";
+    ports.setNow(new Date(Date.parse(at) + TOKEN_USE_RESOLUTION_MS - 1000));
+
+    expect(await noteTokenUse(ports, token.id, at)).toBe(false);
+    expect(ports.state.tokens.get(token.id)?.lastUsedAt).toBeNull();
+  });
+
+  it("writes again once the window has passed", async () => {
+    const token = await issued();
+    const at = "2026-08-23T12:00:00.000Z";
+    ports.setNow(new Date(Date.parse(at) + TOKEN_USE_RESOLUTION_MS + 1000));
+
+    expect(await noteTokenUse(ports, token.id, at)).toBe(true);
+  });
+
+  it("writes when the stored value is in the future, which is two clocks and not freshness", async () => {
+    // Trusting it would stop the field recording anything until time caught up.
+    const token = await issued();
+    ports.setNow(new Date("2026-08-23T12:00:00.000Z"));
+
+    expect(await noteTokenUse(ports, token.id, "2027-01-01T00:00:00.000Z")).toBe(true);
   });
 });
 
