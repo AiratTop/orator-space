@@ -5736,6 +5736,16 @@ the corpus — how long a lap takes grows with the corpus, how often the sweep r
 deployment with no vector store never starts it, and that reports `unavailable`: §38.2 makes
 lexical-only search a documented degradation rather than a fault.
 
+**On "published", which is the platform's event and not the date on the article.**
+`articles.published_at` is what the author said: §15.1 has an import carry the date of the
+original publication, and for anything published twice it is the *first* publish while the
+index entry is the latest write. Measured that way, staging's p95 was 78 million seconds —
+one imported article per end-to-end run, reported as two and a half years of indexing lag,
+in the one indicator that watches the queue. So the interval runs from the newest
+`article.published` event for that article to the index entry, and an entry whose event has
+been pruned is a sample this cannot measure rather than a lag of however long the article
+has existed.
+
 **MUST.** A health endpoint checking D1, R2 and Queue availability, behind
 `status.orator.space`.
 

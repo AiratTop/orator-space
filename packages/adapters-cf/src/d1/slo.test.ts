@@ -28,6 +28,20 @@ async function article(id: string, publishedAt: string | null): Promise<void> {
   ]);
 }
 
+/**
+ * The event the lag is measured from — the platform's own record of the publish, which is
+ * not the same thing as the date on the article (§15.1 imports carry the original one).
+ *
+ * The id is sequential because the query takes the newest event for an article by id, the
+ * way §12 has every identifier order by time.
+ */
+let events = 0;
+const published = (articleId: string, at: string) =>
+  env.DB.prepare(
+    `INSERT INTO events (id, type, subject_type, subject_id, visibility, payload_json, created_at)
+     VALUES (?, 'article.published', 'article', ?, 'public', '{"schema_version":1}', ?)`,
+  ).bind(`E${String(++events).padStart(3, "0")}`, articleId, at);
+
 const indexed = (articleId: string, at: string) =>
   env.DB.prepare(
     `INSERT INTO search_docs (article_id, content_hash, indexed_at) VALUES (?, 'h', ?)`,
@@ -45,6 +59,7 @@ beforeEach(async () => {
     env.DB.prepare(`DELETE FROM dead_letters`),
     env.DB.prepare(`DELETE FROM outbox`),
     env.DB.prepare(`DELETE FROM search_docs`),
+    env.DB.prepare(`DELETE FROM events`),
     env.DB.prepare(`DELETE FROM articles`),
     env.DB.prepare(`DELETE FROM principals`),
   ]);
@@ -66,10 +81,28 @@ describe("the outbox backlog", () => {
   });
 });
 
-describe("published to indexed (§34.4, §66.4)", () => {
+describe("the publish event to the index entry (§34.4, §66.4)", () => {
   it("measures the gap between the two timestamps", async () => {
     await article("A1", AT(0));
-    await indexed("A1", AT(1)).run();
+    await env.DB.batch([published("A1", AT(0)), indexed("A1", AT(1))]);
+
+    expect(await repo().indexingLag(50)).toEqual({ sampled: 1, p95Seconds: 60 });
+  });
+
+  it("measures from the event and not from the date the author gave", async () => {
+    // §15.1 imports an article with the date it was first published elsewhere. Measured
+    // from that, staging's p95 was 78 million seconds and the indicator sat breached.
+    await article("A1", "2024-03-11T09:00:00.000Z");
+    await env.DB.batch([published("A1", AT(0)), indexed("A1", AT(1))]);
+
+    expect(await repo().indexingLag(50)).toEqual({ sampled: 1, p95Seconds: 60 });
+  });
+
+  it("takes the latest publish event, because the entry is the latest index write", async () => {
+    // Published, edited, published again. There is one row in `search_docs` and it holds
+    // the second indexing, so measuring from the first publish reports the editing.
+    await article("A1", AT(0));
+    await env.DB.batch([published("A1", AT(0)), published("A1", AT(5)), indexed("A1", AT(6))]);
 
     expect(await repo().indexingLag(50)).toEqual({ sampled: 1, p95Seconds: 60 });
   });
@@ -80,7 +113,10 @@ describe("published to indexed (§34.4, §66.4)", () => {
     // percentile is for and what a max would get wrong.
     for (let i = 0; i < 20; i++) {
       await article(`A${i}`, AT(0));
-      await indexed(`A${i}`, i === 19 ? AT(10) : "2026-08-23T12:00:01.000Z").run();
+      await env.DB.batch([
+        published(`A${i}`, AT(0)),
+        indexed(`A${i}`, i === 19 ? AT(10) : "2026-08-23T12:00:01.000Z"),
+      ]);
     }
 
     const lag = await repo().indexingLag(50);
@@ -90,6 +126,15 @@ describe("published to indexed (§34.4, §66.4)", () => {
 
   it("drops a negative gap, which means two clocks rather than a fast index", async () => {
     await article("A1", AT(5));
+    await env.DB.batch([published("A1", AT(5)), indexed("A1", AT(1))]);
+
+    expect(await repo().indexingLag(50)).toEqual({ sampled: 0, p95Seconds: null });
+  });
+
+  it("does not count an entry whose event has been pruned", async () => {
+    // Retention removes old events (§23.4) while the index entry stays. A missing event is
+    // a sample this cannot measure, not a lag of however long the article has existed.
+    await article("A1", AT(0));
     await indexed("A1", AT(1)).run();
 
     expect(await repo().indexingLag(50)).toEqual({ sampled: 0, p95Seconds: null });

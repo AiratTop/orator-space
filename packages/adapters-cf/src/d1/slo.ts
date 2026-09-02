@@ -32,32 +32,46 @@ export function createSloRepo(db: D1Database): SloRepo {
     },
 
     /**
-     * Published to indexed, over the last `sample` articles that made it into the index.
+     * The publish event to the index entry, over the last `sample` articles indexed.
+     *
+     * Measured from the event and not from `articles.published_at`, which is a different
+     * quantity that looks like this one. `published_at` is what the author says, and §15.1
+     * has an import carry the original date: staging's p95 was 78 million seconds — two and
+     * a half years, from one imported article per end-to-end run. And for anything published
+     * twice it is the first publish, while `indexed_at` is the latest index write, so an
+     * edited article reported the gap between two unrelated moments (84 s against a real 6).
+     * Both read as an outage in the one indicator that watches the queue.
+     *
+     * `ix_events_subject` is (subject_type, subject_id, id DESC), so each row costs a seek
+     * into the newest event for that article rather than a scan.
      *
      * The percentile is computed here rather than in SQL: D1 is SQLite and SQLite has no
      * percentile function, and the alternatives — a window function over a subquery, or a
      * LIMIT/OFFSET into an ordered set — are both more code than sorting fifty numbers.
      *
      * A negative difference is dropped rather than clamped. It means the two timestamps came
-     * from different clocks (the index is written by the queue consumer, `published_at` by
-     * the request), and a value that says indexing finished before publishing started is not
-     * a fast one, it is a wrong one.
+     * from different clocks (the index is written by the queue consumer, the event by the
+     * request), and a value that says indexing finished before publishing started is not a
+     * fast one, it is a wrong one.
      */
     async indexingLag(sample) {
       const { results } = await db
         .prepare(
-          `SELECT a.published_at AS published, d.indexed_at AS indexed
+          `SELECT d.indexed_at AS indexed,
+                  (SELECT e.created_at FROM events e
+                    WHERE e.subject_type = 'article'
+                      AND e.subject_id = d.article_id
+                      AND e.type = 'article.published'
+                    ORDER BY e.id DESC LIMIT 1) AS published
              FROM search_docs d
-             JOIN articles a ON a.id = d.article_id
-            WHERE a.published_at IS NOT NULL
             ORDER BY d.doc_id DESC
             LIMIT ?`,
         )
         .bind(sample)
-        .all<{ published: string; indexed: string }>();
+        .all<{ published: string | null; indexed: string }>();
 
       const seconds = results
-        .map((row) => (Date.parse(row.indexed) - Date.parse(row.published)) / 1000)
+        .map((row) => (row.published === null ? NaN : (Date.parse(row.indexed) - Date.parse(row.published)) / 1000))
         .filter((value) => Number.isFinite(value) && value >= 0)
         .sort((a, b) => a - b);
 

@@ -23,6 +23,10 @@ export interface OutboxBacklog {
  * The one indicator that measures the whole asynchronous half at once: a value here means
  * the outbox drained, the queue delivered, the consumer ran and the index was written. The
  * sample is bounded — a percentile over the last N indexed articles, not over the corpus.
+ *
+ * From the platform's publish event, not from the article's `published_at`: that field is
+ * the author's date and an import carries the original one (§15.1), which measures a
+ * back-dated article's arrival in years.
  */
 export interface IndexingLag {
   sampled: number;
