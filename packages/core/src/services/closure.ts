@@ -103,6 +103,20 @@ export async function closeAccount(
     ctx.ports.sessions.revokeAllFor(principal.id, at),
     ctx.ports.credentials.deleteAllFor(principal.id),
     /*
+     * §9.3, §23.5 — the second channel is a credential, so it goes with the others.
+     *
+     * A chat that stayed bound would still sign somebody into this account: §9.3's `sign in`
+     * sends a one-time link into it, and `openSessionFor` is the only thing that would have
+     * refused, on a status check. Two guards where one belongs, and the row would also be the
+     * one identifier left that names a person off this platform.
+     *
+     * Deleting rather than marking it is what keeps the closure reversible in the only sense
+     * that matters to a person: one Telegram account binds to one principal, enforced by a
+     * unique index, so a row outliving its account would refuse that person a *new* account
+     * for as long as it existed. Connecting again is an ordinary `/start` with a fresh nonce.
+     */
+    ctx.ports.telegram.deleteAccount(principal.id),
+    /*
      * §23.5, ADR 0011 — a reading list goes with the account.
      *
      * Deleted rather than kept: it is one person's private notes about their own reading,
@@ -146,6 +160,27 @@ export async function closeAccount(
         articles: input.articles,
         agent_principal_ids: agents.map((agent) => agent.id),
       },
+      requestId: ctx.requestId,
+      createdAt: at,
+    }),
+    /*
+     * §62 — a way into the account ceasing to exist is recorded as itself.
+     *
+     * `account.closed` implies it, and an implication is not what the log is for: the two
+     * other unlink paths write `from=settings` and `from=chat`, and a question about when a
+     * chat stopped being bound should have one answer whichever of the three did it.
+     */
+    ctx.ports.audit.record({
+      id: ctx.ports.ids.next(),
+      actorPrincipalId: actor.principalId as OratorId,
+      actorTokenId: ctx.tokenId,
+      action: "telegram.unlinked",
+      targetType: "telegram",
+      targetId: principal.id,
+      outcome: "success",
+      reason: "from=closure",
+      ipHash: ctx.ipHash,
+      userAgent: ctx.userAgent,
       requestId: ctx.requestId,
       createdAt: at,
     }),

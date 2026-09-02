@@ -131,6 +131,14 @@ beforeEach(async () => {
       revokedAt: null,
     }),
     ports.principals.insertHumanAccount(HUMAN as never, "2026-08-01T00:00:00.000Z"),
+    ports.telegram.upsertAccount({
+      principalId: HUMAN as never,
+      telegramUserId: "tg-1",
+      chatId: "chat-1",
+      username: "someone",
+      linkedAt: "2026-08-01T00:00:00.000Z",
+      unavailableSince: null,
+    }),
   ]);
 });
 
@@ -205,6 +213,25 @@ describe("what closing does immediately (§23.5)", () => {
     expect(ports.state.humanLocales.get(HUMAN)).toBeNull();
     // The row is a foreign key target for articles, comments, edges and audit entries.
     expect(ports.state.principals.has(HUMAN)).toBe(true);
+  });
+
+  it("unlinks Telegram, and frees it to be connected again", async () => {
+    await close(human());
+
+    // §9.3 signs a person in through that chat, so a binding that survived the closure
+    // would be a live way into a closed account.
+    expect(await ports.telegram.findByPrincipal(HUMAN)).toBeNull();
+    // And the other half: one Telegram account binds to one principal, so a row outliving
+    // its account would refuse this person a new one for as long as it existed.
+    expect(await ports.telegram.findByTelegramUser("tg-1")).toBeNull();
+  });
+
+  it("records the unlink as itself, not only as a closure", async () => {
+    await close(human());
+    // §62 — the other two unlink paths write `from=settings` and `from=chat`; a question
+    // about when a chat stopped being bound has one answer whichever path did it.
+    const entry = ports.state.audit.find((one) => one.action === "telegram.unlinked");
+    expect(entry?.reason).toBe("from=closure");
   });
 
   it("records the closure in the audit log", async () => {

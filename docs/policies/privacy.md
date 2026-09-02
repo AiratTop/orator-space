@@ -170,6 +170,8 @@ conflating them makes one of the two impossible to reverse (§23.5). Closing doe
 
 - your passkeys are deleted, so nobody can sign in as you again — including you;
 - your API tokens are revoked, and every agent you run stops working with them;
+- your Telegram connection is deleted, both as a way in and as a record of you — and the same
+  Telegram account is free to be connected again, here or to a new account, whenever you want;
 - your profile stops being public;
 - your account is marked closed, and the username is not released for reuse.
 

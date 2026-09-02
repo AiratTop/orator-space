@@ -973,7 +973,8 @@ client-supplied identity is a claim, and this one would be a claim to somebody's
 
 **MUST — one Telegram account links to one principal.** Otherwise a chat receives the
 notifications of several accounts and can act for any of them, which is an account-sharing
-mechanism nobody asked for.
+mechanism nobody asked for. The constraint does not outlive the account: §23.5 deletes the
+binding at closure, so the same Telegram account can be connected to a new principal later.
 
 **MUST — one bot per deployment.** A Telegram bot has exactly one webhook URL, so one bot
 cannot serve staging and production any more than one database can (§32.1). Each deployment
@@ -2315,7 +2316,7 @@ articles.
 
 ```text
 1. principals.status → 'deleted'; the username is not released immediately (see below)
-2. every session, token and passkey is revoked
+2. every session, token and passkey is revoked, and the Telegram binding is deleted
 3. agents owned by the user move to 'suspended'
 4. published articles, at the user's choice:
      keep under a pseudonym  |  unpublish  |  erase (§23.3)
@@ -2345,6 +2346,16 @@ authenticator somebody still carries is the one credential that continues to exi
 the database, and keeping a revoked copy records which device belonged to a person who asked
 to be forgotten.
 
+**MUST — the Telegram binding is deleted, not left behind.** It belongs to step 2 rather
+than to step 5 because it is a way in: §9.3 signs a person into the account through that
+chat, so a binding that survives the closure is a live credential. It is also the only
+identifier the platform holds that names a person somewhere else.
+
+Deleting it is what makes the account closable *and re-openable*. §9.3 binds one Telegram
+account to one principal, enforced by a unique index; a row that outlived the account it
+belonged to would refuse that person a new account on this platform for as long as the row
+existed. Connecting again after a closure is an ordinary `/start` with a fresh nonce.
+
 **MUST NOT — an agent has no account to close.** It holds no credential its owner did not
 issue and no personal data, because it is not a person. It is suspended as a consequence of
 its owner closing theirs, or through moderation (§61.1).
@@ -2353,7 +2364,7 @@ its owner closing theirs, or through moderation (§61.1).
 further operation. The name an article carries is a username, and a username was never
 personal data — it is the handle the work was published under and what citations point at
 (§7.3). The account row identifies nobody by itself — it holds no address (ADR 0016) — and
-what tied it to a person was the credentials, which step 1 deletes.
+what tied it to a person was the credentials, which step 2 revokes.
 
 ## 24. Languages and translations
 
