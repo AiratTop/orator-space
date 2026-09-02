@@ -170,8 +170,16 @@ Then read the environment line in the output before believing it. `orator-web-st
 `ENVIRONMENT ("staging")` are the confirmation; `orator-web` is production.
 
 `.claude/hooks/guard-wrangler.sh` blocks the shapes that get this wrong, as a `PreToolUse`
-hook. A guard that blocks reading gets turned off, so `wrangler tail` and the listing
-commands still work against production — it is the writes that are stopped.
+hook. A guard that blocks reading gets turned off, so `wrangler tail`, the listing commands
+and a `d1 execute` whose `--command` is a `SELECT` still work against production — it is the
+writes that are stopped. `--file` is not a read there: the guard would have to open it, and
+what it holds can change between the check and the run.
+
+Its decisions are recorded as cases, and they run:
+
+```sh
+bash .claude/hooks/guard-wrangler.test.sh   # after editing the guard or its cases
+```
 
 ## gh and wrangler are authenticated
 

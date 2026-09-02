@@ -92,6 +92,42 @@ rotated by them, and never appear in the repository or in an issue. Name the sec
 environment; do not set it."
 fi
 
+# --- 2a. Reading is not deploying, in any environment -------------------------------------
+#
+# `wrangler tail` against production is how a live incident gets diagnosed (CLAUDE.md names it
+# as the tool for exactly that), and so are the listing commands. They name production because
+# that is the thing being looked at.
+#
+# This block used to sit *below* the production checks, so everything it was written to permit
+# was already denied by the time it ran, and a `SELECT` against the production database — the
+# way a question about production gets answered — came back as "changing production
+# infrastructure". A guard that blocks looking is a guard somebody turns off, so it runs first
+# now, and the two checks it must not swallow (`rollback`, `secret`) are above it.
+read_only=false
+
+if printf '%s' "$cmd" | grep -Eq 'wrangler[^|;&]*\b(tail|whoami|versions list|deployments list|d1 info|d1 list|vectorize (list|get|info)|r2 bucket list|queues list|kv (namespace )?list)\b'; then
+  read_only=true
+fi
+
+# `d1 execute` is the one subcommand that reads and writes through the same door, so the SQL
+# decides rather than the verb. The test is deliberately blunt: a statement that changes
+# anything, named anywhere on the line — in the query, in a pipeline after it, in a filename —
+# is not a read. `--file` is never a read here, because the guard would have to open it, and
+# what it holds can change between this check and the run.
+if printf '%s' "$cmd" | grep -Eq 'wrangler[^|;&]*\bd1 execute\b' \
+   && printf '%s' "$cmd" | grep -q -- '--command' \
+   && ! printf '%s' "$cmd" | grep -q -- '--file' \
+   && printf '%s' "$cmd" | grep -Eiq '\bselect\b' \
+   && ! printf '%s' "$cmd" | grep -Eiq '\b(insert|update|delete|drop|alter|create|replace|attach|detach|vacuum|reindex|truncate|begin|commit|savepoint|pragma)\b'; then
+  read_only=true
+fi
+
+# Nothing that also deploys, migrates or rotates a secret rides along in the same command.
+if [ "$read_only" = true ] \
+   && ! printf '%s' "$cmd" | grep -Eq 'wrangler[^|;&]*\b(deploy|rollback|secret|migrations apply)\b'; then
+  exit 0
+fi
+
 if printf '%s' "$cmd" | grep -q -- '--env production'; then
   deny "AGENTS.md, \"Not without explicit instruction\": changing production infrastructure
 and applying migrations to production need an explicit instruction naming the environment,
@@ -100,7 +136,7 @@ and even then production is released through GitHub Actions.
 $PUSH_TO_MAIN"
 fi
 
-# --- 2a. The production package script, which never says "wrangler" ------------------------
+# --- 2c. The production package script, which never says "wrangler" ------------------------
 #
 # `pnpm --filter @orator/web deploy:production` releases production and contains none of the
 # words the checks around it look for. The scripts are the *correct* way to deploy — the
@@ -109,18 +145,6 @@ if printf '%s' "$cmd" | grep -q 'deploy:production'; then
   deny "\`deploy:production\` releases production directly, bypassing the release path.
 
 $PUSH_TO_MAIN"
-fi
-
-# --- 2b. Reading is not deploying ---------------------------------------------------------
-#
-# `wrangler tail` against production is how a live incident gets diagnosed (CLAUDE.md names it
-# as the tool for exactly that), and so are the listing commands. They name production because
-# that is the thing being looked at. A guard that blocks looking is a guard somebody turns off,
-# so read-only subcommands pass — provided no mutating verb is anywhere in the command, which
-# the checks above and below still decide.
-if printf '%s' "$cmd" | grep -Eq 'wrangler[^|;&]*\b(tail|whoami|versions list|deployments list|d1 info|d1 list|vectorize (list|get|info)|r2 bucket list|queues list|kv (namespace )?list)\b' \
-   && ! printf '%s' "$cmd" | grep -Eq 'wrangler[^|;&]*\b(deploy|delete|put|create|rollback|secret|execute|migrations apply)\b'; then
-  exit 0
 fi
 
 # --- 3. A production resource named outright ----------------------------------------------

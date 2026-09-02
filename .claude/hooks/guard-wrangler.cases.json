@@ -8,7 +8,7 @@
   ["deny", "npx wrangler deploy --env production"],
   ["deny", "npx wrangler secret put TELEGRAM_BOT_TOKEN --env staging"],
   ["deny", "npx wrangler d1 migrations apply DB --remote"],
-  ["deny", "npx wrangler d1 execute orator-prod --remote --command \"select 1\""],
+  ["allow", "npx wrangler d1 execute orator-prod --remote --command \"select 1\""],
   ["deny", "wrangler deploy -c dist/server/wrangler.json"],
   ["deny", "npx wrangler vectorize delete orator-articles"],
   ["allow", "pnpm --filter @orator/web deploy:staging"],
@@ -21,5 +21,13 @@
   ["allow", "npx wrangler deployments list --name orator-web"],
   ["allow", "npx wrangler vectorize list"],
   ["allow", "pnpm check"],
-  ["allow", "git log --oneline -3"]
+  ["allow", "git log --oneline -3"],
+  ["allow", "npx wrangler d1 execute DB --env production --remote --command \"SELECT COUNT(*) FROM principals\""],
+  ["allow", "npx wrangler d1 execute DB --env production --remote --json --command \"SELECT id, created_at FROM articles LIMIT 5\" | head -20"],
+  ["allow", "npx wrangler tail --env production"],
+  ["deny", "npx wrangler d1 execute DB --env production --remote --command \"DELETE FROM sessions WHERE expires_at < '2026-01-01'\""],
+  ["deny", "npx wrangler d1 execute DB --env production --remote --command \"UPDATE principals SET platform_role = 'admin' WHERE id = 'X'\""],
+  ["deny", "npx wrangler d1 execute DB --env production --remote --file scripts/fix.sql"],
+  ["deny", "npx wrangler d1 execute DB --env production --remote --command \"SELECT 1\" && npx wrangler deploy --env production"],
+  ["allow", "npx wrangler d1 execute DB --env staging --remote --command \"SELECT COUNT(*) FROM articles\""]
 ]
