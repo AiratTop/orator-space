@@ -1,6 +1,7 @@
 import { ErrorType } from "@orator/protocol";
 import { createArticle, publishArticle } from "./publishing.js";
 import { removeArticle } from "./lifecycle.js";
+import { drainOutbox } from "./outbox.js";
 import { fail, ok, type RequestContext, type Result } from "./context.js";
 
 /**
@@ -97,6 +98,21 @@ export async function deepHealth(
     await step("publish", async () => {
       const result = await publishArticle(ctx, draft.id);
       if (!result.ok) throw new Error(result.error.title);
+
+      /*
+       * Publishing includes handing the outbox to the queue (§35.2).
+       *
+       * Every write route does this in `waitUntil` right after responding, so a client's
+       * article is on the queue within a second of the 200. This check reached the service
+       * directly and did not, which left its event for the cron — the safety net, at a
+       * minimum interval of one minute against a timeout of forty-five seconds. The check
+       * then reported the pipeline stopped, on almost every run, while it was working.
+       *
+       * The drain reports its failures in its result rather than throwing, and the outcome
+       * of one is not this step's to judge: a hand-off that did not happen shows up as the
+       * `indexed` step timing out, which is the observable property §66.7 is about.
+       */
+      await drainOutbox(ctx.ports);
       return result.value;
     });
 

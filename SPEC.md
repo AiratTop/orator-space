@@ -5964,6 +5964,14 @@ public read shares, and the deep check failed its own `indexed` and `public` ste
 first live run: the article it had just published was unreadable at its own URL and absent
 from the index it was waiting on.
 
+**MUST — the check hands the outbox to the queue itself, as a write route does.** Publishing
+over HTTP drains the outbox in the background right after responding (§35.2); the check
+reaches the service directly and, until it did the same, left its event for the cron — whose
+minimum interval is one minute, against a timeout of forty-five seconds. It reported the
+pipeline stopped on nearly every run while the pipeline was working, which is the same defect
+as a shallow check reporting health, pointed the other way: a monitor that cries wolf is
+turned off, and then the outage it was for is invisible again.
+
 **MUST — quotas do not apply to a system account.** The check publishes every few minutes
 and §59.2 allows twenty articles a day, so a metered canary would stop reporting within the
 hour and the outage it exists to detect would look like a quota. The exemption is narrow by

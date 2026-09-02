@@ -111,6 +111,23 @@ describe("what it reports (§66.7, §66.4)", () => {
     expect(report.steps.every((step) => step.ok)).toBe(true);
   });
 
+  it("hands the outbox to the queue itself rather than leaving it for the cron (§35.2)", async () => {
+    /*
+     * Every write route drains the outbox in the background right after responding. This
+     * check reaches the service directly, so before it did the same its publish event waited
+     * for the cron — one minute at its shortest, against a timeout of forty-five seconds.
+     * The check reported the pipeline stopped on nearly every run against staging.
+     */
+    const indexed = {
+      ...ports,
+      search: { ...ports.search, query: async () => [...ports.state.articles.keys()] as never },
+    };
+    unwrap(await deepHealth({ ...ctxFor(actorFor(CANARY, true)), ports: indexed }, { indexTimeoutMs: 200 }));
+
+    const types = ports.published.flat().map((entry) => entry.eventType);
+    expect(types).toContain("article.published");
+  });
+
   it("says degraded when the asynchronous half never delivers", async () => {
     // The failure this check exists for: every synchronous call succeeds and the article
     // never becomes findable. A shallow probe reports a healthy platform here.
