@@ -62,8 +62,10 @@ const indexable = (tables.get("articles")?.columns ?? []).find((c) => c.name ===
 check(indexable !== undefined, "articles.indexable missing (§50.3)");
 check(indexable?.dflt_value === "0", "articles.indexable must default to 0 — indexing is earned (§50.3)");
 
-// -- §6, §15: entities deliberately absent --------------------------------------
+// -- §6, §15, §9.1: entities and attributes deliberately absent -------------------
 check(!tables.has("publications"), "publications table present — excluded from MVP (§6)");
+check(!columnsOf("human_accounts").has("email"), "human_accounts.email present — an account holds no address (§9.1, ADR 0016)");
+check(!columnsOf("human_accounts").has("email_verified_at"), "human_accounts.email_verified_at present (§9.1, ADR 0016)");
 check(!columnsOf("articles").has("publication_id"), "articles.publication_id present (§15)");
 check(!columnsOf("articles").has("version"), "articles.version present — replaced by If-Match (§34.3)");
 

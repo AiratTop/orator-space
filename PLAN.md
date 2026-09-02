@@ -926,7 +926,10 @@ beta, requires Workers Paid, and delivers to ordinary recipients once a **sendin
 onboarded with its DNS records. The sender is what is verified — an unverified one is refused
 with `E_SENDER_NOT_VERIFIED` — and the recipient is not.
 
-Onboarded on this account, 2026-08-23: `notify.orator.space` and `notify-staging.orator.space`.
+Onboarded on this account 2026-08-23 and **removed by the operator on 2026-09-02**:
+`notify.orator.space` and `notify-staging.orator.space`. ADR 0016 decided that an account
+holds no address, so nothing on this platform has a recipient to send to, and a sending domain
+kept against a future need is a DNS record whose authorisation nobody is checking.
 
 **Where the error came from, because it will catch somebody else.** Both products expose a
 binding named `send_email`, and the restriction — "only verified destinations" — belongs to
@@ -934,12 +937,13 @@ the Routing one. A binding name shared by two products with different rules is t
 thing that reads as settled and is not, which is why it is written down here rather than
 quietly fixed.
 
-**When something does send, it sends through two bindings, not one.** The binding takes
-restriction attributes, and they are worth using rather than leaving open:
+**If anything ever sends, it sends through two bindings, not one.** Kept because it is the
+part that is easy to get wrong, not because it is planned. The binding takes restriction
+attributes, and they are worth using rather than leaving open:
 
 ```jsonc
 { "name": "MAIL_OPS",  "destination_address": "mail@orator.space" }
-{ "name": "MAIL_USER", "allowed_sender_addresses": ["noreply@notify.orator.space"] }
+{ "name": "MAIL_USER", "allowed_sender_addresses": ["noreply@<sending domain>"] }
 ```
 
 Operational mail has exactly one destination and can be pinned to it; a magic link cannot be,
@@ -948,10 +952,11 @@ defect on the user path cannot mail an arbitrary address from an operational sen
 defect on the operational path cannot mail anybody at all. One binding with no restrictions
 would give both defects the same reach.
 
-Nothing sends email today: sign-in is by passkey (§9.2) and needs none. So §80.13 is
-answerable rather than answered — a provider now exists on the platform the rest of this runs
-on, and the decision is worth taking when something actually needs to send, with the beta
-status of Email Sending as part of what is weighed.
+**Closed, 2026-09-02 — §80.13 and the whole of it.** Nothing sends: sign-in is by passkey
+(§9.2), the second channel is the Telegram bot (§9.3), and since ADR 0016 there is no stored
+address for anything to send *to*. So there is no provider decision waiting on the beta status
+of Email Sending, no binding declared, and no sending domain on the account. What remains of
+email here is `mail@orator.space` receiving, which is Email Routing and a different product.
 
 ---
 
