@@ -9,8 +9,15 @@
  * should be able to set it.
  *
  *   node scripts/create-canary.mjs --env staging|production [--dry-run]
+ *   node scripts/create-canary.mjs --env staging|production --reissue
  *
  * Prints the token once. Put it in Gatus as a bearer header on `/health/deep`.
+ *
+ * `--reissue` is for the token having been lost rather than leaked — it is printed once and
+ * a monitor that never got it leaves no trace. It keeps the principal, because §11 makes an
+ * identifier permanent and a new canary for a lost password is a second identity for one
+ * account. The old token is revoked in the same statement as the new one is written: a
+ * reissue that leaves the previous credential valid is not a reissue.
  */
 import { spawnSync } from "node:child_process";
 import { newId } from "./lib/orator-id.mjs";
@@ -23,9 +30,10 @@ const flag = (name, fallback) => {
 
 const environment = flag("env", null);
 const dryRun = args.includes("--dry-run");
+const reissue = args.includes("--reissue");
 
 if (environment !== "staging" && environment !== "production") {
-  console.error("usage: node scripts/create-canary.mjs --env staging|production [--dry-run]");
+  console.error("usage: node scripts/create-canary.mjs --env staging|production [--dry-run] [--reissue]");
   process.exit(2);
 }
 
@@ -53,7 +61,7 @@ const tokenHash = await sha256Hex(token);
 const prefix = token.slice(0, 20);
 
 const now = new Date();
-const principalId = newId(now);
+let principalId = newId(now);
 const tokenId = newId(now);
 const username = `canary-${environment}`;
 
@@ -94,16 +102,23 @@ function query(sql) {
   return JSON.parse(out.slice(out.indexOf("[")))[0].results;
 }
 
-if (!dryRun) {
+// `--reissue` reads the principal even in a dry run: a preview that shows a fresh id is a
+// preview of a different operation than the one that would run.
+if (!dryRun || reissue) {
   const existing = query(`SELECT id FROM principals WHERE username = '${username}'`);
-  if (existing.length > 0) {
+  if (existing.length > 0 && !reissue) {
     console.error(`\n  @${username} already exists (${existing[0].id}).`);
-    console.error("  Remove it first if you mean to issue a new token, or issue one against it.\n");
+    console.error("  Pass --reissue to revoke its tokens and print a new one.\n");
     process.exit(1);
   }
+  if (existing.length === 0 && reissue) {
+    console.error(`\n  There is no @${username} in ${environment} to reissue a token for.\n`);
+    process.exit(1);
+  }
+  if (existing.length > 0) principalId = existing[0].id;
 }
 
-const admins = dryRun
+const admins = dryRun || reissue
   ? [{ id: "<an admin principal id>" }]
   : query(`SELECT id, username FROM principals WHERE platform_role = 'admin' AND kind = 'human' LIMIT 1`);
 
@@ -121,7 +136,7 @@ if (admins.length === 0) {
 
 const ownerId = admins[0].id;
 
-const sql = [
+const create = [
   `INSERT INTO principals (id, kind, username, username_skeleton, display_name, status,`,
   `                        platform_role, system_account, created_at, updated_at)`,
   `VALUES ('${principalId}', 'agent', '${username}', '${username}', 'Deep health check',`,
@@ -130,12 +145,26 @@ const sql = [
   `INSERT INTO agents (principal_id, owner_principal_id, model, provider, trust_level, created_at)`,
   `VALUES ('${principalId}', '${ownerId}', 'none', 'orator', 0, '${now.toISOString()}');`,
   ``,
+];
+
+const sql = [
+  ...(reissue
+    ? [
+        `UPDATE api_tokens SET revoked_at = '${now.toISOString()}'`,
+        ` WHERE principal_id = '${principalId}' AND revoked_at IS NULL;`,
+        ``,
+      ]
+    : create),
   `INSERT INTO api_tokens (id, principal_id, name, token_hash, prefix, scopes, created_at)`,
   `VALUES ('${tokenId}', '${principalId}', 'deep-health', '${tokenHash}', '${prefix}',`,
   `        '${JSON.stringify(SCOPES)}', '${now.toISOString()}');`,
 ].join("\n");
 
-console.log(`\nCreating @${username} in ${environment}.\n`);
+console.log(
+  reissue
+    ? `\nReissuing the token of @${username} in ${environment} (${principalId}).\n`
+    : `\nCreating @${username} in ${environment}.\n`,
+);
 console.log(sql);
 
 if (dryRun) {
@@ -164,10 +193,12 @@ if (result.status !== 0) {
 const check = query(
   `SELECT (SELECT COUNT(*) FROM principals WHERE id = '${principalId}') AS principal,
           (SELECT COUNT(*) FROM agents WHERE principal_id = '${principalId}') AS agent,
-          (SELECT COUNT(*) FROM api_tokens WHERE id = '${tokenId}') AS token`,
+          (SELECT COUNT(*) FROM api_tokens WHERE id = '${tokenId}') AS token,
+          (SELECT COUNT(*) FROM api_tokens
+            WHERE principal_id = '${principalId}' AND revoked_at IS NULL) AS active`,
 )[0];
 
-if (check.principal !== 1 || check.agent !== 1 || check.token !== 1) {
+if (check.principal !== 1 || check.agent !== 1 || check.token !== 1 || check.active !== 1) {
   console.error(`\n  Partly created: ${JSON.stringify(check)}. Remove @${username} and run again.\n`);
   process.exit(1);
 }
