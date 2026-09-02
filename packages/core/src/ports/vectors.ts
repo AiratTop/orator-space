@@ -100,13 +100,19 @@ export interface EmbeddingRecord {
  * one reaching D1 — only the answer to "has this article, as published right now, been read
  * by this model".
  */
+/** One row of a sweep window: an embeddable article, and whether its vector is current. */
+export interface ScannedArticle {
+  id: OratorId;
+  stale: boolean;
+}
+
 export interface EmbeddingLedger {
   find(articleId: string): Promise<EmbeddingRecord | null>;
   record(entry: EmbeddingRecord & { articleId: string; embeddedAt: string }): PendingWrite;
   /** For an article that has become a duplicate, or has stopped being published. */
   forget(articleId: string): PendingWrite;
   /**
-   * Published articles with no current vector, oldest first (SPEC §35.2).
+   * One window of the corpus, in id order, each article marked stale or not (SPEC §35.2).
    *
    * The backlog drain's whole query, and the reason there is no backfill script. "No current
    * vector" is three cases and one predicate: never embedded, embedded from a revision that is
@@ -116,8 +122,18 @@ export interface EmbeddingLedger {
    *
    * The second of the three was claimed by 0022 and implemented by 0023: the predicate checked
    * only the first and third, so a lost `article.updated` event left a vector stale for good.
+   *
+   * A window rather than "the stale ones, oldest first", which is what this was until the
+   * query analytics were read. Staleness is a predicate across two tables, so no index can
+   * find the stale rows without visiting the others: asking for ten stale articles out of a
+   * fully embedded corpus reads the whole corpus to answer "none", every five minutes, for
+   * ever. The window bounds that to its own size, and the caller carries a cursor between
+   * invocations so the sweep still reaches every article — later rather than sooner, which is
+   * what a safety net is allowed to be.
+   *
+   * `after` is exclusive and ids are monotonic (§12), so an empty string starts a sweep.
    */
-  listStale(model: string, limit: number): Promise<OratorId[]>;
+  scanForStale(model: string, after: string, window: number): Promise<ScannedArticle[]>;
   /** How deep the backlog is, for §66.4's report. Bounded by a cap, not a full count. */
   countStale(model: string, cap: number): Promise<number>;
 }

@@ -41,9 +41,17 @@ const toRecord = (row: Row): MediaRecord => ({
 export function createMediaRepo(db: D1Database): MediaRepo {
   return {
     async listStalePending(cutoff, limit) {
+      /*
+       * Ordered by `created_at`, which is what `ix_media_pending` is on.
+       *
+       * Ordering by `id` said the same thing — §12 makes ids monotonic in creation time, so
+       * the two orders are one order — but SQLite cannot read that off the index, and sorted
+       * every pass in a temp b-tree to produce the sequence it had just read. The oldest
+       * pending upload first, either way.
+       */
       const { results } = await db
         .prepare(
-          `SELECT id FROM media WHERE status = 'pending' AND created_at < ? ORDER BY id LIMIT ?`,
+          `SELECT id FROM media WHERE status = 'pending' AND created_at < ? ORDER BY created_at LIMIT ?`,
         )
         .bind(cutoff, limit)
         .all<{ id: string }>();

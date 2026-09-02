@@ -72,16 +72,25 @@ beforeEach(async () => {
   ]);
 });
 
+/**
+ * The stale ids in the first window, which is what `listStale` used to return directly.
+ *
+ * The ledger now hands back a window of the corpus with each row marked (migration 0027), so
+ * the assertions below say the same thing through the shape that replaced it.
+ */
+const staleIds = async (window = 10) =>
+  (await ledger().scanForStale(MODEL, "", window)).filter((row) => row.stale).map((row) => row.id);
+
 describe("what the drain considers stale", () => {
   it("an article nothing has embedded", async () => {
     await article("A1", "REV-1");
-    expect(await ledger().listStale(MODEL, 10)).toEqual(["A1"]);
+    expect(await staleIds()).toEqual(["A1"]);
   });
 
   it("not one embedded from the revision that is published", async () => {
     await article("A1", "REV-1");
     await embedded("A1", "REV-1");
-    expect(await ledger().listStale(MODEL, 10)).toEqual([]);
+    expect(await staleIds()).toEqual([]);
   });
 
   /*
@@ -96,14 +105,14 @@ describe("what the drain considers stale", () => {
     await embedded("A1", "REV-1");
     await republish("A1", "REV-2");
 
-    expect(await ledger().listStale(MODEL, 10)).toEqual(["A1"]);
+    expect(await staleIds()).toEqual(["A1"]);
     expect(await ledger().countStale(MODEL, 100)).toBe(1);
   });
 
   it("one embedded by a model that is no longer in use", async () => {
     await article("A1", "REV-1");
     await embedded("A1", "REV-1", "workers-ai:previous");
-    expect(await ledger().listStale(MODEL, 10)).toEqual(["A1"]);
+    expect(await staleIds()).toEqual(["A1"]);
   });
 
   /*
@@ -116,10 +125,10 @@ describe("what the drain considers stale", () => {
   it("one whose row names no revision, until the row names one", async () => {
     await article("A1", "REV-1");
     await embedded("A1", null);
-    expect(await ledger().listStale(MODEL, 10)).toEqual(["A1"]);
+    expect(await staleIds()).toEqual(["A1"]);
 
     await embedded("A1", "REV-1");
-    expect(await ledger().listStale(MODEL, 10)).toEqual([]);
+    expect(await staleIds()).toEqual([]);
   });
 
   /*
@@ -135,14 +144,47 @@ describe("what the drain considers stale", () => {
   it("never one published with no revision to embed", async () => {
     await article("A1", "REV-1");
     await env.DB.prepare(`UPDATE articles SET published_revision_id = NULL WHERE id = 'A1'`).run();
-    expect(await ledger().listStale(MODEL, 10)).toEqual([]);
+    expect(await staleIds()).toEqual([]);
     expect(await ledger().countStale(MODEL, 100)).toBe(0);
+  });
+
+  /*
+   * The window is the corpus, not the backlog (migration 0027).
+   *
+   * What the drain used to ask for was "ten stale articles", which on a corpus with none left
+   * reads every article to answer — 155k rows in six hours of D1 analytics against 1 127
+   * articles, to return nothing. A window costs its own size whatever the answers are, so the
+   * rows that are *not* stale have to come back too, marked, or the caller cannot tell a swept
+   * corpus from a short one and the cursor cannot move.
+   */
+  it("returns the articles it looked at, current ones included", async () => {
+    await article("A1", "REV-1");
+    await article("A2", "REV-2");
+    await embedded("A2", "REV-2");
+
+    expect(await ledger().scanForStale(MODEL, "", 10)).toEqual([
+      { id: "A1", stale: true },
+      { id: "A2", stale: false },
+    ]);
+  });
+
+  it("resumes after the id it is given, and stops at the window", async () => {
+    await article("A1", "REV-1");
+    await article("A2", "REV-2");
+    await article("A3", "REV-3");
+
+    expect(await ledger().scanForStale(MODEL, "", 2)).toEqual([
+      { id: "A1", stale: true },
+      { id: "A2", stale: true },
+    ]);
+    expect(await ledger().scanForStale(MODEL, "A2", 2)).toEqual([{ id: "A3", stale: true }]);
+    expect(await ledger().scanForStale(MODEL, "A3", 2)).toEqual([]);
   });
 
   it("never a duplicate, whatever else is true of it", async () => {
     await article("A1", "REV-1");
     await article("A2", "REV-9", { duplicateOf: "A1" });
-    expect(await ledger().listStale(MODEL, 10)).toEqual(["A1"]);
+    expect(await staleIds()).toEqual(["A1"]);
   });
 
   it("reads back what it recorded, revision included", async () => {

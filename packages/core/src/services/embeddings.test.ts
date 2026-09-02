@@ -299,6 +299,12 @@ describe("what happens when a provider is unwell", () => {
   });
 });
 
+/** The stale ids in the first window — what `listStale` returned before migration 0027. */
+const staleIds = async (window = 10) =>
+  (await ports.embeddings.scanForStale("test-model", "", window))
+    .filter((row) => row.stale)
+    .map((row) => row.id);
+
 describe("the backlog drain catches what a lost event left behind", () => {
   /*
    * The gap migration 0023 closed.
@@ -313,7 +319,7 @@ describe("the backlog drain catches what a lost event left behind", () => {
     const { semantic } = semanticOf();
     const id = await publish("On inference latency", "A long enough body about serving models.");
     await embedArticle(ports, id, semantic);
-    expect(await ports.embeddings.listStale("test-model", 10)).toEqual([]);
+    expect(await staleIds()).toEqual([]);
 
     // A new revision, published, with no event delivered: the shape of a lost message.
     const article = ports.state.articles.get(id);
@@ -322,7 +328,7 @@ describe("the backlog drain catches what a lost event left behind", () => {
     ports.state.revisions.set("REV-2", next);
     ports.state.articles.set(id, { ...article!, publishedRevisionId: "REV-2" as never });
 
-    expect(await ports.embeddings.listStale("test-model", 10)).toEqual([id]);
+    expect(await staleIds()).toEqual([id]);
   });
 
   /*
@@ -340,11 +346,11 @@ describe("the backlog drain catches what a lost event left behind", () => {
 
     const held = await ports.embeddings.find(id);
     ports.state.embeddings.set(id, { ...held!, revisionId: null });
-    expect(await ports.embeddings.listStale("test-model", 10)).toEqual([id]);
+    expect(await staleIds()).toEqual([id]);
 
     expect(await embedArticle(ports, id, semantic)).toBe("unchanged");
     expect(model.seen).toHaveLength(1);
-    expect(await ports.embeddings.listStale("test-model", 10)).toEqual([]);
+    expect(await staleIds()).toEqual([]);
   });
 });
 
@@ -389,6 +395,67 @@ describe("the backlog drain", () => {
     expect(drained.embedded).toBe(1);
     expect(drained.remaining).toBe(1);
     expect(counted).toHaveBeenCalled();
+  });
+
+  /*
+   * The sweep, which is what stopped the drain reading the corpus every five minutes.
+   *
+   * Asking for stale articles reads until it has found some, so a corpus with none costs all
+   * of it, on every run, for ever — two thirds of everything the database did, for an answer
+   * that was "nothing" every time. A window costs the window. The price is that one run no
+   * longer sees the whole corpus, so the position has to survive between invocations, and
+   * these three cases are what "survive" has to mean.
+   */
+  it("sweeps the corpus a window at a time and starts over at the end", async () => {
+    const { semantic } = semanticOf();
+    const first = await publish("First", "A long enough body about serving models.");
+    const second = await publish("Second", "Another long enough body about something else.");
+
+    expect((await drainEmbeddingBacklog(ports, semantic, 10, 1)).embedded).toBe(1);
+    expect(ports.state.retentionCursors.get("embedding")).toBe(first);
+
+    expect((await drainEmbeddingBacklog(ports, semantic, 10, 1)).embedded).toBe(1);
+    expect(ports.state.retentionCursors.get("embedding")).toBe(second);
+    expect(await staleIds()).toEqual([]);
+
+    // A full window means there may be more behind it, so the end is learned by reading one
+    // that comes back short. Then the row is dropped, and "no row" is where
+    // `retention_cursors` says a sweep begins — the same wrap the content sweep uses (0025).
+    expect((await drainEmbeddingBacklog(ports, semantic, 10, 1)).embedded).toBe(0);
+    expect(ports.state.retentionCursors.has("embedding")).toBe(false);
+  });
+
+  it("does not step past articles it did not get to", async () => {
+    const { semantic } = semanticOf();
+    const first = await publish("First", "A long enough body about serving models.");
+    await publish("Second", "Another long enough body about something else entirely.");
+
+    // A window holding two stale articles and a batch that takes one: the cursor stops at the
+    // one that was taken, so the next run sees the other rather than meeting it a lap later.
+    const drained = await drainEmbeddingBacklog(ports, semantic, 1, 10);
+    expect(drained.embedded).toBe(1);
+    expect(ports.state.retentionCursors.get("embedding")).toBe(first);
+  });
+
+  it("leaves the cursor alone when the provider is down", async () => {
+    const store = fakeStore();
+    const down = {
+      embedder: {
+        name: "test-model",
+        dimensions: 4,
+        async embed(): Promise<number[][]> {
+          throw new Error("503");
+        },
+      } as Embedder,
+      vectors: store.index,
+    };
+    await publish("First", "A long enough body about serving models.");
+
+    const drained = await drainEmbeddingBacklog(ports, down, 10, 1);
+    expect(drained.failed).toBe(1);
+    // Nothing was embedded, so nothing was swept: advancing here would hand this article back
+    // to the sweep a full lap later, which is the one thing a safety net must not do.
+    expect(ports.state.retentionCursors.has("embedding")).toBe(false);
   });
 
   it("stops at the first unavailability rather than spending the whole batch", async () => {

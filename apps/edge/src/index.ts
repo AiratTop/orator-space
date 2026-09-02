@@ -915,6 +915,11 @@ export default {
        * and a corpus needing a thousand embeddings gets them over an afternoon rather than in
        * one invocation that times out halfway and cannot say how far it got.
        *
+       * A window of the corpus per run, resuming where the last one stopped, rather than a
+       * query for whatever is stale. The second reads every article to answer "nothing" once
+       * the corpus is embedded, which is what it is almost always doing — two thirds of this
+       * database's whole read volume, five minutes apart, for ever.
+       *
        * Logged only when it did something or has something left, so a fully embedded corpus
        * is silent rather than printing a zero every five minutes for ever.
        */

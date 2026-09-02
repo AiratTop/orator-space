@@ -281,6 +281,32 @@ export async function embedArticle(
  */
 export const EMBEDDING_BATCH = 10;
 
+/**
+ * How much of the corpus one cron run looks at.
+ *
+ * The drain used to ask for stale articles directly, which reads until it has found ten of
+ * them — and on a corpus with none left, that is every article, every five minutes, for ever.
+ * It was 155k rows in six hours of D1 analytics against 1 127 articles, two thirds of
+ * everything the database did, to return nothing on all but a handful of runs.
+ *
+ * So the run reads a window instead and remembers where it stopped. The cost of a run is now
+ * the window rather than the corpus, and it stays the window when the corpus is fifty times
+ * larger — which is the property the drain was written to have and did not.
+ *
+ * What it costs is detection time: a lost event is caught within a full sweep rather than
+ * within five minutes. At this size that is half an hour. It buys nothing to make it shorter,
+ * because the event path is what makes embedding prompt (§35.2) and this is what catches the
+ * event path failing.
+ *
+ * Twenty windows to a batch, deliberately. A model change makes every article in the window
+ * stale, so the run still finds its ten without reading further, and re-embedding the corpus
+ * after a configuration change goes at exactly the speed it did before.
+ */
+export const EMBEDDING_WINDOW = 200;
+
+/** Where the sweep stopped, in `retention_cursors` (migration 0025). */
+const EMBEDDING_SWEEP = "embedding";
+
 export interface DrainOutcome {
   embedded: number;
   failed: number;
@@ -299,22 +325,35 @@ export interface DrainOutcome {
  *
  * Stops at the first unavailability rather than working through the batch. A provider that is
  * down is down for all ten, and ten failed calls a run is a bill for nothing.
+ *
+ * A sweep, not a scan (migration 0027). Each run reads one window of the corpus from where the
+ * last one stopped, and the position is a cursor in `retention_cursors` — the table 0025 built
+ * for exactly this and named after the first thing that needed it. Reaching the end drops the
+ * row, which is that table's way of saying "start from the beginning", so the sweep wraps
+ * without a special case.
  */
 export async function drainEmbeddingBacklog(
   ports: Ports,
   semantic: SemanticProvider,
   limit = EMBEDDING_BATCH,
+  window = EMBEDDING_WINDOW,
 ): Promise<DrainOutcome> {
-  const stale = await ports.embeddings.listStale(semantic.embedder.name, limit);
+  const from = (await ports.retentionCursors.read(EMBEDDING_SWEEP)) ?? "";
+  const scanned = await ports.embeddings.scanForStale(semantic.embedder.name, from, window);
+  const stale = scanned.filter((row) => row.stale).map((row) => row.id);
+  const taking = stale.slice(0, limit);
+
   let embedded = 0;
   let failed = 0;
   /** Articles this run took out of the backlog: written, found unchanged, or withdrawn. */
   let resolved = 0;
+  let stalled = false;
 
-  for (const articleId of stale) {
+  for (const articleId of taking) {
     const status = await embedArticle(ports, articleId, semantic);
     if (status === "unavailable") {
       failed += 1;
+      stalled = true;
       break;
     }
     if (status === "embedded") embedded += 1;
@@ -323,23 +362,45 @@ export async function drainEmbeddingBacklog(
     if (status !== "skipped") resolved += 1;
   }
 
+  /*
+   * Where the next run starts, and the three answers are three different situations.
+   *
+   * An unavailable provider does not move the cursor at all: the window is still full of work
+   * nobody did, and advancing past it would hand those articles back to the sweep a full lap
+   * later. More stale articles than one batch does not move it past them either — it stops at
+   * the last one taken, so the rest are the first thing the next run sees. Otherwise the
+   * window was dealt with, and the cursor goes to its end, or is dropped if the window came
+   * back short, because a short window is the end of the corpus.
+   */
+  if (!stalled) {
+    const next =
+      stale.length > taking.length
+        ? (taking.at(-1) ?? from)
+        : scanned.length < window
+          ? null
+          : (scanned.at(-1)?.id ?? null);
+    await ports.db.commit([
+      ports.retentionCursors.write(EMBEDDING_SWEEP, next, ports.clock.now().toISOString()),
+    ]);
+  }
+
   return {
     embedded,
     failed,
     /*
-     * Counted again only when there might be more than this page (migration 0027).
+     * Counted over the whole corpus only when this window was full of work (migration 0027).
      *
-     * `countStale` is the same scan as `listStale` and was run unconditionally, so a fully
-     * embedded corpus paid for the whole thing twice every five minutes to print a zero —
-     * 1.03M rows a day in the D1 analytics, on top of the 1.14M the listing itself read.
-     * A short page *is* the count: `listStale` was asked for `limit` and returned fewer, so
-     * the backlog was what came back, and what is left of it is what this run did not
-     * resolve. Only a full page can be hiding a tail worth measuring.
+     * `countStale` is the one query left here that reads everything, and it used to run on
+     * every drain — a fully embedded corpus paid for the scan twice every five minutes to
+     * print a zero. What the sweep saw is the honest answer the rest of the time: the window
+     * held this many stale articles and this run resolved that many of them. A window that
+     * filled its batch is the only case that can be hiding a backlog worth a real number, and
+     * that case is about to spend ten inference calls, next to which one scan is nothing.
      */
     remaining:
-      stale.length < limit
-        ? stale.length - resolved
-        : await ports.embeddings.countStale(semantic.embedder.name, 1_000),
+      stale.length > taking.length
+        ? await ports.embeddings.countStale(semantic.embedder.name, 1_000)
+        : stale.length - resolved,
   };
 }
 

@@ -1449,33 +1449,39 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
         return 1;
       }),
     forget: (articleId) => asWrite(() => (state.embeddings.delete(articleId) ? 1 : 0)),
-    async listStale(model, limit) {
-      return staleIds(model).slice(0, limit);
+    async scanForStale(model, after, window) {
+      // The window, not the stale ones — the D1 ledger reads a slice of the corpus in id
+      // order and marks each row, so a double that filtered would hide the whole point of it.
+      return embeddable()
+        .filter((article) => article.id > after)
+        .slice(0, window)
+        .map((article) => ({ id: article.id, stale: isStale(article, model) }));
     },
     async countStale(model, cap) {
-      return Math.min(staleIds(model).length, cap);
+      return Math.min(embeddable().filter((article) => isStale(article, model)).length, cap);
     },
   };
 
-  /** The same predicate the D1 ledger expresses in SQL, so the two agree about "stale". */
-  function staleIds(model: string): OratorId[] {
+  /** Published, public, not a duplicate, with a revision to read — in id order (§12). */
+  function embeddable(): ArticleRecord[] {
     return [...state.articles.values()]
       .filter((article) => {
         if (article.status !== "published" || article.visibility !== "public") return false;
         if (article.duplicateOf !== null && article.duplicateOf !== undefined) return false;
-        if (article.publishedRevisionId === null) return false;
-        const held = state.embeddings.get(article.id);
-        // Never embedded, by another model, or from a revision that is no longer published —
-        // the third is what migration 0023 added, and a double that omitted it would let the
-        // gap this fixes pass here and stay open in production.
-        return (
-          held === undefined ||
-          held.model !== model ||
-          held.revisionId !== article.publishedRevisionId
-        );
+        return article.publishedRevisionId !== null;
       })
-      .map((article) => article.id)
-      .sort();
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
+
+  /** The same predicate the D1 ledger expresses in SQL, so the two agree about "stale". */
+  function isStale(article: ArticleRecord, model: string): boolean {
+    const held = state.embeddings.get(article.id);
+    // Never embedded, by another model, or from a revision that is no longer published — the
+    // third is what migration 0023 added, and a double that omitted it would let the gap this
+    // fixes pass here and stay open in production.
+    return (
+      held === undefined || held.model !== model || held.revisionId !== article.publishedRevisionId
+    );
   }
 
   /** SPEC §22 — curated, and empty until a moderator puts something in it. */

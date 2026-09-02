@@ -50,17 +50,18 @@ export function createEmbeddingLedger(db: D1Database): EmbeddingLedger {
    * article published with no pointer at all, and `published_revision_id IS NOT NULL` excludes
    * that for nothing.
    */
-  const STALE = `
+  const EMBEDDABLE = `
     FROM articles a
    WHERE a.status = 'published'
      AND a.visibility = 'public'
      AND a.duplicate_of IS NULL
-     AND a.published_revision_id IS NOT NULL
-     AND NOT EXISTS (SELECT 1
-                       FROM article_embeddings e
-                      WHERE e.article_id = a.id
-                        AND e.model = ?1
-                        AND e.revision_id = a.published_revision_id)`;
+     AND a.published_revision_id IS NOT NULL`;
+
+  const CURRENT_VECTOR = `EXISTS (SELECT 1
+                                    FROM article_embeddings e
+                                   WHERE e.article_id = a.id
+                                     AND e.model = ?1
+                                     AND e.revision_id = a.published_revision_id)`;
 
   return {
     async find(articleId) {
@@ -108,20 +109,31 @@ export function createEmbeddingLedger(db: D1Database): EmbeddingLedger {
       return asWrite(db.prepare(`DELETE FROM article_embeddings WHERE article_id = ?`).bind(articleId));
     },
 
-    async listStale(model, limit) {
+    async scanForStale(model, after, window) {
       /*
-       * Oldest first, by id.
+       * A window of the corpus in id order, not a list of the stale ones.
        *
-       * §12 makes the id monotonic in creation time, so this is publication order without a
-       * sort on a date column — and it makes the drain deterministic, which matters more than
-       * it sounds: a drain that picked an arbitrary ten each run would revisit the same
-       * articles and starve the tail on a corpus larger than one batch.
+       * §12 makes the id monotonic in creation time, so `a.id > ?2` walks the corpus in
+       * publication order without sorting a date column, and `ix_articles_embeddable`
+       * (migration 0027) serves both the range and the order. The caller keeps the position
+       * between invocations, which is what turns a scan of everything into a sweep.
+       *
+       * The staleness test rides along as a column instead of filtering. That is the whole
+       * change: a filter has to keep reading until it has found `limit` stale articles, and
+       * on a corpus with none it reads all of them to say so, every five minutes. Returning
+       * the window as it is read costs two rows an article and stops at the window's edge,
+       * whatever the answers were.
        */
       const { results } = await db
-        .prepare(`SELECT a.id ${STALE} ORDER BY a.id ASC LIMIT ?2`)
-        .bind(model, limit)
-        .all<{ id: string }>();
-      return results.map((row) => row.id as OratorId);
+        .prepare(
+          `SELECT a.id AS id, NOT ${CURRENT_VECTOR} AS stale ${EMBEDDABLE}
+              AND a.id > ?2
+            ORDER BY a.id ASC
+            LIMIT ?3`,
+        )
+        .bind(model, after, window)
+        .all<{ id: string; stale: number }>();
+      return results.map((row) => ({ id: row.id as OratorId, stale: row.stale === 1 }));
     },
 
     async countStale(model, cap) {
@@ -129,11 +141,12 @@ export function createEmbeddingLedger(db: D1Database): EmbeddingLedger {
       // know whether there is a backlog and roughly how bad, and a full count on a growing
       // corpus is a scan to produce a number nobody reads precisely.
       //
-      // The drain no longer asks on every run either (migration 0027). This is the same scan
-      // `listStale` just did, and a page that came back short already answers the question —
-      // so only a full page, which may be hiding a tail, gets counted.
+      // The drain no longer asks on every run either (migration 0027). It is the one query
+      // here that still reads the whole corpus, so it is asked only when the sweep's window
+      // came back full of stale articles — that is a backlog worth a number, and next to the
+      // inference calls it is about to pay for, one scan is not the expensive part.
       const row = await db
-        .prepare(`SELECT COUNT(*) AS n FROM (SELECT a.id ${STALE} LIMIT ?2)`)
+        .prepare(`SELECT COUNT(*) AS n FROM (SELECT a.id ${EMBEDDABLE} AND NOT ${CURRENT_VECTOR} LIMIT ?2)`)
         .bind(model, cap)
         .first<{ n: number }>();
       return row?.n ?? 0;
