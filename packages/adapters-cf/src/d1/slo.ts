@@ -21,6 +21,16 @@ export function createSloRepo(db: D1Database): SloRepo {
       return { pending: row?.pending ?? 0, oldestPendingAt: row?.oldest ?? null };
     },
 
+    async sweepLastRun(handler) {
+      // One row, by primary key. §66.4's cheapest indicator by a wide margin, and it has to
+      // be: the sweep it watches was built to stop reading the corpus on a timer.
+      const row = await db
+        .prepare(`SELECT cursor, updated_at FROM retention_cursors WHERE handler = ?`)
+        .bind(handler)
+        .first<{ cursor: string; updated_at: string }>();
+      return row === null ? null : { position: row.cursor, at: row.updated_at };
+    },
+
     /**
      * Published to indexed, over the last `sample` articles that made it into the index.
      *

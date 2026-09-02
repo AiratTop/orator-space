@@ -79,6 +79,7 @@ describe("the report (§66.4)", () => {
     expect(report.indicators.map((i) => i.name).sort()).toEqual([
       "database_bytes",
       "dead_lettered",
+      "embedding_sweep",
       "indexing_p95",
       "outbox_pending",
       "publish_p95",

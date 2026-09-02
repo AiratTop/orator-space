@@ -363,26 +363,32 @@ export async function drainEmbeddingBacklog(
   }
 
   /*
-   * Where the next run starts, and the three answers are three different situations.
+   * Where the next run starts, in four situations that are one sentence: the cursor is the
+   * furthest point the sweep has actually dealt with.
    *
-   * An unavailable provider does not move the cursor at all: the window is still full of work
-   * nobody did, and advancing past it would hand those articles back to the sweep a full lap
-   * later. More stale articles than one batch does not move it past them either — it stops at
-   * the last one taken, so the rest are the first thing the next run sees. Otherwise the
-   * window was dealt with, and the cursor goes to its end, or is dropped if the window came
-   * back short, because a short window is the end of the corpus.
+   * An unavailable provider has dealt with nothing, so the position does not move — advancing
+   * past a window full of work nobody did would hand those articles back a full lap later.
+   * More stale articles than one batch stops at the last one taken, so the rest are the first
+   * thing the next run sees. A window that came back short is the end of the corpus, and the
+   * sweep starts over. Otherwise the window was dealt with and the cursor goes to its end.
+   *
+   * Written on every run, including the ones that moved nothing. The row's `updated_at` is
+   * then "when the sweep last ran", which is the only cheap way to see that it is still going
+   * round — §66.4's `embedding_sweep` indicator reads exactly this row. That is also why the
+   * end of a lap writes an empty position rather than dropping the row the way the content
+   * sweep does (0025): here the row's absence would mean two things, and the one it would be
+   * taken for is the healthy one.
    */
-  if (!stalled) {
-    const next =
-      stale.length > taking.length
-        ? (taking.at(-1) ?? from)
-        : scanned.length < window
-          ? null
-          : (scanned.at(-1)?.id ?? null);
-    await ports.db.commit([
-      ports.retentionCursors.write(EMBEDDING_SWEEP, next, ports.clock.now().toISOString()),
-    ]);
-  }
+  const next = stalled
+    ? from
+    : stale.length > taking.length
+      ? (taking.at(-1) ?? from)
+      : scanned.length < window
+        ? ""
+        : (scanned.at(-1)?.id ?? "");
+  await ports.db.commit([
+    ports.retentionCursors.write(EMBEDDING_SWEEP, next, ports.clock.now().toISOString()),
+  ]);
 
   return {
     embedded,

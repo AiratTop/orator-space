@@ -3,14 +3,14 @@ import type { MetricSample, MetricsQuery, SloRepo } from "../ports/slo.js";
 /**
  * The §66.4 indicators, evaluated (SPEC §66.4, §66.7).
  *
- * §66.4 lists seven and calls them mandatory from day one. None of them is visible to an
+ * §66.4 lists them and calls them mandatory from day one. None of them is visible to an
  * external prober — Gatus can tell whether an endpoint answers and nothing about whether the
  * outbox is draining — so the platform reports on itself here, and a monitor that already
  * exists turns that report into an alert by reading its status code.
  *
  * That is the whole design decision: an alerting backend (§66.6, §80.15) is a system to run,
  * and the thing it would do first is exactly this evaluation. Doing it in the Worker, against
- * numbers the Worker can already read, closes six of the seven rows without one.
+ * numbers the Worker can already read, closes all but two of its rows without one.
  *
  * **Unavailable is not healthy, and not an alert either.** Two indicators need Analytics
  * Engine and one needs a purge implementation that does not exist. Reporting those as `ok`
@@ -62,6 +62,15 @@ export const THRESHOLDS = {
    * asleep looks at it. Retention still bounds the table at thirty days (§23.4).
    */
   deadLetterWindowMinutes: 24 * 60,
+  /**
+   * How long the embedding sweep may be silent before it counts as stopped.
+   *
+   * Three missed runs of a five-minute cron. The number is about the schedule and not about
+   * the corpus, deliberately: the sweep reads a window per run, so how long a full lap takes
+   * grows with the corpus and how often it runs does not. A threshold derived from the corpus
+   * size would need the count this whole change was made to stop taking.
+   */
+  sweepIdleMinutes: 15,
   /** §31.3 — D1's ceiling, and §66.4's two marks on the way to it. */
   databaseLimitBytes: 10 * 1024 * 1024 * 1024,
   databaseWarnFraction: 0.6,
@@ -70,6 +79,9 @@ export const THRESHOLDS = {
 
 /** How many recently indexed articles the lag percentile is taken over. */
 export const INDEXING_SAMPLE = 50;
+
+/** The sweep §66.4 watches, keyed as `drainEmbeddingBacklog` writes it. */
+export const EMBEDDING_SWEEP_HANDLER = "embedding";
 
 export interface SloPorts {
   slo: SloRepo;
@@ -87,8 +99,9 @@ export async function evaluateSlo(ports: SloPorts): Promise<SloReport> {
    * They are independent queries against two systems, and a metrics backend that is slow
    * must not add its latency to a database read an operator is waiting on.
    */
-  const [backlog, lag, deadLetters, bytes, publishP95, errorRate] = await Promise.all([
+  const [backlog, sweep, lag, deadLetters, bytes, publishP95, errorRate] = await Promise.all([
     ports.slo.outboxBacklog(),
+    ports.slo.sweepLastRun(EMBEDDING_SWEEP_HANDLER),
     ports.slo.indexingLag(INDEXING_SAMPLE),
     ports.slo.deadLettered(since),
     ports.slo.databaseBytes(),
@@ -106,6 +119,7 @@ export async function evaluateSlo(ports: SloPorts): Promise<SloReport> {
       THRESHOLDS.serverErrorRate,
     ),
     outboxIndicator(backlog, now),
+    sweepIndicator(sweep, now),
     threshold(
       "indexing_p95",
       lag.p95Seconds,
@@ -214,6 +228,49 @@ function outboxIndicator(backlog: { pending: number; oldestPendingAt: string | n
     unit: "count",
     threshold: `> ${THRESHOLDS.outboxDepth}, or oldest older than ${THRESHOLDS.outboxAgeSeconds / 60} minutes`,
     detail: `oldest ${Math.round(ageSeconds)} s`,
+  };
+}
+
+/**
+ * Whether the embedding sweep is still going round (SPEC §66.4, §38.2).
+ *
+ * The indicator the sweep itself made necessary. The drain used to ask "what has no current
+ * vector" every five minutes, which re-established the answer continuously and read the whole
+ * corpus to do it; it now reads a window and remembers its place. That trade has one exposed
+ * edge: a sweep that has stopped and a sweep with nothing to do are both silent, and the
+ * difference is every article published after the moment it stopped, missing from semantic
+ * search, indefinitely.
+ *
+ * Time since the last run, and not how far it has got. Position is not comparable between two
+ * deployments or two corpus sizes, while "it ran in the last quarter of an hour" is the same
+ * sentence everywhere. It is also one row read by primary key, which is what lets §66.4 poll
+ * it as often as it likes.
+ *
+ * Never run is `unavailable` rather than breached. A deployment with no vector store never
+ * starts the sweep (`semanticFor` returns nothing), and §38.2 makes that a documented
+ * degradation to lexical search — an alert nobody can clear by fixing anything.
+ */
+function sweepIndicator(sweep: { position: string; at: string } | null, now: Date): Indicator {
+  const stated = `silent for more than ${THRESHOLDS.sweepIdleMinutes} minutes`;
+  if (sweep === null) {
+    return {
+      name: "embedding_sweep",
+      state: "unavailable",
+      value: null,
+      unit: "seconds",
+      threshold: stated,
+      detail: "the sweep has not run on this deployment",
+    };
+  }
+
+  const idleSeconds = Math.max(0, (now.getTime() - Date.parse(sweep.at)) / 1000);
+  return {
+    name: "embedding_sweep",
+    state: idleSeconds > THRESHOLDS.sweepIdleMinutes * 60 ? "breached" : "ok",
+    value: Math.round(idleSeconds),
+    unit: "seconds",
+    threshold: stated,
+    detail: sweep.position === "" ? "at the start of a lap" : `at ${sweep.position}`,
   };
 }
 

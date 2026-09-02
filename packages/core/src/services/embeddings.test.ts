@@ -419,10 +419,11 @@ describe("the backlog drain", () => {
     expect(await staleIds()).toEqual([]);
 
     // A full window means there may be more behind it, so the end is learned by reading one
-    // that comes back short. Then the row is dropped, and "no row" is where
-    // `retention_cursors` says a sweep begins — the same wrap the content sweep uses (0025).
+    // that comes back short. The position goes back to the start and the row stays, because
+    // §66.4 reads its `updated_at` to see that the sweep is still going round — the content
+    // sweep drops its row instead (0025), and there the absence means only one thing.
     expect((await drainEmbeddingBacklog(ports, semantic, 10, 1)).embedded).toBe(0);
-    expect(ports.state.retentionCursors.has("embedding")).toBe(false);
+    expect(ports.state.retentionCursors.get("embedding")).toBe("");
   });
 
   it("does not step past articles it did not get to", async () => {
@@ -437,7 +438,7 @@ describe("the backlog drain", () => {
     expect(ports.state.retentionCursors.get("embedding")).toBe(first);
   });
 
-  it("leaves the cursor alone when the provider is down", async () => {
+  it("records the run but not a step when the provider is down", async () => {
     const store = fakeStore();
     const down = {
       embedder: {
@@ -453,9 +454,11 @@ describe("the backlog drain", () => {
 
     const drained = await drainEmbeddingBacklog(ports, down, 10, 1);
     expect(drained.failed).toBe(1);
-    // Nothing was embedded, so nothing was swept: advancing here would hand this article back
-    // to the sweep a full lap later, which is the one thing a safety net must not do.
-    expect(ports.state.retentionCursors.has("embedding")).toBe(false);
+    // Nothing was embedded, so the position does not move: advancing here would hand this
+    // article back to the sweep a full lap later, which is the one thing a safety net must not
+    // do. The row is still written, because a provider outage is not a sweep that has stopped
+    // and §66.4's indicator reads that row to tell those apart.
+    expect(ports.state.retentionCursors.get("embedding")).toBe("");
   });
 
   it("stops at the first unavailability rather than spending the whole batch", async () => {

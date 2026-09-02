@@ -5721,6 +5721,20 @@ raw IPs, or prompt contents.
 | queue consumer failures | anything reaching the dead-letter queue |
 | D1 database size | > 60% / > 80% of the limit |
 | cache purge failure rate | > 10% |
+| embedding sweep silence | last run older than 15 minutes |
+
+**On the sweep, which is the one indicator that watches a piece of machinery rather than a
+result.** §38.2's backlog drain reads a window of the corpus per invocation and remembers its
+place, because asking "what has no current vector" re-establishes the answer continuously and
+reads the whole corpus to do it — on a corpus with nothing stale, which is the ordinary case,
+that was two thirds of the database's entire read volume, five minutes apart, for ever. The
+trade has one exposed edge: a sweep that has stopped and a sweep with nothing to do are both
+silent, and the difference between them is every article published after the moment it
+stopped, absent from semantic search, indefinitely. Time since the last run is what tells them
+apart, it is one row read by primary key, and the threshold is about the schedule rather than
+the corpus — how long a lap takes grows with the corpus, how often the sweep runs does not. A
+deployment with no vector store never starts it, and that reports `unavailable`: §38.2 makes
+lexical-only search a documented degradation rather than a fault.
 
 **MUST.** A health endpoint checking D1, R2 and Queue availability, behind
 `status.orator.space`.
@@ -5741,7 +5755,7 @@ observes is one that lasts, so the one thing that can see it says so. It is not 
 a local run — `wrangler secret` has no local equivalent, and a check that is permanently red
 in development is a check everybody learns to ignore.
 
-**MUST — the platform evaluates these about itself, at `/health/slo`.** None of the seven is
+**MUST — the platform evaluates these about itself, at `/health/slo`.** None of them is
 visible to an external prober: a monitor can tell whether an endpoint answers and nothing
 about whether the outbox is draining. So the Worker reads its own numbers, compares them with
 the table above, and puts the verdict in a status code — `503` when an indicator is breached,
@@ -5787,7 +5801,7 @@ preceding day.
   carries no duration: it is emitted after the commit, where there is nothing left to time.
   Until somebody publishes over HTTP, this indicator is honestly `no-traffic`.
 
-**MUST.** Where each number comes from, because six of the seven need no metrics pipeline:
+**MUST.** Where each number comes from, because all but two need no metrics pipeline:
 
 | Indicator | Source |
 |---|---|
@@ -5798,6 +5812,7 @@ preceding day.
 | dead-lettered messages | D1, `dead_letters` — written by the dead-letter consumer, over 24 hours |
 | D1 size | the `size_after` field D1 returns in the metadata of any statement |
 | purge failure rate | nothing: §33.4's purge is not implemented (§33.1) |
+| embedding sweep silence | D1, the sweep's own row in `retention_cursors` — one read by key |
 
 **MUST — the dead-letter queue has a consumer, and it does not retry.** A message reaches it
 after five failed attempts on the primary queue, which makes it a handler that cannot succeed
@@ -6433,9 +6448,9 @@ begins only once that chain works.
 
 **The last row closed on 2026-08-23, and it closed by removing the dependency rather than
 by satisfying it.** It was written expecting a metrics backend, and the answer was that the
-platform evaluates the seven indicators about itself at `/health/slo` and puts the verdict in
+platform evaluates §66.4's indicators about itself at `/health/slo` and puts the verdict in
 a status code (§66.4) — which an external monitor that already existed turned into an alert
-through a channel that was already configured. Two of the seven report `unavailable` until
+through a channel that was already configured. Two of them report `unavailable` until
 the edge Worker holds `CF_ACCOUNT_ID` and `CF_ANALYTICS_TOKEN`; the other five answer, and an
 indicator that cannot be measured says so rather than reporting `ok`.
 

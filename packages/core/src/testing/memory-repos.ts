@@ -2258,6 +2258,12 @@ export function createMemoryPorts(options: { now?: Date } = {}): Ports & MemoryC
    * against a double reporting a comfortable zero would prove the opposite of what it should.
    */
   const slo: SloRepo = {
+    async sweepLastRun(handler: string) {
+      const position = state.retentionCursors.get(handler);
+      // The double keeps no timestamp, and the service only ever compares one — so a row that
+      // exists reads as "just ran", which is what every test that is not about staleness wants.
+      return position === undefined ? null : { position, at: clock.now().toISOString() };
+    },
     async outboxBacklog() {
       // `sentOutbox` is where this double records delivery, as `listPending` above does.
       const pending = state.outbox.filter((entry) => !sentOutbox.has(entry.id));

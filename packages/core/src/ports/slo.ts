@@ -1,11 +1,11 @@
 /**
  * What an operator needs to know about the pipeline (SPEC §66.4).
  *
- * §66.4 names seven indicators and calls them mandatory from day one. Four of them are
- * questions about the database and are answered here; two are questions about request
- * traffic and belong to Analytics Engine (§66.2), which is a different port because it is a
- * different system with a different failure mode — a metrics backend that is unreachable
- * must degrade the report rather than fail it.
+ * §66.4 names its indicators and calls them mandatory from day one. All but two are questions
+ * about the database and are answered here; the other two are questions about request traffic
+ * and belong to Analytics Engine (§66.2), which is a different port because it is a different
+ * system with a different failure mode — a metrics backend that is unreachable must degrade
+ * the report rather than fail it.
  *
  * Deliberately separate from `ReadingRepo`. Nothing here is about content, none of it is
  * cached, and every query is one an operator runs and a reader never does.
@@ -29,8 +29,25 @@ export interface IndexingLag {
   p95Seconds: number | null;
 }
 
+/**
+ * When a resumable sweep last ran, and how far it had got (SPEC §66.4).
+ *
+ * The embedding drain reads a window of the corpus per invocation and remembers its place, so
+ * "every article has a current vector" stops being re-established every five minutes and
+ * becomes a property of the sweep going round. A sweep that has stopped looks exactly like one
+ * with nothing to do — silent, cheap, and wrong — and this is the one row that tells them
+ * apart.
+ */
+export interface SweepRun {
+  /** Where it had got to. Empty means the start, which is also where a finished lap leaves it. */
+  position: string;
+  at: string;
+}
+
 export interface SloRepo {
   outboxBacklog(): Promise<OutboxBacklog>;
+  /** Null when the sweep has never run — no bindings for it, or a deployment too new. */
+  sweepLastRun(handler: string): Promise<SweepRun | null>;
   indexingLag(sample: number): Promise<IndexingLag>;
   /** How many messages the consumer gave up on since `since`. */
   deadLettered(since: string): Promise<number>;

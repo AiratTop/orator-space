@@ -3,7 +3,7 @@ import type { MetricsQuery, SloRepo } from "../ports/slo.js";
 import { evaluateSlo, THRESHOLDS, type Indicator, type SloReport } from "./slo.js";
 
 /**
- * SPEC §66.4 — the seven indicators, and what each of them says.
+ * SPEC §66.4 — the eight indicators, and what each of them says.
  *
  * The thresholds themselves are the interesting part, and specifically the three states that
  * are not "ok" or "breached". An indicator nobody can measure must not read as healthy, an
@@ -16,6 +16,9 @@ const NOW = new Date("2026-08-23T12:00:00.000Z");
 const repo = (over: Partial<SloRepo> = {}): SloRepo => ({
   async outboxBacklog() {
     return { pending: 0, oldestPendingAt: null };
+  },
+  async sweepLastRun() {
+    return { position: "ARTICLE-1", at: new Date(NOW.getTime() - 60_000).toISOString() };
   },
   async indexingLag() {
     return { sampled: 10, p95Seconds: 4 };
@@ -54,7 +57,7 @@ describe("a healthy pipeline", () => {
 
     // §33.4's purge does not exist, so its indicator says so rather than disappearing.
     expect(find(report, "purge_failure_rate").state).toBe("not-implemented");
-    expect(report.indicators).toHaveLength(7);
+    expect(report.indicators).toHaveLength(8);
 
     // And a deliberate, documented absence does not degrade the report. A status that can
     // never read `ok` is a status nobody reads.
@@ -86,6 +89,67 @@ describe("the backlog (§66.4)", () => {
       repo({ async outboxBacklog() { return { pending: THRESHOLDS.outboxDepth, oldestPendingAt: NOW.toISOString() }; } }),
     );
     expect(find(report, "outbox_pending").state).toBe("ok");
+  });
+});
+
+describe("the embedding sweep (§66.4, §38.2)", () => {
+  /*
+   * The indicator that exists because the drain stopped scanning.
+   *
+   * Asking "what has no current vector" re-establishes the answer on every run and reads the
+   * whole corpus to do it. A sweep reads a window and remembers its place — and then a sweep
+   * that has stopped and a sweep with nothing to do are both silent. The difference is every
+   * article published after it stopped, missing from semantic search, indefinitely.
+   */
+  it("is healthy while the sweep keeps running, wherever it has got to", async () => {
+    const report = await evaluate(
+      repo({
+        async sweepLastRun() {
+          return { position: "", at: new Date(NOW.getTime() - 4 * 60_000).toISOString() };
+        },
+      }),
+    );
+
+    const sweep = find(report, "embedding_sweep");
+    expect(sweep.state).toBe("ok");
+    expect(sweep.value).toBe(240);
+    // An empty position is the start of a lap, which is where a finished one leaves it — not
+    // a sweep that has never moved.
+    expect(sweep.detail).toBe("at the start of a lap");
+  });
+
+  it("breaches when it has been silent for longer than three runs of its cron", async () => {
+    const report = await evaluate(
+      repo({
+        async sweepLastRun() {
+          return {
+            position: "ARTICLE-9",
+            at: new Date(NOW.getTime() - (THRESHOLDS.sweepIdleMinutes + 1) * 60_000).toISOString(),
+          };
+        },
+      }),
+    );
+
+    expect(find(report, "embedding_sweep").state).toBe("breached");
+    expect(report.status).toBe("breached");
+  });
+
+  /*
+   * A deployment with no vector store never starts the sweep, and §38.2 makes that a
+   * documented degradation to lexical search rather than a fault. Breaching here would ring a
+   * bell that fixing nothing can silence, which §66.4 says is the way to get a bell muted.
+   */
+  it("says it cannot measure rather than alerting where there is no sweep", async () => {
+    const report = await evaluate(
+      repo({
+        async sweepLastRun() {
+          return null;
+        },
+      }),
+    );
+
+    expect(find(report, "embedding_sweep").state).toBe("unavailable");
+    expect(report.status).toBe("degraded");
   });
 });
 
