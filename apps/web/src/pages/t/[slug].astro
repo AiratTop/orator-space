@@ -1,9 +1,11 @@
 ---
-import { INDEXABLE_THRESHOLD, loadTopic } from "@orator/core";
+import { INDEXABLE_THRESHOLD, loadTopic, topicTrail } from "@orator/core";
 import { decodeFeedCursor } from "@orator/protocol";
 import Layout from "../../components/Layout.astro";
 import Feed from "../../components/Feed.astro";
 import NotFound from "../../components/NotFound.astro";
+import Crumbs from "../../components/Crumbs.astro";
+import { breadcrumbJsonLd } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
 import { topicPorts } from "../../lib/ports.js";
 
@@ -27,6 +29,9 @@ if (!result.ok) {
 }
 
 const page = result.ok ? result.value : null;
+
+/* §50 — the trail, which for a topic ends at the topic itself. */
+const trail = page === null ? [] : await topicTrail(topicPorts, page.topic.slug);
 
 /*
  * §51, §50.3 — indexable once the listing is worth submitting, and never on a cursor page.
@@ -56,17 +61,19 @@ const canonicalPath = `/t/${slug}`;
     description={page.topic.description ?? undefined}
     canonicalPath={canonicalPath}
     indexable={indexable}
+    jsonLd={trail.length === 0 ? undefined : breadcrumbJsonLd(trail)}
   >
     <main id="main" class="wrap wrap--wide">
       {/*
-        The section a leaf belongs to, named and linked. A reader who arrived from a search
-        result has no other way to find out that this topic sits inside a wider one.
+        Where this topic sits (§50, ADR 0018).
+        
+        This was a single `← ai` link showing the parent's *slug*, which is the identifier
+        rather than the name — a reader arriving from a search result was told the section
+        was called `ai` when it is called "AI and machine learning". A trail says the same
+        thing in words, gives a crawler a `BreadcrumbList`, and is the same component the
+        article page uses so the two cannot drift.
       */}
-      {page.topic.parentSlug !== null && (
-        <p class="topic__parent">
-          <a href={`/t/${page.topic.parentSlug}`}>&larr; {page.topic.parentSlug}</a>
-        </p>
-      )}
+      <Crumbs trail={trail} endsHere />
 
       <h1 class="title">{page.topic.label}</h1>
 

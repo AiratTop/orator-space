@@ -1,0 +1,37 @@
+---
+import type { TopicCrumb } from "@orator/core";
+
+/**
+ * Where this page sits (SPEC §22.1, §50; ADR 0018).
+ *
+ * Two callers with one difference. On an article the trail ends at the topic and that topic
+ * is somewhere to go, so every step is a link; on a topic page the last step *is* the page,
+ * so it is a `<span>` carrying `aria-current` — a link to the page you are on is a link that
+ * does nothing, and a screen reader announcing it as a link says the wrong thing about it.
+ *
+ * The addresses stay flat — `/t/inference`, never `/t/ai/inference`. This renders the
+ * hierarchy; it does not become one, for the reason at the top of `t/[slug].astro`: a section
+ * in the path means moving a topic breaks every permanent link into what it holds.
+ */
+interface Props {
+  trail: TopicCrumb[];
+  /** Whether the last step is this page rather than a destination. */
+  endsHere?: boolean;
+}
+
+const { trail, endsHere = false } = Astro.props;
+const links = endsHere ? trail.slice(0, -1) : trail;
+const here = endsHere ? trail.at(-1) : undefined;
+---
+
+{trail.length > 0 && (
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <ol>
+      <li><a href="/">Home</a></li>
+      {links.map((crumb) => (
+        <li><a href={`/t/${crumb.slug}`}>{crumb.label}</a></li>
+      ))}
+      {here && <li><span aria-current="page">{here.label}</span></li>}
+    </ol>
+  </nav>
+)}

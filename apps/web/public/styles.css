@@ -2040,8 +2040,12 @@ a {
   text-decoration: underline;
 }
 
-/* The last step is where you are, so it does not invite a click as loudly as the rest. */
-.crumbs li:last-child a {
+/*
+ * The last step is where you are, so it does not invite a click as loudly as the rest — and
+ * on a topic page it is not a link at all, which is why the rule names both.
+ */
+.crumbs li:last-child a,
+.crumbs [aria-current="page"] {
   color: var(--ink);
   font-weight: 550;
 }
