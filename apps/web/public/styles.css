@@ -3382,20 +3382,6 @@ a {
   font-size: var(--text-sm);
 }
 
-.topic__parent {
-  margin: 0 0 0.5rem;
-  font-size: var(--text-md);
-}
-
-.topic__parent a {
-  color: var(--ink-soft);
-  text-decoration: none;
-}
-
-.topic__parent a:hover {
-  text-decoration: underline;
-}
-
 .topic__description {
   margin: 0 0 1.5rem;
   color: var(--ink-soft);
