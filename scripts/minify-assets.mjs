@@ -92,6 +92,40 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const source = await readFile(path, "utf8");
     const output = css ? minifyCss(source) : minifyJs(source);
 
+    /*
+     * The invariant the last bug broke, checked on the real file rather than on examples.
+     *
+     * A space before a `:` inside a selector is a descendant combinator, and dropping one
+     * silently changes what the rule matches — `.prose :not(pre)` becomes `.prose:not(pre)`,
+     * which is a different set of elements and usually an empty one. The unit tests pin the
+     * behaviour on shapes somebody thought of; this counts them in the stylesheet actually
+     * being shipped, so a future rewrite of the regexes cannot quietly lose one.
+     *
+     * Comments are stripped from the source first, because they are full of prose containing
+     * colons and the output has none of them.
+     */
+    if (css) {
+      /*
+       * What counts, and what does not.
+       *
+       * `}` `{` `;` `,` before a colon is a rule boundary or a selector-list break, and the
+       * output closes those up on purpose. `>` `+` `~` are explicit combinators whose
+       * surrounding space is decorative — `.a > :first-child` and `.a>:first-child` are the
+       * same selector. What is left is the one case that matters: a space that is *itself*
+       * the combinator, between a selector and the pseudo-class that follows it.
+       */
+      const combinators = (text) =>
+        (text.replace(/\/\*[\s\S]*?\*\//g, "").match(/[^\s{};,>+~]\s+:/g) ?? []).length;
+      const before = combinators(source);
+      const after = combinators(output);
+      if (before !== after) {
+        throw new Error(
+          `${name}: minifying lost ${before - after} descendant combinator(s) before a ` +
+            `pseudo-class — a selector now matches something other than what it was written to`,
+        );
+      }
+    }
+
     // A minifier that made a file bigger has misunderstood it. Leave the original.
     if (output.length >= source.length) continue;
 
