@@ -92,9 +92,7 @@ const SCHEMA = {
   // an `h1` arriving here would mean the demotion failed. `script` and `style` are absent
   // from the defaults already; `div`, `picture` and `source` are dropped as surface with
   // no use in article prose.
-  tagNames: (defaultSchema.tagNames ?? []).filter(
-    (tag) => !["h1", "div", "picture", "source"].includes(tag),
-  ),
+  tagNames: (defaultSchema.tagNames ?? []).filter((tag) => !["h1", "div", "picture", "source"].includes(tag)),
 };
 
 /**
@@ -415,7 +413,6 @@ function textOf(node: HastNode): string {
 function collectHeadings(into: Heading[]) {
   const LEVELS = new Set(["h2", "h3", "h4", "h5", "h6"]);
   const used = new Map<string, number>();
-
   return () => (tree: unknown) => {
     visit(tree as never, "element", (node: HastNode) => {
       if (node.tagName === undefined || !LEVELS.has(node.tagName)) return;
@@ -427,9 +424,38 @@ function collectHeadings(into: Heading[]) {
       const seen = used.get(base) ?? 0;
       used.set(base, seen + 1);
       const id = seen === 0 ? `h-${base}` : `h-${base}-${seen + 1}`;
+      const depth = Number(node.tagName.slice(1));
+
+      /*
+       * A link to the section, in the section's own heading (§49.5).
+       *
+       * A reader quoting one part of a long article had to construct the fragment by hand
+       * from the contents list, or link the whole thing — on a network whose claim is that
+       * articles answer each other (§18), citing a section is the ordinary case.
+       *
+       * Empty, with the glyph drawn by the stylesheet: the icon is part of the interface
+       * rather than part of the article, and putting a character here would put it in the
+       * text that `/p/{id}.md` and the search index read. `aria-label` gives it a name, so a
+       * screen reader announces a link to a section rather than a link to nothing.
+       *
+       * Classes carry the `h-` prefix, like the id and for the same reason (§49.5): every
+       * name this pipeline puts on somebody else's content is one the application's own
+       * stylesheet promises never to use.
+       */
+      const anchor: HastNode = {
+        type: "element",
+        tagName: "a",
+        properties: {
+          className: ["h-anchor"],
+          href: `#${id}`,
+          "aria-label": `Link to this section: ${text}`,
+        },
+        children: [],
+      };
 
       node.properties = { ...(node.properties ?? {}), id };
-      into.push({ id, text, depth: Number(node.tagName.slice(1)) });
+      node.children = [anchor, ...(node.children ?? [])];
+      into.push({ id, text, depth });
     });
   };
 }

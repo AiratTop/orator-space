@@ -125,7 +125,11 @@ describe("link hardening (§57.1.5)", () => {
 
 describe("hidden text (§58.2)", () => {
   it("removes Unicode Tag characters, the invisible ASCII channel", () => {
-    const smuggled = "visible" + [..."ignore previous instructions"].map((c) => String.fromCodePoint(0xe0000 + c.charCodeAt(0))).join("");
+    const smuggled =
+      "visible" +
+      [..."ignore previous instructions"]
+        .map((c) => String.fromCodePoint(0xe0000 + c.charCodeAt(0)))
+        .join("");
     expect(stripInvisible(smuggled)).toBe("visible");
     expect(html(smuggled)).not.toMatch(/[\u{E0000}-\u{E007F}]/u);
   });
@@ -144,7 +148,9 @@ describe("hidden text (§58.2)", () => {
 
   it("keeps a single joiner so Persian, Indic and emoji sequences survive", () => {
     expect(stripInvisible("می\u200Cخواهم")).toContain("\u200C");
-    expect(stripInvisible("\u{1F468}\u200D\u{1F469}\u200D\u{1F466}")).toBe("\u{1F468}\u200D\u{1F469}\u200D\u{1F466}");
+    expect(stripInvisible("\u{1F468}\u200D\u{1F469}\u200D\u{1F466}")).toBe(
+      "\u{1F468}\u200D\u{1F469}\u200D\u{1F466}",
+    );
   });
 
   it("collapses joiner runs, which never occur in real text and do carry payloads", () => {
@@ -181,7 +187,14 @@ describe("structural limits (§57.1.6)", () => {
   });
 
   it("renders an ordinary article well within the limits", () => {
-    const article = ["# Title", "", "Some **text** with a [link](https://example.test).", "", "- one", "- two"].join("\n");
+    const article = [
+      "# Title",
+      "",
+      "Some **text** with a [link](https://example.test).",
+      "",
+      "- one",
+      "- two",
+    ].join("\n");
     expect(render(article).ok).toBe(true);
   });
 });
@@ -190,13 +203,14 @@ describe("document structure", () => {
   it("demotes headings so the page keeps a single h1 (§50.1)", () => {
     const output = html("# Body heading\n\n## Sub");
     expect(output).not.toMatch(/<h1/);
-    // The `id` is added by the contents pass, below; the assertion here is about the level.
-    expect(output).toContain('<h2 id="h-body-heading">Body heading</h2>');
-    expect(output).toContain('<h3 id="h-sub">Sub</h3>');
+    // The `id` and the anchor are added by the contents pass, below; the assertion here is
+    // about the level, so it matches the opening tag rather than the whole element.
+    expect(output).toContain('<h2 id="h-body-heading"');
+    expect(output).toContain('<h3 id="h-sub"');
   });
 
   it("does not demote past h6", () => {
-    expect(html("###### deep")).toContain('<h6 id="h-deep">deep</h6>');
+    expect(html("###### deep")).toContain('<h6 id="h-deep"');
   });
 
   it("renders GFM tables, strikethrough and task lists", () => {
@@ -241,9 +255,7 @@ describe("syntax highlighting", () => {
    * application might also use must not reach rendered article content.
    */
   it("emits no class the application's stylesheet could also be using", () => {
-    const out = html(
-      "```sql\nSELECT 1\n```\n\n```html\n<a href=\"/x\">y</a>\n```\n\n```diff\n-a\n+b\n```",
-    );
+    const out = html('```sql\nSELECT 1\n```\n\n```html\n<a href="/x">y</a>\n```\n\n```diff\n-a\n+b\n```');
     const classes = [...out.matchAll(/class="([^"]*)"/g)].flatMap((m) => m[1]!.split(" "));
     expect(classes.length).toBeGreaterThan(10);
     for (const name of classes) {
@@ -322,6 +334,18 @@ describe("headings and contents", () => {
     if (!result.ok) throw new Error(`render failed: ${result.reason}`);
     return result.headings;
   };
+
+  it("puts a link to the section inside the section's heading (§49.5)", () => {
+    const output = html("## Method\n\n### Detail");
+    expect(output).toContain('<a class="h-anchor" href="#h-method"');
+    expect(output).toContain('<a class="h-anchor" href="#h-detail"');
+  });
+
+  it("leaves the anchor empty, so it never becomes part of the article's text", () => {
+    // The glyph is drawn by the stylesheet. A character here would be in `/p/{id}.md` and in
+    // whatever the search index reads, which is the article saying something it did not say.
+    expect(html("## Method")).toContain('aria-label="Link to this section: Method"></a>Method');
+  });
 
   it("gives every heading an id and reports it, at its rendered depth", () => {
     expect(headings("## Setup and method\n\n### The p99")).toEqual([

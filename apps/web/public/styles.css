@@ -86,6 +86,14 @@
   --shadow-1: light-dark(0 1px 2px rgb(16 18 21 / 6%), 0 1px 2px rgb(0 0 0 / 30%));
   --shadow-2: light-dark(0 6px 20px rgb(16 18 21 / 10%), 0 8px 24px rgb(0 0 0 / 45%));
 
+  /*
+   * The chain glyph for a heading's anchor, as a mask rather than an image.
+   *
+   * `img-src` admits `data:` (§57.2), and a mask takes `currentColor` — a fetched icon would
+   * be one colour in both themes and would need a second file to stop being.
+   */
+  --icon-link: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'/%3E%3C/svg%3E");
+
   --radius-sm: 0.375rem;
   --radius: 0.625rem;
   --radius-lg: 1rem;
@@ -1970,6 +1978,77 @@ a {
     padding: 0 0 0 1rem;
   }
 }
+
+/* ---- a link to each section, and which one you are in --------------------- */
+
+/*
+ * The anchor the renderer puts inside every heading (§49.5, §18).
+ *
+ * Empty in the markup, so the glyph never enters `/p/{id}.md` or the search index; drawn here
+ * with a masked data URI, which `img-src ... data:` admits and which takes `currentColor`
+ * the way a fetched image could not.
+ *
+ * Invisible until the heading is hovered or the link itself is focused — a chain icon beside
+ * every heading of a long article is a column of furniture down the left of the text. Focus
+ * is separate from hover on purpose: it is how a keyboard reaches it at all.
+ */
+.h-anchor {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.1em;
+  margin-left: 0.35rem;
+  background-color: var(--ink-soft);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  -webkit-mask: var(--icon-link) center / contain no-repeat;
+  mask: var(--icon-link) center / contain no-repeat;
+}
+
+.prose :is(h2, h3, h4, h5, h6):hover .h-anchor,
+.h-anchor:focus-visible {
+  opacity: 1;
+}
+
+.h-anchor:hover {
+  background-color: var(--accent);
+}
+
+/*
+ * Outside the column on a wide screen, where the gutter has room for it, and after the text
+ * on a narrow one, where it does not. At 390px the page's own margin is 20px, and a glyph
+ * hung 1.6rem to the left of the text would be off the side of the phone.
+ */
+@media (min-width: 76rem) {
+  .prose :is(h2, h3, h4, h5, h6) {
+    position: relative;
+  }
+
+  .h-anchor {
+    position: absolute;
+    left: -1.75rem;
+    top: 0.15em;
+    margin-left: 0;
+  }
+}
+
+/*
+ * There is no highlight of the current section in the contents, and the reason is a rule.
+ *
+ * A scroll-spy is an `IntersectionObserver`, and §49.1 admits a script only for a preference
+ * belonging to this device or an action that begins and ends on it. Rendering which section a
+ * reader is looking at is neither: it is the page describing its own state, which is the line
+ * that rule draws.
+ *
+ * The CSS-only version was built and measured before being removed, so the next person does
+ * not have to. `view-timeline-name` on each heading with `timeline-scope` on the article does
+ * let a contents link animate against a heading it is not related to — but a view timeline
+ * can only say "this heading is on screen", and "the current section" means "this heading has
+ * passed the top and the next one has not". Four ranges were tried against a real article:
+ * the wide ones lit two to four links at once and the narrow one lit none for most of the
+ * page. CSS cannot express "until the next one", so the feature is a decision about §49.1
+ * rather than a styling problem.
+ */
 
 /* ---- the trail (§50, ADR 0018) ---------------------------------------- */
 
