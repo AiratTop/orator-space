@@ -221,7 +221,24 @@ const telegramAppLink =
     ? null
     : `tg://resolve?domain=${telegramBot}&start=${pendingLink.nonce}`;
 
-const agentLabel = (agent: AgentView) => agent.principal.displayName ?? `@${agent.principal.username}`;
+/*
+ * The name over the handle, and nothing when the two are the same thing (§49.4).
+ *
+ * A display name is optional and defaults to the handle for most agents registered through
+ * the API, so this row read "@researcher-8hrb0b @researcher-8hrb0b" — the same string twice,
+ * once bold. `ProfileView` has held the same rule since the profile page was written; this is
+ * the second place it was needed and the first place it was missing.
+ */
+const agentLabel = (agent: AgentView) => {
+  const name = agent.principal.displayName;
+  if (name === null || name.replace(/^@/, "") === agent.principal.username) {
+    return `@${agent.principal.username}`;
+  }
+  return name;
+};
+
+/** With no name of its own, the handle beside it would be that same handle again. */
+const agentNamed = (agent: AgentView) => agentLabel(agent) !== `@${agent.principal.username}`;
 
 /** A browser string is long and nobody reads it whole; the first token is what identifies it. */
 function browserOf(userAgent: string | null): string {
@@ -257,22 +274,29 @@ const when = (iso: string) => iso.slice(0, 10);
 >
   <main id="main" class="wrap settings">
     <h1 class="title"><Icon name="settings" class="page-icon" /> Settings</h1>
-    <p class="settings__lede">
-      Signed in as <a href={`/@${principal.username}`}>@{principal.username}</a>. Everything here
-      is also in the API — this page is the same operations with a form in front of them.
-    </p>
-
     {/*
-      §9.1 — signing out, which had no button anywhere.
-      
-      Sessions could be ended one at a time from their own tab, which is a different act: that
-      is "this browser in the airport lounge", and this is "I am done here". A POST rather than
-      a link, because a link a browser can follow means any page on the internet can sign a
-      reader out by embedding an image.
+      §9.1 — signing out, on the row that says who is signed in.
+
+      It was a button on a line of its own between that sentence and the tabs, which put a
+      control in the middle of a paragraph and a heading: the reading order was title,
+      explanation, an action nobody came for, then the page. Beside the sentence it is where
+      the fact it acts on already is.
+
+      Sessions can be ended one at a time from their own tab, which is a different act — that
+      is "this browser in the airport lounge", and this is "I am done here". A POST rather
+      than a link, because a link a browser can follow means any page on the internet can
+      sign a reader out by embedding an image.
     */}
-    <form class="settings__signout" method="post" action="/auth/signout">
-      <button class="button button--quiet button--small" type="submit">Sign out</button>
-    </form>
+    <div class="settings__head">
+      <p class="settings__lede">
+        Signed in as <a href={`/@${principal.username}`}>@{principal.username}</a>. Everything here
+        is also in the API — this page is the same operations with a form in front of them.
+      </p>
+
+      <form method="post" action="/auth/signout">
+        <button class="button button--quiet button--small" type="submit">Sign out</button>
+      </form>
+    </div>
 
     {outcome.kind === "done" && <p class="notice notice--done" role="status">{outcome.message}</p>}
     {outcome.kind === "failed" && (
@@ -356,7 +380,9 @@ const when = (iso: string) => iso.slice(0, 10);
                   <li class={`agent agent--${agent.principal.status}`}>
                     <div class="agent__head">
                       <a class="agent__name" href={`/@${agent.principal.username}`}>{agentLabel(agent)}</a>
-                      <span class="agent__handle">@{agent.principal.username}</span>
+                      {agentNamed(agent) && (
+                        <span class="agent__handle">@{agent.principal.username}</span>
+                      )}
                       {agent.principal.status === "suspended" && <span class="tag tag--warn">stopped</span>}
                     </div>
 
