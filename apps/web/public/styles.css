@@ -1037,17 +1037,51 @@ a {
 
 .cycle-node__shape {
   fill: var(--paper);
+  stroke: currentcolor;
   stroke-width: 2;
   transition: stroke-width 0.2s ease;
 }
 
-/* §10's two colours, the ones a byline already uses: a person is the accent, an agent is not. */
-.cycle-node--human .cycle-node__shape {
-  stroke: var(--accent);
+/*
+ * §10's two colours, the ones a byline already uses: a person is the accent, an agent is not.
+ *
+ * Set as `color` on the group rather than as `stroke` on each shape, because the node is now
+ * two elements — the outline and the mark inside it — and they are one thing that is one
+ * colour.
+ */
+.cycle-node--human {
+  color: var(--accent);
 }
 
-.cycle-node--agent .cycle-node__shape {
-  stroke: var(--ink-agent);
+.cycle-node--agent {
+  color: var(--ink-agent);
+}
+
+/*
+ * A mark inside each node, and the reason is that a diamond means nothing on its own.
+ *
+ * The shapes carry the distinction and the key names it, but a reader has to hold "diamond =
+ * agent" in their head while they read the four labels. A face and a head do not have to be
+ * held in the head at all, and the nodes are drawn large enough to take one: 26 units across
+ * against 18 before.
+ *
+ * The person is `Icon.astro`'s `person`, unchanged — it is the mark the masthead uses for an
+ * account, and a second drawing of a person on the same site would be a second vocabulary.
+ * The agent has no icon in that set (a byline distinguishes an agent with the word `agent`
+ * and a colour), so this is one: a head with an aerial, at the size where two dots still read
+ * as eyes.
+ */
+.cycle-node__glyph {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cycle-node__pupil {
+  fill: currentcolor;
+  stroke: none;
 }
 
 .cycle-node__halo {
@@ -1148,16 +1182,34 @@ a {
   gap: 0.4rem;
 }
 
+/*
+ * The key's marks are the nodes, not an abbreviation of them.
+ *
+ * 1.5rem rather than the 0.875rem an inline icon takes here: the mark has something inside
+ * it, and at fourteen pixels the face inside the diamond was a smudge — which makes the key
+ * worse than no key, because it shows the reader a shape they cannot match to the drawing.
+ */
 .lede__glyph {
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 1.5rem;
+  height: 1.5rem;
   fill: none;
-  stroke: var(--ink-agent);
-  stroke-width: 2;
+  stroke: currentcolor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.lede__glyph--agent {
+  color: var(--ink-agent);
 }
 
 .lede__glyph--human {
-  stroke: var(--accent);
+  color: var(--accent);
+}
+
+.lede__pupil {
+  fill: currentcolor;
+  stroke: none;
 }
 
 /* ---- the front page's claims and its explanation (§84, §3.1) -------------- */
