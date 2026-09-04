@@ -112,9 +112,21 @@ const page = async (path, { cookie = true } = {}) => {
   return { status: response.status, headers: response.headers, html: await response.text() };
 };
 
-/** A form post: `application/x-www-form-urlencoded` with an Origin, like every browser. */
-async function submit(fields, { origin = webOrigin } = {}) {
-  const response = await wire(`${webBase}/settings`, {
+/**
+ * A form post: `application/x-www-form-urlencoded` with an Origin, like every browser.
+ *
+ * The tab is in the address, because it is in the address a browser posts to: every form on
+ * the page has `action="/settings?tab=<the tab it is on>"`, so the response renders the panel
+ * the reader was working in. Posting to a bare `/settings` used to work by coincidence —
+ * `agents` was the default tab, so the response happened to contain the agent forms. It
+ * stopped being the default and a dozen assertions about agents and tokens went looking for
+ * markup that was on another panel.
+ *
+ * `agents` here rather than no default: every caller of this helper is exercising the agent
+ * or token forms, and the two profile ones already use `wire` with their own address.
+ */
+async function submit(fields, { origin = webOrigin, tab = "agents" } = {}) {
+  const response = await wire(`${webBase}/settings?tab=${tab}`, {
     method: "POST",
     headers: {
       "content-type": "application/x-www-form-urlencoded",
@@ -210,7 +222,10 @@ check("carrying no validator a cache could revalidate against", settings.headers
 // --- writing ---------------------------------------------------------------------------
 section("Registering an agent from a browser (§7.2, §60.3)");
 
-const forged = await submit({ action: "agent.create", username: `p9-evil-${suffix}` }, { origin: "https://evil.test" });
+const forged = await submit(
+  { action: "agent.create", username: `p9-evil-${suffix}` },
+  { origin: "https://evil.test" },
+);
 check("a form post from another origin is refused", forged.status === 403);
 
 const noOrigin = await submit({ action: "agent.create", username: `p9-evil-${suffix}` }, { origin: null });
@@ -226,23 +241,49 @@ const created = await submit({
   model: "claude-opus-5",
   provider: "anthropic",
 });
-check("an agent is registered from the page", created.status === 200 && created.html.includes(`@${agentName}`));
+check(
+  "an agent is registered from the page",
+  created.status === 200 && created.html.includes(`@${agentName}`),
+);
 check("and the model it declares is shown", created.html.includes("claude-opus-5"));
 
 const taken = await submit({ action: "agent.create", username: agentName });
-check("a taken username is refused, on the page rather than as a 500", taken.status === 200 && /taken/i.test(taken.html));
+check(
+  "a taken username is refused, on the page rather than as a 500",
+  taken.status === 200 && /taken/i.test(taken.html),
+);
 
-const agentId = /\/@__none__/.test(created.html) ? null : (created.html.match(/name="agent" value="([0-9A-Z]{26})"/) ?? [])[1];
-check("the page carries the agent's id, which the forms act on", typeof agentId === "string", String(agentId));
+const agentId = /\/@__none__/.test(created.html)
+  ? null
+  : (created.html.match(/name="agent" value="([0-9A-Z]{26})"/) ?? [])[1];
+check(
+  "the page carries the agent's id, which the forms act on",
+  typeof agentId === "string",
+  String(agentId),
+);
 
 // --- tokens ----------------------------------------------------------------------------
 section("Issuing and revoking a token (§42.2)");
 
-const issued = await submit({ action: "token.issue", principal: agentId, name: "checkpoint", preset: "agent" });
+const issued = await submit({
+  action: "token.issue",
+  principal: agentId,
+  name: "checkpoint",
+  preset: "agent",
+});
 const shown = (issued.html.match(/orat_[A-Za-z0-9_-]+/) ?? [])[0];
 check("a token is issued and shown", issued.status === 200 && typeof shown === "string");
 
-const again = await page("/settings");
+/*
+ * The agents tab, and not the tokens one, because this reads a token id back out of it.
+ *
+ * The tokens panel lists every token this account has; the agents panel lists them under the
+ * agent that holds them. The regex below takes the first match, so on the tokens panel it
+ * found whichever token happened to be listed first and the revoke a few lines down revoked
+ * that one — leaving the token this section issued alive, and "stops working at the API
+ * immediately" failing with a 200 while "a token is revoked from the page" passed.
+ */
+const again = await page("/settings?tab=agents");
 check(
   "and never appears again — the page stores a hash, not the token (§42.2)",
   typeof shown === "string" && !again.html.includes(shown),
@@ -263,7 +304,10 @@ check("the token issued from a browser authenticates at the API", asAgent.status
  * because the select is what a person sees and this is what a script would send.
  */
 const escalated = await submit({ action: "token.issue", principal: agentId, name: "wide", preset: "admin" });
-check("a scope preset the page does not offer is refused", escalated.status === 200 && /Unknown scope preset/.test(escalated.html));
+check(
+  "a scope preset the page does not offer is refused",
+  escalated.status === 200 && /Unknown scope preset/.test(escalated.html),
+);
 
 /*
  * The bug this catches: one static scope list under a `<select>`.
@@ -304,13 +348,20 @@ section("Stopping an agent (§7.2, §43.2)");
 
 const working = await submit({ action: "token.issue", principal: agentId, name: "second", preset: "agent" });
 const workingToken = (working.html.match(/orat_[A-Za-z0-9_-]+/) ?? [])[0];
-check("the agent has a working token again", (await api("GET", "/v1/tokens", { token: workingToken })).status === 200);
+check(
+  "the agent has a working token again",
+  (await api("GET", "/v1/tokens", { token: workingToken })).status === 200,
+);
 
 const stopped = await submit({ action: "agent.status", agent: agentId, status: "suspended" });
 check("the owner stops the agent", stopped.status === 200 && /stopped/i.test(stopped.html));
 
 const whileStopped = await api("GET", "/v1/tokens", { token: workingToken });
-check("a stopped agent's token no longer acts", whileStopped.status === 401 || whileStopped.status === 403, String(whileStopped.status));
+check(
+  "a stopped agent's token no longer acts",
+  whileStopped.status === 401 || whileStopped.status === 403,
+  String(whileStopped.status),
+);
 
 const started = await submit({ action: "agent.status", agent: agentId, status: "active" });
 check("starting it again restores it", started.status === 200);
@@ -413,10 +464,16 @@ check("the article is classified", classified !== null, JSON.stringify(classifie
 if (classified !== null) {
   const slugs = classified.map((topic) => topic.slug);
   check("into at most five topics (§22.2)", slugs.length <= 5, slugs.join(", "));
-  check("by the platform, not the author (§22)", classified.every((topic) => topic.source === "ai"));
+  check(
+    "by the platform, not the author (§22)",
+    classified.every((topic) => topic.source === "ai"),
+  );
 
   const known = new Set((vocabulary.body?.items ?? []).map((topic) => topic.slug));
-  check("and only into topics that already existed (§22.3)", slugs.every((slug) => known.has(slug)));
+  check(
+    "and only into topics that already existed (§22.3)",
+    slugs.every((slug) => known.has(slug)),
+  );
 
   /*
    * The injection, and what it achieved.
@@ -524,7 +581,10 @@ check(
 check(
   "and they are about what the query asked for, not merely non-empty",
   semantic.length > 0 && semantic.every((card) => /latency|inference|quantis|задержк/i.test(card.title)),
-  semantic.map((card) => card.title).slice(0, 3).join(" | "),
+  semantic
+    .map((card) => card.title)
+    .slice(0, 3)
+    .join(" | "),
 );
 
 /*
@@ -535,7 +595,10 @@ check(
  * measured hubness is what makes this a real risk rather than a theoretical one — a vague
  * query sat at 0.38 to 0.40 from every article in the sample.
  */
-const nonsense = await api("GET", `/v1/search?q=${encodeURIComponent("рецепт борща со свёклой и говядиной")}`);
+const nonsense = await api(
+  "GET",
+  `/v1/search?q=${encodeURIComponent("рецепт борща со свёклой и говядиной")}`,
+);
 check(
   "and a query about something else entirely returns nothing",
   nonsense.status === 200 && (nonsense.body?.articles ?? []).length === 0,
@@ -692,7 +755,11 @@ check("and the commenter sees it immediately", withComment.html.includes(body));
  * without its parent looks identical in a list and is a different conversation.
  */
 const parentId = (withComment.html.match(/id="c-([0-9A-Z]{26})"/) ?? [])[1];
-check("the comment can be replied to", withComment.html.includes(`name="parent" value="${parentId}"`), String(parentId));
+check(
+  "the comment can be replied to",
+  withComment.html.includes(`name="parent" value="${parentId}"`),
+  String(parentId),
+);
 
 const answerBody = `And from a third side: ${suffix}`;
 const replied = await comment({ body: answerBody, parent: parentId, stance: "disagrees" });
@@ -703,7 +770,10 @@ check(
 );
 
 const withReply = await page(`/p/${articleId}`);
-check("and is rendered inside the thread it answers", /thread--nested/.test(withReply.html) && withReply.html.includes(answerBody));
+check(
+  "and is rendered inside the thread it answers",
+  /thread--nested/.test(withReply.html) && withReply.html.includes(answerBody),
+);
 check(
   "on a response no cache may keep",
   /no-store/.test(withComment.headers.get("cache-control") ?? ""),
@@ -746,7 +816,11 @@ const uploaded = await wire(`${webBase}/settings?tab=profile`, {
   redirect: "manual",
 });
 const uploadedHtml = await uploaded.text();
-check("a picture uploads from the account page", /Your picture is set/.test(uploadedHtml), String(uploaded.status));
+check(
+  "a picture uploads from the account page",
+  /Your picture is set/.test(uploadedHtml),
+  String(uploaded.status),
+);
 
 const avatarSrc = (uploadedHtml.match(/src="([^"]*\/avatar)"/) ?? [])[1];
 check("and the page then points at its avatar variant", typeof avatarSrc === "string", String(avatarSrc));
@@ -840,7 +914,11 @@ const removed = await wire(`${webBase}/settings?tab=profile`, {
   redirect: "manual",
 });
 const removedHtml = await removed.text();
-check("the picture can be removed again", /Your picture is removed/.test(removedHtml), String(removed.status));
+check(
+  "the picture can be removed again",
+  /Your picture is removed/.test(removedHtml),
+  String(removed.status),
+);
 check(
   "and the generated mark comes back",
   !removedHtml.includes('src="' + avatarSrc + '"'),
@@ -876,7 +954,11 @@ check("the sitemap index is built", index.status === 200, String(index.status));
  */
 for (const shard of shards) {
   const fetched = await wire(`${webBase}/sitemaps/${shard}.xml`);
-  check(`the ${shard} shard the index names is served`, fetched.status === 200, `${fetched.status} /sitemaps/${shard}.xml`);
+  check(
+    `the ${shard} shard the index names is served`,
+    fetched.status === 200,
+    `${fetched.status} /sitemaps/${shard}.xml`,
+  );
 }
 
 if (shards.includes("topics")) {
@@ -1045,10 +1127,7 @@ check(
 section("A private reading list (ADR 0011, §49.2)");
 
 const anonymousArticle = await page_(`/p/${articleId}`);
-check(
-  "an anonymous reader is offered nothing to save with",
-  !anonymousArticle.html.includes('class="save"'),
-);
+check("an anonymous reader is offered nothing to save with", !anonymousArticle.html.includes('class="save"'));
 
 const beforeSaving = await page(`/p/${articleId}`);
 check("a signed-in reader is", beforeSaving.html.includes('aria-pressed="false"'));
@@ -1069,7 +1148,11 @@ async function save(want) {
 
 const forgedSave = await wire(`${webBase}/p/${articleId}/save`, {
   method: "POST",
-  headers: { "content-type": "application/x-www-form-urlencoded", origin: "https://evil.test", cookie: cookieHeader() },
+  headers: {
+    "content-type": "application/x-www-form-urlencoded",
+    origin: "https://evil.test",
+    cookie: cookieHeader(),
+  },
   body: "saved=yes",
   redirect: "manual",
 });
@@ -1232,7 +1315,8 @@ const foreignComment = await wire(`${webBase}/p/${articleId}/moderate`, {
 });
 check(
   "a comment that is not on this article is refused",
-  foreignComment.status === 303 && (foreignComment.headers.get("location") ?? "").includes("moderation=failed"),
+  foreignComment.status === 303 &&
+    (foreignComment.headers.get("location") ?? "").includes("moderation=failed"),
   `${foreignComment.status} ${foreignComment.headers.get("location")}`,
 );
 
@@ -1251,10 +1335,7 @@ section("Reporting content (§61.1, §61.2)");
  * without a cookie, because that is the case §61.2 is actually about.
  */
 const articleForReport = await page_(`/p/${articleId}`);
-check(
-  "an article offers a way to report it",
-  articleForReport.html.includes(`/report?article=${articleId}`),
-);
+check("an article offers a way to report it", articleForReport.html.includes(`/report?article=${articleId}`));
 
 const noTarget = await page_("/report");
 check(
@@ -1332,10 +1413,7 @@ check(
 );
 
 const aboutNobody = await page_("/report?user=__nobody__");
-check(
-  "and a handle that matches nothing offers no form",
-  !aboutNobody.html.includes('name="category"'),
-);
+check("and a handle that matches nothing offers no form", !aboutNobody.html.includes('name="category"'));
 
 /*
  * §61.1 — the lookup takes a handle, which is what a moderator has after acting on an account.
@@ -1394,10 +1472,7 @@ check("the account page offers a way to sign out", withSessions.html.includes('a
  * the only answer to an authenticator somebody else is holding was to close the account.
  */
 const passkeyId = (withSessions.html.match(/name="passkey" value="([0-9A-Z]{26})"/) ?? [])[1];
-check(
-  "the passkeys are listed, not only the sessions",
-  withSessions.html.includes("Ways back in"),
-);
+check("the passkeys are listed, not only the sessions", withSessions.html.includes("Ways back in"));
 
 /*
  * §9.1 — the last one is refused unless there is a second way in, and this account has none.
@@ -1447,16 +1522,12 @@ check(
 );
 
 const passkeyRemoved = await submit({ action: "passkey.remove", passkey: removable[0] });
-check(
-  "removing one says how many ways back in are left",
-  /1 left on this account/.test(passkeyRemoved.html),
-);
+check("removing one says how many ways back in are left", /1 left on this account/.test(passkeyRemoved.html));
 
 const withOneAgain = await page("/settings?tab=sessions");
 check(
   "and the last one is protected again, without a second way in",
-  withOneAgain.html.includes("the only way in") &&
-    !withOneAgain.html.includes('value="passkey.remove"'),
+  withOneAgain.html.includes("the only way in") && !withOneAgain.html.includes('value="passkey.remove"'),
 );
 
 /*
@@ -1484,9 +1555,7 @@ check(
  * The current row is the one carrying "this browser", which is how the page marks it.
  */
 const nowSignedIn = await page("/settings?tab=sessions");
-const currentRow = nowSignedIn.html
-  .split('<li class="session"')
-  .find((row) => row.includes("this browser"));
+const currentRow = nowSignedIn.html.split('<li class="session"').find((row) => row.includes("this browser"));
 const currentSessionId = (currentRow?.match(/name="session" value="([0-9A-Z]{26})"/) ?? [])[1];
 check(
   "the session opened by the surviving passkey is the one marked as this browser",
@@ -1495,7 +1564,10 @@ check(
 );
 
 const ended = await submit({ action: "session.end", session: currentSessionId });
-check("ending the current session redirects away", ended.status === 303 && ended.headers.get("location") === "/");
+check(
+  "ending the current session redirects away",
+  ended.status === 303 && ended.headers.get("location") === "/",
+);
 check("and clears the cookie rather than leaving a revoked one", !cookies.has("orator_session"));
 
 const afterEnd = await page("/settings", { cookie: false });
