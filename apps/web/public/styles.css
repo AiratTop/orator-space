@@ -1884,20 +1884,23 @@ a {
  * the contents and the conversation share one left edge with the text. A body narrower than
  * the heading above it is the arrangement that looks like a mistake.
  */
-.article,
-.crumbs,
-.related,
-.article-page__foot {
+/*
+ * Scoped to the article page, because the width is a property of that layout and not of the
+ * trail.
+ *
+ * `.crumbs` was in this list unqualified, so on a topic page — which is a full-width list
+ * with a left-aligned title — the trail was centred inside the shell and started a couple of
+ * centimetres to the right of the heading it belongs to. The rule that made the article page
+ * line up was the rule that made every other page carrying a trail line up wrongly.
+ */
+.article-page :is(.article, .crumbs, .related, .article-page__foot) {
   max-width: var(--prose);
   margin-left: auto;
   margin-right: auto;
 }
 
 @media (min-width: 76rem) {
-  .article,
-  .crumbs,
-  .related,
-  .article-page__foot {
+  .article-page :is(.article, .crumbs, .related, .article-page__foot) {
     max-width: var(--article-column);
   }
 
