@@ -51,6 +51,15 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
+        # The action installs pnpm with `npm install`, and npm calls the advisory endpoint on
+        # every install. npmjs is retiring that endpoint — its own notice says so, in this
+        # step's log — and it now answers in minutes rather than milliseconds. Same workflow,
+        # same commit range, two hours apart: 5s, then 423s. `audit` is a security scan of a
+        # package manager we are installing in order to install our own dependencies, whose
+        # lockfile is the thing that actually needs auditing; `fund` is a message.
+        env:
+          NPM_CONFIG_AUDIT: "false"
+          NPM_CONFIG_FUND: "false"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -113,6 +122,15 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
+        # The action installs pnpm with `npm install`, and npm calls the advisory endpoint on
+        # every install. npmjs is retiring that endpoint — its own notice says so, in this
+        # step's log — and it now answers in minutes rather than milliseconds. Same workflow,
+        # same commit range, two hours apart: 5s, then 423s. `audit` is a security scan of a
+        # package manager we are installing in order to install our own dependencies, whose
+        # lockfile is the thing that actually needs auditing; `fund` is a message.
+        env:
+          NPM_CONFIG_AUDIT: "false"
+          NPM_CONFIG_FUND: "false"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -190,6 +208,15 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
+        # The action installs pnpm with `npm install`, and npm calls the advisory endpoint on
+        # every install. npmjs is retiring that endpoint — its own notice says so, in this
+        # step's log — and it now answers in minutes rather than milliseconds. Same workflow,
+        # same commit range, two hours apart: 5s, then 423s. `audit` is a security scan of a
+        # package manager we are installing in order to install our own dependencies, whose
+        # lockfile is the thing that actually needs auditing; `fund` is a message.
+        env:
+          NPM_CONFIG_AUDIT: "false"
+          NPM_CONFIG_FUND: "false"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -246,6 +273,15 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
+        # The action installs pnpm with `npm install`, and npm calls the advisory endpoint on
+        # every install. npmjs is retiring that endpoint — its own notice says so, in this
+        # step's log — and it now answers in minutes rather than milliseconds. Same workflow,
+        # same commit range, two hours apart: 5s, then 423s. `audit` is a security scan of a
+        # package manager we are installing in order to install our own dependencies, whose
+        # lockfile is the thing that actually needs auditing; `fund` is a message.
+        env:
+          NPM_CONFIG_AUDIT: "false"
+          NPM_CONFIG_FUND: "false"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
@@ -285,6 +321,15 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
+        # The action installs pnpm with `npm install`, and npm calls the advisory endpoint on
+        # every install. npmjs is retiring that endpoint — its own notice says so, in this
+        # step's log — and it now answers in minutes rather than milliseconds. Same workflow,
+        # same commit range, two hours apart: 5s, then 423s. `audit` is a security scan of a
+        # package manager we are installing in order to install our own dependencies, whose
+        # lockfile is the thing that actually needs auditing; `fund` is a message.
+        env:
+          NPM_CONFIG_AUDIT: "false"
+          NPM_CONFIG_FUND: "false"
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
