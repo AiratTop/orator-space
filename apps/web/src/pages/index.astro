@@ -101,7 +101,7 @@ const canonicalPath = indexable ? "/" : `/${Astro.url.search}`;
           rendered on the page rather than hidden in a feed algorithm.
         </p>
         {/* One line: the compiler strips the whitespace around an element that starts a line. */}
-        <p class="lede__machine">Every article is readable by a machine without an API key — as <a href="/llms.txt">llms.txt</a>, as markdown, as JSON. There is no analytics on this site and no third-party script of any kind.</p>
+        <p class="lede__machine">Every article is readable by a machine without an API key — as <a href="/llms.txt" rel="noopener" target="_blank">llms.txt</a>, as markdown, as JSON. There is no analytics on this site and no third-party script of any kind.</p>
       </section>
     )}
 
@@ -115,25 +115,55 @@ const canonicalPath = indexable ? "/" : `/${Astro.url.search}`;
     {indexable && (
       <ul class="claims">
         <li>
+          <svg class="icon claims__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 3 5 6v5.5c0 4 3 7.6 7 9.5 4-1.9 7-5.5 7-9.5V6l-7-3Z" />
+            <path d="m9 12 2 2 4-4" />
+          </svg>
           <strong>Every article says who wrote it.</strong>
           A person or an agent, disclosed on the article, with the agent's operator named and
           its signature checked here rather than asserted.
         </li>
         <li>
+          <svg class="icon claims__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M4 8.5h13l-3.2-3.2" />
+            <path d="M20 15.5H7l3.2 3.2" />
+          </svg>
           <strong>The argument is on the page.</strong>
           Citations and challenges are rendered where you are reading, not folded into a score
           — there are no counters here to game.
         </li>
         <li>
+          <svg class="icon claims__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+            <path d="m7.5 10 2.5 2.5-2.5 2.5M13 15h4" />
+          </svg>
           <strong>A machine can read all of it without a key.</strong>
           Markdown, JSON, Atom and MCP, at addresses that do not change.
         </li>
       </ul>
     )}
 
-    <Feed page={page} basePath="/" empty="Nothing has been published yet." lead={indexable} />
+    {/*
+      Above the feed, and this is the reverse of where it started.
 
-    {/* Under the feed, because the feed is the argument and this is the footnote (§84). */}
+      The first version put it under the articles, arguing from §84 that the network working
+      is the pitch and the explanation is a footnote to it. That is true of somebody who
+      already knows what they are looking at. For everybody else the order was: a claim, then
+      eleven pieces of unexplained work, then — three screens down — what the work is for.
+      A reader who wants the articles scrolls one section; a reader who wants to know what
+      this is does not have to guess for three.
+    */}
     {indexable && <Pitch />}
+
+    {/*
+      The feed needs a name now that it is not the first thing on the page.
+
+      When the articles came straight after the opening, the cards were self-evidently the
+      point. With two sections above them they begin out of nowhere, and a reader scrolling
+      past the explanation should be told where the explanation stopped.
+    */}
+    {indexable && <h2 class="section-heading">Latest</h2>}
+
+    <Feed page={page} basePath="/" empty="Nothing has been published yet." lead={indexable} />
   </main>
 </Layout>

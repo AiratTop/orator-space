@@ -248,9 +248,30 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
             </svg>
           </summary>
 
+        {/*
+          Each destination gets a mark (§49.5).
+
+          Drawn rather than fetched, for the reason every icon on this site is: `img-src`
+          would admit a file, but an icon inside a link has to take the link's colour in both
+          themes and in every state, and a fetched image cannot. `aria-hidden` on all of them —
+          the word beside each one is the accessible name, and a screen reader reading "image,
+          magnifier, Search" says the same thing twice, once badly.
+        */}
         <nav class="masthead__nav" aria-label="Site">
-          <a href="/search">Search</a>
-          <a href="/topics">Topics</a>
+          <a href="/search">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m20 20-4.4-4.4" />
+            </svg>
+            Search
+          </a>
+          <a href="/topics">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 3.5 3.5 8l8.5 4.5L20.5 8 12 3.5Z" />
+              <path d="m3.5 12.5 8.5 4.5 8.5-4.5" />
+            </svg>
+            Topics
+          </a>
           {/*
             The one link in the masthead that leaves the site (ADR 0013), and the only place
             it can be reached from without scrolling to the bottom of an article. A reader
@@ -263,16 +284,55 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
             scope is called. Sending them away loses the article. `rel="noopener"` because a
             page opened with `target` can otherwise reach back through `window.opener`.
           */}
-          <a href={`${docsOrigin}/`} rel="noopener" target="_blank">Docs</a>
-          {Astro.locals.viewer && <a href="/bookmarks">Bookmarks</a>}
-          {Astro.locals.viewer?.moderator && <a class="masthead__moderate" href="/moderation">Moderation</a>}
+          <a href={`${docsOrigin}/`} rel="noopener" target="_blank">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 6.8S10.3 5 6.5 5H4v13h2.5c3.8 0 5.5 1.8 5.5 1.8V6.8Z" />
+              <path d="M12 6.8S13.7 5 17.5 5H20v13h-2.5c-3.8 0-5.5 1.8-5.5 1.8V6.8Z" />
+            </svg>
+            Docs
+          </a>
+          {Astro.locals.viewer && (
+            <a href="/bookmarks">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6.5 4.5h11v15l-5.5-4-5.5 4v-15Z" />
+              </svg>
+              Bookmarks
+            </a>
+          )}
+          {Astro.locals.viewer?.moderator && (
+            <a class="masthead__moderate" href="/moderation">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M6 20V4.5h9.5l-1.6 3 1.6 3H6" />
+              </svg>
+              Moderation
+            </a>
+          )}
           {Astro.locals.viewer === undefined ? (
-            <a href="/signin">Account</a>
+            <a href="/signin">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <circle cx="12" cy="8.5" r="3.5" />
+                <path d="M5 19.5a7 7 0 0 1 14 0" />
+              </svg>
+              Account
+            </a>
           ) : (
             <>
               {/* Their own page, as a reader sees it — which is the point of having one. */}
-              <a href={`/@${Astro.locals.viewer.username}`}>Me</a>
-              <a href="/settings">Settings</a>
+              <a href={`/@${Astro.locals.viewer.username}`}>
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <circle cx="12" cy="8.5" r="3.5" />
+                  <path d="M5 19.5a7 7 0 0 1 14 0" />
+                </svg>
+                Me
+              </a>
+              <a href="/settings">
+                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M4 7.5h8M17 7.5h3M4 16.5h3M12 16.5h8" />
+                  <circle cx="14.5" cy="7.5" r="2.2" />
+                  <circle cx="9.5" cy="16.5" r="2.2" />
+                </svg>
+                Settings
+              </a>
             </>
           )}
         </nav>
@@ -374,10 +434,17 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
                 an agent at a feed when it has the API, MCP and `.md` would be advice to use
                 a worse tool.
               */}
-              <li><a href="/feed.xml">Feed (Atom)</a></li>
-              <li><a href="/llms.txt">llms.txt</a></li>
-              <li><a href="/sitemap.xml">Sitemap</a></li>
-              <li><a href="/robots.txt">robots.txt</a></li>
+              {/*
+                All four open in a new tab, by the same rule the pitch uses: none of them is a
+                page. They are our own origin, and a browser still renders them as a wall of
+                plain text or XML — following one replaces whatever somebody was reading with
+                a file whose only way back is the back button. `rel="noopener"` because a page
+                opened with `target` can otherwise reach back through `window.opener`.
+              */}
+              <li><a href="/feed.xml" rel="noopener" target="_blank">Feed (Atom)</a></li>
+              <li><a href="/llms.txt" rel="noopener" target="_blank">llms.txt</a></li>
+              <li><a href="/sitemap.xml" rel="noopener" target="_blank">Sitemap</a></li>
+              <li><a href="/robots.txt" rel="noopener" target="_blank">robots.txt</a></li>
             </ul>
           </nav>
 

@@ -578,7 +578,16 @@ a {
   font-size: var(--text-base);
 }
 
-@media (min-width: 48rem) {
+/*
+ * 62rem, not 48rem, because the number of links depends on who is looking.
+ *
+ * Signed out the bar is four links and fits from 768px; a signed-in moderator has seven, and
+ * with a mark beside each one that row wrapped to two lines between 768px and about 1000px —
+ * the two-row masthead the disclosure menu was introduced to remove, reappearing for the one
+ * reader who has the most to do. A breakpoint has to be sized for the widest case the markup
+ * can produce, not the one the person writing it happens to be looking at.
+ */
+@media (min-width: 62rem) {
   .masthead__toggle {
     display: none;
   }
@@ -622,6 +631,9 @@ a {
  * direction. The tint on hover is what a border would say, without a border on every link.
  */
 .masthead__nav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   color: var(--ink-soft);
   text-decoration: none;
   padding: 0.4rem 0.625rem;
@@ -629,6 +641,24 @@ a {
   transition:
     color 0.15s ease,
     background-color 0.15s ease;
+}
+
+/*
+ * The mark beside each destination.
+ *
+ * Smaller than the icon default and a hair lighter in stroke, because these sit next to 15px
+ * words rather than standing alone: an icon drawn at the same weight as the standalone ones
+ * reads heavier than the word it labels and the row becomes a row of pictures.
+ *
+ * `flex: none` so a link never squashes its own icon into an oval when the bar runs out of
+ * room — it is the words that give.
+ */
+.masthead__nav .icon {
+  flex: none;
+  width: 1.05rem;
+  height: 1.05rem;
+  stroke-width: 1.6;
+  opacity: 0.85;
 }
 
 .masthead__nav a:hover {
@@ -821,6 +851,23 @@ a {
   border-top: 2px solid var(--line-strong);
 }
 
+/*
+ * One icon per claim, above the sentence rather than beside it.
+ *
+ * Beside it, three icons of different widths would leave three different left margins for the
+ * text; above, the column reads as a column. The accent tint is what makes them read as marks
+ * on the page rather than as illustrations of anything — none of the three is a picture of the
+ * thing it labels, and pretending otherwise takes more space than the claim itself.
+ */
+.claims__icon {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin-bottom: 0.6rem;
+  color: var(--accent);
+  stroke-width: 1.6;
+}
+
 .claims strong {
   display: block;
   margin-bottom: 0.3rem;
@@ -840,12 +887,27 @@ a {
   border-top: 1px solid var(--line);
 }
 
-.pitch__heading {
+/*
+ * One size for a section's name, wherever a page divides into sections.
+ *
+ * `.pitch__heading` and the feed's own heading are the same kind of thing — the name of a
+ * block on a page whose `h1` is somewhere above — so they are one rule rather than two that
+ * drift a pixel apart.
+ */
+.pitch__heading,
+.section-heading {
   margin: 0 0 2rem;
   font-size: var(--text-3xl);
   line-height: 1.15;
   letter-spacing: -0.03em;
   font-weight: 700;
+}
+
+/* Above the feed, the heading has a rule over it for the same reason `.pitch` does. */
+.section-heading {
+  margin-top: 4rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--line);
 }
 
 .pitch__block {
@@ -902,10 +964,31 @@ a {
 }
 
 .pitch__block h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
   margin: 0;
   font-size: var(--text-xl);
   letter-spacing: -0.02em;
   text-wrap: balance;
+}
+
+/*
+ * The section's mark, in a tinted square.
+ *
+ * `flex: none` because a heading that wraps to two lines would otherwise squash the icon into
+ * an oval — the icon is the fixed part of that row and the words are the part that gives.
+ */
+.pitch__icon {
+  flex: none;
+  box-sizing: content-box;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+  stroke-width: 1.7;
 }
 
 .pitch__lede {
