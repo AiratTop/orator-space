@@ -22,6 +22,25 @@ export default defineConfig({
           include: ["packages/{protocol,core,db,sdk}/**/*.test.ts"],
         },
       },
+      /*
+       * The build's own tools, which until now had none.
+       *
+       * `minify-assets.mjs` rewrites the stylesheet on the way into `dist/`, so development
+       * serves the source and production serves its output — a difference between the two is
+       * invisible until somebody looks at a deployed page. One did: collapsing the space
+       * before a `:` turned eight descendant selectors into compound ones, and the rules they
+       * carried did nothing in production for weeks while working on every machine here.
+       *
+       * A separate profile rather than a line in "domain", because these are not the domain:
+       * they run in Node against no runtime and assert about a build step.
+       */
+      {
+        test: {
+          name: "tools",
+          environment: "node",
+          include: ["scripts/**/*.test.mjs"],
+        },
+      },
       "packages/adapters-cf/vitest.config.ts",
       "apps/edge/vitest.config.ts",
     ],

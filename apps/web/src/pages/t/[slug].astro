@@ -5,6 +5,8 @@ import Layout from "../../components/Layout.astro";
 import Feed from "../../components/Feed.astro";
 import NotFound from "../../components/NotFound.astro";
 import Crumbs from "../../components/Crumbs.astro";
+import Icon from "../../components/Icon.astro";
+import { topicIcon } from "../../lib/topic-icons.js";
 import { breadcrumbJsonLd } from "../../lib/article.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
 import { topicPorts } from "../../lib/ports.js";
@@ -75,7 +77,15 @@ const canonicalPath = `/t/${slug}`;
       */}
       <Crumbs trail={trail} endsHere />
 
-      <h1 class="title">{page.topic.label}</h1>
+      {/*
+        A leaf takes its section's mark, so `/t/inference` carries the same glyph as
+        "AI and machine learning" one step above it in the trail. Fifty marks would be fifty
+        decisions, most of them arbitrary, and a reader would learn none of them.
+      */}
+      <h1 class="title">
+        <Icon name={topicIcon(page.topic.parentSlug ?? page.topic.slug)} class="page-icon" />
+        {page.topic.label}
+      </h1>
 
       {/*
         The description is on the page and in the meta description, from one field (§22.2).

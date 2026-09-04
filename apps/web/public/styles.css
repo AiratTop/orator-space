@@ -3843,7 +3843,11 @@ a {
 
 .branch__heading {
   display: flex;
-  align-items: baseline;
+  /*
+   * Centred, not on the baseline. The heading became a row with a 36px mark in it, and a
+   * count aligned to the text baseline then sat visibly below the middle of that row.
+   */
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
   margin: 0;
@@ -3852,8 +3856,34 @@ a {
 }
 
 .branch__heading a {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
   color: var(--ink);
   text-decoration: none;
+}
+
+/*
+ * The section's mark, in the tinted square the rest of the site uses for "this is what this
+ * is". `flex: none` so a two-line heading never squashes it into an oval.
+ */
+.branch__icon {
+  flex: none;
+  box-sizing: content-box;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+  stroke-width: 1.7;
+}
+
+/* The heading is a row now, so the underline on hover belongs to the words. */
+.branch__heading a:hover .branch__icon {
+  background: var(--accent);
+  color: var(--surface);
 }
 
 .branch__heading a:hover {

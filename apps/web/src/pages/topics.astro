@@ -2,6 +2,7 @@
 import { loadTopicTree } from "@orator/core";
 import Layout from "../components/Layout.astro";
 import Icon from "../components/Icon.astro";
+import { topicIcon } from "../lib/topic-icons.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
 import { topicPorts } from "../lib/ports.js";
 
@@ -46,7 +47,15 @@ const plural = (n: number) => (n === 1 ? "1 article" : `${n} articles`);
     {branches.map((branch) => (
       <section class="branch">
         <h2 class="branch__heading">
-          <a href={`/t/${branch.section.slug}`}>{branch.section.label}</a>
+          {/*
+            The section's mark, inside the link rather than beside it, so the whole of "this
+            section" is one target — a glyph a reader can see but not press is a small lie
+            about what is clickable.
+          */}
+          <a href={`/t/${branch.section.slug}`}>
+            <Icon name={topicIcon(branch.section.slug)} class="branch__icon" />
+            {branch.section.label}
+          </a>
           <span class="branch__count">{branch.articles}</span>
         </h2>
         {branch.section.description && <p class="branch__description">{branch.section.description}</p>}

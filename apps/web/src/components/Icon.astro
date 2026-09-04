@@ -51,6 +51,49 @@ const ICONS: Record<string, Shape[]> = {
     { d: "m8.6 8.6 4.8 4.8M13.4 8.6l-4.8 4.8" },
   ],
   privacy: [{ d: "M6 10.5h12v9H6v-9Z" }, { d: "M8.6 10.5V8a3.4 3.4 0 0 1 6.8 0v2.5" }],
+  /*
+   * The nine sections of the vocabulary (§22.1), one mark each.
+   *
+   * Each is a thing the section is *about* rather than a letter or an abstraction: a chart
+   * for economics, a flask for research, a database for infrastructure. A reader should be
+   * able to guess three of them without reading the labels, which is the whole of what an
+   * icon in a list of nine headings can do.
+   */
+  "topic-ai": [
+    { circle: [12, 5.5, 2.2] },
+    { circle: [5.5, 17, 2.2] },
+    { circle: [18.5, 17, 2.2] },
+    { d: "M10.4 7.3 7.1 15.2M13.6 7.3l3.3 7.9M7.7 17h8.6" },
+  ],
+  "topic-business": [{ d: "M3.5 20h17" }, { d: "m5 15.5 4.5-5 3.5 3 6-6.5" }, { d: "M15 7h4v4" }],
+  "topic-culture": [
+    { d: "M3.5 8.5 12 4l8.5 4.5" },
+    { d: "M5.5 8.5v9M10 8.5v9M14 8.5v9M18.5 8.5v9" },
+    { d: "M3.5 20h17" },
+  ],
+  "topic-engineering": [{ d: "m8 8-4.5 4L8 16" }, { d: "m16 8 4.5 4L16 16" }, { d: "m13.4 5.5-2.8 13" }],
+  "topic-health": [{ d: "M3 12h4l2-5 3.5 10 2.5-6.5 1.5 1.5H21" }],
+  "topic-infrastructure": [
+    { d: "M5 6.5c0-1.5 3.1-2.8 7-2.8s7 1.3 7 2.8-3.1 2.8-7 2.8-7-1.3-7-2.8Z" },
+    { d: "M5 6.5v11c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8v-11" },
+    { d: "M5 12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8" },
+  ],
+  "topic-science": [
+    { d: "M9.5 3.5h5" },
+    { d: "M10.5 3.5v6L5.2 18a1.8 1.8 0 0 0 1.6 2.7h10.4a1.8 1.8 0 0 0 1.6-2.7L13.5 9.5v-6" },
+    { d: "M8 14.8h8" },
+  ],
+  "topic-security": [
+    { d: "M12 3 5 6v5.5c0 4 3 7.6 7 9.5 4-1.9 7-5.5 7-9.5V6l-7-3Z" },
+    { circle: [12, 11, 1.6] },
+    { d: "M12 12.6v2.4" },
+  ],
+  "topic-society": [
+    { circle: [9, 8.5, 3] },
+    { d: "M3.5 19.5a5.5 5.5 0 0 1 11 0" },
+    { d: "M16 6.2a3 3 0 0 1 0 5.6" },
+    { d: "M17.5 14.6a5.5 5.5 0 0 1 3 4.9" },
+  ],
   policy: [
     { d: "M5.5 4.5h9L18.5 8v11.5h-13V4.5Z" },
     { d: "M14 4.5V8h4.5" },

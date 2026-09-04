@@ -21,6 +21,7 @@
  */
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const dir = process.argv[2] ?? "apps/web/dist/client";
 
@@ -31,12 +32,29 @@ const dir = process.argv[2] ?? "apps/web/dist/client";
  * A minifier that parses is a minifier that can be wrong about a corner of the syntax, and
  * the saving between "strip comments" and "rewrite selectors" is small next to the risk of
  * shipping a stylesheet that is subtly different from the one that was reviewed.
+ *
+ * **`:` is not in the list of characters whose surrounding space is dropped, and the reason
+ * is a bug this shipped for weeks.** It was, and a colon means two different things in CSS: a
+ * separator inside a declaration, where the space before it is noise, and the start of a
+ * pseudo-class in a selector, where the space *before* it is a descendant combinator. Dropping
+ * both turned
+ *
+ *   `.prose :not(pre) > code`   into   `.prose:not(pre)>code`
+ *
+ * — "a `code` inside anything but a `pre`, inside the prose" became "a `code` inside a
+ * `.prose` that is not itself a `pre`", which matches nothing this site renders. Eight
+ * selectors were silently doing nothing in production while working in development, which is
+ * the exact arrangement the note above this function calls the worst one available.
+ *
+ * So the space after a colon goes and the space before it stays. `color: red` is still
+ * `color:red`, because nobody writes `color : red`; `.a :hover` keeps its combinator.
  */
-const minifyCss = (source) =>
+export const minifyCss = (source) =>
   source
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\s+/g, " ")
-    .replace(/\s*([{}:;,>])\s*/g, "$1")
+    .replace(/\s*([{};,>])\s*/g, "$1")
+    .replace(/:\s+/g, ":")
     .replace(/;}/g, "}")
     .trim();
 
@@ -47,7 +65,7 @@ const minifyCss = (source) =>
  * assumes that is a minifier that breaks the day somebody writes one. The saving is small and
  * the failure would be a page whose only script does nothing.
  */
-const minifyJs = (source) =>
+export const minifyJs = (source) =>
   source
     .replace(/^\s*\/\*[\s\S]*?\*\/\s*$/gm, "")
     .replace(/^\s*\/\/.*$/gm, "")
@@ -56,24 +74,31 @@ const minifyJs = (source) =>
     .filter((line) => line !== "")
     .join("\n");
 
-const entries = await readdir(dir).catch(() => []);
-let saved = 0;
+/*
+ * The work runs only when this file is the program, so the two functions above can be
+ * imported and asserted on. Without the guard, a test that imports this module minifies
+ * whatever happens to be in `dist/` as a side effect of loading it.
+ */
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const entries = await readdir(dir).catch(() => []);
+  let saved = 0;
 
-for (const name of entries) {
-  const css = name.endsWith(".css");
-  const js = name.endsWith(".js");
-  if (!css && !js) continue;
+  for (const name of entries) {
+    const css = name.endsWith(".css");
+    const js = name.endsWith(".js");
+    if (!css && !js) continue;
 
-  const path = join(dir, name);
-  const source = await readFile(path, "utf8");
-  const output = css ? minifyCss(source) : minifyJs(source);
+    const path = join(dir, name);
+    const source = await readFile(path, "utf8");
+    const output = css ? minifyCss(source) : minifyJs(source);
 
-  // A minifier that made a file bigger has misunderstood it. Leave the original.
-  if (output.length >= source.length) continue;
+    // A minifier that made a file bigger has misunderstood it. Leave the original.
+    if (output.length >= source.length) continue;
 
-  await writeFile(path, output);
-  saved += source.length - output.length;
-  console.log(`  ${name}: ${source.length} → ${output.length}`);
+    await writeFile(path, output);
+    saved += source.length - output.length;
+    console.log(`  ${name}: ${source.length} → ${output.length}`);
+  }
+
+  console.log(`minify: ${saved} bytes removed from ${dir}`);
 }
-
-console.log(`minify: ${saved} bytes removed from ${dir}`);
