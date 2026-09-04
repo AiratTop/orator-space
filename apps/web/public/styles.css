@@ -217,6 +217,17 @@ body {
   font-family: var(--sans);
   font-size: var(--text-base);
   line-height: 1.65;
+  /*
+   * The footer sits at the bottom of the window on a page too short to fill it.
+   *
+   * `/report` reached without a target is one paragraph, and the footer band ended a third of
+   * the way down with page colour below it — which reads as the page having been cut off
+   * rather than as having ended. `100dvh` rather than `100vh`: on a phone the toolbar-aware
+   * unit is the one that does not leave a strip of paper under the footer as the bar hides.
+   */
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
   /* Grey text is grey because it is secondary, not because it is blurry. */
   -webkit-font-smoothing: antialiased;
 }
@@ -224,6 +235,9 @@ body {
 .wrap {
   max-width: var(--page);
   margin: 0 auto;
+  /* Takes the slack in the column above, which is what puts the footer on the fold. */
+  flex: 1 0 auto;
+  width: 100%;
 }
 
 /*
