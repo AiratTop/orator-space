@@ -16,3 +16,6 @@ dist/
 # and anything a `--work` pointed back in here.
 .restore-drill/
 *.sql.gz
+
+# Screenshots taken by .claude/skills/design-shots. Looked at, not committed.
+.design-shots/
