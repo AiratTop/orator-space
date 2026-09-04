@@ -288,10 +288,34 @@ async function capture(cdp, { url, viewport, theme, full, clip }) {
     features: [{ name: "prefers-color-scheme", value: theme }],
   });
 
+  /*
+   * Whether anything answered, and what it said, rather than assuming both.
+   *
+   * A run against a dev server that has stopped writes a directory of Chrome's own "This site
+   * can't be reached" page, at the right sizes and in the right themes, with nothing to say
+   * so — which is how half an hour goes into wondering why a stylesheet has no effect.
+   * Chrome's error page is a real navigation with a real load event, so the load event cannot
+   * be the check. `Page.navigate` returns `errorText` when the navigation itself failed,
+   * which is the authoritative answer and needs no race.
+   */
+  await cdp.send("Network.enable");
   await cdp.send("Page.enable");
   const loaded = cdp.once("Page.loadEventFired");
-  await cdp.send("Page.navigate", { url });
+  const responded = cdp.once("Network.responseReceived");
+  const navigation = await cdp.send("Page.navigate", { url });
+  if (navigation.errorText) throw new Error(`${url}: ${navigation.errorText}`);
   await Promise.race([loaded, sleep(30000)]);
+
+  /*
+   * A 404 is not a failure: this site has a designed 404 (§49.5) and looking at it is a
+   * reason to run this script. A 5xx is — it means the page threw, and a screenshot of a
+   * stack trace is not a screenshot of a design.
+   */
+  const first = await Promise.race([responded, sleep(1000)]);
+  if (first !== undefined && first.response.status >= 500) {
+    throw new Error(`${url} answered ${first.response.status} ${first.response.statusText}`);
+  }
+
   await cdp.send("Runtime.evaluate", { expression: "document.fonts.ready", awaitPromise: true });
   await sleep(250);
 

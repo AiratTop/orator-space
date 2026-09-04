@@ -881,9 +881,17 @@ a {
     letter-spacing: -0.03em;
   }
 
+  /*
+   * The lead's excerpt gets a wider measure than a paragraph would normally take.
+   *
+   * It is one paragraph across a card twice the width of its neighbours, so the usual cap
+   * left the right third of the lead empty and the card read as a mistake rather than as a
+   * feature. Wider than comfortable for a page of prose, and right for four lines somebody
+   * skims to decide whether to open the thing.
+   */
   .feed--lead .card:first-child .card__excerpt {
     font-size: var(--text-lg);
-    max-width: 46rem;
+    max-width: 58rem;
   }
 }
 
@@ -1560,6 +1568,15 @@ a {
 .prose {
   font-size: var(--text-lg);
   line-height: 1.72;
+  /*
+   * The measure travels with the prose, not with the page.
+   *
+   * An article gets it from `.article`, but a policy page is a `.prose` block inside a plain
+   * `.wrap` (§48, `Policy.astro`) — so the Terms ran the full 50rem at the body's new size,
+   * which is about 92 characters. Capping here means any block of prose is measured wherever
+   * it is put, and a page that has already narrowed its column loses nothing.
+   */
+  max-width: var(--prose);
 }
 
 .prose > * + * {
@@ -2833,22 +2850,33 @@ a {
  * this site that is neither a search nor a date. So: the site's accent, a tint behind it, and
  * a hover that fills rather than merely recolours.
  */
+/*
+ * A topic is a filled chip, like every other label on the site.
+ *
+ * It was an outlined pill in the accent colour, which put a ring around every small fact on
+ * a card and made the row of them read as three buttons. Filled, they read as what they are:
+ * where the platform filed this (§22). The hover fills harder rather than inverting — an
+ * inverted chip set `color: var(--paper)`, which is near-black in dark mode, so hovering a
+ * topic on a dark page produced dark text on a pale blue pill by luck rather than by rule.
+ */
 .article__topics a {
   display: inline-block;
-  padding: 0.125rem 0.625rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  border: 1px solid transparent;
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
   font-size: var(--text-sm);
+  font-weight: 550;
   text-decoration: none;
   color: var(--accent);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .article__topics a:hover,
 .article__topics a:focus-visible {
   border-color: var(--accent);
-  background: var(--accent);
-  color: var(--paper);
 }
 
 /*
@@ -2870,20 +2898,21 @@ a {
 
 .card__topics a {
   display: inline-block;
-  padding: 0.0625rem 0.5rem;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
-  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid transparent;
+  background: var(--accent-soft);
+  border-radius: var(--radius-pill);
   font-size: var(--text-xs);
+  font-weight: 550;
   line-height: 1.6;
   text-decoration: none;
   color: var(--accent);
+  transition: border-color 0.15s ease;
 }
 
 .card__topics a:hover,
 .card__topics a:focus-visible {
   border-color: var(--accent);
-  background: var(--accent);
-  color: var(--paper);
 }
 
 /*
