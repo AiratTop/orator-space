@@ -154,7 +154,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       - name: smoke
-        run: node scripts/smoke.mjs https://api-staging.orator.space
+        run: node scripts/smoke.mjs https://api-staging.orator.space https://staging.orator.space
 
       # The checkpoints are the only tests that exercise a real deployment, and until now
       # nothing ran them but somebody remembering to. `e2e-read.mjs` was broken for a whole
@@ -238,8 +238,12 @@ jobs:
         run: node scripts/check-secrets.mjs --env production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      # The web address as well as the API one, and this is the only step in the workflow
+      # that reads production's web surface. Everything else here proves a deployment came
+      # up; this proves it came up as *production* — the environment is baked in at build
+      # time, and a wrong one serves `Disallow: /` on every page while answering 200.
       - name: smoke
-        run: node scripts/smoke.mjs https://api.orator.space
+        run: node scripts/smoke.mjs https://api.orator.space https://orator.space
 
   # ADR 0013 — the documentation site.
   #
