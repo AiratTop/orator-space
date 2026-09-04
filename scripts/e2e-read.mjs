@@ -248,11 +248,17 @@ check("and opens out of process", /target="_blank"/.test(prose));
 
 // --- headers (§57.2, §57.3) ---------------------------------------------------
 const csp = page.headers.get("content-security-policy") ?? "";
-// The only script on the site, and the reason `script-src 'self'` still holds (§49.1).
+/*
+ * One of the two scripts §49.1 admits, and the reason `script-src 'self'` still holds.
+ *
+ * Whether each admitted control ships `hidden` is checked further up, over every one of them
+ * at once — including this one. It used to be asserted here as `data-theme-control`, the
+ * footer's three named buttons, which no longer exist: the masthead's icon replaced them, and
+ * a check naming one control by hand goes stale the moment that control moves.
+ */
 const themeScript = await web("/theme.js");
 check("the theme script is served from this origin", themeScript.status === 200);
 check("and the page loads it rather than inlining it", html.includes('src="/theme.js"'));
-check("the theme control is hidden until that script runs", /data-theme-control[^>]*\shidden/.test(html));
 
 const favicon = await web("/favicon.svg");
 // WCAG 2.2 §2.4.1 — a way past the masthead, and a target for it to reach.

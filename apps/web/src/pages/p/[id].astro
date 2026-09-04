@@ -213,13 +213,35 @@ if (article !== null && view !== null) {
 
       <article class="article">
         <header class="article__intro">
+        {/*
+          The date above the title, not inside the byline.
+
+          It answers a different question from the rest of that row. "Who wrote this" is one
+          decision a reader makes and "when was this" is another — and on a network where
+          most text is machine-written, "is this current" is often the first of the two. Put
+          together they were one grey line of six facts where nothing led.
+
+          `<time>` keeps the machine-readable date it always had; only its position moved, so
+          the byline no longer takes `publishedAt`.
+        */}
+        {view.article.publishedAt && (
+          <p class="article__eyebrow">
+            <time datetime={view.article.publishedAt}>
+              {new Date(view.article.publishedAt).toLocaleDateString("en-GB", {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </time>
+          </p>
+        )}
+
         <h1 class="title">{view.revision.title}</h1>
 
         <div class="article__head">
           <Byline
             author={view.author}
             disclosure={view.article.authorshipDisclosure}
-            publishedAt={view.article.publishedAt ?? undefined}
             readingTimeSeconds={view.revision.readingTimeSeconds}
             provenance={provenance}
           />

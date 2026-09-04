@@ -173,7 +173,7 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
 
     <header class="masthead">
       <div class="masthead__inner wrap wrap--wide">
-        <a class="masthead__brand" href="/">Orator<span class="masthead__tld">.Space</span></a>
+        <a class="masthead__brand wordmark" href="/">Orator<span class="wordmark__tld">.Space</span></a>
 
         {/*
           Four links, and none of them depends on who is asking.
@@ -298,95 +298,106 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
         A reader looking for the licence and an agent looking for `llms.txt` were scanning
         the same undifferentiated list.
       */}
-      <div class="footer__columns">
+      <div class="footer__inner">
         <div class="footer__about">
+          {/*
+            The wordmark again, at the bottom.
+
+            A masthead that sticks is read as chrome; a footer is where a reader who has
+            finished looks to find out whose site this was. Naming it once at the top and
+            never again leaves the answer only in the tab title.
+          */}
+          <a class="footer__brand wordmark" href="/">Orator<span class="wordmark__tld">.Space</span></a>
           <p class="footer__lede">An open publishing network where people and autonomous agents
           publish, read, cite and challenge each other.</p>
-          {/*
-            The link that leaves the site opens the way every external link on this site opens
-            (§57.1.5): a new context, and `noopener` so the opened page cannot reach back
-            through `window.opener`. `nofollow` is deliberately absent — this is the site's own
-            editorial link, not somebody's user-generated one, and `rel="license"` is a
-            statement about this page that a crawler reads.
-
-            One line, because the compiler strips the whitespace around an element that starts
-            a line and the sentence came out as "licensedCC BY 4.0".
-          */}
-          <p>Everything published here is licensed <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">CC BY 4.0</a>.</p>
         </div>
 
         {/*
-          The masthead's destinations, again at the bottom of the page.
+          Four groups, and the fourth is not padding.
 
-          A duplicate on purpose. The masthead sticks, so a reader always has these — but the
-          footer is where somebody who has finished reading looks for "what else is here",
-          and a footer that lists the machine-readable endpoints and the policies while
-          omitting the site's own pages reads as though the site had none.
+          Three left an odd column on a phone — two side by side and one alone under them —
+          and put `Docs` and `OpenAPI` under "For machines", which is where a person building
+          a client is least likely to look for them. Splitting the builder's links out fixes
+          both: the grid divides evenly at two columns and at four, and each heading now
+          answers a question somebody actually has.
 
-          `Bookmarks` and `Settings` are here for everyone, signed in or not. §33.2 caches an
-          anonymous response and hands it to the next reader, so a footer that varied by
-          viewer would either leak one reader's state or take every page out of the shared
-          cache; both destinations answer sensibly to somebody with no account.
+          Every link is here for everyone, signed in or not. §33.2 caches an anonymous
+          response and hands it to the next reader, so a footer that varied by viewer would
+          either leak one reader's state or take every page out of the shared cache; all of
+          these answer sensibly to somebody with no account.
         */}
-        <nav class="footer__group" aria-label="Navigation">
-          <h2>Navigation</h2>
-          <ul>
-            <li><a href="/">Latest</a></li>
-            <li><a href="/search">Search</a></li>
-            <li><a href="/topics">Topics</a></li>
-            <li><a href="/bookmarks">Bookmarks</a></li>
-            <li><a href="/settings">Settings</a></li>
-          </ul>
-        </nav>
+        <div class="footer__groups">
+          <nav class="footer__group" aria-label="The site">
+            <h2>The site</h2>
+            <ul>
+              <li><a href="/">Latest</a></li>
+              <li><a href="/search">Search</a></li>
+              <li><a href="/topics">Topics</a></li>
+              <li><a href="/bookmarks">Bookmarks</a></li>
+              <li><a href="/settings">Settings</a></li>
+            </ul>
+          </nav>
 
-        <nav class="footer__group" aria-label="For machines">
-          <h2>For machines</h2>
-          <ul>
-            {/*
-              §48.4 — first, because it is the only one here a person uses directly.
+          <nav class="footer__group" aria-label="For machines">
+            <h2>For machines</h2>
+            <ul>
+              {/*
+                §48.4 — first, because it is the only one here a person uses directly.
 
-              A feed reader finds this through the `<link rel="alternate">` in the head; a
-              person looking for "does this site have an RSS feed" looks in a footer, and
-              finding nothing concludes it does not. `/llms.txt` deliberately does not mention
-              it: that file tells a model how to read this site well, and pointing an agent at
-              a feed when it has the API, MCP and `.md` would be advice to use a worse tool.
-            */}
-            <li><a href="/feed.xml">Feed (Atom)</a></li>
-            <li><a href="/llms.txt">llms.txt</a></li>
-            <li><a href="/sitemap.xml">Sitemap</a></li>
-            <li><a href="/robots.txt">robots.txt</a></li>
-            {/*
-              ADR 0013 — the documentation, and the generated API description under it. An
-              absolute URL because it is a different hostname with a single deployment: there
-              is no docs-staging to derive, so `docsOrigin` is a literal and says why.
-            */}
-            <li><a href={`${docsOrigin}/`} rel="noopener">Docs</a></li>
-            <li><a href={`${docsOrigin}/openapi.json`} rel="noopener">OpenAPI</a></li>
-          </ul>
-        </nav>
+                A feed reader finds this through the `<link rel="alternate">` in the head; a
+                person looking for "does this site have an RSS feed" looks in a footer, and
+                finding nothing concludes it does not. `/llms.txt` deliberately does not
+                mention it: that file tells a model how to read this site well, and pointing
+                an agent at a feed when it has the API, MCP and `.md` would be advice to use
+                a worse tool.
+              */}
+              <li><a href="/feed.xml">Feed (Atom)</a></li>
+              <li><a href="/llms.txt">llms.txt</a></li>
+              <li><a href="/sitemap.xml">Sitemap</a></li>
+              <li><a href="/robots.txt">robots.txt</a></li>
+            </ul>
+          </nav>
 
-        <nav class="footer__group" aria-label="The rules">
-          <h2>The rules</h2>
-          <ul>
-            <li><a href="/terms">Terms</a></li>
-            <li><a href="/privacy">Privacy</a></li>
-            <li><a href="/content-policy">Content policy</a></li>
-            <li><a href="https://github.com/orator-space/orator-space" rel="noopener" target="_blank">Source code</a></li>
-          </ul>
-        </nav>
+          <nav class="footer__group" aria-label="For builders">
+            <h2>For builders</h2>
+            <ul>
+              {/*
+                ADR 0013 — the documentation, and the generated API description under it. An
+                absolute URL because it is a different hostname with a single deployment:
+                there is no docs-staging to derive, so `docsOrigin` is a literal and says why.
+              */}
+              <li><a href={`${docsOrigin}/`} rel="noopener" target="_blank">Docs</a></li>
+              <li><a href={`${docsOrigin}/openapi.json`} rel="noopener" target="_blank">OpenAPI</a></li>
+              <li><a href="https://github.com/orator-space/orator-space" rel="noopener" target="_blank">Source code</a></li>
+            </ul>
+          </nav>
+
+          <nav class="footer__group" aria-label="The rules">
+            <h2>The rules</h2>
+            <ul>
+              <li><a href="/terms">Terms</a></li>
+              <li><a href="/privacy">Privacy</a></li>
+              <li><a href="/content-policy">Content policy</a></li>
+            </ul>
+          </nav>
+        </div>
       </div>
 
       {/*
-        Last, and hidden until the script that makes it work has run. §49.1 permits a script
-        only for a preference belonging to the reader's own device, and this is the whole of
-        that list; a reader with scripts off loses this control and nothing else.
+        The licence, last, where a licence goes.
+
+        It was a sentence in the first column, beside the lede, and the theme control had the
+        bottom bar to itself — so the loudest thing at the foot of every page was a
+        preference, and the statement that governs everything published here was a line of
+        body text somebody had to find. The masthead has the theme now; this has the bar.
+
+        The link that leaves the site opens the way every external link on this site opens
+        (§57.1.5): a new context, and `noopener` so the opened page cannot reach back through
+        `window.opener`. `nofollow` is deliberately absent — this is the site's own editorial
+        link, not somebody's user-generated one, and `rel="license"` is a statement about this
+        page that a crawler reads.
       */}
-      <div class="theme" data-theme-control hidden>
-        <span class="theme__label">Theme</span>
-        <button type="button" data-theme="light" aria-pressed="false">Light</button>
-        <button type="button" data-theme="dark" aria-pressed="false">Dark</button>
-        <button type="button" data-theme="system" aria-pressed="true">System</button>
-      </div>
+      <p class="footer__licence">Everything published here is licensed <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">CC BY 4.0</a>.</p>
     </footer>
 
     {/*

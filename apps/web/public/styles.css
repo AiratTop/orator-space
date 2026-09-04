@@ -484,7 +484,14 @@ a {
   display: block;
 }
 
-.masthead__brand {
+/*
+ * The wordmark, in two places now.
+ *
+ * A masthead that sticks is read as chrome; the footer is where a reader who has finished
+ * looks for whose site this was. The name is one class so the two cannot drift into two
+ * slightly different logotypes.
+ */
+.wordmark {
   color: inherit;
   text-decoration: none;
   font-weight: 680;
@@ -492,8 +499,8 @@ a {
   letter-spacing: -0.02em;
 }
 
-/* The second half of the wordmark, present but not competing with the first. */
-.masthead__tld {
+/* The second half, present but not competing with the first. */
+.wordmark__tld {
   color: var(--ink-soft);
   font-weight: 500;
 }
@@ -783,7 +790,7 @@ a {
  */
 .footer {
   margin: 5rem calc(var(--gutter) * -1) -5rem;
-  padding: 3rem var(--gutter) 3.5rem;
+  padding: 3rem var(--gutter) 2rem;
   border-top: 1px solid var(--line);
   background: var(--paper-soft);
   color: var(--ink-soft);
@@ -791,44 +798,60 @@ a {
 }
 
 /*
- * The footer keeps the frame, which is why it declares it again.
+ * The frame, declared here rather than on the band.
  *
- * `.footer` is the full-bleed band and also carries `wrap--wide`, so its own `max-width`
- * would have to fight the padding that makes the band. The inner grid takes the frame
- * instead, and the band is free to be as wide as the window.
+ * `.footer` is the full-bleed strip, so its own `max-width` would fight the padding that
+ * makes the strip. Everything inside takes the frame instead, and the band is free to be as
+ * wide as the window.
  */
-.footer__columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
-  gap: 2.5rem;
+.footer__inner,
+.footer__licence {
   max-width: var(--shell);
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-@media (max-width: 62rem) {
-  .footer__columns {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .footer__about {
-    grid-column: 1 / -1;
-  }
+.footer__inner {
+  display: grid;
+  gap: 2.5rem;
 }
 
-@media (max-width: 40rem) {
-  .footer__columns {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 2rem;
+@media (min-width: 62rem) {
+  .footer__inner {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2.3fr);
+    gap: 3rem;
   }
 }
 
-.footer__about p {
-  margin: 0 0 0.6rem;
+.footer__brand {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  color: var(--ink);
 }
 
 .footer__lede {
   max-width: 26rem;
+  margin: 0;
   color: var(--ink);
+}
+
+/*
+ * Four groups, which is the number that divides evenly at both widths.
+ *
+ * Three left an odd column on a phone — two side by side and one alone underneath. Four is
+ * two rows of two there and one row of four on a desktop, so the block is a rectangle at
+ * every size instead of a rectangle with a corner missing.
+ */
+.footer__groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2rem 1.5rem;
+}
+
+@media (min-width: 48rem) {
+  .footer__groups {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
 }
 
 .footer__group h2 {
@@ -851,8 +874,8 @@ a {
 
 /*
  * A footer link is grey until it is wanted, which is the opposite of the accent everywhere
- * else on the site. Twelve blue links in three columns is a wall; twelve grey ones that turn
- * to ink under the cursor is a list.
+ * else on the site. Fifteen blue links in four columns is a wall; fifteen grey ones that
+ * turn to ink under the cursor is a list.
  */
 .footer__group a {
   color: var(--ink-soft);
@@ -865,55 +888,18 @@ a {
 }
 
 /*
- * The theme control, hidden until the script that makes it work has run.
+ * The licence, last, where a licence goes.
  *
- * `[hidden]` alone would lose to `display: flex`, which is the classic way a control that
- * does nothing ends up on the page anyway.
+ * It was a sentence beside the lede while the theme control had the bottom bar to itself, so
+ * the loudest thing at the foot of every page was a preference and the statement that
+ * governs everything published here was body text somebody had to find. The masthead has the
+ * theme now.
  */
-.theme {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  max-width: var(--shell);
+.footer__licence {
   margin: 2.5rem auto 0;
   padding-top: 1.25rem;
   border-top: 1px solid var(--line);
-}
-
-.theme[hidden] {
-  display: none;
-}
-
-.theme__label {
-  color: var(--ink-soft);
-}
-
-.theme button {
-  padding: 0.3rem 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  background: var(--surface);
-  color: var(--ink-soft);
-  font: inherit;
   font-size: var(--text-sm);
-  cursor: pointer;
-  transition:
-    border-color 0.15s ease,
-    color 0.15s ease,
-    background-color 0.15s ease;
-}
-
-.theme button:hover {
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
-
-.theme button[aria-pressed="true"] {
-  border-color: transparent;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
 }
 
 /* ---------------------------------------------------------------------------
@@ -921,13 +907,22 @@ a {
  *
  * This is the control that looks like it needs JavaScript and does not. A scroll timeline
  * drives two animations: one fades the button in once there is a page worth returning from,
- * and one advances a typed custom property that a `conic-gradient` reads as an angle.
+ * and one advances the dash offset of a stroked circle.
  *
  * Absent entirely where scroll-driven animations are unsupported, rather than falling back
  * to a button that is always there. A permanent floating control on a page that fits the
  * window is worse than no control, and this one is a convenience rather than a way to reach
  * anything: `#main` is one keystroke away for anybody using the keyboard.
+ *
+ * `display: none` on the base rule is load-bearing beyond the fallback. The markup is two
+ * SVG circles, and an SVG circle with no `fill` declared is filled black — so a version of
+ * this block that goes missing does not degrade to a plain link, it paints a black disc
+ * across the page. That is not hypothetical: it is what a careless splice of this file did.
  * ------------------------------------------------------------------------ */
+
+.to-top {
+  display: none;
+}
 
 @keyframes to-top-appear {
   from {
@@ -1022,22 +1017,7 @@ a {
   margin: 0 0 1rem;
 }
 
-/*
- * A deliberate break between "who wrote this" and "what this text is".
- *
- * A zero-height item at full width forces the wrap where the meaning divides. The
- * alternative — two elements — would mean the compact byline on a card had to grow a second
- * one it does not want, and a card is one line by design.
- */
-.byline__break {
-  flex-basis: 100%;
-  height: 0;
-}
-
 /* The second row is quieter: it is context for the name above it, not a peer of it. */
-.byline__break ~ * {
-  font-size: var(--text-sm);
-}
 
 /*
  * The feed's byline: the same facts, one line, no pills.
@@ -2037,6 +2017,22 @@ a {
   font-weight: 550;
 }
 
+/*
+ * The line above the title: what this is, before what it says.
+ *
+ * Small caps and grey, so it reads as a label rather than as the article's first sentence.
+ * It is the one thing on the page set in a size below the body deliberately — the date is
+ * a fact a reader checks, not one they read.
+ */
+.article__eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: var(--text-xs);
+  font-weight: 640;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
 .title {
   font-size: var(--text-5xl);
   line-height: 1.1;
@@ -2284,9 +2280,10 @@ a {
 .article__meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 1.25rem;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
   width: 100%;
+  margin-top: 0.25rem;
   font-size: var(--text-sm);
 }
 

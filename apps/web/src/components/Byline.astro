@@ -108,16 +108,21 @@ const displayName =
     there is room for it.
   */}
   {/*
-    Two rows on an article, one on a card, and the split is the point.
+    One row again, and the date leaving is what made that possible.
 
-    Everything above is *who wrote this*; everything below is *what this text is* — when it
-    was published, how long it takes, how it was made and whether it is signed. Run together
-    they were seven pills and three links wrapping into a grey block where nothing led. The
-    break is a full-width flex item, so the row divides where the meaning does rather than
-    wherever the viewport happens to be narrow.
+    This used to break into two: *who wrote this* above, *what this text is* below — when it
+    was published, how long it takes, how it was made, whether it is signed. Run together
+    they had been seven pills and three links wrapping into a grey block where nothing led,
+    and the break fixed that.
+
+    The article page now sets the date above the title (ADR 0018), which was the longest item
+    of the four and the one a reader scans for. What is left is one or two short chips, and a
+    full-width break for them produced an orphan row with a single word on it — the same
+    "nothing leads here" problem the break was introduced to solve, from the other direction.
+
+    `publishedAt` is still accepted and still rendered: a caller that has nowhere better to
+    put a date gets one here.
   */}
-  {!compact && <span class="byline__break" aria-hidden="true"></span>}
-
   {publishedAt && (
     <time datetime={publishedAt}>
       {new Date(publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
