@@ -36,10 +36,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # `standalone` fetches the pnpm binary instead of running an `npm install` into
-      # `~/setup-pnpm`. That install was taking two minutes a job — three jobs, every push —
-      # for a package manager the runner then immediately replaced anyway, because the image
-      # ships v11.19.0 and `packageManager` pins v11.22.0.
+      # `pnpm/action-setup` installs pnpm by running an `npm install` into `~/setup-pnpm`, and
+      # that install is the single most expensive step in this workflow: measured at 109s,
+      # 316s and 254s across three consecutive runs of the same commit range. The variance is
+      # the point — it is registry latency, not work — and five jobs pay it on every push.
+      #
+      # `standalone` skips one layer of it. The cache skips the rest on a hit: the directory
+      # is a pinned version of one tool, so the only thing that invalidates it is that pin
+      # moving. A miss behaves exactly as before.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/setup-pnpm
+          key: setup-pnpm-${{ runner.os }}-${{ hashFiles('package.json') }}
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
@@ -90,10 +98,18 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # `standalone` fetches the pnpm binary instead of running an `npm install` into
-      # `~/setup-pnpm`. That install was taking two minutes a job — three jobs, every push —
-      # for a package manager the runner then immediately replaced anyway, because the image
-      # ships v11.19.0 and `packageManager` pins v11.22.0.
+      # `pnpm/action-setup` installs pnpm by running an `npm install` into `~/setup-pnpm`, and
+      # that install is the single most expensive step in this workflow: measured at 109s,
+      # 316s and 254s across three consecutive runs of the same commit range. The variance is
+      # the point — it is registry latency, not work — and five jobs pay it on every push.
+      #
+      # `standalone` skips one layer of it. The cache skips the rest on a hit: the directory
+      # is a pinned version of one tool, so the only thing that invalidates it is that pin
+      # moving. A miss behaves exactly as before.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/setup-pnpm
+          key: setup-pnpm-${{ runner.os }}-${{ hashFiles('package.json') }}
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
@@ -159,10 +175,18 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # `standalone` fetches the pnpm binary instead of running an `npm install` into
-      # `~/setup-pnpm`. That install was taking two minutes a job — three jobs, every push —
-      # for a package manager the runner then immediately replaced anyway, because the image
-      # ships v11.19.0 and `packageManager` pins v11.22.0.
+      # `pnpm/action-setup` installs pnpm by running an `npm install` into `~/setup-pnpm`, and
+      # that install is the single most expensive step in this workflow: measured at 109s,
+      # 316s and 254s across three consecutive runs of the same commit range. The variance is
+      # the point — it is registry latency, not work — and five jobs pay it on every push.
+      #
+      # `standalone` skips one layer of it. The cache skips the rest on a hit: the directory
+      # is a pinned version of one tool, so the only thing that invalidates it is that pin
+      # moving. A miss behaves exactly as before.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/setup-pnpm
+          key: setup-pnpm-${{ runner.os }}-${{ hashFiles('package.json') }}
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
@@ -207,10 +231,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # `standalone` fetches the pnpm binary instead of running an `npm install` into
-      # `~/setup-pnpm`. That install was taking two minutes a job — three jobs, every push —
-      # for a package manager the runner then immediately replaced anyway, because the image
-      # ships v11.19.0 and `packageManager` pins v11.22.0.
+      # `pnpm/action-setup` installs pnpm by running an `npm install` into `~/setup-pnpm`, and
+      # that install is the single most expensive step in this workflow: measured at 109s,
+      # 316s and 254s across three consecutive runs of the same commit range. The variance is
+      # the point — it is registry latency, not work — and five jobs pay it on every push.
+      #
+      # `standalone` skips one layer of it. The cache skips the rest on a hit: the directory
+      # is a pinned version of one tool, so the only thing that invalidates it is that pin
+      # moving. A miss behaves exactly as before.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/setup-pnpm
+          key: setup-pnpm-${{ runner.os }}-${{ hashFiles('package.json') }}
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
@@ -238,10 +270,18 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # `standalone` fetches the pnpm binary instead of running an `npm install` into
-      # `~/setup-pnpm`. That install was taking two minutes a job — three jobs, every push —
-      # for a package manager the runner then immediately replaced anyway, because the image
-      # ships v11.19.0 and `packageManager` pins v11.22.0.
+      # `pnpm/action-setup` installs pnpm by running an `npm install` into `~/setup-pnpm`, and
+      # that install is the single most expensive step in this workflow: measured at 109s,
+      # 316s and 254s across three consecutive runs of the same commit range. The variance is
+      # the point — it is registry latency, not work — and five jobs pay it on every push.
+      #
+      # `standalone` skips one layer of it. The cache skips the rest on a hit: the directory
+      # is a pinned version of one tool, so the only thing that invalidates it is that pin
+      # moving. A miss behaves exactly as before.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/setup-pnpm
+          key: setup-pnpm-${{ runner.os }}-${{ hashFiles('package.json') }}
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.10
         with:
           standalone: true
