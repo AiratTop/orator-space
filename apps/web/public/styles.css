@@ -788,6 +788,223 @@ a {
   text-wrap: balance;
 }
 
+/* ---- the front page's claims and its explanation (§84, §3.1) -------------- */
+
+/*
+ * Three facts under the opening, on the first screen.
+ *
+ * A row on a desktop and a column on a phone, and the strong opening of each is the claim —
+ * so a reader who scans only the bold text still gets three sentences that stand alone. It is
+ * kept to three because everything here is a line between the reader and the feed, which is
+ * what actually makes the argument (§84).
+ */
+.claims {
+  list-style: none;
+  margin: 0 0 3rem;
+  padding: 0;
+  display: grid;
+  gap: 1.25rem var(--gap);
+  grid-template-columns: 1fr;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+@media (min-width: 56rem) {
+  .claims {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.claims li {
+  padding-top: 0.875rem;
+  border-top: 2px solid var(--line-strong);
+}
+
+.claims strong {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--ink);
+  font-weight: 620;
+}
+
+/*
+ * The explanation, under the feed.
+ *
+ * On its own surface and full width, so it reads as a different kind of thing from the cards
+ * above it rather than as three more of them.
+ */
+.pitch {
+  margin: 4rem 0 0;
+  padding: 2.5rem 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.pitch__heading {
+  margin: 0 0 2rem;
+  font-size: var(--text-3xl);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  font-weight: 700;
+}
+
+.pitch__block {
+  display: grid;
+  gap: 0.75rem var(--gap);
+  padding: 1.75rem 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.pitch__block:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.pitch__block + .pitch__block {
+  margin-top: 2rem;
+}
+
+/*
+ * Two columns above 62rem: the heading and its sentence on the left, the list on the right.
+ *
+ * A heading over a full-width list of six short items puts the eye back at the left margin
+ * six times for no reason. Beside it, the list is a block the eye takes in at once and the
+ * sentence stays at a readable measure.
+ */
+@media (min-width: 62rem) {
+  .pitch__block {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    /*
+     * The heading's row is its own height and the sentence takes the rest.
+     *
+     * Both rows were `auto`, so the list — which spans them — divided its height between the
+     * two, and the heading floated half a paragraph above its own sentence. `align-items` does
+     * not help: the item was not stretched, the row was.
+     */
+    grid-template-rows: auto 1fr;
+    align-items: start;
+  }
+
+  .pitch__block h3 {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .pitch__lede {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .pitch__block :is(ol, ul) {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+.pitch__block h3 {
+  margin: 0;
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.pitch__lede {
+  margin: 0;
+  max-width: var(--measure);
+  color: var(--ink-soft);
+  text-wrap: pretty;
+}
+
+.pitch__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+}
+
+/*
+ * A dash rather than a bullet. The list is a set of examples, not a sequence or a count, and
+ * a bulleted column beside a paragraph reads as a form to fill in.
+ */
+.pitch__list li {
+  padding-left: 1.1rem;
+  position: relative;
+}
+
+.pitch__list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.72em;
+  width: 0.6rem;
+  height: 1px;
+  background: var(--line-strong);
+}
+
+.pitch__list--links li::before {
+  background: var(--accent);
+}
+
+/*
+ * §84's loop, numbered, because it is the one thing on this page that is a sequence.
+ *
+ * The counter is drawn rather than left to the list marker so it can sit in the accent tint
+ * at a fixed width — five steps whose numbers do not line up read as five separate facts.
+ */
+.chain-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.625rem;
+  counter-reset: step;
+  color: var(--ink-soft);
+  font-size: var(--text-md);
+}
+
+.chain-steps li {
+  position: relative;
+  padding-left: 2.25rem;
+  counter-increment: step;
+  line-height: 1.55;
+}
+
+.chain-steps li::before {
+  content: counter(step);
+  position: absolute;
+  left: 0;
+  top: -0.05em;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The thread between the steps, so five items read as one chain.
+ *
+ * Not on the last, which has nothing below it to join — and `aria-hidden` is unnecessary
+ * because a pseudo-element is not in the accessibility tree to begin with.
+ */
+.chain-steps li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 0.71rem;
+  top: 1.6rem;
+  bottom: -0.625rem;
+  width: 1px;
+  background: var(--line);
+}
+
 /* Nothing at that address (§49.5) --------------------------------------- */
 
 .missing {

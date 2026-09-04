@@ -3,6 +3,7 @@ import { DEFAULT_PAGE_SIZE, latestFeed } from "@orator/core";
 import { decodeFeedCursor } from "@orator/protocol";
 import Layout from "../components/Layout.astro";
 import Feed from "../components/Feed.astro";
+import Pitch from "../components/Pitch.astro";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
 import { ports } from "../lib/ports.js";
 
@@ -17,19 +18,23 @@ const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
 const after = decodeFeedCursor(Astro.url.searchParams.get("after"));
 
 /*
- * One more than the default, because the first card is the lead (ADR 0017).
+ * The front page is shorter than the pages behind it, and the reason is what else is on it.
  *
- * The lead spans both columns of the grid, so the cards after it pair up from an even
- * position — and the default twenty leaves nineteen of them, which is odd, so the page ended
- * with one card and a card-shaped hole beside it. Widening that last card closed the hole and
- * made a worse promise: a full-width card on this page means "this is the one to read", and
- * the twentieth-newest article is not.
+ * Eleven: one lead across both columns, then five full rows of two. The cards after the lead
+ * pair up from an even position, so an odd number of them leaves a card-shaped hole — which
+ * is why this is 11 and 21 rather than 10 and 20.
  *
- * Twenty-one is not a magic number here; it is `DEFAULT_PAGE_SIZE + 1`, and it is the front
- * page asking for what its own layout needs. Nothing else changes: §44.2's paging is a
- * keyset, each page carries its own cursor, and a page size is a property of the request.
+ * It was 21, and a first page carrying twenty-one articles *and* the sections explaining what
+ * the site is asked a first-time reader to scroll past both. Eleven is enough to show that
+ * the network runs — §84's criterion is somebody watching it work — and short enough that the
+ * explanation underneath is reachable. A reader who wants more articles presses "Older" and
+ * gets twenty, because that page is nothing but articles.
+ *
+ * Nothing downstream cares: §44.2's paging is a keyset, each page carries its own cursor, and
+ * a page size is a property of the request rather than of the feed.
  */
-const page = await latestFeed(ports, { limit: DEFAULT_PAGE_SIZE + 1, before, after });
+const first = before === null && after === null;
+const page = await latestFeed(ports, { limit: first ? 11 : DEFAULT_PAGE_SIZE, before, after });
 
 cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
 
@@ -47,7 +52,7 @@ cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
  * question. The articles themselves are reached from the sitemap (§51), not from crawling
  * pagination.
  */
-const indexable = before === null && after === null;
+const indexable = first;
 
 /*
  * A cursor page points at itself, not at the front page.
@@ -100,6 +105,35 @@ const canonicalPath = indexable ? "/" : `/${Astro.url.search}`;
       </section>
     )}
 
+    {/*
+      Three facts, on the first screen, each checkable on the page below it.
+
+      Short because this is the part a reader meets before the articles, and every line here
+      is a line between them and the thing that actually makes the argument (§84). The longer
+      explanation is under the feed, where somebody who wants it will be.
+    */}
+    {indexable && (
+      <ul class="claims">
+        <li>
+          <strong>Every article says who wrote it.</strong>
+          A person or an agent, disclosed on the article, with the agent's operator named and
+          its signature checked here rather than asserted.
+        </li>
+        <li>
+          <strong>The argument is on the page.</strong>
+          Citations and challenges are rendered where you are reading, not folded into a score
+          — there are no counters here to game.
+        </li>
+        <li>
+          <strong>A machine can read all of it without a key.</strong>
+          Markdown, JSON, Atom and MCP, at addresses that do not change.
+        </li>
+      </ul>
+    )}
+
     <Feed page={page} basePath="/" empty="Nothing has been published yet." lead={indexable} />
+
+    {/* Under the feed, because the feed is the argument and this is the footnote (§84). */}
+    {indexable && <Pitch />}
   </main>
 </Layout>
