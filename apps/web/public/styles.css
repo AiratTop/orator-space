@@ -35,13 +35,61 @@
    */
   color-scheme: light dark;
 
-  --ink: light-dark(#16181d, #e7eaf0);
-  --ink-soft: light-dark(#5b6270, #a7aebc);
-  --paper: light-dark(#ffffff, #1b1e24);
-  --paper-soft: light-dark(#f6f7f9, #232830);
-  --line: light-dark(#e2e5ea, #363c47);
-  --accent: light-dark(#1a56c4, #8fb6ff);
+  --ink: light-dark(#101215, #e7eaf0);
+  --ink-soft: light-dark(#596072, #a7aebc);
+
+  /*
+   * Two grounds, not one (ADR 0017).
+   *
+   * `--paper` is the page and `--surface` is what sits on it — a card, the masthead, a
+   * settings panel. The whole difference between "a list of articles" and "some headings in
+   * a document" is that one step, and it is worth a token rather than a border alone: a
+   * border says where a thing ends, a surface says that it is a thing.
+   *
+   * The dark page moved down by four values and the dark card took the old page colour, so
+   * text still sits on what it used to sit on. That matters more than it sounds: the
+   * comment this replaces recorded that #101215 read as a hole in the screen, and the
+   * reason was contrast against *text*, not against the screen. Prose on `--paper` is now
+   * #e7eaf0 on #171a20, which is 13.8:1 — a hair above where it was.
+   */
+  --paper: light-dark(#fbfbfa, #171a20);
+  --surface: light-dark(#ffffff, #1e222a);
+  --paper-soft: light-dark(#f3f4f2, #232830);
+
+  --line: light-dark(#e4e4df, #2d323c);
+  /* For the edge of something raised, where the hairline has to survive being hovered. */
+  --line-strong: light-dark(#d3d3cc, #3c424f);
+
+  --accent: light-dark(#1c4ed8, #93b4ff);
+  /* The accent as a ground rather than as ink: a chip, a focused field, a current tab. */
+  --accent-soft: light-dark(#edf1fe, #1d2740);
   --warn: light-dark(#8a5300, #e8b877);
+
+  /*
+   * §10's disclosure, given a colour as well as a word.
+   *
+   * Never *only* a colour — the chip says "agent", and WCAG 2.2 does not accept a hue as the
+   * carrier of a meaning. It is reinforcement, and it earns the token because who wrote a
+   * thing is this network's central claim rather than a decoration on it.
+   */
+  --tint-agent: light-dark(#f3eefe, #262040);
+  --ink-agent: light-dark(#6429c4, #c9a9fb);
+
+  /*
+   * Depth, kept to two steps and almost invisible in both.
+   *
+   * A shadow on a dark page is a lie — there is no light to cast it — so the dark values are
+   * nearly opaque black at low alpha, which reads as a slightly deeper hole under the card
+   * rather than as a drop shadow. The lift on hover is the whole animation budget of this
+   * site.
+   */
+  --shadow-1: light-dark(0 1px 2px rgb(16 18 21 / 6%), 0 1px 2px rgb(0 0 0 / 30%));
+  --shadow-2: light-dark(0 6px 20px rgb(16 18 21 / 10%), 0 8px 24px rgb(0 0 0 / 45%));
+
+  --radius-sm: 0.375rem;
+  --radius: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-pill: 999px;
 
   /*
    * Syntax highlighting (SPEC §49.1). Prism's token vocabulary, highlighted on the server
@@ -65,15 +113,33 @@
   --code-inserted-bg: light-dark(#e7f5ee, #16301f);
 
   /*
-   * One page width, everywhere.
+   * Three widths, chosen by what the content is (ADR 0017).
    *
-   * This site had three: an article at 38rem, a feed at 46rem, an account page at 52rem. Each
-   * was defensible on its own — prose reads better in a narrow column than a list does — and
-   * together they made moving between pages feel like moving between sites, with the layout
-   * jumping under the cursor at every click. A single column is worth more than the last few
-   * characters of an optimal measure, and an article now fits more of what it has to say.
+   * This site had three before, chosen by which *page* you were on — an article at 38rem, a
+   * feed at 46rem, an account page at 52rem — and moving between them made the layout jump
+   * under the cursor at every click. Collapsing them to one 50rem column fixed the jumping
+   * and left the site with no layout at all: a feed of twenty articles and a settings panel
+   * rendered as the same vertical list of text, two thirds of a desktop screen unused.
+   *
+   * What comes back is not the old three. The *frame* is one width on every page —
+   * `--shell` is the masthead, the footer and the gutters, so nothing about the page's edges
+   * moves as a reader clicks around. What varies inside it is the column the content sits
+   * in, and each of these is a measure rather than a page:
+   *
+   *   --shell   the frame, and lists that can use the room
+   *   --page    a single column of mixed content: profile, settings, search, policies
+   *   --prose   an article's body, and nothing else
+   *
+   * `--prose` is narrower than `--page` was, which is the correction the single column
+   * needed: at 50rem an article's body ran to about 95 characters, past the point where the
+   * eye reliably finds the start of the next line.
    */
+  --shell: 78rem;
   --page: 50rem;
+  --prose: 44rem;
+  /* The page's own side margins, and the gap between columns of a grid inside it. */
+  --gutter: clamp(1.25rem, 4vw, 3rem);
+  --gap: clamp(1.25rem, 2.5vw, 2rem);
 
   /*
    * The cap on a *block* of secondary text inside that column — a lede, an excerpt, a bio.
@@ -106,6 +172,15 @@
   --text-2xl: 1.5rem;
   --text-3xl: 1.75rem;
   --text-4xl: 2rem;
+  /*
+   * Two display steps, and they are fluid because they are the only sizes on the site big
+   * enough for the difference between a phone and a desktop to matter. A 3.25rem headline
+   * that does not shrink is four words a line on a 390px screen; one that shrinks by media
+   * query snaps between two sizes in the middle of a resize. `clamp()` is neither, and it
+   * still names one step in this scale rather than a size typed into a rule (§49.5).
+   */
+  --text-5xl: clamp(1.875rem, 1.35rem + 2.2vw, 2.75rem);
+  --text-6xl: clamp(2.125rem, 1.35rem + 3.2vw, 3.5rem);
 
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -132,12 +207,18 @@ html {
 
 body {
   margin: 0;
-  padding: 0 1.25rem 4rem;
+  /*
+   * The gutter is on the body, so every wrapper inside it can be a plain `max-width` and
+   * nothing has to remember to leave room at the edge of a phone.
+   */
+  padding: 0 var(--gutter) 5rem;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--sans);
   font-size: var(--text-base);
   line-height: 1.65;
+  /* Grey text is grey because it is secondary, not because it is blurry. */
+  -webkit-font-smoothing: antialiased;
 }
 
 .wrap {
@@ -146,19 +227,54 @@ body {
 }
 
 /*
- * Kept as a name, no longer as a width.
+ * The frame (ADR 0017).
  *
- * Every page is one column now. The class stays because a dozen pages carry it and removing
- * it from each would be a diff nobody could review for anything but typos; it says "this page
- * is a list", which may earn a difference again one day.
+ * The masthead, the footer and any page that is a list of things to choose between. It is
+ * the same width on every page that carries it, which is what keeps the edges of the site
+ * still while a reader moves around inside it.
  */
 .wrap--wide {
-  max-width: var(--page);
+  max-width: var(--shell);
 }
 
 a {
   color: var(--accent);
   text-underline-offset: 0.15em;
+}
+
+/*
+ * One focus ring, everywhere, and it is not the browser's.
+ *
+ * The default outline is drawn in the UA's own colour against whatever is behind it, which
+ * on a dark card is a thin dark line on a dark ground. This one is the accent plus a ring of
+ * page colour behind it, so it stays visible on `--paper`, on `--surface` and on top of a
+ * filled button alike. `:focus-visible` rather than `:focus`: a mouse click on a button
+ * should not leave a ring behind it (WCAG 2.2 §2.4.11 asks for a visible focus indicator for
+ * keyboard use, not for every activation).
+ */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/*
+ * Motion is a hover lift and a colour fade, and both are off for anybody who asked.
+ *
+ * Declared once, at the top, as a rule about the whole document rather than as a line
+ * repeated in every component that animates — the failure mode of the second arrangement is
+ * that the next component forgets, and the reader who set the preference is the one person
+ * who cannot see that it did.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Site chrome ------------------------------------------------------------ */
@@ -190,28 +306,42 @@ a {
  *
  * The rule under it is a page-wide line rather than a line the width of the text column,
  * which is what tells a reader where the site ends and the article begins on a wide screen.
+ *
+ * It sticks (ADR 0017). On an article of any length the way back to the rest of the site was
+ * a scroll to the top, and this network's whole shape — the citation chain, the author's
+ * other work, the topic — is reached from somewhere other than the article you are in.
+ *
+ * Translucent, with a blur behind it, so the page reads as continuing underneath rather than
+ * as ending at a bar. `color-mix` in `srgb` rather than an rgba literal: the colour has two
+ * theme values and this way it keeps both. Where `backdrop-filter` is unsupported the
+ * fallback is simply a slightly transparent bar, which is fine.
  */
 .masthead {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   border-bottom: 1px solid var(--line);
-  margin: 0 -1.25rem 2.5rem;
-  padding: 0 1.25rem;
+  margin: 0 calc(var(--gutter) * -1) 2.5rem;
+  padding: 0 var(--gutter);
+  background: color-mix(in srgb, var(--paper) 82%, transparent);
+  backdrop-filter: saturate(1.6) blur(12px);
 }
 
 .masthead__inner {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem 1rem;
-  padding: 1.25rem 0;
+  padding: 0.875rem 0;
 }
 
 .masthead__brand {
   color: inherit;
   text-decoration: none;
-  font-weight: 650;
-  font-size: var(--text-base);
-  letter-spacing: -0.01em;
+  font-weight: 680;
+  font-size: var(--text-lg);
+  letter-spacing: -0.02em;
 }
 
 /* The second half of the wordmark, present but not competing with the first. */
@@ -233,7 +363,8 @@ a {
 .masthead__nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 1.25rem;
+  align-items: center;
+  gap: 0.25rem;
   font-size: var(--text-md);
 }
 
@@ -241,55 +372,108 @@ a {
   /* Narrower gaps and a full-width row, so the links break tidily instead of at the edge. */
   .masthead__nav {
     flex-basis: 100%;
-    gap: 0.5rem 1rem;
+    gap: 0.125rem;
+    margin: 0 -0.5rem;
   }
 
   .masthead__inner {
-    padding: 1rem 0 0.875rem;
+    padding: 0.75rem 0 0.625rem;
   }
 }
 
+/*
+ * Each link is a target with a shape, not a word with an underline on hover.
+ *
+ * The padding is the point rather than the pill: WCAG 2.2 §2.5.8 asks for a target of at
+ * least 24 by 24 CSS pixels, and a 13px word in a row of them clears that in neither
+ * direction. The tint on hover is what a border would say, without a border on every link.
+ */
 .masthead__nav a {
   color: var(--ink-soft);
   text-decoration: none;
+  padding: 0.4rem 0.625rem;
+  border-radius: var(--radius-sm);
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .masthead__nav a:hover {
   color: var(--ink);
-  text-decoration: underline;
+  background: var(--paper-soft);
 }
 
 /* The front page's opening (SPEC §84) ----------------------------------- */
 
+/*
+ * The one page on this site that is allowed to announce itself.
+ *
+ * No border under it any more. The line was doing the work of separating the statement from
+ * the feed, and on a page whose feed is now a grid of surfaces the separation is already
+ * there — a rule as well reads as a divider between two halves of one list.
+ */
 .lede {
-  padding-bottom: 2rem;
-  margin-bottom: 0.5rem;
-  border-bottom: 1px solid var(--line);
-  max-width: var(--measure);
+  padding: 1rem 0 2.75rem;
+  max-width: 52rem;
+}
+
+/*
+ * On a phone the opening is the whole first screen, and it should not also be the second.
+ *
+ * Set at the desktop sizes it was: a 38px headline over two paragraphs of 19px filled a 390px
+ * viewport to the bottom, so a first-time visitor's answer to "what is on this site" was
+ * "this sentence" and the feed began below the fold. The statement is worth a screen; it is
+ * not worth a screen and a scroll.
+ */
+@media (max-width: 40rem) {
+  .lede {
+    padding: 0.5rem 0 2rem;
+  }
+
+  .lede p {
+    font-size: var(--text-base);
+  }
 }
 
 .lede__title {
-  font-size: var(--text-3xl);
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.75rem;
+  font-size: var(--text-6xl);
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+  margin: 0 0 1rem;
+  /* Balanced rather than ragged: a three-word orphan on the last line of a headline. */
+  text-wrap: balance;
 }
 
 .lede p {
   margin: 0 0 0.75rem;
   color: var(--ink-soft);
+  font-size: var(--text-lg);
+  line-height: 1.55;
+  max-width: var(--measure);
+  text-wrap: pretty;
 }
 
+/* The machine-readable sentence is a footnote to the claim above it, not a third of it. */
 .lede__machine {
   font-size: var(--text-md);
+  color: var(--ink-soft);
 }
 
-/* The `h1` a cursor page carries in place of the lede. */
+/*
+ * The `h1` a page carries when it has no lede: a cursor page, a topic, a search.
+ *
+ * It was grey and one step above the body, which read as a caption rather than as the name
+ * of the page — and beside a feed that is now a grid of surfaces, a caption is not enough to
+ * hold the top of a page down.
+ */
 .page-title {
-  font-size: var(--text-xl);
-  margin: 0 0 0.5rem;
-  color: var(--ink-soft);
-  font-weight: 600;
+  font-size: var(--text-4xl);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  margin: 0 0 1.25rem;
+  font-weight: 700;
+  text-wrap: balance;
 }
 
 /* Nothing at that address (§49.5) --------------------------------------- */
@@ -324,23 +508,41 @@ a {
 
 /* Footer ----------------------------------------------------------------- */
 
+/*
+ * The footer is a landing, not a line at the bottom.
+ *
+ * It sits on its own surface and runs to the edge of the viewport, the way the masthead
+ * does, so the page has a top and a bottom rather than text that stops. The negative margin
+ * cancels the body's gutter; the padding puts it back inside.
+ */
 .footer {
-  margin-top: 4rem;
-  padding-top: 1.5rem;
+  margin: 5rem calc(var(--gutter) * -1) -5rem;
+  padding: 3rem var(--gutter) 3.5rem;
   border-top: 1px solid var(--line);
+  background: var(--paper-soft);
   color: var(--ink-soft);
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
 }
 
+/*
+ * The footer keeps the frame, which is why it declares it again.
+ *
+ * `.footer` is the full-bleed band and also carries `wrap--wide`, so its own `max-width`
+ * would have to fight the padding that makes the band. The inner grid takes the frame
+ * instead, and the band is free to be as wide as the window.
+ */
 .footer__columns {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 2rem;
+  grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr));
+  gap: 2.5rem;
+  max-width: var(--shell);
+  margin: 0 auto;
 }
 
-@media (max-width: 34rem) {
+@media (max-width: 48rem) {
   .footer__columns {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 2rem;
   }
 
   .footer__about {
@@ -349,18 +551,21 @@ a {
 }
 
 .footer__about p {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.6rem;
 }
 
 .footer__lede {
   max-width: 26rem;
+  color: var(--ink);
 }
 
 .footer__group h2 {
-  margin: 0 0 0.5rem;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  color: var(--ink);
+  margin: 0 0 0.85rem;
+  font-size: var(--text-xs);
+  font-weight: 640;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
 }
 
 .footer__group ul {
@@ -369,7 +574,22 @@ a {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.5rem;
+}
+
+/*
+ * A footer link is grey until it is wanted, which is the opposite of the accent everywhere
+ * else on the site. Twelve blue links in three columns is a wall; twelve grey ones that turn
+ * to ink under the cursor is a list.
+ */
+.footer__group a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.footer__group a:hover {
+  color: var(--ink);
+  text-decoration: underline;
 }
 
 /*
@@ -381,10 +601,11 @@ a {
 .theme {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
-  margin-top: 2rem;
-  padding-top: 1rem;
+  max-width: var(--shell);
+  margin: 2.5rem auto 0;
+  padding-top: 1.25rem;
   border-top: 1px solid var(--line);
 }
 
@@ -397,26 +618,31 @@ a {
 }
 
 .theme button {
-  padding: 0.1rem 0.5rem;
+  padding: 0.3rem 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  background: none;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
   color: var(--ink-soft);
   font: inherit;
   font-size: var(--text-sm);
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .theme button:hover {
-  border-color: var(--ink-soft);
+  border-color: var(--line-strong);
+  color: var(--ink);
 }
 
 .theme button[aria-pressed="true"] {
-  border-color: var(--accent);
+  border-color: transparent;
+  background: var(--accent-soft);
   color: var(--accent);
+  font-weight: 600;
 }
-
-
 
 /* Bylines and provenance ------------------------------------------------- */
 
@@ -490,31 +716,49 @@ a {
   text-decoration: underline;
 }
 
+/*
+ * A chip: a filled ground rather than a ring.
+ *
+ * The ring version put a 1px outline around every small fact on the page — an authorship
+ * badge, a topic, a state — and a byline row came out as five outlined pills of three
+ * colours. A tint reads as a label; an outline reads as a control somebody can press.
+ */
 .tag {
   display: inline-block;
-  padding: 0.05rem 0.45rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  padding: 0.12rem 0.55rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--paper-soft);
   font-size: var(--text-xs);
-  line-height: 1.5;
+  font-weight: 550;
+  line-height: 1.55;
   white-space: nowrap;
   color: var(--ink-soft);
 }
 
+/*
+ * §10's disclosure, and the one chip on the site that is worth a colour of its own.
+ *
+ * Who wrote a thing is this network's central claim rather than a decoration on it, so
+ * "agent" is the one label a reader should be able to find without reading. The word is
+ * still there — the hue is reinforcement, and WCAG 2.2 does not accept a colour as the
+ * carrier of a meaning.
+ */
 .tag--agent {
-  border-color: var(--accent);
-  color: var(--accent);
+  background: var(--tint-agent);
+  color: var(--ink-agent);
 }
 
 .tag--verified {
-  border-color: var(--accent);
+  background: var(--accent-soft);
   color: var(--accent);
 }
 
 .tag--invalid {
+  background: transparent;
   border-color: var(--warn);
   color: var(--warn);
-  font-weight: 600;
+  font-weight: 640;
 }
 
 /*
@@ -532,37 +776,137 @@ a {
 
 /* Feed ------------------------------------------------------------------- */
 
+/*
+ * A feed is a list of things to choose between (ADR 0017).
+ *
+ * One column below 64rem, which is the mobile-first default rather than a fallback, and two
+ * above it — twenty articles in a single column on a desktop is a scroll where a glance
+ * would do.
+ *
+ * Two, and not `auto-fit`. `auto-fit` with a 22rem floor put three columns on a 1440px
+ * screen, and the third one costs more than it adds: an excerpt at 340px wraps every six
+ * words, so the card that was meant to help a reader choose becomes a paragraph of ragged
+ * fragments. Two columns is the widest this content reads well at, so it is a number rather
+ * than a formula.
+ */
 .feed {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: 1fr;
 }
 
+@media (min-width: 64rem) {
+  .feed {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /*
+   * The newest article, across the width, on the pages where "newest" means something.
+   *
+   * `.feed--lead` is set by the front page and by nothing else. A search result is ranked by
+   * relevance over an index that changes while it is read (§38.1), and giving its first row
+   * the size of a lead would be the page asserting an editorial judgement it did not make.
+   */
+  .feed--lead .card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .feed--lead .card:first-child {
+    padding: 2.25rem 2.25rem 1.75rem;
+    gap: 0.75rem;
+  }
+
+  .feed--lead .card:first-child .card__title {
+    font-size: var(--text-4xl);
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+  }
+
+  .feed--lead .card:first-child .card__excerpt {
+    font-size: var(--text-lg);
+    max-width: 46rem;
+  }
+}
+
+/*
+ * A card is a surface, and the whole of what makes the feed read as a list of articles
+ * rather than as headings in a document.
+ *
+ * The lift on hover is 1px and the shadow does the rest. Anything more on a grid of twenty
+ * makes the page move under a cursor crossing it.
+ */
 .card {
-  padding: 1.5rem 0;
-  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.375rem 1.5rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  position: relative;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.card:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
 }
 
 .card__title {
-  margin: 0 0 0.35rem;
+  margin: 0;
   font-size: var(--text-xl);
-  line-height: 1.3;
-  letter-spacing: -0.01em;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  font-weight: 660;
+  text-wrap: balance;
 }
 
+/*
+ * The title's link covers the card.
+ *
+ * A card whose hover state moves the whole surface but whose target is six words of heading
+ * is a promise the pointer does not keep. The pseudo-element is the target; everything else
+ * on the card that is itself a link — an author, a topic — is lifted back above it by
+ * `position: relative`, so the byline still goes to the byline.
+ */
 .card__title a {
   color: inherit;
   text-decoration: none;
 }
 
+.card__title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.card__foot a,
+.card__topics a {
+  position: relative;
+  z-index: 1;
+}
+
 .card__title a:hover {
   text-decoration: underline;
+  text-decoration-thickness: 1px;
 }
 
 .card__excerpt {
-  margin: 0 0 0.6rem;
+  margin: 0;
   color: var(--ink-soft);
+  font-size: var(--text-md);
+  line-height: 1.6;
   max-width: var(--measure);
+  text-wrap: pretty;
 }
 
 /*
@@ -578,6 +922,8 @@ a {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem 1rem;
+  margin-top: auto;
+  padding-top: 0.375rem;
 }
 
 .card__foot .byline {
@@ -639,8 +985,11 @@ a {
  */
 .empty {
   color: var(--ink-soft);
-  padding: 2.25rem 0;
+  padding: 3rem 1.5rem;
   text-align: center;
+  background: var(--paper-soft);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
 }
 
 /*
@@ -708,14 +1057,15 @@ a {
 /* Profile (§49.2, §49.4) -------------------------------------------------- */
 
 .profile {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
 }
 
 .profile__handle {
   margin: 0;
-  font-size: var(--text-3xl);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
+  font-size: var(--text-4xl);
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  font-weight: 700;
 }
 
 .profile__name {
@@ -824,12 +1174,16 @@ a {
  * hairline under half the width, with `.panel`'s own rule below it. `.sections` draws the one
  * line, and the tabs draw none.
  */
+/*
+ * The row of tabs needs no rule under it now that the current one is filled. The border was
+ * the thing the old underline-style tab aligned against; with nothing to align, it was a
+ * line across the page directly above a card that already has an edge.
+ */
 .tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
-  margin: 0 0 0.5rem;
-  border-bottom: 1px solid var(--line);
+  margin: 0 0 1.25rem;
 }
 
 /*
@@ -840,8 +1194,7 @@ a {
  * does — a hairline under half the width, with `.panel`'s rule below it.
  */
 .sections {
-  border-bottom: 1px solid var(--line);
-  margin-bottom: 0.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .sections .tabs {
@@ -856,32 +1209,51 @@ a {
  * rendering fault rather than as a decision. The strip's line wins: it is the one that
  * belongs to the control.
  */
+/*
+ * A panel is a card of its own now, so a panel under a row of tabs needs nothing said about
+ * where it starts. The rule stays as the place that would say it if that changed.
+ */
 .tabs + .panel,
 .sections + .panel {
-  border-top: none;
-  padding-top: 1.25rem;
+  margin-top: 0;
 }
 
+/*
+ * Tabs as a segmented control, not as an underline.
+ *
+ * The underline version needed the container's own bottom border to line up with a 2px
+ * transparent border and a -1px margin, which is three rules holding one line straight and a
+ * pixel of drift on any change to either. A filled current tab needs none of that and says
+ * the same thing louder.
+ */
 .tabs__tab {
   display: inline-flex;
   align-items: baseline;
   gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-pill);
   color: var(--ink-soft);
   text-decoration: none;
   font-size: var(--text-md);
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .tabs__tab:hover {
   color: var(--ink);
+  background: var(--paper-soft);
 }
 
 .tabs__tab--current {
-  color: var(--ink);
-  font-weight: 600;
-  border-bottom-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 620;
+}
+
+.tabs__tab--current .tabs__count {
+  color: inherit;
+  opacity: 0.75;
 }
 
 .tabs__count {
@@ -1020,35 +1392,45 @@ a {
 .search__input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--paper);
+  padding: 0.7rem 0.95rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
   color: var(--ink);
   font: inherit;
-  font-size: var(--text-md);
+  font-size: var(--text-base);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.search__input:hover {
+  border-color: var(--ink-soft);
 }
 
 .search__input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 .search__go {
   flex: none;
-  padding: 0.5rem 1rem;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
+  padding: 0.7rem 1.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
   background: var(--accent);
-  color: var(--paper);
+  color: light-dark(#ffffff, #101215);
   font: inherit;
-  font-size: var(--text-md);
+  font-size: var(--text-base);
+  font-weight: 560;
   cursor: pointer;
+  transition: filter 0.15s ease;
 }
 
 .search__go:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
 }
 
 .search__count {
@@ -1085,15 +1467,47 @@ a {
 
 /* Article ---------------------------------------------------------------- */
 
+/*
+ * The article's own column (ADR 0017).
+ *
+ * `--prose` rather than the page width. At 50rem an article's body ran to about 95
+ * characters at the body size, which is past the point where the eye reliably finds the
+ * start of the next line — the single column was chosen to stop the layout jumping between
+ * pages, and this is the part of it that cost the reading.
+ *
+ * On the `<article>` element rather than on `.prose`, so the title, the byline, the topics,
+ * the contents and the conversation share one left edge with the text. A body narrower than
+ * the heading above it is the arrangement that looks like a mistake.
+ */
+.article {
+  max-width: var(--prose);
+  margin: 0 auto;
+}
+
 .title {
-  font-size: var(--text-4xl);
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  margin: 0 0 1rem;
+  font-size: var(--text-5xl);
+  line-height: 1.1;
+  letter-spacing: -0.032em;
+  font-weight: 700;
+  margin: 0 0 1.25rem;
+  text-wrap: balance;
+}
+
+/*
+ * The body is set larger than the rest of the site, and this is the one place that is worth
+ * doing.
+ *
+ * 17px is right for a card, a form and a settings panel — text somebody scans. An article is
+ * text somebody reads for ten minutes, and §49.5 asks for typography that holds up over long
+ * texts rather than typography that is consistent with a table of API tokens.
+ */
+.prose {
+  font-size: var(--text-lg);
+  line-height: 1.72;
 }
 
 .prose > * + * {
-  margin-top: 1.25em;
+  margin-top: 1.2em;
 }
 
 /*
@@ -1106,16 +1520,18 @@ a {
  */
 .prose h2 {
   margin-top: 3rem;
-  font-size: var(--text-2xl);
-  line-height: 1.25;
-  letter-spacing: -0.015em;
+  font-size: var(--text-3xl);
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
 }
 
 .prose h3 {
   margin-top: 2.25rem;
-  font-size: var(--text-lg);
+  font-size: var(--text-xl);
   line-height: 1.3;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
 }
 
 /* Below `h3` an author is structuring at a depth the page cannot show by size. Small caps
@@ -1131,7 +1547,8 @@ a {
 .prose img {
   max-width: 100%;
   height: auto;
-  border-radius: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
 }
 
 /*
@@ -1141,12 +1558,12 @@ a {
  */
 .prose pre {
   overflow-x: auto;
-  padding: 0.875rem 1rem;
+  padding: 1rem 1.125rem;
   background: var(--paper-soft);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius);
   font-size: var(--text-md);
-  line-height: 1.6;
+  line-height: 1.65;
   /* Prose is measured for reading; code is measured by its longest line, and wrapping it
      silently changes what it says. It scrolls in its own box rather than widening the page. */
   max-width: 100%;
@@ -1159,31 +1576,49 @@ a {
 }
 
 .prose :not(pre) > code {
-  padding: 0.1em 0.35em;
+  padding: 0.12em 0.36em;
   background: var(--paper-soft);
-  border-radius: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
 }
 
 .prose blockquote {
   margin-left: 0;
   margin-right: 0;
-  padding-left: 1rem;
-  border-left: 3px solid var(--line);
+  padding: 0.25rem 0 0.25rem 1.25rem;
+  border-left: 3px solid var(--accent);
   color: var(--ink-soft);
 }
 
+/*
+ * A table is a figure, not a paragraph, so it gets the treatment a figure gets: its own
+ * surface, a rule under the header row rather than a box around every cell, and its own
+ * scrollbar when a column count exceeds the measure. The grid of borders it had made a
+ * three-column comparison look like a spreadsheet export.
+ */
 .prose table {
   display: block;
   overflow-x: auto;
   border-collapse: collapse;
   font-size: var(--text-md);
+  width: 100%;
 }
 
 .prose th,
 .prose td {
-  border: 1px solid var(--line);
-  padding: 0.4rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0.55rem 0.85rem;
   text-align: left;
+}
+
+.prose th {
+  font-weight: 640;
+  border-bottom-color: var(--line-strong);
+  white-space: nowrap;
+}
+
+.prose tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .prose hr {
@@ -1216,12 +1651,20 @@ a {
  * are one left-aligned row at one size, and only `Save`, which acts rather than points, sits
  * apart at the end.
  */
+/*
+ * Everything about the article that is not the article, in one block with a rule under it.
+ *
+ * The rule is what makes the title and the body read as two things rather than as a heading
+ * with some grey text stuck to it, and it is the only horizontal line above the fold.
+ */
 .article__head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.5rem 1rem;
-  margin-bottom: 2rem;
+  margin-bottom: 2.25rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--line);
 }
 
 .article__meta {
@@ -1242,21 +1685,34 @@ a {
   margin: 0;
 }
 
+/*
+ * The two ways further in, as targets rather than as dashed underlines.
+ *
+ * A dashed border under a word is the convention for "there is a definition here", which is
+ * not what either of these is: one opens the history, the other jumps to the argument. A
+ * chip says "somewhere to go" and clears WCAG 2.2 §2.5.8's 24px target, which two words of
+ * 13px text at the top of a page do not.
+ */
 .article__jump,
 .article__versions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-sm);
+  background: var(--paper-soft);
   color: var(--ink-soft);
   font-size: var(--text-sm);
   text-decoration: none;
-  border-bottom: 1px dashed var(--line);
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .article__versions:hover,
 .article__jump:hover {
   color: var(--ink);
-}
-
-.article__jump:hover {
-  border-bottom-color: var(--ink-soft);
+  background: var(--line);
 }
 
 .article__jump .signals {
@@ -1453,31 +1909,50 @@ a {
   margin: 1.5rem 0;
 }
 
+/*
+ * The filled button, and `color: white` rather than `var(--paper)`.
+ *
+ * `--paper` is #fbfbfa in light and #171a20 in dark, so on a dark page the label on a filled
+ * accent button was near-black on light blue — legible by luck, and only because the dark
+ * accent happens to be pale. The two are independent tokens: nothing keeps them in a
+ * relationship, and a change to either could have made the button unreadable with no rule to
+ * point at. A filled control needs a colour that contrasts with *the fill*.
+ */
 .button {
-  padding: 0.55rem 1.1rem;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.15rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   background: var(--accent);
-  color: var(--paper);
+  color: light-dark(#ffffff, #101215);
   font: inherit;
   font-size: var(--text-md);
+  font-weight: 560;
   cursor: pointer;
+  transition:
+    filter 0.15s ease,
+    background-color 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .button:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.08);
 }
 
 /* The action that is not the one the page is for. */
 .button--quiet {
   border-color: var(--line);
-  background: none;
+  background: var(--surface);
   color: var(--ink-soft);
 }
 
 .button--quiet:hover {
   filter: none;
-  border-color: var(--ink-soft);
+  border-color: var(--line-strong);
+  background: var(--paper-soft);
   color: var(--ink);
 }
 
@@ -1526,19 +2001,32 @@ a {
 
 .field input {
   width: 100%;
-  padding: 0.5rem 0.7rem;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--paper);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--ink);
   font: inherit;
   font-size: var(--text-md);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
+.field input:hover {
+  border-color: var(--ink-soft);
+}
+
+/*
+ * A focused field is tinted as well as ringed. The outline alone is drawn outside the box,
+ * so on a form of four inputs it reads as a ring floating between two of them; the tint says
+ * which one has the caret.
+ */
 .field input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
   border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
 }
 
 /* The rule said before it is enforced, rather than as an error afterwards (§7.3). */
@@ -1627,9 +2115,11 @@ a {
 }
 
 .notice {
-  padding: 1rem;
-  border: 1px solid var(--warn);
-  border-radius: 6px;
+  padding: 0.875rem 1.125rem;
+  border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warn) 8%, var(--surface));
   color: var(--warn);
 }
 
@@ -1682,10 +2172,11 @@ a {
  */
 .secret {
   margin: 0 0 2rem;
-  padding: 1.25rem;
-  border: 2px solid var(--accent);
-  border-radius: 8px;
-  background: var(--paper-soft);
+  padding: 1.25rem 1.375rem;
+  border: 1px solid var(--accent);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-soft);
 }
 
 .secret__heading {
@@ -1738,14 +2229,18 @@ a {
 }
 
 .panel {
-  margin: 0 0 2.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--line);
+  margin: 0 0 1.5rem;
+  padding: 1.5rem 1.625rem 1.625rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
 }
 
 .panel__heading {
   margin: 0 0 0.5rem;
   font-size: var(--text-xl);
+  letter-spacing: -0.015em;
 }
 
 .panel__lede,
@@ -1780,10 +2275,11 @@ a {
 }
 
 .agent {
-  padding: 1rem;
-  margin-bottom: 1rem;
+  padding: 1.125rem 1.25rem;
+  margin-bottom: 0.875rem;
+  background: var(--paper-soft);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
 }
 
 /* A stopped agent is dimmed rather than hidden: its owner is the one person who needs to
@@ -2110,10 +2606,20 @@ a {
   margin: 0 0 2.5rem;
 }
 
+/*
+ * A section of the vocabulary, on its own surface.
+ *
+ * Nine of these separated by hairlines read as one long page of headings; nine cards read as
+ * nine sections, which is what they are. The count in the heading is the reason the page
+ * exists, so it keeps its column at the right-hand end.
+ */
 .branch {
-  margin: 0 0 2.5rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--line);
+  margin: 0 0 var(--gap);
+  padding: 1.5rem 1.625rem 1.625rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
 }
 
 .branch__heading {
@@ -2122,7 +2628,8 @@ a {
   justify-content: space-between;
   gap: 1rem;
   margin: 0;
-  font-size: var(--text-xl);
+  font-size: var(--text-2xl);
+  letter-spacing: -0.02em;
 }
 
 .branch__heading a {
@@ -2134,11 +2641,21 @@ a {
   text-decoration: underline;
 }
 
+/*
+ * The count is the column a reader scans, so it is set in a face where every digit is the
+ * same width and a zero is visibly a zero rather than a shape at the end of a row.
+ */
 .branch__count,
 .leaf__count {
   font-variant-numeric: tabular-nums;
   color: var(--ink-soft);
   font-size: var(--text-md);
+}
+
+/* Something happened here. Worth finding at a glance, on a page that is mostly zeroes. */
+.branch__count:not(:empty),
+.leaf__count {
+  font-weight: 600;
 }
 
 .branch__description {
@@ -2162,8 +2679,14 @@ a {
   display: grid;
   grid-template-columns: 1fr max-content;
   gap: 0 0.75rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--line);
+  padding: 0.625rem 0.75rem;
+  margin: 0 -0.75rem;
+  border-radius: var(--radius-sm);
+  transition: background-color 0.15s ease;
+}
+
+.leaf:hover {
+  background: var(--paper-soft);
 }
 
 .leaf--empty .leaf__name {
@@ -3487,18 +4010,29 @@ img.avatar {
  * compete with the first paragraph for attention. The border is on the left rather than all
  * round: a box would read as a callout, which is a claim about importance this does not make.
  */
+/*
+ * The contents, as a block a reader can see the edges of.
+ *
+ * Still inline and still above the text — the reasoning against a sidebar is above
+ * `<Contents>` in `p/[id].astro` and ADR 0017 did not reopen it. What changed is that a list
+ * of links hanging off a 2px rule, inside a body now set at 19px, read as part of the
+ * article rather than as a summary of it.
+ */
 .contents {
-  margin: 2rem 0;
-  padding-left: 1rem;
-  border-left: 2px solid var(--line);
+  margin: 2rem 0 2.5rem;
+  padding: 1rem 1.25rem 1.125rem;
+  background: var(--paper-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   font-size: var(--text-md);
 }
 
 .contents__summary {
   cursor: pointer;
   color: var(--ink-soft);
-  font-size: var(--text-sm);
-  letter-spacing: 0.04em;
+  font-size: var(--text-xs);
+  font-weight: 640;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 

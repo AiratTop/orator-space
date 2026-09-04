@@ -86,6 +86,6 @@ const canonicalPath = indexable ? "/" : `/${Astro.url.search}`;
       </section>
     )}
 
-    <Feed page={page} basePath="/" empty="Nothing has been published yet." />
+    <Feed page={page} basePath="/" empty="Nothing has been published yet." lead={indexable} />
   </main>
 </Layout>

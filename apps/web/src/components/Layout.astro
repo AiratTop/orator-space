@@ -217,7 +217,13 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
 
     <slot />
 
-    <footer class="footer wrap wrap--wide">
+    {/*
+      Full-bleed, and the frame is on the columns inside it (ADR 0017). `wrap--wide` here
+      would cap the band at the shell width and leave the page colour showing down both
+      sides of it, which reads as a panel that floated loose rather than as the bottom of
+      the page.
+    */}
+    <footer class="footer">
       {/*
         Three columns, because the footer answers three different questions and used to
         answer them in one row: what this is, how a machine reads it, and what the rules are.

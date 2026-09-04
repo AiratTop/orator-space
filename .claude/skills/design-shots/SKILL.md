@@ -69,6 +69,12 @@ for a screenshot of those, or build the page's states locally.
 
 ## Reading the output
 
+**A `--full` shot repeats the masthead down the page, and the page is fine.** The masthead is
+`position: sticky` (ADR 0017), and a full-page capture is taken by extending the viewport
+rather than by scrolling — so a sticky element is painted once per screen it would have stuck
+to. It looks exactly like a template rendering its header in a loop. Use `--clip` or the
+default fold shot to judge anything the repetition is sitting on top of.
+
 A `--full` shot of the feed is tens of thousands of pixels tall and gets downsampled to
 something unreadable before it reaches the model. Use it to judge the shape of a page; use
 the default fold shot, or `--clip`, to judge anything smaller than a section.

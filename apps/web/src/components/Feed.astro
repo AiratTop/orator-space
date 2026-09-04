@@ -31,9 +31,19 @@ interface Props {
    * list that was never chronological.
    */
   paged?: boolean;
+  /**
+   * Whether the first card is the lead (ADR 0017).
+   *
+   * The front page and nothing else. A lead is an editorial judgement — "this is the one to
+   * read" — and it is only true where the ordering makes it true. Search is ranked by
+   * relevance over an index that changes while it is read (§38.1), a profile is one author's
+   * work in date order, and giving either a card twice the size of its neighbours would be
+   * the layout asserting something the page did not.
+   */
+  lead?: boolean;
 }
 
-const { page, basePath, empty, paged = true } = Astro.props;
+const { page, basePath, empty, paged = true, lead = false } = Astro.props;
 const href = (param: "before" | "after", cursor: NonNullable<FeedPage["next"]>) =>
   `${basePath}?${param}=${encodeFeedCursor(cursor)}`;
 
@@ -47,7 +57,7 @@ const atTheEnd = page.next === null && page.cards.length > 0;
 {page.cards.length === 0 ? (
   <p class="empty">{empty}</p>
 ) : (
-  <ul class="feed">
+  <ul class={lead ? "feed feed--lead" : "feed"}>
     {page.cards.map((card) => (
       <li class="card">
         <h2 class="card__title"><a href={canonicalPath(card)}>{card.title}</a></h2>

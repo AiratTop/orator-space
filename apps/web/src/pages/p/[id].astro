@@ -171,7 +171,8 @@ if (article !== null && view !== null) {
     jsonLd={articleJsonLd(view, provenance)}
   >
     <main id="main" class="wrap">
-      <article>
+      {/* `--prose` rather than the page width — ADR 0017, and the rule is on the stylesheet. */}
+      <article class="article">
         <h1 class="title">{view.revision.title}</h1>
 
         <div class="article__head">
