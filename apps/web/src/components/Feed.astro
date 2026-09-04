@@ -101,7 +101,16 @@ const atTheEnd = page.next === null && page.cards.length > 0;
   </ul>
 )}
 
-{paged && page.cards.length > 0 && (
+{/*
+  A pager with nowhere to go is furniture.
+
+  It rendered whenever the feed was paged and held anything, so a profile with one article
+  ended in a rule, "Newest first" on the left and "That is the oldest" on the right — two
+  labels that are the answer to a question the reader cannot ask, because neither side is a
+  control. Where there is a page to go to the labels earn their place: they say which end of
+  the sequence you are at. Where there is not, the whole row goes.
+*/}
+{paged && page.cards.length > 0 && (previousHref !== null || nextHref !== null) && (
   <nav class="pager" aria-label="Feed pages">
     <span class="pager__side">
       {previousHref !== null ? (

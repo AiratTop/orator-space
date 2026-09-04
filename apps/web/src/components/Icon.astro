@@ -32,6 +32,18 @@ const ICONS: Record<string, Shape[]> = {
   bookmarks: [{ d: "M6.5 4.5h11v15l-5.5-4-5.5 4v-15Z" }],
   moderation: [{ d: "M6 20V4.5h9.5l-1.6 3 1.6 3H6" }],
   person: [{ circle: [12, 8.5, 3.5] }, { d: "M5 19.5a7 7 0 0 1 14 0" }],
+  /*
+   * A feed, in the shape everything else uses for one: a dot and two arcs.
+   *
+   * The dot is a stroked circle rather than a filled one, because every shape in this set is
+   * stroked and a single filled mark in it would be the one icon that ignores the weight the
+   * others share. At 1.05 it reads as a dot anyway.
+   */
+  feed: [
+    { circle: [6.2, 17.8, 1.05] },
+    { d: "M4.5 11.2a8.3 8.3 0 0 1 8.3 8.3" },
+    { d: "M4.5 5.5a14 14 0 0 1 14 14" },
+  ],
   settings: [
     { d: "M4 7.5h8M17 7.5h3M4 16.5h3M12 16.5h8" },
     { circle: [14.5, 7.5, 2.2] },

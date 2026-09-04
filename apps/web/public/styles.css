@@ -94,6 +94,9 @@
    */
   --icon-link: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'/%3E%3C/svg%3E");
 
+  /* The `<summary>` marker on the contents, for the reason `--icon-link` is drawn here. */
+  --icon-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 9 7 7 7-7'/%3E%3C/svg%3E");
+
   --radius-sm: 0.375rem;
   --radius: 0.625rem;
   --radius-lg: 1rem;
@@ -854,15 +857,22 @@ a {
 }
 
 /*
- * Not rendered on a phone, and `display: none` rather than a smaller drawing.
+ * On a phone it goes under the statement rather than beside it.
  *
- * The comment above `.lede` records what the opening costs on a 390px screen: at the desktop
- * sizes it filled the viewport on its own and the feed began below the fold. A diagram of
- * four nodes and eleven edges is not readable at 340px wide, and a picture that has to be
- * squinted at is worth less than the scroll it takes.
+ * It was `display: none` below 64rem, on the argument that four nodes and eleven edges do not
+ * survive being 340px wide. They do — the documentation site has carried the same drawing at
+ * the top of its own splash page on a phone since it was added, and it is legible there. What
+ * the first version was really protecting was the fold, and the answer to that is where the
+ * drawing sits: after the two paragraphs, so a reader meets the claim first and the picture
+ * of it second. The feed moves down by one screen; §84's criterion is somebody watching this
+ * network work, and the picture is what says there is something to watch.
  */
 .lede__art {
-  display: none;
+  display: block;
+  position: relative;
+  width: 100%;
+  max-width: 21rem;
+  margin: 1.75rem auto 0.5rem;
 }
 
 @media (min-width: 64rem) {
@@ -875,11 +885,8 @@ a {
   }
 
   .lede__art {
-    display: block;
-    position: relative;
     margin: 0;
     justify-self: end;
-    width: 100%;
     max-width: 25rem;
   }
 }
@@ -1411,13 +1418,28 @@ a {
   position: relative;
 }
 
+/*
+ * The dash before each item, at 2px rather than as a hairline.
+ *
+ * It was 1px tall at `top: 0.72em`, which is a fractional number of pixels — and each item
+ * sits at a different fraction, because the offsets accumulate down the list. So some dashes
+ * landed on the device's pixel grid and painted solid while the ones between two rows were
+ * split across two and painted at half strength. On the front page's four links that showed
+ * as the first two being visibly heavier than the last two: not a font weight, not a colour,
+ * a rounding difference nobody can fix by adjusting the value.
+ *
+ * Two pixels of an even height survive the same half-pixel shift as 2px of colour rather
+ * than as two greys, and the rounded ends make it read as a mark rather than as a rule that
+ * came out wrong.
+ */
 .pitch__list li::before {
   content: "";
   position: absolute;
   left: 0;
-  top: 0.72em;
-  width: 0.6rem;
-  height: 1px;
+  top: 0.68em;
+  width: 0.55rem;
+  height: 2px;
+  border-radius: 1px;
   background: var(--line-strong);
 }
 
@@ -1942,6 +1964,15 @@ a {
  * fragments. Two columns is the widest this content reads well at, so it is a number rather
  * than a formula.
  */
+/*
+ * `align-items: start`, so a card is as tall as what is in it.
+ *
+ * A grid stretches its items by default, and `.card__foot` is pushed to the bottom — so two
+ * cards side by side, one with a row of topics and one without, produced a card with its
+ * byline six lines below its excerpt and nothing in between. That hole reads as a rendering
+ * fault rather than as a tidy grid, and the tidiness it bought was never visible: the feet
+ * only ever lined up when the cards happened to hold the same amount.
+ */
 .feed {
   list-style: none;
   margin: 0;
@@ -1949,6 +1980,7 @@ a {
   display: grid;
   gap: var(--gap);
   grid-template-columns: 1fr;
+  align-items: start;
 }
 
 @media (min-width: 64rem) {
@@ -2244,6 +2276,13 @@ a {
   line-height: 1.1;
   letter-spacing: -0.03em;
   font-weight: 700;
+  /*
+   * A handle is one word and can be thirty characters of it, so the normal rule — break
+   * between words — has nothing to work with and the name runs out of its column. `anywhere`
+   * rather than `break-word` because only the former lets the browser count the break when it
+   * decides how wide the line wants to be.
+   */
+  overflow-wrap: anywhere;
 }
 
 .profile__name {
@@ -2904,8 +2943,19 @@ a {
  * It is the one thing on the page set in a size below the body deliberately — the date is
  * a fact a reader checks, not one they read.
  */
+/*
+ * The date, and the copy button at the other end of the same row.
+ *
+ * `baseline` rather than `center`: the date is 12px uppercase and the button is a 13px chip,
+ * and centring them puts the two texts on visibly different lines. The row keeps its own
+ * height off the button, which is taller than the date — hence the smaller bottom margin.
+ */
 .article__eyebrow {
-  margin: 0 0 0.75rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 0.5rem;
   font-size: var(--text-xs);
   font-weight: 640;
   letter-spacing: 0.09em;
@@ -3208,25 +3258,15 @@ a {
 }
 
 /*
- * The two controls sit at the right-hand end of the row, whether or not both are there.
+ * Save sits at the right-hand end of the row.
  *
- * `margin-left: auto` was on `.save`, which only exists for a signed-in reader — so the copy
- * button was pushed right for them and left against the comment count for everybody else.
- * The same page had two different layouts depending on who was looking at it, which is the
- * kind of difference nobody sees because nobody looks at their own site signed out.
- *
- * The auto margin goes on whichever of the two comes first: Save when it is present, the
- * copy button when it is not. `:has()` asks that question rather than a template answering
- * it in two places.
+ * It used to share that end with the copy button, and which of the two took the auto margin
+ * depended on whether the reader was signed in — the page had two layouts and nobody saw the
+ * signed-out one. The copy button is now on the date's row, so there is one control here and
+ * one rule for it.
  */
-.article__meta .article__copy,
-.article__meta .save:has(+ .article__copy) {
+.article__meta .save {
   margin-left: auto;
-}
-
-/* Together they are one group, so the second does not take the gap again. */
-.article__meta .save + .article__copy {
-  margin-left: 0;
 }
 
 .article__head .byline {
@@ -4315,8 +4355,20 @@ a {
   background: var(--paper-soft);
 }
 
+/*
+ * Nothing published under it yet, said quietly.
+ *
+ * The vocabulary is the platform's and the page shows all fifty of it (§22.1), so an empty
+ * topic stays on the list — but the count is set bold to make "something happened here"
+ * findable, and a bold zero does the opposite of that on a page that is mostly zeroes.
+ */
 .leaf--empty .leaf__name {
   color: var(--ink-soft);
+}
+
+.leaf--empty .leaf__count {
+  font-weight: 400;
+  opacity: 0.5;
 }
 
 .leaf__name {
@@ -4549,23 +4601,92 @@ a {
  * `align-items: start` and not `center`: the mark lines up with the handle, and a long bio
  * should push the text down rather than drag the avatar with it.
  */
+/*
+ * The identity, on a surface (ADR 0017).
+ *
+ * A row of items on the page background, above a feed of cards — the one part of the page
+ * that is about *somebody* was the only part that did not read as a thing, and on a 78rem
+ * frame it faded out into three quarters of paper with nothing holding its right edge.
+ *
+ * A grid rather than a flex row, because there is now something at the far end: the avatar,
+ * the body, and the feed link pinned right. `align-items: start` keeps that link level with
+ * the handle rather than centred against a bio of unknown length.
+ */
 .profile {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: start;
-  gap: 1rem;
+  gap: 0 1.125rem;
+  padding: 1.5rem 1.625rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
 }
 
 .profile > .avatar {
-  /* Smaller than it was. 64px next to a handle set at the page's heading size read as the
-     subject of the page, which the name is. */
-  width: 48px;
-  height: 48px;
-  margin-top: 0.25rem;
+  width: 56px;
+  height: 56px;
+  margin-top: 0.125rem;
 }
 
 .profile__body {
   min-width: 0;
-  flex: 1 1 auto;
+}
+
+/*
+ * Following an author, offered to a person and not only to a parser.
+ *
+ * The chip is the shape used everywhere else for "somewhere to go", and it clears WCAG 2.2
+ * §2.5.8's 24px target, which the word "Atom" set at 13px does not.
+ */
+.profile__feed {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.profile__feed .icon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.profile__feed:hover,
+.profile__feed:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/*
+ * On a phone the link goes under the identity rather than beside it.
+ *
+ * Three columns inside 350px leaves the handle a track narrower than the word in it, and a
+ * long agent handle then breaks across four lines to keep a chip company.
+ */
+@media (max-width: 40rem) {
+  .profile {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 1.25rem;
+  }
+
+  .profile__feed {
+    grid-column: 2;
+    margin-top: 0.875rem;
+    justify-self: start;
+  }
 }
 
 /*
@@ -5738,13 +5859,43 @@ img.avatar {
   font-size: var(--text-md);
 }
 
+/*
+ * The marker is drawn, because the platform's own is not part of this typeface.
+ *
+ * A `<summary>` renders a black triangle whose size, colour and spacing come from the browser
+ * — beside a 12px uppercase label it reads as a character from another font that wandered in.
+ * Masked like the heading anchor (`--icon-link` above), it takes `currentColor`, matches the
+ * weight of every other mark on the page, and turns when the box opens.
+ */
 .contents__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   cursor: pointer;
   color: var(--ink-soft);
   font-size: var(--text-xs);
   font-weight: 640;
   letter-spacing: 0.07em;
   text-transform: uppercase;
+  list-style: none;
+}
+
+.contents__summary::-webkit-details-marker {
+  display: none;
+}
+
+.contents__summary::before {
+  content: "";
+  width: 0.7rem;
+  height: 0.7rem;
+  background: currentcolor;
+  mask: var(--icon-chevron) center / contain no-repeat;
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+}
+
+.contents[open] > .contents__summary::before {
+  transform: rotate(0deg);
 }
 
 /* Focus has to survive the marker being replaced by nothing on some platforms. */

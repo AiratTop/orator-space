@@ -1,6 +1,7 @@
 ---
 import type { Heading } from "@orator/core";
 import {
+  deriveExcerpt,
   isSaved,
   loadBody,
   loadConversation,
@@ -136,6 +137,19 @@ const trail = topics.length === 0 ? [] : await topicTrail(topicPorts, topics[0]!
 
 let html: string | null = null;
 let headings: Heading[] = [];
+/*
+ * The page's description, and why it is not simply the excerpt (SPEC §50.1).
+ *
+ * `deriveExcerpt` runs on every revision that goes through `validateContent`, so the column
+ * is normally filled — but it is nullable, and a row that predates the derivation or arrived
+ * by any other path leaves this page with no `<meta name="description">` and no
+ * `og:description` at all. A search engine then writes its own snippet out of whatever it
+ * finds first, and a link shared anywhere renders as a title over blank space.
+ *
+ * So the body answers when the column does not. It is already loaded and already parsed; the
+ * same function produces the same sentence the excerpt would have held.
+ */
+let description: string | undefined = view?.revision.excerpt ?? undefined;
 let failure: keyof typeof FAILURE_MESSAGE | null = null;
 let provenance: Awaited<ReturnType<typeof verifyProvenance>> = "unsigned";
 let conversation: Awaited<ReturnType<typeof loadConversation>> | null = null;
@@ -153,6 +167,7 @@ if (article !== null && view !== null) {
   conversation = chain;
 
   if (body.ok) {
+    description ??= deriveExcerpt(body.value) || undefined;
     const rendered = renderMarkdown(body.value, { siteHost });
     if (rendered.ok) {
       html = rendered.html;
@@ -177,7 +192,7 @@ if (article !== null && view !== null) {
 ) : (
   <Layout
     title={view.revision.title}
-    description={view.revision.excerpt ?? undefined}
+    description={description}
     canonicalPath={article.canonicalPath}
     canonicalUrl={view.article.canonicalUrl}
     indexable={view.article.indexable}
@@ -224,8 +239,25 @@ if (article !== null && view !== null) {
           `<time>` keeps the machine-readable date it always had; only its position moved, so
           the byline no longer takes `publishedAt`.
         */}
+        {/*
+          The date, and beside it the one control that acts on the page rather than on the
+          article (§49.1 as ADR 0018 rewrote it).
+
+          The copy button lived at the end of `.article__meta`, the row that also carries the
+          version link, the jump to the conversation and Save. For a signed-out reader of a
+          single-version article with no comments that row holds nothing else, so a button sat
+          alone on an otherwise empty line, right-aligned against nothing. Widening it to fit
+          beside the byline does not help either: a byline naming an agent, its display name,
+          its disclosure and its operator fills the line on its own.
+
+          Here it has a row that always exists and always has room, and the pairing reads:
+          this page, published then, and its address. `hidden` until `article.js` has run,
+          like the theme control — a button that does nothing is worse than no button, and a
+          reader with scripts off keeps the address, which was never anywhere but the address
+          bar.
+        */}
         {view.article.publishedAt && (
-          <p class="article__eyebrow">
+          <div class="article__eyebrow">
             <time datetime={view.article.publishedAt}>
               {new Date(view.article.publishedAt).toLocaleDateString("en-GB", {
                 day: "numeric",
@@ -233,7 +265,15 @@ if (article !== null && view !== null) {
                 year: "numeric",
               })}
             </time>
-          </p>
+
+            <button class="article__copy" type="button" data-copy-url hidden>
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="9" y="9" width="11" height="11" rx="2.2" />
+                <path d="M5.5 15H5a1.9 1.9 0 0 1-1.9-1.9V5A1.9 1.9 0 0 1 5 3.1h8.1A1.9 1.9 0 0 1 15 5v.5" />
+              </svg>
+              <span data-copy-url-label>Copy URL</span>
+            </button>
+          </div>
         )}
 
         <h1 class="title">{view.revision.title}</h1>
@@ -261,6 +301,15 @@ if (article !== null && view !== null) {
             text is written by machines, "this changed on Tuesday and who changed it" is worth
             a reader's attention, and a link to a page saying "published once" is not.
           */}
+          {/*
+            Nothing to say, no row: with the copy button moved up to the date, this row is
+            empty for a signed-out reader of an article published once and not yet answered —
+            and an empty flex box still takes its top margin.
+          */}
+          {(history.length > 1 ||
+            view.signals.comments > 0 ||
+            view.signals.inbound > 0 ||
+            session !== null) && (
           <div class="article__meta">
           {history.length > 1 && (
             <a class="article__versions" href={`/p/${view.article.id}/history`}>
@@ -289,21 +338,8 @@ if (article !== null && view !== null) {
             </form>
           )}
 
-          {/*
-            §49.1 as ADR 0018 rewrote it — an action that begins and ends on this device.
-
-            `hidden` until `article.js` has run, like the theme control: a button that does
-            nothing is worse than no button. A reader with scripts off loses it and keeps the
-            address, which was never anywhere but the address bar.
-          */}
-          <button class="article__copy" type="button" data-copy-url hidden>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <rect x="9" y="9" width="11" height="11" rx="2.2" />
-              <path d="M5.5 15H5a1.9 1.9 0 0 1-1.9-1.9V5A1.9 1.9 0 0 1 5 3.1h8.1A1.9 1.9 0 0 1 15 5v.5" />
-            </svg>
-            <span data-copy-url-label>Copy URL</span>
-          </button>
           </div>
+          )}
         </div>
 
         {/*

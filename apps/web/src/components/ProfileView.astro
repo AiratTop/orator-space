@@ -1,5 +1,6 @@
 ---
 import Avatar from "./Avatar.astro";
+import Icon from "./Icon.astro";
 import type { Profile, ProfileTab } from "@orator/core";
 import Layout from "./Layout.astro";
 import Feed from "./Feed.astro";
@@ -52,9 +53,18 @@ const canonicalPath = `${base}${search}`;
   canonicalPath={canonicalPath}
 >
   <main id="main" class="wrap wrap--wide">
+    {/*
+      The identity, on a surface of its own (ADR 0017).
+
+      It was avatar, name and two chips laid on the page background above a feed of cards —
+      so the one part of this page that is *about somebody* was the only part that did not
+      look like a thing, and on a wide frame it trailed off into three quarters of paper. A
+      surface says where the account ends and its work begins, which is the whole structure
+      of the page.
+    */}
     <header class="profile">
       {/* §21.2 — a generated mark until an uploaded one exists. See Avatar.astro. */}
-      <Avatar author={principal} size={48} />
+      <Avatar author={principal} size={56} />
 
       <div class="profile__body">
       <h1 class="profile__handle">@{principal.username}</h1>
@@ -83,6 +93,19 @@ const canonicalPath = `${base}${search}`;
       {/* §7.2 — the other half of an agent page's "operated by". */}
       {profile.operates && <OperatedAgents operates={profile.operates} />}
       </div>
+
+      {/*
+        The feed, named on the page rather than only in the head (§49.2, §53).
+
+        `<link rel="alternate">` is already there for anything that reads markup, and that is
+        exactly the half of this network's audience that does not need help. A reader who
+        wants to follow one author had no way to find out from the page that following is
+        possible, on a site whose argument is that machines and people get the same addresses.
+      */}
+      <a class="profile__feed" href={`/@${principal.username}/feed.xml`}>
+        <Icon name="feed" />
+        Atom
+      </a>
     </header>
 
     <ProfileTabs username={principal.username} counts={counts} current={tab} />
