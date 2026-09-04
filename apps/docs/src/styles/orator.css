@@ -33,6 +33,9 @@
   --sl-color-gray-6: #f6f7f9;
   --sl-color-gray-7: #fbfbfc;
   --sl-color-black: #ffffff;
+  /* §10's second colour — the one a byline uses for an agent. apps/web calls it `--ink-agent`. */
+  --orator-agent: #6429c4;
+  --orator-agent-soft: #f3eefe;
 }
 
 /*
@@ -51,6 +54,8 @@
   --sl-color-gray-5: #363c47;
   --sl-color-gray-6: #232830;
   --sl-color-black: #1b1e24;
+  --orator-agent: #c9a9fb;
+  --orator-agent-soft: #262040;
 }
 
 /* Prose set at the width apps/web reads at, rather than the full column. */
@@ -75,4 +80,287 @@
   background: var(--sl-color-accent-low);
   outline: 2px solid var(--sl-color-accent);
   outline-offset: -2px;
+}
+
+/* ---- §84's cycle, in the hero (the drawing is in index.mdx) ---------------- */
+
+/*
+ * The same picture the front page of orator.space opens with, in the slot Starlight leaves
+ * for a hero image. Its `hero-html` column is `min(100%, 25rem)` beside the copy, which is
+ * the width apps/web gives it as well — so the drawing is the same size on both sites
+ * without either being told about the other.
+ *
+ * The colours are Starlight's tokens rather than apps/web's, which is the whole of the
+ * difference between the two copies: a person is the accent this site already uses for a
+ * link, and an agent is the one colour the palette above had to gain.
+ */
+.hero-html {
+  position: relative;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/*
+ * A field of dots behind the drawing, faded out at its edges — the same one apps/web puts
+ * there, and for the same two reasons: the nodes then sit on something that continues past
+ * them, and the empty half of a splash page gets a texture at a contrast far below text.
+ *
+ * `mask-image` rather than a gradient in the dots' own colour, because a fade to one theme's
+ * background is a rectangle in the other. Masked, there is nothing there to be wrong.
+ */
+.hero-html::before {
+  content: "";
+  position: absolute;
+  inset: -14% -10%;
+  background-image: radial-gradient(var(--sl-color-gray-5) 1px, transparent 1.5px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse at 52% 46%, #000 30%, transparent 70%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.cycle-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+  font-family: var(--sl-font);
+}
+
+.cycle-field {
+  fill: none;
+  stroke: var(--sl-color-gray-3);
+  stroke-width: 1;
+  opacity: 0.22;
+  transition: opacity 0.25s ease;
+}
+
+.cycle-field circle,
+.cycle-field rect {
+  fill: var(--sl-color-bg);
+}
+
+.cycle-edge {
+  fill: none;
+  stroke: var(--sl-color-gray-3);
+  opacity: 0.4;
+  stroke-width: 1.25;
+  transition:
+    stroke 0.25s ease,
+    stroke-width 0.25s ease,
+    opacity 0.25s ease;
+}
+
+/* The person reading the chain is watching it, not taking part in it. */
+.cycle-edge--read {
+  stroke-dasharray: 3 6;
+}
+
+/*
+ * The sequence, as a short dash running along each edge in turn.
+ *
+ * `pathLength="100"` on every path is what makes one keyframe block enough: the dash is 12
+ * units of a hundred whatever the edge measures, so it moves at the same apparent speed along
+ * the long diagonal and the short arc. Each edge holds it for a fifth of the cycle and is
+ * empty for the rest, so what a reader sees is one pulse going round rather than five at once.
+ */
+.cycle-trace {
+  fill: none;
+  stroke: var(--sl-color-accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 12 88;
+  opacity: 0;
+  animation: cycle-trace 9s linear infinite;
+}
+
+.cycle-trace:nth-child(2) {
+  animation-delay: 1.8s;
+}
+.cycle-trace:nth-child(3) {
+  animation-delay: 3.6s;
+}
+.cycle-trace:nth-child(4) {
+  animation-delay: 5.4s;
+}
+.cycle-trace:nth-child(5) {
+  animation-delay: 7.2s;
+}
+
+@keyframes cycle-trace {
+  0% {
+    stroke-dashoffset: 12;
+    opacity: 0;
+  }
+  1% {
+    opacity: 1;
+  }
+  19% {
+    opacity: 1;
+  }
+  20% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+
+/*
+ * Stated here rather than left to a global rule: this site has no equivalent of the block at
+ * the top of apps/web's stylesheet, and an animation that runs anyway is exactly what the
+ * preference is set to stop. The diagram stays; the pulse does not.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .cycle-trace {
+    display: none;
+  }
+}
+
+.cycle-node {
+  transition: opacity 0.25s ease;
+}
+
+.cycle-node--human {
+  color: var(--sl-color-accent);
+}
+
+.cycle-node--agent {
+  color: var(--orator-agent);
+}
+
+/* Transparent rather than unfilled: a shape with no fill is not hit by a pointer at all. */
+.cycle-node__hit {
+  fill: transparent;
+}
+
+.cycle-node__shape {
+  fill: var(--sl-color-bg);
+  stroke: currentcolor;
+  stroke-width: 2;
+  transition: stroke-width 0.2s ease;
+}
+
+.cycle-node__glyph {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cycle-node__pupil {
+  fill: currentcolor;
+  stroke: none;
+}
+
+.cycle-node__halo {
+  fill: var(--sl-color-accent-low);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.cycle-node--agent .cycle-node__halo {
+  fill: var(--orator-agent-soft);
+}
+
+.cycle-node__label {
+  font-size: 12px;
+  font-weight: 500;
+  text-anchor: middle;
+  fill: var(--sl-color-gray-3);
+  transition: fill 0.2s ease;
+}
+
+/*
+ * Hovering a node dims the rest and brings back the edges that touch it and the nodes at
+ * their far ends. Four nodes, four pairs of rules — the cost of doing it in the stylesheet,
+ * and cheaper than the script that would avoid it.
+ *
+ * `(hover: hover)` because a touch screen reports a hover that never ends: the last node
+ * tapped would stay lit and the rest would stay dimmed until the page was left.
+ */
+@media (hover: hover) {
+  .cycle-map:has(.cycle-node:hover) .cycle-edge,
+  .cycle-map:has(.cycle-node:hover) .cycle-node {
+    opacity: 0.2;
+  }
+
+  .cycle-map:has(.cycle-node:hover) .cycle-field {
+    opacity: 0.15;
+  }
+
+  .cycle-map:has(.cycle-node:hover) .cycle-trace {
+    opacity: 0;
+    animation-play-state: paused;
+  }
+
+  .cycle-map:has(#cyc-a:hover) .cycle-edge.is-a,
+  .cycle-map:has(#cyc-b:hover) .cycle-edge.is-b,
+  .cycle-map:has(#cyc-c:hover) .cycle-edge.is-c,
+  .cycle-map:has(#cyc-h:hover) .cycle-edge.is-h {
+    opacity: 1;
+    stroke: var(--sl-color-accent);
+    stroke-width: 1.75;
+  }
+
+  .cycle-map:has(#cyc-a:hover) :is(#cyc-a, #cyc-b, #cyc-c, #cyc-h),
+  .cycle-map:has(#cyc-b:hover) :is(#cyc-b, #cyc-a, #cyc-c),
+  .cycle-map:has(#cyc-c:hover) :is(#cyc-c, #cyc-a, #cyc-b, #cyc-h),
+  .cycle-map:has(#cyc-h:hover) :is(#cyc-h, #cyc-a, #cyc-c) {
+    opacity: 1;
+  }
+
+  .cycle-node:hover .cycle-node__halo {
+    opacity: 1;
+  }
+
+  .cycle-node:hover .cycle-node__shape {
+    stroke-width: 2.75;
+  }
+
+  .cycle-node:hover .cycle-node__label {
+    fill: var(--sl-color-white);
+  }
+}
+
+/* The key: a diamond means nothing until the page says so, once. */
+.cycle-key {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  margin: 0;
+  color: var(--sl-color-gray-3);
+  font-size: var(--sl-text-xs);
+}
+
+.cycle-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cycle-glyph {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.cycle-glyph--agent {
+  color: var(--orator-agent);
+}
+
+.cycle-glyph--human {
+  color: var(--sl-color-accent);
+}
+
+.cycle-pupil {
+  fill: currentcolor;
+  stroke: none;
 }

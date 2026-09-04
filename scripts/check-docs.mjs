@@ -116,6 +116,41 @@ function claims(page, path, pattern, expected, what) {
   claims(connecting, "mcp/connecting.md", /(\w+) tools\. Streamable/, [names.length], "MCP tools");
 }
 
+// ---- the cycle in the two heroes -----------------------------------------
+//
+// §84's drawing is on both front pages, and there is nothing between the two copies: the web
+// one is an Astro component, the documentation one is raw HTML in front matter, because
+// `hero.image.html` is where Starlight takes a hero image and front matter cannot import.
+// So the geometry is compared instead. What this catches is a node moved on one site and not
+// the other — a divergence no test would notice and no reader would report, because either
+// page on its own looks finished.
+//
+// Only the drawing, from the first group to the end of the element: the stylesheets differ
+// on purpose (one uses this site's tokens, the other Starlight's) and are not compared.
+{
+  const geometry = (source, what) => {
+    const start = source.indexOf('<g class="cycle-field"');
+    const end = source.indexOf("</svg>");
+    if (start === -1 || end === -1) {
+      problems.push(`${what}: the cycle drawing is not there at all`);
+      return null;
+    }
+    return source
+      .slice(start, end)
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  const web = "apps/web/src/components/CycleMap.astro";
+  const docs = "apps/docs/src/content/docs/index.mdx";
+  const a = geometry(await readFile(web, "utf8"), web);
+  const b = geometry(await readFile(docs, "utf8"), docs);
+  if (a !== null && b !== null && a !== b) {
+    problems.push(`${docs}: the cycle drawing no longer matches the one in ${web}`);
+  }
+}
+
 if (problems.length > 0) {
   console.error(`\nDocumentation drift (${problems.length}):\n`);
   for (const p of problems) console.error("  " + p);
@@ -126,5 +161,5 @@ if (problems.length > 0) {
 console.log(
   `docs: ok — ${SCOPES.length} scopes, ${Object.keys(ErrorType).length} error types ` +
     `(${RETRYABLE.size} retryable) and ${TOOLS.length} MCP tools are documented, ` +
-    "each with the count the prose claims",
+    "each with the count the prose claims, and the cycle drawing matches apps/web",
 );
