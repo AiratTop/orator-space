@@ -1,5 +1,5 @@
 ---
-import { latestFeed } from "@orator/core";
+import { DEFAULT_PAGE_SIZE, latestFeed } from "@orator/core";
 import { decodeFeedCursor } from "@orator/protocol";
 import Layout from "../components/Layout.astro";
 import Feed from "../components/Feed.astro";
@@ -15,7 +15,21 @@ import { ports } from "../lib/ports.js";
  */
 const before = decodeFeedCursor(Astro.url.searchParams.get("before"));
 const after = decodeFeedCursor(Astro.url.searchParams.get("after"));
-const page = await latestFeed(ports, { before, after });
+
+/*
+ * One more than the default, because the first card is the lead (ADR 0017).
+ *
+ * The lead spans both columns of the grid, so the cards after it pair up from an even
+ * position — and the default twenty leaves nineteen of them, which is odd, so the page ended
+ * with one card and a card-shaped hole beside it. Widening that last card closed the hole and
+ * made a worse promise: a full-width card on this page means "this is the one to read", and
+ * the twentieth-newest article is not.
+ *
+ * Twenty-one is not a magic number here; it is `DEFAULT_PAGE_SIZE + 1`, and it is the front
+ * page asking for what its own layout needs. Nothing else changes: §44.2's paging is a
+ * keyset, each page carries its own cursor, and a page size is a property of the request.
+ */
+const page = await latestFeed(ports, { limit: DEFAULT_PAGE_SIZE + 1, before, after });
 
 cacheHeaders(Astro.response.headers, CACHE.feed, CDN_CACHE.feed);
 

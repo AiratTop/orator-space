@@ -366,7 +366,7 @@ a {
    * the motion they came for.
    */
   .to-top,
-  .to-top__ring {
+  .to-top__fill {
     animation-duration: auto !important;
   }
 }
@@ -929,16 +929,6 @@ a {
  * anything: `#main` is one keystroke away for anybody using the keyboard.
  * ------------------------------------------------------------------------ */
 
-@property --to-top-fill {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
-.to-top {
-  display: none;
-}
-
 @keyframes to-top-appear {
   from {
     opacity: 0;
@@ -951,13 +941,14 @@ a {
   }
 }
 
+/* 2πr for r = 20, which is the circle the markup draws. */
 @keyframes to-top-progress {
   from {
-    --to-top-fill: 0deg;
+    stroke-dashoffset: 125.664;
   }
 
   to {
-    --to-top-fill: 360deg;
+    stroke-dashoffset: 0;
   }
 }
 
@@ -973,7 +964,6 @@ a {
     height: 2.75rem;
     border-radius: 50%;
     background: var(--surface);
-    border: 1px solid var(--line);
     color: var(--ink-soft);
     box-shadow: var(--shadow-2);
     text-decoration: none;
@@ -990,17 +980,31 @@ a {
     color: var(--ink);
   }
 
-  /*
-   * The ring: a full-circle gradient with its middle masked out, so the arc is the border
-   * rather than a wedge. `closest-side` keeps the hole round whatever the button's size.
-   */
+  /* Rotated so the arc starts at twelve o'clock rather than at three. */
   .to-top__ring {
     position: absolute;
-    inset: -3px;
-    border-radius: 50%;
-    background: conic-gradient(var(--accent) var(--to-top-fill), transparent 0deg);
-    -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
-    mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+    overflow: visible;
+  }
+
+  .to-top__track,
+  .to-top__fill {
+    fill: none;
+    stroke-width: 2;
+  }
+
+  .to-top__track {
+    stroke: var(--line);
+  }
+
+  .to-top__fill {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    stroke-dasharray: 125.664;
+    stroke-dashoffset: 125.664;
     animation: to-top-progress linear both;
     animation-timeline: scroll(root block);
   }
@@ -1174,23 +1178,6 @@ a {
    * the size of a lead would be the page asserting an editorial judgement it did not make.
    */
   .feed--lead .card:first-child {
-    grid-column: 1 / -1;
-  }
-
-  /*
-   * The last card takes the width when it would otherwise sit beside nothing.
-   *
-   * The lead spans both columns, so the cards after it pair up from an even position — and
-   * a page holding an odd number of them ends with one card and a card-shaped hole. The
-   * hole reads as a layout that broke rather than as a list that ended. `:nth-child(even)`
-   * is the arithmetic: with the lead at position 1, a last card at an even position is the
-   * first of a row nothing follows.
-   *
-   * The page size is not the place to fix this. It would make the fix depend on a number
-   * chosen for the database (§44.2), and the last page of a feed is short whatever that
-   * number is.
-   */
-  .feed--lead .card:last-child:nth-child(even) {
     grid-column: 1 / -1;
   }
 
@@ -2303,9 +2290,26 @@ a {
   font-size: var(--text-sm);
 }
 
-/* The one control here that does something rather than leading somewhere. */
-.article__meta .save {
+/*
+ * The two controls sit at the right-hand end of the row, whether or not both are there.
+ *
+ * `margin-left: auto` was on `.save`, which only exists for a signed-in reader — so the copy
+ * button was pushed right for them and left against the comment count for everybody else.
+ * The same page had two different layouts depending on who was looking at it, which is the
+ * kind of difference nobody sees because nobody looks at their own site signed out.
+ *
+ * The auto margin goes on whichever of the two comes first: Save when it is present, the
+ * copy button when it is not. `:has()` asks that question rather than a template answering
+ * it in two places.
+ */
+.article__meta .article__copy,
+.article__meta .save:has(+ .article__copy) {
   margin-left: auto;
+}
+
+/* Together they are one group, so the second does not take the gap again. */
+.article__meta .save + .article__copy {
+  margin-left: 0;
 }
 
 .article__head .byline {
@@ -3629,15 +3633,37 @@ a {
  * an undifferentiated column: somebody else's reply, then a box to type in, with nothing
  * saying which was which.
  */
+/*
+ * Answering an article is what this network is for, so the form says so.
+ *
+ * It was a rule and some fields on the page background — the same surface as the article
+ * above it, with nothing marking where the reading stopped and the writing started. On a
+ * page whose feed, panels and suggestions are all cards, the one control a reader is
+ * supposed to use was the only thing that was not.
+ */
 .join {
-  margin: 2.5rem 0 0;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--line);
+  margin: 3rem 0 0;
+  padding: 1.5rem 1.625rem 1.625rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
   max-width: none;
 }
 
 .join .field {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.875rem;
+}
+
+/* The field's own label opens this block; it should read like a heading. */
+.join > .field > label {
+  font-size: var(--text-base);
+}
+
+/* On a card, an input in the card's own colour is not an input. */
+.join textarea {
+  background: var(--paper);
+  min-height: 6.5rem;
 }
 
 .join__foot {
@@ -3651,6 +3677,19 @@ a {
   margin: 0;
 }
 
+/*
+ * One height for both controls, so their bottom edges agree.
+ *
+ * `align-items: flex-end` aligns boxes, and the boxes differed: a `<select>` sized by its
+ * font and a button sized by its padding came out two pixels apart, which is far enough to
+ * look like a mistake and not far enough to look deliberate. Stating the height once is
+ * shorter than tuning two paddings against each other.
+ */
+.join__foot select,
+.join__foot .button {
+  height: 2.5rem;
+}
+
 /* The button ends the row rather than following the select. */
 .join__foot .button {
   margin-left: auto;
@@ -3659,10 +3698,6 @@ a {
 .field--stance select {
   width: auto;
   min-width: 12rem;
-}
-
-.join__foot .button {
-  margin-left: auto;
 }
 
 /*

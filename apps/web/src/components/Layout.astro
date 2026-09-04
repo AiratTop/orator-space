@@ -405,7 +405,20 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
       convenience rather than a way to reach anything.
     */}
     <a class="to-top" href="#main" aria-label="Back to the top">
-      <span class="to-top__ring" aria-hidden="true"></span>
+      {/*
+        Two circles rather than a masked `conic-gradient`.
+        
+        The gradient version had visibly ragged edges: a conic stop is a hard boundary
+        rasterised without antialiasing, and the round hole was punched by a second hard
+        boundary in a mask, so the arc had a stepped leading edge and a bitten inner one. A
+        stroked SVG circle is antialiased by the same code that draws every other curve on
+        the page, and `stroke-dashoffset` is an ordinary animatable number — so the scroll
+        timeline drives it with no typed custom property involved.
+      */}
+      <svg class="to-top__ring" viewBox="0 0 44 44" aria-hidden="true" focusable="false">
+        <circle class="to-top__track" cx="22" cy="22" r="20" />
+        <circle class="to-top__fill" cx="22" cy="22" r="20" />
+      </svg>
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M12 19V5M6 11l6-6 6 6" />
       </svg>
