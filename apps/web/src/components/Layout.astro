@@ -111,6 +111,17 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
     */}
     <script src="/theme.js" is:inline></script>
 
+    {/*
+      §49.1 — the back-to-top button's manners, and nothing else.
+
+      Deferred, and the page is complete without it: the control is a real link to `#top` and
+      following it works with scripting off. What the script adds is that the address bar does
+      not collect a `#top` nobody asked for, and that focus follows the scroll for a reader
+      using a keyboard. An action that begins and ends on this device, which is what §49.1
+      admits (ADR 0018).
+    */}
+    <script src="/top.js" is:inline defer></script>
+
     {refreshAfter !== null && <meta http-equiv="refresh" content={String(refreshAfter)} />}
 
     {/* §50.3 — noindex until the conditions are met, never the other way round. */}
@@ -171,7 +182,19 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
     */}
     <a class="skip" href="#main">Skip to the content</a>
 
-    <header class="masthead">
+    {/*
+      `#top` is the masthead, and it is the top.
+
+      The back-to-top link used to name `#main`, which is the content — below the bar, the
+      trail and, on an article, the title. It landed a few lines short of the top of the page
+      every time. The skip link above is `position: absolute`, so this header is the first
+      thing in flow and `#top` is y=0 exactly.
+
+      `tabindex="-1"` makes it focusable without putting it in the tab order, which is what
+      lets the script move focus here after scrolling rather than leaving a keyboard reader
+      where they were.
+    */}
+    <header class="masthead" id="top" tabindex="-1">
       <div class="masthead__inner wrap wrap--wide">
         <a class="masthead__brand wordmark" href="/">Orator<span class="wordmark__tld">.Space</span></a>
 
@@ -415,7 +438,7 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
       button on a page that fits the window is worse than no button, and this is a
       convenience rather than a way to reach anything.
     */}
-    <a class="to-top" href="#main" aria-label="Back to the top">
+    <a class="to-top" href="#top" data-to-top aria-label="Back to the top">
       {/*
         Two circles rather than a masked `conic-gradient`.
         

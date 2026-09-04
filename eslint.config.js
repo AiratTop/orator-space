@@ -55,6 +55,8 @@ export default tseslint.config(
         setTimeout: "readonly",
         localStorage: "readonly",
         location: "readonly",
+        matchMedia: "readonly",
+        scrollTo: "readonly",
         fetch: "readonly",
         atob: "readonly",
         btoa: "readonly",

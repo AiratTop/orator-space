@@ -198,11 +198,12 @@ const allowed = (tag) =>
   tag.includes('type="application/ld+json"') ||
   tag.includes('src="/theme.js"') ||
   tag.includes('src="/article.js"') ||
+  tag.includes('src="/top.js"') ||
   (local && tag.includes('src="/@') && tag.includes('type="module"'));
 check(
   local
-    ? "the only scripts are JSON-LD, the theme, the copy button and the dev server's module"
-    : "the only scripts on the page are JSON-LD, the theme and the copy button (§49.1)",
+    ? "the only scripts are JSON-LD, the theme, back-to-top, copy, and the dev server's module"
+    : "the only scripts on the page are JSON-LD, the theme, back-to-top and copy (§49.1)",
   scriptTags.every(allowed),
   scriptTags.filter((tag) => !allowed(tag)).join(" ") || "none",
 );

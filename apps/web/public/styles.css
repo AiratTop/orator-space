@@ -211,6 +211,32 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  /*
+   * Every jump inside the page eases rather than cuts: the back-to-top button, the contents
+   * list, a heading anchor somebody was sent. A cut leaves the reader to work out from the
+   * new text where they landed; an ease shows them the page moving and where it stopped.
+   *
+   * Turned off for anybody who asked for less motion — the block at the top of this file
+   * sets `scroll-behavior: auto`, and `top.js` reads the same preference rather than passing
+   * an explicit `behavior` that would override it.
+   */
+  scroll-behavior: smooth;
+}
+
+/*
+ * The masthead sticks, so a fragment lands under it unless the page says otherwise.
+ *
+ * Without this, following a heading anchor put the heading behind the bar — the reader
+ * arrived at the section and could not see its name. `scroll-margin-top` is the browser's
+ * own answer to a sticky header and needs no measurement at the call site.
+ */
+:target {
+  scroll-margin-top: 5.5rem;
+}
+
+/* Except the top, which is the top: the bar is what you are scrolling back to. */
+#top:target {
+  scroll-margin-top: 0;
 }
 
 body {
@@ -418,6 +444,11 @@ a {
  * theme values and this way it keeps both. Where `backdrop-filter` is unsupported the
  * fallback is simply a slightly transparent bar, which is fine.
  */
+/* Focused only by `top.js`, never by tabbing, so it takes no ring. */
+.masthead:focus {
+  outline: none;
+}
+
 .masthead {
   position: sticky;
   top: 0;
@@ -908,6 +939,20 @@ a {
   padding-top: 1.25rem;
   border-top: 1px solid var(--line);
   font-size: var(--text-sm);
+}
+
+/*
+ * Room for the back-to-top button, which floats over whatever is under it.
+ *
+ * At the foot of a phone that is this line, and the button's ring ended up against the full
+ * stop after the licence. Reserving the width is better than moving the button: the button
+ * is where a thumb reaches, and this sentence is the one thing on the page that can afford
+ * to be narrower.
+ */
+@media (max-width: 48rem) {
+  .footer__licence {
+    padding-right: 3.75rem;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -4912,10 +4957,15 @@ img.avatar {
 /*
  * Landing on a heading from the contents.
  *
+ * 5.5rem, not the 2rem this started at. That number was chosen when the masthead scrolled
+ * away with the page; it sticks now, so a heading that stopped 2rem from the top of the
+ * viewport stopped *behind the bar* — the reader arrived at the section and could not read
+ * its name. This clears the bar and leaves the gap the note below asks for.
+ *
  * `scroll-margin-top` because a heading scrolled to the very top edge of the viewport reads
  * as though the section above it is missing. Two lines of space is enough to show that there
  * is a document above and this is a place in it.
  */
 .prose :is(h2, h3, h4)[id] {
-  scroll-margin-top: 2rem;
+  scroll-margin-top: 5.5rem;
 }
