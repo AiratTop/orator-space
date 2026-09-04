@@ -44,7 +44,7 @@ node .claude/skills/design-shots/shot.mjs --label after  --base local /
 | `--label`    | —               | filename prefix, for before/after                                    |
 | `--out`      | `.design-shots` |                                                                      |
 
-## Four things worth knowing before the first run
+## Things worth knowing before the first run
 
 **Staging is the target, not production.** Production has no articles in it, so a feed, a
 byline, a tag row and an article page all render as their empty state there — which is the
@@ -63,9 +63,30 @@ reason that survives AGENTS.md, "Change discipline".
 choice is the system one, so the stylesheet reads `prefers-color-scheme` and the script sets
 it directly. No interaction, no stored preference, and dark mode is one flag.
 
-**Signed-in pages cannot be reached.** `/settings`, `/moderation`, `/bookmarks` need a
-session, and this script carries none — it opens a fresh profile every run. Ask the operator
-for a screenshot of those, or build the page's states locally.
+**Signed-in pages need `--as`, and it only works locally.** `/settings`, `/moderation` and
+`/bookmarks` are a third of this site, and a passkey ceremony (ADR 0004) is not something a
+headless browser can perform. `--as <username>` writes a session row into the miniflare
+database under `.wrangler-state` and hands the browser the cookie, so the page renders by
+exactly the path a real reader takes.
+
+```sh
+node .claude/skills/design-shots/shot.mjs --base local --as owner-aajqmf /settings
+node .claude/skills/design-shots/shot.mjs --base local --as mod-hkrct1  /moderation
+```
+
+Find an account to be: any row of
+
+```sh
+cd apps/edge && npx wrangler d1 execute DB --local --persist-to ../../.wrangler-state \
+  --command "SELECT username, kind, platform_role FROM principals WHERE kind = 'human'"
+```
+
+The moderation queue needs one whose `platform_role` is `moderator`.
+
+**This is deliberately not a `/dev/signin` route**, and the note at the top of `session.mjs`
+says why at length: the first attempt was one, guarded by `import.meta.env.DEV`, and the
+build kept the route and shipped an auth bypass with a boolean in front of it. Nothing in
+`apps/web` knows this script exists. Do not move it back.
 
 ## Reading the output
 

@@ -19,6 +19,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
+import { mintSession } from "./session.mjs";
 import { join, resolve as resolvePath } from "node:path";
 
 /* Chrome is the operator's own browser. Nothing here downloads one. */
@@ -60,6 +61,7 @@ usage: node .claude/skills/design-shots/shot.mjs [options] <path|url> ...
   --theme <light|dark|both>         default light
   --full                            whole page rather than the fold
   --clip <selector>                 just that element, for iterating on one component
+  --as <username>                   open a session for that account — local base only
   --label <name>                    filename prefix, e.g. before / after
   --out <dir>                       default .design-shots (git-ignored)
 `);
@@ -74,6 +76,7 @@ function parseArgs(argv) {
     full: false,
     clip: null,
     label: null,
+    as: null,
     out: ".design-shots",
     targets: [],
   };
@@ -91,11 +94,20 @@ function parseArgs(argv) {
     } else if (arg === "--full") opts.full = true;
     else if (arg === "--clip") opts.clip = value();
     else if (arg === "--label") opts.label = value();
+    else if (arg === "--as") opts.as = value();
     else if (arg === "--out") opts.out = value();
     else if (arg.startsWith("--")) usage(`unknown option ${arg}`);
     else opts.targets.push(arg);
   }
   if (opts.targets.length === 0) usage("nothing to screenshot");
+  /*
+   * A session is written into the miniflare database under `.wrangler-state`, which only a
+   * dev server opens. Refusing any other base here is not a formality: a deployed site has no
+   * such row, so the run would quietly produce a directory of signed-out pages.
+   */
+  if (opts.as !== null && !opts.base.startsWith("http://localhost")) {
+    usage(`--as needs --base local; a session is minted in the local database and nowhere else`);
+  }
   for (const name of opts.viewports) {
     if (!VIEWPORTS[name] && !/^\d+x\d+$/.test(name)) usage(`unknown viewport ${name}`);
   }
@@ -239,6 +251,27 @@ async function launch() {
   };
 }
 
+/**
+ * Puts a session cookie in the browser before the first shot.
+ *
+ * `session.mjs` writes the row; this hands the browser the other half. `Network.setCookie`
+ * rather than a visit to a sign-in page, because there is no sign-in page a script can use —
+ * see the note at the top of `session.mjs` for why that stayed true.
+ */
+async function signIn(cdp, base, username) {
+  const token = await mintSession(process.cwd(), username);
+  const { hostname } = new URL(base);
+  await cdp.send("Network.enable");
+  const { success } = await cdp.send("Network.setCookie", {
+    name: "orator_session",
+    value: token,
+    domain: hostname,
+    path: "/",
+    httpOnly: true,
+  });
+  if (!success) throw new Error(`Chrome refused the session cookie for ${hostname}`);
+}
+
 async function capture(cdp, { url, viewport, theme, full, clip }) {
   await cdp.send("Emulation.setDeviceMetricsOverride", {
     width: viewport.width,
@@ -303,6 +336,11 @@ await mkdir(outDir, { recursive: true });
 const browser = await launch();
 let failures = 0;
 try {
+  if (opts.as !== null) {
+    await signIn(browser.cdp, opts.base, opts.as);
+    process.stdout.write(`signed in as @${opts.as}\n`);
+  }
+
   for (const target of opts.targets) {
     const url = target.startsWith("http")
       ? target

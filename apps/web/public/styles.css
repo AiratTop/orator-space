@@ -243,6 +243,61 @@ a {
 }
 
 /*
+ * One look for every control that takes typing or a choice.
+ *
+ * Written with `:where()`, so the whole selector has zero specificity and the components
+ * that style their own field — `.field input`, `.search__input` — still win without having
+ * to be written more loudly. What this catches is the controls nobody gave a class to: the
+ * `<select>` pairs in the moderation queue, the stance picker on a comment, the textareas.
+ * Those were the platform's defaults, which on a dark page means a grey system widget with a
+ * light dropdown behind it — every form on the site was consistent except the one place a
+ * moderator makes decisions.
+ *
+ * `font: inherit` is the part that matters most: a control that does not inherit the page's
+ * font is the single loudest way an interface says it was assembled rather than designed.
+ */
+:where(
+  select,
+  textarea,
+  input:not(
+    [type="hidden"],
+    [type="submit"],
+    [type="button"],
+    [type="radio"],
+    [type="checkbox"],
+    [type="file"]
+  )
+) {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-md);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+:where(select, textarea, input):hover {
+  border-color: var(--ink-soft);
+}
+
+:where(select, textarea, input):focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+/* A textarea is for prose, so it gets the measure and never the horizontal resize handle. */
+:where(textarea) {
+  width: 100%;
+  max-width: var(--measure);
+  resize: vertical;
+  line-height: 1.6;
+}
+
+/*
  * One focus ring, everywhere, and it is not the browser's.
  *
  * The default outline is drawn in the UA's own colour against whatever is behind it, which
@@ -769,9 +824,10 @@ a {
  * dressing the two the same would teach a reader to ignore the one that matters.
  */
 .tag--contested {
-  border-color: var(--ink-soft);
+  background: var(--paper-soft);
+  border-color: var(--line-strong);
   color: var(--ink);
-  font-weight: 600;
+  font-weight: 640;
 }
 
 /* Feed ------------------------------------------------------------------- */
