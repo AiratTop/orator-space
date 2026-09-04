@@ -835,6 +835,331 @@ a {
   text-wrap: balance;
 }
 
+/* ---- the front page's cycle, drawn (§84, §10) ----------------------------- */
+
+/*
+ * The opening becomes two columns where there is room for two.
+ *
+ * It was one column 52rem wide inside a 78rem frame, so a third of the first screen was
+ * paper — and the thing missing from that screen is the one a sentence is bad at: that an
+ * argument here is a chain between several authors. `CycleMap` draws §84's cycle, which is
+ * the same sequence the `ol` under "What this is" states in words further down.
+ *
+ * 64rem is where the second column stops taking width from the first: below it the text
+ * column would drop under 40rem and the headline would break into four lines to make room
+ * for a decoration. So below it there is no second column at all.
+ */
+.lede__text {
+  max-width: 52rem;
+}
+
+/*
+ * Not rendered on a phone, and `display: none` rather than a smaller drawing.
+ *
+ * The comment above `.lede` records what the opening costs on a 390px screen: at the desktop
+ * sizes it filled the viewport on its own and the feed began below the fold. A diagram of
+ * four nodes and eleven edges is not readable at 340px wide, and a picture that has to be
+ * squinted at is worth less than the scroll it takes.
+ */
+.lede__art {
+  display: none;
+}
+
+@media (min-width: 64rem) {
+  .lede {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 52rem) minmax(19rem, 1fr);
+    gap: var(--gap);
+    align-items: center;
+  }
+
+  .lede__art {
+    display: block;
+    position: relative;
+    margin: 0;
+    justify-self: end;
+    width: 100%;
+    max-width: 25rem;
+  }
+}
+
+/*
+ * A field of dots behind the graph, faded out at its edges.
+ *
+ * Two jobs. It stops the drawing reading as a boxed illustration dropped into the corner —
+ * the nodes sit on something that continues past them, which is the claim the faint
+ * satellite nodes make as well. And it gives the right-hand third of the screen a texture at
+ * a contrast far below text, so the page is not half empty and is not half busy either.
+ *
+ * `mask-image` rather than a gradient painted in the dots' own colour: the fade has to work
+ * against `--paper` in both themes, and a fade to one theme's ground is a rectangle in the
+ * other. Masked, there is nothing there to be the wrong colour.
+ */
+.lede__art::before {
+  content: "";
+  position: absolute;
+  inset: -14% -10%;
+  background-image: radial-gradient(var(--line-strong) 1px, transparent 1.5px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse at 52% 46%, #000 30%, transparent 70%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.cycle-map {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: auto;
+  /* The labels sit outside the nodes and one of them reaches the edge of the box. */
+  overflow: visible;
+}
+
+/*
+ * The network the chain runs through: nodes and edges this page is not about.
+ *
+ * Four nodes alone read as the whole of it, which is the one thing this drawing must not
+ * say — §3.1's hypothesis is about a network, and §84's chain is a path through one. They
+ * are drawn at a contrast where they are texture rather than information, and nothing about
+ * them is interactive: there is nothing to find out.
+ */
+.cycle-field {
+  fill: none;
+  stroke: var(--ink-soft);
+  stroke-width: 1;
+  opacity: 0.22;
+  transition: opacity 0.25s ease;
+}
+
+.cycle-field circle,
+.cycle-field rect {
+  fill: var(--paper);
+}
+
+.cycle-edge {
+  fill: none;
+  /*
+   * `--ink-soft` held down by opacity rather than `--line-strong` at full strength: a line
+   * this thin against paper needs a darker ink to survive at all, and the border colours are
+   * mixed for a 1px edge sitting next to a filled surface rather than for a hairline in the
+   * middle of empty page.
+   */
+  stroke: var(--ink-soft);
+  opacity: 0.4;
+  stroke-width: 1.25;
+  transition:
+    stroke 0.25s ease,
+    stroke-width 0.25s ease,
+    opacity 0.25s ease;
+}
+
+/* The person reading the chain is watching it, not taking part in it. */
+.cycle-edge--read {
+  stroke-dasharray: 3 6;
+}
+
+/*
+ * The sequence, as a short dash running along each edge in turn.
+ *
+ * `pathLength="100"` on every path is what makes one keyframe block enough: the dash is 12
+ * units of a hundred whatever the edge measures, so it moves at the same apparent speed
+ * along the long diagonal and the short arc.
+ *
+ * Each edge holds its dash for a fifth of the cycle and is empty for the rest, so what a
+ * reader sees is one pulse travelling the loop rather than five pulses at once. That is the
+ * difference between a diagram of a cycle and a picture of a graph.
+ */
+.cycle-trace {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 12 88;
+  opacity: 0;
+  animation: cycle-trace 9s linear infinite;
+}
+
+.cycle-trace:nth-child(2) {
+  animation-delay: 1.8s;
+}
+.cycle-trace:nth-child(3) {
+  animation-delay: 3.6s;
+}
+.cycle-trace:nth-child(4) {
+  animation-delay: 5.4s;
+}
+.cycle-trace:nth-child(5) {
+  animation-delay: 7.2s;
+}
+
+/*
+ * The reduced-motion block at the top of this file forces the duration to a millisecond,
+ * which lands every dash on the last keyframe — `opacity: 0`, off the end of its edge. So a
+ * reader who asked for less motion gets the diagram and none of the animation, without a
+ * second rule here saying so.
+ */
+@keyframes cycle-trace {
+  0% {
+    stroke-dashoffset: 12;
+    opacity: 0;
+  }
+  1% {
+    opacity: 1;
+  }
+  19% {
+    opacity: 1;
+  }
+  20% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+
+.cycle-node {
+  transition: opacity 0.25s ease;
+}
+
+/*
+ * A disc wider than the shape under it, invisible and clickable.
+ *
+ * `transparent` rather than `none`: a shape with no fill is not hit by a pointer at all, and
+ * an 18px diamond is a target a hand has to aim at. The hit area is what makes the highlight
+ * feel like it belongs to the node rather than to a pixel.
+ */
+.cycle-node__hit {
+  fill: transparent;
+}
+
+.cycle-node__shape {
+  fill: var(--paper);
+  stroke-width: 2;
+  transition: stroke-width 0.2s ease;
+}
+
+/* §10's two colours, the ones a byline already uses: a person is the accent, an agent is not. */
+.cycle-node--human .cycle-node__shape {
+  stroke: var(--accent);
+}
+
+.cycle-node--agent .cycle-node__shape {
+  stroke: var(--ink-agent);
+}
+
+.cycle-node__halo {
+  fill: var(--accent-soft);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.cycle-node--agent .cycle-node__halo {
+  fill: var(--tint-agent);
+}
+
+.cycle-node__label {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-anchor: middle;
+  fill: var(--ink-soft);
+  transition: fill 0.2s ease;
+}
+
+/*
+ * The reaction to a pointer, and it is `:has()` rather than a script.
+ *
+ * Hovering a node dims everything and brings back the edges that touch it and the nodes at
+ * their far ends — so the answer to "what did this one do" is the drawing answering it. Four
+ * nodes means four pairs of rules; a fifth node would mean a fifth pair, which is the honest
+ * cost of doing this in the stylesheet and cheaper than the script that avoids it (§49.1).
+ *
+ * `(hover: hover)` because a touch screen reports a hover that never ends: the last node
+ * tapped would stay lit and the rest of the diagram would stay dimmed until the page was
+ * left.
+ */
+@media (hover: hover) {
+  .cycle-map:has(.cycle-node:hover) .cycle-edge,
+  .cycle-map:has(.cycle-node:hover) .cycle-node {
+    opacity: 0.2;
+  }
+
+  .cycle-map:has(.cycle-node:hover) .cycle-field {
+    opacity: 0.15;
+  }
+
+  /* The pulse stops while somebody is reading a branch of it. */
+  .cycle-map:has(.cycle-node:hover) .cycle-trace {
+    opacity: 0;
+    animation-play-state: paused;
+  }
+
+  .cycle-map:has(#cyc-a:hover) .cycle-edge.is-a,
+  .cycle-map:has(#cyc-b:hover) .cycle-edge.is-b,
+  .cycle-map:has(#cyc-c:hover) .cycle-edge.is-c,
+  .cycle-map:has(#cyc-h:hover) .cycle-edge.is-h {
+    opacity: 1;
+    stroke: var(--accent);
+    stroke-width: 1.75;
+  }
+
+  .cycle-map:has(#cyc-a:hover) :is(#cyc-a, #cyc-b, #cyc-c, #cyc-h),
+  .cycle-map:has(#cyc-b:hover) :is(#cyc-b, #cyc-a, #cyc-c),
+  .cycle-map:has(#cyc-c:hover) :is(#cyc-c, #cyc-a, #cyc-b, #cyc-h),
+  .cycle-map:has(#cyc-h:hover) :is(#cyc-h, #cyc-a, #cyc-c) {
+    opacity: 1;
+  }
+
+  .cycle-node:hover .cycle-node__halo {
+    opacity: 1;
+  }
+
+  .cycle-node:hover .cycle-node__shape {
+    stroke-width: 2.75;
+  }
+
+  .cycle-node:hover .cycle-node__label {
+    fill: var(--ink);
+  }
+}
+
+/*
+ * The key, which is what stops the two shapes being a decoration.
+ *
+ * A diamond and a circle mean nothing until the page says which is which, once. Text rather
+ * than more drawing, because §10's distinction is the site's central claim and WCAG 2.2 does
+ * not accept a shape as the carrier of a meaning any more than it accepts a colour.
+ */
+.lede__key {
+  display: flex;
+  gap: 1.25rem;
+  justify-content: center;
+  margin-top: 0.5rem;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.lede__key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.lede__glyph {
+  width: 0.875rem;
+  height: 0.875rem;
+  fill: none;
+  stroke: var(--ink-agent);
+  stroke-width: 2;
+}
+
+.lede__glyph--human {
+  stroke: var(--accent);
+}
+
 /* ---- the front page's claims and its explanation (§84, §3.1) -------------- */
 
 /*
