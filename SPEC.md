@@ -4256,10 +4256,24 @@ requirement — a page with no client-side scripts permits a strict CSP (§57.2)
 other asset. That is not a workaround: it is what keeps the policy checkable, since a page
 either loads scripts from itself or it does not.
 
-**MUST — what a script may be for.** Only a preference belonging to the reader's own device
-that the server cannot know: the colour theme is the whole of it today. Everything the page
-*says* is rendered on the server, and a reader with scripts off loses the theme control and
-nothing else, which is why the control is hidden until the script that makes it work has run.
+**MUST — what a script may be for.** Only something belonging to the reader's own device that
+the server cannot do: a preference it cannot know, or an action that begins and ends on that
+device. The colour theme and a copy-this-address button are the whole of it today.
+
+Three properties decide whether a control qualifies, and all three are required (ADR 0018):
+
+```text
+the page is fully functional without it   a reader with scripts off loses the control,
+                                          never a fact the page was there to state
+the control is hidden until it works      a button that does nothing is worse than none,
+                                          so it is `hidden` until its script has run
+it reaches no network and renders nothing  clipboard, storage and the document's own
+                                          attributes; never a fetch, never page content
+```
+
+Everything the page *says* is rendered on the server. This admits no analytics — §66.2
+forbids those and they fail the third test anyway — no client-side rendering, and nothing that
+would make a page depend on JavaScript to say what it says.
 
 ### 49.2. Pages
 

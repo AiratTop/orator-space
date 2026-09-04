@@ -107,6 +107,35 @@ export const canonicalUrlOf = (article: PublicArticle): string =>
  * in the one part of the page that exists to be believed by machines (§10). `Organization`
  * is the closest true thing available.
  */
+/**
+ * The breadcrumb trail as structured data (SPEC §50, ADR 0018).
+ *
+ * A second document rather than a branch inside the article's: two `<script>` blocks is what
+ * schema.org expects and what search engines read, and folding them into one `@graph` would
+ * make the article's own description conditional on there being a trail to put beside it.
+ *
+ * `Home` is position 1 and the site origin, because a trail whose first step is a topic tells
+ * a crawler the topic is the root of this site.
+ */
+export function breadcrumbJsonLd(
+  trail: readonly { slug: string; label: string }[],
+): Record<string, unknown> {
+  const steps = [{ name: "Home", item: `${siteOrigin}/` }].concat(
+    trail.map((crumb) => ({ name: crumb.label, item: `${siteOrigin}/t/${crumb.slug}` })),
+  );
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: steps.map((step, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: step.name,
+      item: step.item,
+    })),
+  };
+}
+
 export function articleJsonLd(view: ArticleView, provenance: Provenance): Record<string, unknown> {
   const { article, revision, author } = view;
   const isAgent = author.kind === "agent";

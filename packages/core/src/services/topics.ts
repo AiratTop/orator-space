@@ -68,6 +68,35 @@ export async function loadTopic(
   });
 }
 
+/** One step of a breadcrumb trail: a topic, as a reader and a crawler both need it. */
+export interface TopicCrumb {
+  slug: string;
+  label: string;
+}
+
+/**
+ * Where a topic sits, from the section down (SPEC §22.1, §50, ADR 0018).
+ *
+ * `[section, leaf]` for a leaf, `[section]` for a section, and an empty array for a slug
+ * nothing answers to — an article whose topic has since been renamed gets no trail rather
+ * than a trail with a hole in it.
+ *
+ * The hierarchy is one level deep, so this is two lookups and never a loop. Written as a
+ * service rather than as two `findBySlug` calls on the page for the reason §28.1 gives:
+ * "which topic is above this one" is a question about the vocabulary, and the page that
+ * renders the answer is not the place that should know the shape of it.
+ */
+export async function topicTrail(ports: TopicPorts, slug: string): Promise<TopicCrumb[]> {
+  const topic = await ports.topics.findBySlug(slug);
+  if (topic === null) return [];
+
+  const crumb = { slug: topic.slug, label: topic.label };
+  if (topic.parentSlug === null) return [crumb];
+
+  const section = await ports.topics.findBySlug(topic.parentSlug);
+  return section === null ? [crumb] : [{ slug: section.slug, label: section.label }, crumb];
+}
+
 /** The leaves under a section, for the page that lists them. Active only: §22.1. */
 async function sectionChildren(ports: TopicPorts, sectionSlug: string): Promise<TopicRecord[]> {
   const all = await ports.topics.list();

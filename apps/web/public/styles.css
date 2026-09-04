@@ -357,6 +357,18 @@ a {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+
+  /*
+   * Except the two that are driven by a scroll timeline, where `animation-duration` means a
+   * proportion of the scroll range rather than a length of time — forcing it to a
+   * millisecond leaves the back-to-top ring stuck at zero rather than still. Neither
+   * animates on its own: they advance only while the reader is already scrolling, which is
+   * the motion they came for.
+   */
+  .to-top,
+  .to-top__ring {
+    animation-duration: auto !important;
+  }
 }
 
 /* Site chrome ------------------------------------------------------------ */
@@ -411,11 +423,65 @@ a {
 
 .masthead__inner {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
+  gap: 0.5rem;
   padding: 0.875rem 0;
+}
+
+/* The brand holds the left; everything else is pushed to the right of it. */
+.masthead__brand {
+  margin-right: auto;
+}
+
+/*
+ * The menu, which is a panel on a phone and a row on a desktop, from one element.
+ *
+ * `<details>` hides everything but its summary while closed, and an author `display` on the
+ * hidden child is what puts it back — which is the whole desktop rule below. No script is
+ * involved in either state (§49.1).
+ */
+.masthead__menu {
+  display: flex;
+  align-items: center;
+}
+
+.masthead__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+/* Safari draws its own disclosure triangle unless both of these are said. */
+.masthead__toggle::-webkit-details-marker {
+  display: none;
+}
+
+.masthead__toggle::marker {
+  content: "";
+}
+
+.masthead__toggle:hover {
+  color: var(--ink);
+  background: var(--paper-soft);
+}
+
+/* One icon at a time, chosen by the element's own open state rather than by a class. */
+.masthead__toggle .icon--close,
+.masthead__menu[open] .masthead__toggle .icon--open {
+  display: none;
+}
+
+.masthead__menu[open] .masthead__toggle .icon--close {
+  display: block;
 }
 
 .masthead__brand {
@@ -442,24 +508,63 @@ a {
  * to save a line of chrome. Six short words fit on two lines; a menu that is always open
  * needs no state, no mechanism, and nothing to go wrong.
  */
+/*
+ * Below 48rem the navigation is a panel under the bar; at and above it, a row inside the bar.
+ *
+ * Absolutely positioned against `.masthead`, which is `position: sticky` and therefore
+ * already a containing block — so the panel follows the bar down the page rather than
+ * scrolling away from the button that opened it.
+ */
 .masthead__nav {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: var(--text-md);
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.125rem;
+  padding: 0.5rem var(--gutter) 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--shadow-2);
+  font-size: var(--text-base);
 }
 
-@media (max-width: 32rem) {
-  /* Narrower gaps and a full-width row, so the links break tidily instead of at the edge. */
-  .masthead__nav {
-    flex-basis: 100%;
-    gap: 0.125rem;
-    margin: 0 -0.5rem;
+@media (min-width: 48rem) {
+  .masthead__toggle {
+    display: none;
   }
 
-  .masthead__inner {
-    padding: 0.75rem 0 0.625rem;
+  /*
+   * Forcing a closed `<details>` to show its contents, twice, because browsers changed how
+   * they hide them.
+   *
+   * The old mechanism was a `display: none` in the UA stylesheet, which an author `display`
+   * on the child overrides — the technique every CSS-only disclosure menu was built on. The
+   * current one is `::details-content` with `content-visibility: hidden`, and `display` no
+   * longer touches it: this was found by shipping the desktop bar with no navigation in it
+   * at all, which is what the rule below prevents.
+   *
+   * Both are written, and each is inert in the browser that does not use it.
+   */
+  .masthead__menu::details-content {
+    content-visibility: visible;
+    block-size: auto;
+  }
+
+  .masthead__nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+    font-size: var(--text-md);
   }
 }
 
@@ -483,6 +588,85 @@ a {
 .masthead__nav a:hover {
   color: var(--ink);
   background: var(--paper-soft);
+}
+
+/*
+ * The theme, as one icon (SPEC §49.1).
+ *
+ * `[hidden]` alone would lose to `display: inline-flex`, which is the classic way a control
+ * that does nothing ends up on the page anyway — the same trap the footer control names.
+ */
+.theme-cycle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.theme-cycle[hidden] {
+  display: none;
+}
+
+.theme-cycle:hover {
+  color: var(--ink);
+  background: var(--paper-soft);
+}
+
+/*
+ * Which of the three icons shows.
+ *
+ * Keyed off `data-choice`, which `theme.js` writes. Before the script runs the button is
+ * `hidden`, so the "no attribute" case never reaches a reader — but it is given the system
+ * icon anyway, because a control that renders empty for one frame is a control that flickers.
+ */
+.theme-cycle .icon {
+  display: none;
+}
+
+.theme-cycle .icon--system,
+.theme-cycle[data-choice="system"] .icon--system,
+.theme-cycle[data-choice="light"] .icon--light,
+.theme-cycle[data-choice="dark"] .icon--dark {
+  display: block;
+}
+
+.theme-cycle[data-choice="light"] .icon--system,
+.theme-cycle[data-choice="dark"] .icon--system {
+  display: none;
+}
+
+/*
+ * The icon set, drawn rather than downloaded.
+ *
+ * Inline SVG: `img-src 'self'` would admit a file, but an icon that is part of the interface
+ * has to take the interface's colour, and a fetched image cannot. `currentColor` is the whole
+ * reason these are markup.
+ */
+.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The half-filled circle that means "whatever the system says". */
+.icon__fill {
+  fill: currentColor;
+  stroke: none;
 }
 
 /* The front page's opening (SPEC §84) ----------------------------------- */
@@ -615,20 +799,26 @@ a {
  */
 .footer__columns {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.5fr) repeat(3, minmax(0, 1fr));
   gap: 2.5rem;
   max-width: var(--shell);
   margin: 0 auto;
 }
 
-@media (max-width: 48rem) {
+@media (max-width: 62rem) {
   .footer__columns {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 2rem;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .footer__about {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 40rem) {
+  .footer__columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 2rem;
   }
 }
 
@@ -724,6 +914,96 @@ a {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
+}
+
+/* ---------------------------------------------------------------------------
+ * Back to the top, with a progress ring, and no script (ADR 0018)
+ *
+ * This is the control that looks like it needs JavaScript and does not. A scroll timeline
+ * drives two animations: one fades the button in once there is a page worth returning from,
+ * and one advances a typed custom property that a `conic-gradient` reads as an angle.
+ *
+ * Absent entirely where scroll-driven animations are unsupported, rather than falling back
+ * to a button that is always there. A permanent floating control on a page that fits the
+ * window is worse than no control, and this one is a convenience rather than a way to reach
+ * anything: `#main` is one keystroke away for anybody using the keyboard.
+ * ------------------------------------------------------------------------ */
+
+@property --to-top-fill {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.to-top {
+  display: none;
+}
+
+@keyframes to-top-appear {
+  from {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  to {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+@keyframes to-top-progress {
+  from {
+    --to-top-fill: 0deg;
+  }
+
+  to {
+    --to-top-fill: 360deg;
+  }
+}
+
+@supports (animation-timeline: scroll()) {
+  .to-top {
+    position: fixed;
+    right: clamp(1rem, 2.5vw, 2.25rem);
+    bottom: clamp(1rem, 2.5vw, 2.25rem);
+    z-index: 30;
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    color: var(--ink-soft);
+    box-shadow: var(--shadow-2);
+    text-decoration: none;
+    opacity: 0;
+    visibility: hidden;
+    animation: to-top-appear linear both;
+    animation-timeline: scroll(root block);
+    /* Not before there is something to come back from. */
+    animation-range: 60vh 110vh;
+    transition: color 0.15s ease;
+  }
+
+  .to-top:hover {
+    color: var(--ink);
+  }
+
+  /*
+   * The ring: a full-circle gradient with its middle masked out, so the arc is the border
+   * rather than a wedge. `closest-side` keeps the hole round whatever the button's size.
+   */
+  .to-top__ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: conic-gradient(var(--accent) var(--to-top-fill), transparent 0deg);
+    -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
+    mask: radial-gradient(closest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2.5px));
+    animation: to-top-progress linear both;
+    animation-timeline: scroll(root block);
+  }
 }
 
 /* Bylines and provenance ------------------------------------------------- */
@@ -894,6 +1174,23 @@ a {
    * the size of a lead would be the page asserting an editorial judgement it did not make.
    */
   .feed--lead .card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  /*
+   * The last card takes the width when it would otherwise sit beside nothing.
+   *
+   * The lead spans both columns, so the cards after it pair up from an even position — and
+   * a page holding an odd number of them ends with one card and a card-shaped hole. The
+   * hole reads as a layout that broke rather than as a list that ended. `:nth-child(even)`
+   * is the arithmetic: with the lead at position 1, a last card at an even position is the
+   * first of a row nothing follows.
+   *
+   * The page size is not the place to fix this. It would make the fix depend on a number
+   * chosen for the database (§44.2), and the last page of a feed is short whatever that
+   * number is.
+   */
+  .feed--lead .card:last-child:nth-child(even) {
     grid-column: 1 / -1;
   }
 
@@ -1593,6 +1890,21 @@ a {
 
 /* Article ---------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------
+ * The article page (SPEC §49.2, §49.5; ADR 0017, ADR 0018)
+ *
+ * Two columns above 76rem — the prose at its measure and a rail of contents beside it — and
+ * one below, where the rail becomes the inline block it always was. The width of the pair is
+ * a token because four things line up against it: the trail, the article, the suggestions
+ * and the machine-readable footer.
+ * ------------------------------------------------------------------------ */
+
+:root {
+  --rail: 15rem;
+  --rail-gap: 3.5rem;
+  --article-column: calc(var(--prose) + var(--rail-gap) + var(--rail));
+}
+
 /*
  * The article's own column (ADR 0017).
  *
@@ -1605,9 +1917,133 @@ a {
  * the contents and the conversation share one left edge with the text. A body narrower than
  * the heading above it is the arrangement that looks like a mistake.
  */
-.article {
+.article,
+.crumbs,
+.related,
+.article-page__foot {
   max-width: var(--prose);
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (min-width: 76rem) {
+  .article,
+  .crumbs,
+  .related,
+  .article-page__foot {
+    max-width: var(--article-column);
+  }
+
+  /*
+   * The rail, and the rows it spans.
+   *
+   * `align-items: start` is what makes `position: sticky` work on the rail: a stretched grid
+   * item is as tall as its row, and a sticky box as tall as its container has nowhere to
+   * stick to — which looks exactly like sticky not being supported.
+   */
+  .article {
+    display: grid;
+    grid-template-columns: minmax(0, var(--prose)) minmax(0, var(--rail));
+    column-gap: var(--rail-gap);
+    align-items: start;
+  }
+
+  /*
+   * No contents, no column — and the trail comes in with it.
+   *
+   * `<Contents>` renders nothing below three headings (§49.5), so a short article had an
+   * empty 15rem track holding its text off-centre for a rail that was not there. Narrowing
+   * only the article would leave the breadcrumbs starting at an edge the title no longer
+   * has, so the whole page comes in: with a rail it is a wide two-column layout, without one
+   * it is the centred column it always was.
+   *
+   * The suggestions keep the wider measure either way. They are a separate band under a
+   * rule, three across is the point of them, and matching them to a 44rem article would put
+   * three cards in a column and call it a row.
+   */
+  .article-page:not(:has(.contents)) :is(.article, .crumbs, .article-page__foot) {
+    max-width: var(--prose);
+  }
+
+  .article:not(:has(.contents)) {
+    grid-template-columns: minmax(0, var(--prose));
+  }
+
+  .article__intro {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .article__body {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .article__rail {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    position: sticky;
+    /* Clear of the masthead, which sticks at the top of the same viewport. */
+    top: 5.5rem;
+    max-height: calc(100dvh - 7rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* In the rail it is a panel, not a block interrupting the text. */
+  .article__rail .contents {
+    margin: 0;
+    background: none;
+    border: none;
+    border-left: 2px solid var(--line);
+    border-radius: 0;
+    padding: 0 0 0 1rem;
+  }
+}
+
+/* ---- the trail (§50, ADR 0018) ---------------------------------------- */
+
+.crumbs {
+  margin-bottom: 1.5rem;
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * The separator is a pseudo-element rather than a character in the markup, so the trail a
+ * screen reader announces is "Home, AI and machine learning, Inference and serving" rather
+ * than the same list with a chevron read out between every pair.
+ */
+.crumbs li + li::before {
+  content: "›";
+  margin-right: 0.5rem;
+  color: var(--line-strong);
+}
+
+.crumbs a {
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.crumbs a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+/* The last step is where you are, so it does not invite a click as loudly as the rest. */
+.crumbs li:last-child a {
+  color: var(--ink);
+  font-weight: 550;
 }
 
 .title {
@@ -1660,7 +2096,7 @@ a {
   }
 
   .prose h3 {
-    font-size: var(--text-lg);
+    font-size: var(--text-xl);
   }
 }
 
@@ -1684,11 +2120,20 @@ a {
   text-wrap: balance;
 }
 
+/*
+ * `h3` is the level most articles are actually structured at, and it had stopped saying so.
+ *
+ * §50.1 demotes an author's headings by one, so their `##` — the section heading of a normal
+ * article — arrives here as `h3`. Raising the body to 19px without raising this left it at
+ * 21px against 19px: the "subheading a pixel and a half larger than the paragraph under it"
+ * that the type-scale note at the top of this file exists to prevent, reintroduced by the
+ * change that was supposed to improve the reading.
+ */
 .prose h3 {
-  margin-top: 2.25rem;
-  font-size: var(--text-xl);
-  line-height: 1.3;
-  letter-spacing: -0.012em;
+  margin-top: 2.5rem;
+  font-size: var(--text-2xl);
+  line-height: 1.25;
+  letter-spacing: -0.018em;
   text-wrap: balance;
 }
 
@@ -1820,9 +2265,29 @@ a {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+/*
+ * The rule goes under everything the header holds, including the topics.
+ *
+ * It was on `.article__head`, which is the byline and the small controls — so the topics,
+ * which come after it, ended up below the line that was meant to close the header. One rule,
+ * one job: this is where the article stops introducing itself and starts.
+ */
+.article__intro {
   margin-bottom: 2.25rem;
-  padding-bottom: 1.25rem;
+  padding-bottom: 1.5rem;
   border-bottom: 1px solid var(--line);
+}
+
+.article__intro .article__topics {
+  margin-bottom: 0;
+}
+
+/* The body opens at the top of its column; the heading brings its own space below. */
+.prose > :first-child {
+  margin-top: 0;
 }
 
 .article__meta {
@@ -1871,6 +2336,52 @@ a {
 .article__jump:hover {
   color: var(--ink);
   background: var(--line);
+}
+
+/*
+ * Copy the address (§49.1 as ADR 0018 rewrote it).
+ *
+ * Shaped like the two links beside it rather than like the Save button: it leads nowhere,
+ * but it is the same size of decision — a thing you press once and forget. `[hidden]` has to
+ * beat `display: inline-flex`, which is the classic way a control that does nothing ends up
+ * on the page anyway.
+ */
+.article__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--paper-soft);
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.article__copy[hidden] {
+  display: none;
+}
+
+.article__copy .icon {
+  width: 0.95rem;
+  height: 0.95rem;
+  stroke-width: 1.9;
+}
+
+.article__copy:hover {
+  color: var(--ink);
+  background: var(--line);
+}
+
+/* Held for a second and a half by the script, so the press has an answer. */
+.article__copy[data-copied] {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .article__jump .signals {
@@ -3008,16 +3519,63 @@ a {
  * names the topic because that is the whole reason for doing this from a taxonomy rather
  * than from a vector — the offer comes with a reason somebody can disagree with.
  */
+/*
+ * What to read next, across the foot of the page (ADR 0018).
+ *
+ * Outside `<article>` now, so it is laid out against the frame instead of the measure: three
+ * suggestions stacked under a 44rem column read as more of the same article, which is the
+ * one thing they are not. Three above 76rem, two between 64 and 76, one below.
+ */
 .related {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
+  margin-top: 4rem;
+  padding-top: 2rem;
   border-top: 1px solid var(--line);
 }
 
+@media (min-width: 76rem) {
+  .related .feed {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/*
+ * A suggestion is a smaller thing than a feed card: it is offered at the end of something
+ * rather than chosen from a list, so it says the title, who wrote it, and stops.
+ */
+.related .card {
+  padding: 1.125rem 1.25rem 1rem;
+}
+
+.related .card__title {
+  font-size: var(--text-lg);
+}
+
+/*
+ * A suggestion does not repeat where it was filed.
+ *
+ * Every card here shares a topic with the article being read — that is why it is here, and
+ * the heading above says so. Repeating the chips per card is the same fact three more times,
+ * in the loudest colour on the page, taking two lines out of three cards.
+ */
+.related .card__topics {
+  display: none;
+}
+
+.related .card__excerpt {
+  font-size: var(--text-sm);
+  /* Three lines, so a card of six and a card of two do not make a ragged row. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
 .related__heading {
-  margin: 0 0 1rem;
-  font-size: var(--text-md);
-  font-weight: 600;
+  margin: 0 0 1.25rem;
+  font-size: var(--text-xs);
+  font-weight: 640;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
   color: var(--ink-soft);
 }
 

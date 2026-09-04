@@ -6,6 +6,7 @@ import {
   loadConversation,
   loadRelated,
   renderMarkdown,
+  topicTrail,
   resolveSession,
   verifyProvenance,
 } from "@orator/core";
@@ -18,7 +19,13 @@ import Contents from "../../components/Contents.astro";
 import Conversation from "../../components/Conversation.astro";
 import StanceField from "../../components/StanceField.astro";
 import ModerationPanel from "../../components/ModerationPanel.astro";
-import { articleJsonLd, FAILURE_MESSAGE, gateArticle, validatorsFor } from "../../lib/article.js";
+import {
+  articleJsonLd,
+  breadcrumbJsonLd,
+  FAILURE_MESSAGE,
+  gateArticle,
+  validatorsFor,
+} from "../../lib/article.js";
 import { answersFor } from "../../lib/accountable.js";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../../lib/http.js";
 import { mediaOrigin, ports, readingListPorts, siteHost, topicPorts } from "../../lib/ports.js";
@@ -116,6 +123,16 @@ const related =
     ? { cards: [], because: null }
     : await loadRelated(topicPorts, view.article.id, topics);
 
+/*
+ * §50, ADR 0018 — the trail above the title, from the article's first topic.
+ *
+ * The first and not the "best": the platform assigns every topic (§22) and the page shows at
+ * most three of them (§22.2), so any rule for picking among them would be this page inventing
+ * a ranking the classifier did not produce. First is stable, which is what a breadcrumb has
+ * to be — a trail that moved between two renders of the same article is worse than none.
+ */
+const trail = topics.length === 0 ? [] : await topicTrail(topicPorts, topics[0]!.slug);
+
 let html: string | null = null;
 let headings: Heading[] = [];
 let failure: keyof typeof FAILURE_MESSAGE | null = null;
@@ -168,11 +185,42 @@ if (article !== null && view !== null) {
     publishedAt={view.article.publishedAt ?? undefined}
     modifiedAt={view.revision.createdAt}
     authorName={`@${view.author.username}`}
-    jsonLd={articleJsonLd(view, provenance)}
+    jsonLd={
+      trail.length === 0
+        ? [articleJsonLd(view, provenance)]
+        : [articleJsonLd(view, provenance), breadcrumbJsonLd(trail)]
+    }
   >
-    <main id="main" class="wrap">
-      {/* `--prose` rather than the page width — ADR 0017, and the rule is on the stylesheet. */}
+    {/*
+      The frame, not the measure (ADR 0018).
+
+      This is the first page whose `<main>` is `wrap--wide`, and the reason is that two of
+      its parts live outside the prose column: the contents rail beside the body, and the
+      related articles across the foot. The body itself is still `--prose`; the stylesheet
+      places it.
+    */}
+    <main id="main" class="wrap wrap--wide article-page">
+      {/*
+        §50 — where this article sits, for a reader and for a crawler.
+
+        From the article's first topic. The vocabulary is one level deep (§22.1) and the
+        platform assigns it (§22), so this is a fact about the article rather than a path
+        somebody typed — and the addresses stay flat, because a section in the path would
+        mean that moving a topic breaks every permanent link into the article.
+      */}
+      {trail.length > 0 && (
+        <nav class="crumbs" aria-label="Breadcrumb">
+          <ol>
+            <li><a href="/">Home</a></li>
+            {trail.map((crumb) => (
+              <li><a href={`/t/${crumb.slug}`}>{crumb.label}</a></li>
+            ))}
+          </ol>
+        </nav>
+      )}
+
       <article class="article">
+        <header class="article__intro">
         <h1 class="title">{view.revision.title}</h1>
 
         <div class="article__head">
@@ -226,6 +274,21 @@ if (article !== null && view !== null) {
               </button>
             </form>
           )}
+
+          {/*
+            §49.1 as ADR 0018 rewrote it — an action that begins and ends on this device.
+
+            `hidden` until `article.js` has run, like the theme control: a button that does
+            nothing is worse than no button. A reader with scripts off loses it and keeps the
+            address, which was never anywhere but the address bar.
+          */}
+          <button class="article__copy" type="button" data-copy-url hidden>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <rect x="9" y="9" width="11" height="11" rx="2.2" />
+              <path d="M5.5 15H5a1.9 1.9 0 0 1-1.9-1.9V5A1.9 1.9 0 0 1 5 3.1h8.1A1.9 1.9 0 0 1 15 5v.5" />
+            </svg>
+            <span data-copy-url-label>Copy URL</span>
+          </button>
           </div>
         </div>
 
@@ -287,21 +350,30 @@ if (article !== null && view !== null) {
             ))}
           </ul>
         )}
+        </header>
 
         {/*
-          §49.5 — the contents of a long article.
+          §49.5, ADR 0018 — the contents of a long article, in one element and two places.
 
-          Above the text and inline, not a panel beside it. A sidebar of contents is a
-          reference-document pattern; this is a page somebody reads from the top, and the
-          contents are there to answer "how long is this and what is in it" before they
-          start — a question a reader asks once, not one they keep glancing at.
+          Below 76rem this renders exactly where it always did: inline, under the header,
+          above the text. The reasoning that put it there holds for a single column — a
+          sidebar of contents is a reference-document pattern, and this is a page somebody
+          reads from the top.
+
+          Above 76rem the stylesheet moves it into a sticky rail beside the body, and there
+          the argument inverts: the space it takes is space the prose has been told not to
+          use (§49.5's measure), and a reader eight paragraphs into a benchmark does keep
+          glancing at how much is left. One element placed by grid rather than two copies of
+          somebody's headings to keep in step.
 
           Only when there is something to summarise. `<details>` because a reader who does
-          not want it should be able to put it away, and because closing it needs no script:
-          §49.1 permits one only for a preference the server cannot know, and this is not
-          that.
+          not want it should be able to put it away, and because closing it needs no script.
         */}
-        <Contents headings={headings} />
+        <aside class="article__rail">
+          <Contents headings={headings} />
+        </aside>
+
+        <div class="article__body">
 
         {html === null ? (
           <p class="notice">
@@ -381,7 +453,10 @@ if (article !== null && view !== null) {
           of doing this from a taxonomy rather than from a distance: the offer comes with a
           reason the reader can disagree with.
         */}
-        {related.cards.length > 0 && (
+        </div>
+      </article>
+
+      {related.cards.length > 0 && (
           <section class="related" aria-labelledby="related-heading">
             <h2 class="related__heading" id="related-heading">
               {related.because === null
@@ -395,8 +470,9 @@ if (article !== null && view !== null) {
               paged={false}
             />
           </section>
-        )}
+      )}
 
+      <div class="article-page__foot">
         {/*
           §48 — the same article, addressed for machines. Stated on the page because the
           reader is often the person wiring up the agent.
@@ -423,7 +499,17 @@ if (article !== null && view !== null) {
             <a href={`/report?article=${view.article.id}`} rel="nofollow">Report this article</a>
           </p>
         )}
-      </article>
+      </div>
+
+      {/*
+        §49.1, ADR 0018 — the copy button's script, and nothing else on this page needs one.
+
+        `is:inline` keeps Astro from bundling a file that is already a file; `defer` because
+        nothing about the page waits on it. Loaded here rather than in the layout: it is a
+        button that exists on this page alone, and a request on every other page for a
+        control that is not there is a request nobody asked for.
+      */}
+      <script src="/article.js" is:inline defer></script>
     </main>
   </Layout>
 )}

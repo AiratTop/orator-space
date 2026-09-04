@@ -21,6 +21,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { mintSession } from "./session.mjs";
 import { join, resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /* Chrome is the operator's own browser. Nothing here downloads one. */
 const CHROME_CANDIDATES = [
@@ -259,7 +260,15 @@ async function launch() {
  * see the note at the top of `session.mjs` for why that stayed true.
  */
 async function signIn(cdp, base, username) {
-  const token = await mintSession(process.cwd(), username);
+  /*
+   * The repository root from this file's own location, not from the working directory.
+   *
+   * `process.cwd()` made the script correct only when run from the root — and running it
+   * from `apps/web`, which is where a dev server is started, produced a confusing failure
+   * about a database rather than about a path.
+   */
+  const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
+  const token = await mintSession(repoRoot, username);
   const { hostname } = new URL(base);
   await cdp.send("Network.enable");
   const { success } = await cdp.send("Network.setCookie", {

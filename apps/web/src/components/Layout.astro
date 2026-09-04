@@ -46,7 +46,7 @@ interface Props {
    * a string it had stringified itself would be one `JSON.stringify` away from closing the
    * element with somebody's article title (see `jsonLdDocument`).
    */
-  jsonLd?: Record<string, unknown>;
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
   /**
    * Seconds after which this page reloads itself, for a page waiting on something that
    * happens elsewhere (§9.3).
@@ -144,9 +144,18 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
       Not an inline script under the CSP: `application/ld+json` is data, not code, and
       `script-src` does not apply to a type the browser never executes (§57.2).
     */}
-    {jsonLd !== undefined && (
-      <script type="application/ld+json" set:html={jsonLdDocument(jsonLd)} />
-    )}
+    {/*
+      One `<script>` per document (ADR 0018).
+
+      An article page emits two: its own description and its breadcrumb trail. Two blocks
+      rather than one `@graph`, because that is what schema.org expects and what search
+      engines read — and because folding them together would make the article's description
+      conditional on there being a trail to put beside it.
+    */}
+    {jsonLd !== undefined &&
+      (Array.isArray(jsonLd) ? jsonLd : [jsonLd]).map((document_) => (
+        <script type="application/ld+json" set:html={jsonLdDocument(document_)} />
+      ))}
   </head>
 
   <body>
@@ -188,6 +197,34 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
           The signed-out version says "Account" rather than "Sign in" for the reason it
           always did: it names a destination that is true whether or not somebody has one.
         */}
+        {/*
+          A menu that opens, and nothing runs to make it (SPEC §49.1, §57.2).
+
+          The stylesheet used to argue against this: the links wrapped onto a second line
+          rather than hiding behind a button, on the grounds that a hamburger would put every
+          destination one tap further away to save a line of chrome. That was right when the
+          bar was two rows of four short words. It stopped being right when signing in added
+          Bookmarks, Moderation, Me and Settings — six to eight links wrapping to three rows
+          on a phone, which is not a line of chrome, it is a third of the viewport above
+          every article on the site.
+
+          `<details>` and not a script. §49.1 permits a script only for a preference belonging
+          to the reader's own device, and "I would like to see the menu" is not one; a
+          disclosure element opens and closes on its own, keeps its keyboard behaviour and its
+          `aria-expanded` without any help, and works with scripting off like the rest of the
+          page. On a wide screen the summary is `display: none` and the nav is forced back to
+          a row, so the same markup is a bar there and a panel here.
+        */}
+        <details class="masthead__menu">
+          <summary class="masthead__toggle" aria-label="Menu">
+            <svg class="icon icon--open" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+            <svg class="icon icon--close" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          </summary>
+
         <nav class="masthead__nav" aria-label="Site">
           <a href="/search">Search</a>
           <a href="/topics">Topics</a>
@@ -196,10 +233,14 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
             it can be reached from without scrolling to the bottom of an article. A reader
             who wants the API wants it while reading, not afterwards.
 
-            `rel="noopener"` and no `target`, like its twin in the footer: the documentation
-            is somewhere to go, not a second window to leave open behind this one.
+            It opens in a new tab, which is the reverse of what this comment used to say. The
+            argument for keeping it in place — "the documentation is somewhere to go, not a
+            second window" — is true of a reader who has finished the page and false of the
+            one this link exists for: somebody reading an article who wants to check what a
+            scope is called. Sending them away loses the article. `rel="noopener"` because a
+            page opened with `target` can otherwise reach back through `window.opener`.
           */}
-          <a href={`${docsOrigin}/`} rel="noopener">Docs</a>
+          <a href={`${docsOrigin}/`} rel="noopener" target="_blank">Docs</a>
           {Astro.locals.viewer && <a href="/bookmarks">Bookmarks</a>}
           {Astro.locals.viewer?.moderator && <a class="masthead__moderate" href="/moderation">Moderation</a>}
           {Astro.locals.viewer === undefined ? (
@@ -212,6 +253,33 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
             </>
           )}
         </nav>
+        </details>
+
+        {/*
+          The theme, where a reader looks for it (SPEC §49.1).
+
+          The footer keeps the three named buttons — that control says what the states are,
+          which a single icon cannot. This one is for the reader who is already squinting at
+          a white page and wants it to stop: it cycles light → dark → system and shows which
+          of the three is in force.
+
+          `hidden` until `theme.js` has run, exactly like its twin below. A control that does
+          nothing is worse than no control, and this one does nothing without the script.
+        */}
+        <button class="theme-cycle" type="button" data-theme-cycle hidden>
+          <svg class="icon icon--light" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="4.2" />
+            <path d="M12 2.5v2.6M12 18.9v2.6M4.2 4.2l1.9 1.9M17.9 17.9l1.9 1.9M2.5 12h2.6M18.9 12h2.6M4.2 19.8l1.9-1.9M17.9 6.1l1.9-1.9" />
+          </svg>
+          <svg class="icon icon--dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M20 14.2A8.2 8.2 0 0 1 9.8 4a8.4 8.4 0 1 0 10.2 10.2Z" />
+          </svg>
+          <svg class="icon icon--system" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="12" r="8.4" />
+            <path d="M12 3.6a8.4 8.4 0 0 1 0 16.8Z" class="icon__fill" />
+          </svg>
+          <span class="sr-only" data-theme-cycle-label>Theme</span>
+        </button>
       </div>
     </header>
 
@@ -246,6 +314,30 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
           */}
           <p>Everything published here is licensed <a href="https://creativecommons.org/licenses/by/4.0/" rel="license noopener" target="_blank">CC BY 4.0</a>.</p>
         </div>
+
+        {/*
+          The masthead's destinations, again at the bottom of the page.
+
+          A duplicate on purpose. The masthead sticks, so a reader always has these — but the
+          footer is where somebody who has finished reading looks for "what else is here",
+          and a footer that lists the machine-readable endpoints and the policies while
+          omitting the site's own pages reads as though the site had none.
+
+          `Bookmarks` and `Settings` are here for everyone, signed in or not. §33.2 caches an
+          anonymous response and hands it to the next reader, so a footer that varied by
+          viewer would either leak one reader's state or take every page out of the shared
+          cache; both destinations answer sensibly to somebody with no account.
+        */}
+        <nav class="footer__group" aria-label="Navigation">
+          <h2>Navigation</h2>
+          <ul>
+            <li><a href="/">Latest</a></li>
+            <li><a href="/search">Search</a></li>
+            <li><a href="/topics">Topics</a></li>
+            <li><a href="/bookmarks">Bookmarks</a></li>
+            <li><a href="/settings">Settings</a></li>
+          </ul>
+        </nav>
 
         <nav class="footer__group" aria-label="For machines">
           <h2>For machines</h2>
@@ -296,5 +388,27 @@ const fullTitle = canonicalPath === "/" ? "Orator.Space" : `${title} — Orator.
         <button type="button" data-theme="system" aria-pressed="true">System</button>
       </div>
     </footer>
+
+    {/*
+      Back to the top, with a ring that fills as the page scrolls, and no script (ADR 0018).
+
+      This is the control that looks like it needs JavaScript and does not:
+      `animation-timeline: scroll()` drives both its appearance and a `@property`-typed angle
+      behind a `conic-gradient`, so the whole feature is CSS and §49.1 is not involved.
+
+      `#main` rather than `#top`: it is a real element, it is where the content starts, and
+      following the link moves keyboard focus there — which a jump to the document's origin
+      does not.
+
+      Absent entirely where scroll-driven animations are not supported. A permanent floating
+      button on a page that fits the window is worse than no button, and this is a
+      convenience rather than a way to reach anything.
+    */}
+    <a class="to-top" href="#main" aria-label="Back to the top">
+      <span class="to-top__ring" aria-hidden="true"></span>
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 19V5M6 11l6-6 6 6" />
+      </svg>
+    </a>
   </body>
 </html>
