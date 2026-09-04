@@ -243,6 +243,19 @@ a {
 }
 
 /*
+ * Selected text, in the site's own colour rather than the browser's blue.
+ *
+ * Not decoration: a reader quoting a passage out of an article — which is most of what this
+ * site is for (§18) — sees the selection over prose and over code, and the default is a
+ * saturated blue that hides syntax colours under it. A tint keeps the text readable while it
+ * is selected.
+ */
+::selection {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+/*
  * One look for every control that takes typing or a choice.
  *
  * Written with `:where()`, so the whole selector has zero specificity and the components
@@ -962,6 +975,23 @@ a {
 .card__title a:hover {
   text-decoration: underline;
   text-decoration-thickness: 1px;
+}
+
+/*
+ * The card takes the focus ring the title's link would have drawn.
+ *
+ * The link covers the whole card, so its focus outline was a rectangle around six words of
+ * heading with a card-sized hit area around it — the pointer and the keyboard were told two
+ * different things about the same target. `:has()` moves the ring to the thing that is
+ * actually being activated. The inner outline is suppressed rather than left to draw twice.
+ */
+.card:has(.card__title a:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.card__title a:focus-visible {
+  outline: none;
 }
 
 .card__excerpt {
