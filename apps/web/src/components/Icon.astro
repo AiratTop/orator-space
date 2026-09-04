@@ -1,0 +1,80 @@
+---
+/**
+ * The interface's icon set, in one place (SPEC §49.5, §57.2).
+ *
+ * **Drawn, not fetched.** `img-src 'self'` would admit a file, but an icon inside a link has
+ * to take that link's colour in both themes and in every state, and a fetched image cannot.
+ *
+ * **One file, because the same mark appears twice.** `Search` is in the masthead and at the
+ * head of `/search`; the same is true of six others. Inline in both places they would be two
+ * copies of a path that eventually differ by a curve nobody notices, so the set lives here
+ * and both callers name it.
+ *
+ * **Shapes rather than a string of markup.** A record of SVG source per name would need
+ * `set:html`, and the one `set:html` on this site is the sanitised article body — a second
+ * one, even over a constant, is a second place somebody could put a variable. These are data
+ * that this component turns into elements.
+ *
+ * Every icon is `aria-hidden`. Each is used beside its own word, and a screen reader
+ * announcing "image, magnifier, Search" is told the same thing twice, once badly. A caller
+ * with no visible word beside it gives the *link* an `aria-label`, which is the accessible
+ * name of the thing being activated rather than of its decoration.
+ */
+type Shape = { d: string } | { circle: [cx: number, cy: number, r: number] };
+
+const ICONS: Record<string, Shape[]> = {
+  search: [{ circle: [11, 11, 6.5] }, { d: "m20 20-4.4-4.4" }],
+  topics: [{ d: "M12 3.5 3.5 8l8.5 4.5L20.5 8 12 3.5Z" }, { d: "m3.5 12.5 8.5 4.5 8.5-4.5" }],
+  docs: [
+    { d: "M12 6.8S10.3 5 6.5 5H4v13h2.5c3.8 0 5.5 1.8 5.5 1.8V6.8Z" },
+    { d: "M12 6.8S13.7 5 17.5 5H20v13h-2.5c-3.8 0-5.5 1.8-5.5 1.8V6.8Z" },
+  ],
+  bookmarks: [{ d: "M6.5 4.5h11v15l-5.5-4-5.5 4v-15Z" }],
+  moderation: [{ d: "M6 20V4.5h9.5l-1.6 3 1.6 3H6" }],
+  person: [{ circle: [12, 8.5, 3.5] }, { d: "M5 19.5a7 7 0 0 1 14 0" }],
+  settings: [
+    { d: "M4 7.5h8M17 7.5h3M4 16.5h3M12 16.5h8" },
+    { circle: [14.5, 7.5, 2.2] },
+    { circle: [9.5, 16.5, 2.2] },
+  ],
+  /* A report is a warning about something, not a verdict on it — a triangle, not a flag. */
+  report: [{ d: "M12 4.2 2.8 20h18.4L12 4.2Z" }, { d: "M12 10.5v4M12 17.4v.01" }],
+  terms: [
+    { d: "M6 3.5h8.5L19 8v12.5H6V3.5Z" },
+    { d: "M14 3.5V8h5" },
+    { d: "M9 12.5h6M9 16h4" },
+  ],
+  /* Nothing at that address: a magnifier with a line through it rather than a cross. */
+  missing: [
+    { circle: [11, 11, 6.5] },
+    { d: "m20 20-4.4-4.4" },
+    { d: "m8.6 8.6 4.8 4.8M13.4 8.6l-4.8 4.8" },
+  ],
+  privacy: [{ d: "M6 10.5h12v9H6v-9Z" }, { d: "M8.6 10.5V8a3.4 3.4 0 0 1 6.8 0v2.5" }],
+  policy: [
+    { d: "M5.5 4.5h9L18.5 8v11.5h-13V4.5Z" },
+    { d: "M14 4.5V8h4.5" },
+    { d: "m8.8 13.6 1.7 1.7 3.4-3.4" },
+  ],
+};
+
+interface Props {
+  name: keyof typeof ICONS | string;
+  /** Extra classes. `icon` is always applied, so a caller sizes rather than restates. */
+  class?: string;
+}
+
+const { name, class: extra } = Astro.props;
+const shapes = ICONS[name];
+if (shapes === undefined) throw new Error(`no icon called "${name}"`);
+---
+
+<svg class={extra ? `icon ${extra}` : "icon"} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  {shapes.map((shape) =>
+    "circle" in shape ? (
+      <circle cx={shape.circle[0]} cy={shape.circle[1]} r={shape.circle[2]} />
+    ) : (
+      <path d={shape.d} />
+    ),
+  )}
+</svg>

@@ -1,6 +1,7 @@
 ---
 import { resolveSession } from "@orator/core";
 import Layout from "../components/Layout.astro";
+import Icon from "../components/Icon.astro";
 import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
 import { CACHE, CDN_CACHE } from "../lib/http.js";
 
@@ -31,7 +32,7 @@ Astro.response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
 
 <Layout title="Sign in" canonicalPath="/signin">
   <main id="main" class="wrap">
-    <h1 class="title">Sign in</h1>
+    <h1 class="title"><Icon name="person" class="page-icon" /> Sign in</h1>
 
     <p class="account__lede">
       Orator uses passkeys. There is no password to remember, none to reuse, and none for

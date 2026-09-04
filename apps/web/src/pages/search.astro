@@ -1,6 +1,7 @@
 ---
 import { search } from "@orator/core";
 import Layout from "../components/Layout.astro";
+import Icon from "../components/Icon.astro";
 import Feed from "../components/Feed.astro";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
 import { searchLimiter, searchPorts } from "../lib/ports.js";
@@ -77,7 +78,7 @@ const canonicalPath = query.length === 0 ? "/search" : `/search${Astro.url.searc
 
 <Layout title={query.length === 0 ? "Search" : `Search: ${query}`} canonicalPath={canonicalPath}>
   <main id="main" class="wrap wrap--wide">
-    <h1 class="title">Search</h1>
+    <h1 class="title"><Icon name="search" class="page-icon" /> Search</h1>
 
     {/*
       `role="search"` rather than a bare form: it is the landmark a screen reader offers as a

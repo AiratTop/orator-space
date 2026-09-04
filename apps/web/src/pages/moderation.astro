@@ -18,6 +18,7 @@ import {
   type TargetSummary,
 } from "@orator/core";
 import Layout from "../components/Layout.astro";
+import Icon from "../components/Icon.astro";
 import NotFound from "../components/NotFound.astro";
 import { moderationContext, principalOf, sameOrigin } from "../lib/account.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
@@ -408,7 +409,7 @@ const undoableIds = new Set<string>();
 ) : (
   <Layout title="Moderation" canonicalPath="/moderation">
     <main id="main" class="wrap settings">
-      <h1 class="title">Moderation</h1>
+      <h1 class="title"><Icon name="moderation" class="page-icon" /> Moderation</h1>
       <p class="settings__lede">
         Every action here tells the author, states a reason, and can be undone (§61.2).
         Erasing bytes is not among them — that is §23.3, and it is deliberate that it is not

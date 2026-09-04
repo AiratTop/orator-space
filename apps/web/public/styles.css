@@ -690,8 +690,25 @@ a {
     background-color 0.15s ease;
 }
 
+/*
+ * Hidden, but not gone — the box stays and the control does not.
+ *
+ * `theme.js` removes the attribute on `DOMContentLoaded`, which is after the first paint, so
+ * `display: none` meant the bar was laid out once without this button and again with it. The
+ * whole navigation jumped left by 40px on every page load, on every page.
+ *
+ * §49.1's rule is that the control is hidden until the script that makes it work has run, and
+ * it still is: `visibility: hidden` takes it out of the tab order and out of the
+ * accessibility tree, and a press lands on nothing. What it does not take is the space, which
+ * is the only part of it a reader was seeing move.
+ *
+ * A reader with scripts off gets a 40px blank at the end of the bar for ever. That is the
+ * trade, and it is the right way round: an empty square at the end of a row against a layout
+ * shift on every navigation for everybody else.
+ */
 .theme-cycle[hidden] {
-  display: none;
+  display: inline-flex;
+  visibility: hidden;
 }
 
 .theme-cycle:hover {
@@ -1143,16 +1160,72 @@ a {
  * makes the strip. Everything inside takes the frame instead, and the band is free to be as
  * wide as the window.
  */
-.footer__inner,
+/*
+ * Where to follow this, as a row of marks.
+ *
+ * Brand marks are filled glyphs, not stroked drawings — an X or an octocat traced in a 1.6px
+ * stroke is not the logo, it is a sketch of it. So they take their own class rather than
+ * `.icon`, and the two never share a rule.
+ *
+ * The negative margin pulls the first icon's *box* left so its glyph lines up with the
+ * wordmark above it, rather than sitting half a target-width in from it.
+ */
+.social {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 1.25rem;
+  margin-left: -0.55rem;
+}
+
+.social a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.social a:hover {
+  color: var(--ink);
+  background: var(--line);
+}
+
+.brand-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: currentColor;
+  stroke: none;
+}
+
+/*
+ * The licence and who runs this, on one line where there is room and two where there is not.
+ */
 .footer__licence {
   max-width: var(--shell);
   margin-left: auto;
   margin-right: auto;
 }
 
+/*
+ * The frame, declared on the block rather than on the band.
+ *
+ * `.footer` is the full-bleed strip, so its own `max-width` would fight the padding that
+ * makes the strip. This is what carries the shell width, and `.footer__licence` below carries
+ * it too — the two used to share one selector, and an edit that inserted a rule between them
+ * silently handed `.footer__inner` a `display: flex` and took its cap away. The licence line
+ * then started 56px right of the wordmark it sits under.
+ */
 .footer__inner {
   display: grid;
   gap: 2.5rem;
+  max-width: var(--shell);
+  margin: 0 auto;
 }
 
 @media (min-width: 62rem) {
@@ -1235,6 +1308,9 @@ a {
  * theme now.
  */
 .footer__licence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
   margin: 2.5rem auto 0;
   padding-top: 1.25rem;
   border-top: 1px solid var(--line);
@@ -2460,6 +2536,46 @@ a {
   color: var(--ink-soft);
 }
 
+/*
+ * A page whose title carries a mark becomes a row rather than a block.
+ *
+ * `:has()` rather than a modifier class, because the fact that decides the layout is already
+ * in the markup — a caller that adds the icon should not also have to remember to say that
+ * it did. An article's title has no mark and is untouched.
+ */
+:is(h1, .title):has(.page-icon) {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/*
+ * The mark, in the tinted square the front page's sections use, so a reader meets one shape
+ * for "this is what this section is" across the site.
+ *
+ * `flex: none` so a title that wraps to two lines never squashes it into an oval — the icon
+ * is the fixed part of the row and the words are the part that gives.
+ */
+.page-icon {
+  flex: none;
+  box-sizing: content-box;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0.625rem;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent);
+  stroke-width: 1.7;
+}
+
+@media (max-width: 40rem) {
+  .page-icon {
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0.5rem;
+  }
+}
+
 .title {
   font-size: var(--text-5xl);
   line-height: 1.1;
@@ -2795,8 +2911,10 @@ a {
     background-color 0.15s ease;
 }
 
+/* The same trade as the theme button above, for the same reason. */
 .article__copy[hidden] {
-  display: none;
+  display: inline-flex;
+  visibility: hidden;
 }
 
 .article__copy .icon {

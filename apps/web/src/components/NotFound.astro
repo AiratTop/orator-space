@@ -1,5 +1,6 @@
 ---
 import Layout from "./Layout.astro";
+import Icon from "./Icon.astro";
 
 /**
  * One 404, wherever it is reached from (SPEC §49.5).
@@ -26,7 +27,11 @@ const { heading, explanation } = Astro.props;
 <Layout title={heading} canonicalPath="/">
   <main id="main" class="wrap missing">
     <p class="missing__code">404</p>
-    <h1 class="title">{heading}</h1>
+    {/*
+      The mark says "there is nothing here" before the sentence does — which on the one page a
+      reader arrives at by accident is worth the room it takes.
+    */}
+    <h1 class="title"><Icon name="missing" class="page-icon" /> {heading}</h1>
     <p class="missing__why">{explanation}</p>
 
     <ul class="missing__ways">

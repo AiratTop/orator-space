@@ -1,6 +1,7 @@
 ---
 import { renderMarkdown } from "@orator/core";
 import Layout from "./Layout.astro";
+import Icon from "./Icon.astro";
 import { siteHost } from "../lib/ports.js";
 import type { Policy } from "../lib/policies.js";
 
@@ -9,6 +10,13 @@ interface Props {
 }
 
 const { policy } = Astro.props;
+
+/** §48's three policy pages, each with its own mark. */
+const ICON: Record<string, string> = {
+  terms: "terms",
+  privacy: "privacy",
+  "content-policy": "policy",
+};
 
 /**
  * A policy page (SPEC §61.1).
@@ -32,7 +40,15 @@ if (!rendered.ok) throw new Error(`the ${policy.slug} policy did not render: ${r
 >
   <main id="main" class="wrap">
     <article class="prose">
-      <h1>{policy.title}</h1>
+      {/*
+        The mark that stands for this policy, from the same set the masthead uses.
+        
+        Mapped from the slug rather than passed in as a prop: the three policies are a closed
+        set (§48, `policies.ts`), and a prop would let a fourth page be added with the wrong
+        mark or none. An unknown slug throws in `Icon.astro`, which is the right moment to
+        find out.
+      */}
+      <h1><Icon name={ICON[policy.slug] ?? "policy"} class="page-icon" /> {policy.title}</h1>
       {/*
         The same `set:html` the article page carries, with the same justification: the
         argument comes from `renderMarkdown`, which drops raw HTML rather than escaping it

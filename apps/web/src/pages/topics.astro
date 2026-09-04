@@ -1,6 +1,7 @@
 ---
 import { loadTopicTree } from "@orator/core";
 import Layout from "../components/Layout.astro";
+import Icon from "../components/Icon.astro";
 import { CACHE, CDN_CACHE, cacheHeaders } from "../lib/http.js";
 import { topicPorts } from "../lib/ports.js";
 
@@ -31,7 +32,7 @@ const plural = (n: number) => (n === 1 ? "1 article" : `${n} articles`);
   indexable={true}
 >
   <main id="main" class="wrap wrap--wide">
-    <h1 class="title">Topics</h1>
+    <h1 class="title"><Icon name="topics" class="page-icon" /> Topics</h1>
 
     <p class="topics__lede">
       {/*

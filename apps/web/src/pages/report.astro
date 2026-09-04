@@ -1,5 +1,6 @@
 ---
 import Layout from "../components/Layout.astro";
+import Icon from "../components/Icon.astro";
 import { createReport, loadConversation, resolveSession, type CreateReportInput } from "@orator/core";
 import type { AuthorSummary } from "@orator/core/ports";
 import { openReportBy, principalOf, reportContext, sameOrigin } from "../lib/account.js";
@@ -244,7 +245,7 @@ const heading =
 
 <Layout title={heading} canonicalPath="/report" indexable={false}>
   <main class="wrap" id="main">
-    <h1>{heading}</h1>
+    <h1><Icon name="report" class="page-icon" /> {heading}</h1>
 
     {subject !== null && own && (
       <div class="filing">

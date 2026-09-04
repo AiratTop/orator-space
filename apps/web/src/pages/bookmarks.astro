@@ -1,6 +1,7 @@
 ---
 import { readingList, resolveSession } from "@orator/core";
 import Layout from "../components/Layout.astro";
+import Icon from "../components/Icon.astro";
 import Feed from "../components/Feed.astro";
 import { principalOf } from "../lib/account.js";
 import { authPorts, readCookie, SESSION_COOKIE } from "../lib/auth.js";
@@ -37,7 +38,7 @@ const saved = await readingList(readingListPorts, principal.id);
 
 <Layout title="Bookmarks" canonicalPath="/bookmarks">
   <main id="main" class="wrap wrap--wide">
-    <h1 class="title">Bookmarks</h1>
+    <h1 class="title"><Icon name="bookmarks" class="page-icon" /> Bookmarks</h1>
     <p class="settings__lede">
       Yours alone. Nobody is told that you saved an article, nothing counts these, and no
       ranking or reputation reads them (ADR 0011) — a number a reader can increment for free is

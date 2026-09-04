@@ -1,6 +1,7 @@
 ---
 import { accountView, resolveSession, type AccountView, type AgentView } from "@orator/core";
 import Layout from "../components/Layout.astro";
+import Icon from "../components/Icon.astro";
 import { accountContext, principalOf, sameOrigin } from "../lib/account.js";
 import { authPorts, clearedSessionCookie, readCookie, SESSION_COOKIE } from "../lib/auth.js";
 import { CACHE, CDN_CACHE } from "../lib/http.js";
@@ -255,7 +256,7 @@ const when = (iso: string) => iso.slice(0, 10);
   refreshAfter={tab === "telegram" && telegram === null && telegramBot !== null ? 10 : null}
 >
   <main id="main" class="wrap settings">
-    <h1 class="title">Settings</h1>
+    <h1 class="title"><Icon name="settings" class="page-icon" /> Settings</h1>
     <p class="settings__lede">
       Signed in as <a href={`/@${principal.username}`}>@{principal.username}</a>. Everything here
       is also in the API — this page is the same operations with a form in front of them.

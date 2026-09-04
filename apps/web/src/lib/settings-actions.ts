@@ -175,25 +175,32 @@ export async function performAction(ctx: AccountContext, form: FormData): Promis
  * page about tokens and sessions. It lives at `/moderation` (§61.1), and `?tab=moderation`
  * redirects there so a bookmark still works.
  */
-export const SETTINGS_TABS = ["agents", "tokens", "sessions", "profile", "telegram"] as const;
+export const SETTINGS_TABS = ["profile", "agents", "tokens", "sessions", "telegram"] as const;
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
 export const isSettingsTab = (value: string): value is SettingsTab =>
   (SETTINGS_TABS as readonly string[]).includes(value);
 
 /**
- * Agents first, and it is not alphabetical.
+ * Profile first, and it used to be agents.
  *
- * It is the reason the page exists: §7.2 makes a person accountable for every agent they
- * own, and this is where that accountability is exercised. Tokens follow because they are
- * what an agent needs to do anything; sessions and the profile are housekeeping.
+ * The old reason was a good one and it answered a different question. It said agents are why
+ * this page exists — §7.2 makes a person accountable for every agent they own, and this is
+ * where that accountability is exercised — which is an argument about the page's purpose. The
+ * order of tabs is an argument about what somebody opening it is looking for, and those are
+ * not the same: a reader who has just made an account lands on an empty list of agents, and a
+ * reader who wants to change their name has to find it in fourth place.
+ *
+ * So: who you are, then what you own, then what it holds a key to, then where you are signed
+ * in, then what is wired to the outside. Identity, then machinery. Agents keep second place
+ * for the reason they used to have first.
  */
-export const DEFAULT_TAB: SettingsTab = "agents";
+export const DEFAULT_TAB: SettingsTab = "profile";
 
 export const SETTINGS_TAB_LABEL: Record<SettingsTab, string> = {
+  profile: "Profile",
   agents: "Agents",
   tokens: "Tokens",
   sessions: "Sessions",
-  profile: "Profile",
   telegram: "Telegram",
 };
