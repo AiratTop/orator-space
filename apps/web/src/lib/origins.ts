@@ -10,6 +10,8 @@ import { env } from "cloudflare:workers";
  */
 interface HostEnv {
   SITE_HOST: string;
+  /** `production`, `staging` or `local` — SPEC §63, and the wrangler config's `vars`. */
+  ENVIRONMENT: string;
   /**
    * SPEC §9.3 — the bot a deep link points at.
    *
@@ -29,8 +31,7 @@ export const siteHost = (env as unknown as HostEnv).SITE_HOST;
  * Built from configuration and never from the `Host` header. A header-derived origin is
  * how an attacker turns a canonical tag into a link to their own copy of the page.
  */
-export const siteOrigin =
-  siteHost === "localhost" ? "http://localhost:4321" : `https://${siteHost}`;
+export const siteOrigin = siteHost === "localhost" ? "http://localhost:4321" : `https://${siteHost}`;
 
 /**
  * The sibling surfaces, derived from this one (SPEC §14.3, ADR 0003).
@@ -96,6 +97,26 @@ export const defaultCard = `${siteOrigin}/card.png`;
  * is an identifier rather than a location.
  */
 export const docsOrigin = "https://docs.orator.space";
+
+/**
+ * Whether this deployment is the one that may appear in a search index (SPEC §50.2, §14.1).
+ *
+ * Exactly one of them is. Staging serves the same pages from the same zone under a different
+ * hostname, which is the duplicate content §50.2 spends a section on — and the copy has no
+ * `canonical_url` pointing anywhere, because §15.1's rule is about an article published on
+ * two domains, not about a deployment accidentally published twice. Until 2026-09-05 nothing
+ * distinguished them: `robots.txt` said `Allow: /` on both and no page carried `noindex`, so
+ * the only thing keeping staging out of an index was that nobody had ever linked it.
+ *
+ * That is not a property to rely on — a link in a chat, an issue or an announcement is enough
+ * — and it is worth nothing against a crawler that discovers hostnames from certificate
+ * transparency logs, which every public certificate is published to.
+ *
+ * Local is not production either, and gets the same treatment for free. Nothing crawls
+ * localhost; the value of that is that a developer sees on their own machine what staging
+ * serves, rather than a behaviour that only exists on a deployment.
+ */
+export const indexableDeployment = (env as unknown as HostEnv).ENVIRONMENT === "production";
 
 /** SPEC §9.3 — the bot's public name, or null where this deployment has none. */
 export const telegramBot: string | null = (env as unknown as HostEnv).TELEGRAM_BOT ?? null;

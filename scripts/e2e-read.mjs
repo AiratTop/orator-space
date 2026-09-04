@@ -13,6 +13,16 @@
 const webBase = process.argv[2] ?? "http://localhost:4321";
 const apiBase = process.argv[3] ?? "http://localhost:8787";
 const local = webBase.includes("localhost") || webBase.includes("127.0.0.1");
+/**
+ * Which deployment this is, because two of the assertions below invert (SPEC §50.2).
+ *
+ * One deployment is meant to be found in a search index and the others are not, so
+ * `robots.txt` and the `X-Robots-Tag` header say opposite things on either side of this
+ * line. Read from the hostname rather than passed in: the caller already names the
+ * deployment by naming its address, and a second argument saying which one it is would be a
+ * thing that can disagree with the first.
+ */
+const production = new URL(webBase).hostname === "orator.space";
 
 let failures = 0;
 const check = (name, ok, detail = "") => {
@@ -505,7 +515,13 @@ check(
   "the .md variant has invisible characters removed",
   !mdText.includes(ZWSP) && !/[\u{E0000}-\u{E007F}]/u.test(mdText),
 );
-check("the .md variant is excluded from indexing", md.headers.get("x-robots-tag") === "noindex");
+check(
+  "the .md variant is excluded from indexing",
+  // `includes`, not equality: on a deployment that is not production the middleware
+  // replaces this with the stricter `noindex, nofollow` (§50.2). What is asserted is the
+  // directive, not the spelling a particular deployment gives it.
+  (md.headers.get("x-robots-tag") ?? "").includes("noindex"),
+);
 check("the .md variant names its canonical page", (md.headers.get("link") ?? "").includes('rel="canonical"'));
 
 const json = await web(`/p/${id}.json`);
@@ -519,7 +535,10 @@ check("the source principal is named", doc.content?.source_principal === `@reade
 check("the disclosure of origin is stated", doc.content?.disclosure === "ai_generated");
 check("the signature state is stated", doc.content?.provenance === "unsigned");
 check("the schema version is present", doc.schema_version === 1);
-check("the .json variant is excluded from indexing", json.headers.get("x-robots-tag") === "noindex");
+check(
+  "the .json variant is excluded from indexing",
+  (json.headers.get("x-robots-tag") ?? "").includes("noindex"),
+);
 
 // --- SEO surface (§50, §52) --------------------------------------------------------
 check("the page declares its canonical URL", html.includes(`rel="canonical"`) && html.includes(canonical));
@@ -719,6 +738,12 @@ check("robots.txt states a policy", robots.status === 200 && robotsBody.includes
  *
  * A zone setting can undo the product's central premise without a line of code changing,
  * so it is asserted here rather than trusted. See PLAN.md §1.7.
+ *
+ * Still meaningful on a deployment that disallows everything, which is what makes it worth
+ * keeping here rather than moving to a production-only block: the managed block is prepended
+ * per *zone*, and staging is on the same zone. What it names is `GPTBot` and its siblings by
+ * name, not `*`, so our own group saying `Disallow: /` neither satisfies this check nor hides
+ * a zone setting from it.
  */
 const TURNED_AWAY = ["GPTBot", "ClaudeBot", "CCBot", "Google-Extended", "Amazonbot", "meta-externalagent"];
 const blocked = TURNED_AWAY.filter((agent) =>
@@ -741,6 +766,45 @@ check(
   // answer is the opposite of what this header would announce on our behalf.
   !/Content-Signal:/i.test(robotsBody),
 );
+
+/*
+ * The other half of §50.2, and the half a `Disallow` cannot state.
+ *
+ * `robots.txt` governs the fetch; the header governs the listing. On a deployment that is
+ * not meant to be found, both are wanted — the file for a crawler that reads it, the header
+ * for one that arrived from a link and never asked. Asserted on a page rather than on
+ * `robots.txt` alone, because the claim is about every response.
+ *
+ * Both fetched past the cache. `robots.txt` is held for an hour at the edge and the front
+ * page carries `stale-while-revalidate`, so either can be older than the deployment being
+ * checked — which would make this assert what the *previous* build decided. A unique query
+ * string is served by the same route and misses.
+ */
+const closedRobots = await (await web(`/robots.txt?indexing=${suffix}`)).text();
+const CLOSED_TO_ALL = /^User-agent:\s*\*\s*\nDisallow:\s*\/\s*$/im;
+const frontTag = (await web(`/?indexing=${suffix}`)).headers.get("x-robots-tag") ?? "(none)";
+
+if (production) {
+  check(
+    "robots.txt does not close the site, because this is the deployment to read (§48)",
+    !CLOSED_TO_ALL.test(closedRobots),
+  );
+  check("and the front page is offered for indexing", !frontTag.includes("noindex"), frontTag);
+} else {
+  check(
+    "a deployment that is not production is closed to indexing (§50.2)",
+    CLOSED_TO_ALL.test(closedRobots),
+    closedRobots
+      .split("\n")
+      .filter((line) => /^(User-agent|Allow|Disallow):/i.test(line))
+      .join(" · "),
+  );
+  check(
+    "and says so in a header too, for a crawler that never read the file",
+    frontTag.includes("noindex"),
+    frontTag,
+  );
+}
 
 const llms = await web("/llms.txt");
 const llmsText = await llms.text();
@@ -789,11 +853,28 @@ const freshRobots = await (await web(`/robots.txt?deploy=${suffix}`)).text();
 // `http` as well as `https`: locally the origin is a dev server, and a check that only
 // recognises production's scheme is a check that cannot be run before pushing.
 const namesSitemap = /^Sitemap:\s*https?:\/\/\S+\/sitemap\.xml$/im.test(freshRobots);
-check(
-  "robots.txt names the sitemap exactly when it lists something (§51)",
-  listsAShard === namesSitemap,
-  `sitemap.xml ${sitemap.status}${listsAShard ? " with shards" : " empty"}, robots.txt ${namesSitemap ? "names it" : "does not"}`,
-);
+if (production) {
+  check(
+    "robots.txt names the sitemap exactly when it lists something (§51)",
+    listsAShard === namesSitemap,
+    `sitemap.xml ${sitemap.status}${listsAShard ? " with shards" : " empty"}, robots.txt ${namesSitemap ? "names it" : "does not"}`,
+  );
+} else {
+  /*
+   * A closed deployment names no sitemap, whether or not it has one.
+   *
+   * The sitemap is still built here — that is the point of building it on staging — and it
+   * is still reachable at its address, which the shard checks below depend on. What it is
+   * not is advertised: handing a crawler a list of addresses in the same breath as telling
+   * it not to fetch any of them is a contradiction, and a crawler resolves those by picking
+   * one.
+   */
+  check(
+    "a closed deployment names no sitemap, though it still builds one (§51)",
+    !namesSitemap,
+    `sitemap.xml ${sitemap.status}${listsAShard ? " with shards" : " empty"}`,
+  );
+}
 // And it always lists something, because the site's own pages are always there (§50.1).
 check("the index names the static page shard", indexXml.includes("/sitemaps/pages.xml"));
 
@@ -875,7 +956,7 @@ for (const [path, marker] of [
     `${md.status}`,
   );
   check(`${path}.md is the source, not the rendering`, mdText.startsWith("# ") && !mdText.includes("<p>"));
-  check(`${path}.md is excluded from indexing`, md.headers.get("x-robots-tag") === "noindex");
+  check(`${path}.md is excluded from indexing`, (md.headers.get("x-robots-tag") ?? "").includes("noindex"));
   check(
     `${path}.md names the page as canonical`,
     (md.headers.get("link") ?? "").includes(`${webBase}${path}>; rel="canonical"`),

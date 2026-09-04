@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import type { MiddlewareHandler } from "astro";
 import { CACHE, CDN_CACHE } from "./lib/http.js";
 import { fromEdgeCache, mayCache, toEdgeCache } from "./lib/edge-cache.js";
-import { mediaOrigin } from "./lib/origins.js";
+import { indexableDeployment, mediaOrigin } from "./lib/origins.js";
 import { resolveSession } from "@orator/core";
 import { authPorts, readCookie, SESSION_COOKIE } from "./lib/auth.js";
 import { principalOf } from "./lib/account.js";
@@ -152,6 +152,25 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
   const response = await next();
   for (const [name, value] of Object.entries(SECURITY_HEADERS)) response.headers.set(name, value);
 
+  /**
+   * SPEC §50.2 — one deployment is readable, and the others say so on every response.
+   *
+   * `robots.txt` disallows the whole of a non-production deployment, and this is the half of
+   * that statement which survives a crawler that never asked for the file. `apps/edge` sends
+   * the same header on `api`, `mcp` and `media` for the same reason, and the argument is
+   * written out there: the two mechanisms are honoured by different clients, and a URL that
+   * reached an index through a link is the case the file cannot cover.
+   *
+   * `set` rather than `append`, so it overwrites the plain `noindex` a machine representation
+   * or a feed already carries (§50.2). Both mean the same thing; the stricter one is the one
+   * to keep, and two `X-Robots-Tag` headers saying nearly the same thing is how a directive
+   * ends up being read as neither.
+   *
+   * Applied before the response reaches the edge cache below, so a cached copy carries it
+   * too — the same ordering the security headers depend on.
+   */
+  if (!indexableDeployment) response.headers.set("x-robots-tag", "noindex, nofollow");
+
   // HSTS only where TLS is actually in force; sending it from localhost would poison the
   // developer's browser for every other project on that hostname.
   if (url.protocol === "https:") {
@@ -168,7 +187,10 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
    * The web surface accepts no credentials today, which is exactly when the rule is cheap
    * to establish.
    */
-  if (context.request.headers.get("authorization") !== null || context.request.headers.get("cookie") !== null) {
+  if (
+    context.request.headers.get("authorization") !== null ||
+    context.request.headers.get("cookie") !== null
+  ) {
     response.headers.set("cache-control", CACHE.private);
     response.headers.set("cloudflare-cdn-cache-control", CDN_CACHE.private);
     response.headers.delete("etag");

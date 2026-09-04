@@ -163,6 +163,15 @@ export const assets = { get: createR2AssetStore(web.ASSETS_BUCKET).get };
  * than left for every caller to re-import, because "where the site lives" and "what the site
  * may reach" are asked together on nearly every page.
  */
-export { apiOrigin, defaultCard, docsOrigin, mcpOrigin, mediaOrigin, siteHost, siteOrigin } from "./origins.js";
+export {
+  apiOrigin,
+  defaultCard,
+  docsOrigin,
+  indexableDeployment,
+  mcpOrigin,
+  mediaOrigin,
+  siteHost,
+  siteOrigin,
+} from "./origins.js";
 
 export const environment = web.ENVIRONMENT;
