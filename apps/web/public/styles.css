@@ -13,13 +13,35 @@
  */
 
 :root {
-  --ink: #16181d;
-  --ink-soft: #5b6270;
-  --paper: #ffffff;
-  --paper-soft: #f6f7f9;
-  --line: #e2e5ea;
-  --accent: #1a56c4;
-  --warn: #8a5300;
+  /*
+   * The colour scheme is the switch, and `light-dark()` is what reads it.
+   *
+   * This was a light palette plus two blocks that re-pointed every token at a dark one:
+   * once inside `@media (prefers-color-scheme: dark)` for a reader following their system,
+   * once on `[data-theme="dark"]` for a reader who chose it. Two copies of a seventeen-line
+   * mapping, and they had drifted — the media block listed the syntax colours twice and the
+   * attribute block listed them not at all. So a reader who *chose* dark got a dark page
+   * with light-mode highlighting in every code block: dark blue and near-black on
+   * near-black. Nothing could catch it, because both copies were valid CSS that disagreed.
+   *
+   * `light-dark()` deletes the mapping. A token is declared once with both of its values,
+   * a theme that forgets one is not expressible, and all three states are a single
+   * `color-scheme` declaration: follow the system, or force one.
+   *
+   * The dark values are lighter than the first version, which sat at #101215 and read as a
+   * hole in the screen. A dark page is not a black one — the contrast that makes text
+   * comfortable is a ratio, and a near-black background pushes it past the point where it
+   * stops being legibility and starts being glare.
+   */
+  color-scheme: light dark;
+
+  --ink: light-dark(#16181d, #e7eaf0);
+  --ink-soft: light-dark(#5b6270, #a7aebc);
+  --paper: light-dark(#ffffff, #1b1e24);
+  --paper-soft: light-dark(#f6f7f9, #232830);
+  --line: light-dark(#e2e5ea, #363c47);
+  --accent: light-dark(#1a56c4, #8fb6ff);
+  --warn: light-dark(#8a5300, #e8b877);
 
   /*
    * Syntax highlighting (SPEC §49.1). Prism's token vocabulary, highlighted on the server
@@ -31,16 +53,17 @@
    * hue competes with the sentence that introduced it. What earns a colour is what a reader
    * scans for: where the strings are, what is a comment, where the names are. The rest is ink.
    */
-  --code-comment: #6a7280;
-  --code-keyword: #7a3ec8;
-  --code-string: #0a6f4c;
-  --code-number: #9a5b00;
-  --code-name: #1a56c4;
-  --code-punctuation: #5b6270;
-  --code-deleted: #a5271b;
-  --code-deleted-bg: #fbeae8;
-  --code-inserted: #0a6f4c;
-  --code-inserted-bg: #e7f5ee;
+  --code-comment: light-dark(#6a7280, #8d95a3);
+  --code-keyword: light-dark(#7a3ec8, #c9a9fb);
+  --code-string: light-dark(#0a6f4c, #7fd7a6);
+  --code-number: light-dark(#9a5b00, #e8b877);
+  --code-name: light-dark(#1a56c4, #8fb6ff);
+  --code-punctuation: light-dark(#5b6270, #a7aebc);
+  --code-deleted: light-dark(#a5271b, #ffa39b);
+  --code-deleted-bg: light-dark(#fbeae8, #3b2321);
+  --code-inserted: light-dark(#0a6f4c, #86dfab);
+  --code-inserted-bg: light-dark(#e7f5ee, #16301f);
+
   /*
    * One page width, everywhere.
    *
@@ -86,83 +109,14 @@
 
   --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* The two forced states. Absent both, the declaration above follows the reader's system. */
+:root[data-theme="light"] {
   color-scheme: light;
-
-  /*
-   * The dark values, named once and applied twice below.
-   *
-   * They have to be applied twice — once for a reader following their system and once for a
-   * reader who chose dark — and CSS has no way to give one declaration block two selectors
-   * across a media-query boundary. Naming the colours here means the duplication is of the
-   * mapping, not of the palette, so the two cannot drift apart.
-   *
-   * Lighter than the first version, which sat at #101215 and read as a hole in the screen.
-   * A dark page is not a black one: the contrast that makes text comfortable is the ratio,
-   * and a near-black background pushes it past the point where it stops being legibility and
-   * starts being glare.
-   */
-  --dark-ink: #e7eaf0;
-  --dark-ink-soft: #a7aebc;
-  --dark-paper: #1b1e24;
-  --dark-paper-soft: #232830;
-  --dark-line: #363c47;
-  --dark-accent: #8fb6ff;
-  --dark-warn: #e8b877;
-  --dark-code-comment: #8d95a3;
-  --dark-code-keyword: #c9a9fb;
-  --dark-code-string: #7fd7a6;
-  --dark-code-number: #e8b877;
-  --dark-code-name: #8fb6ff;
-  --dark-code-punctuation: #a7aebc;
-  --dark-code-deleted: #ffa39b;
-  --dark-code-deleted-bg: #3b2321;
-  --dark-code-inserted: #86dfab;
-  --dark-code-inserted-bg: #16301f;
 }
 
-/* Dark for anybody whose system says so, unless they have said otherwise here. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --ink: var(--dark-ink);
-    --ink-soft: var(--dark-ink-soft);
-    --paper: var(--dark-paper);
-    --paper-soft: var(--dark-paper-soft);
-    --line: var(--dark-line);
-    --accent: var(--dark-accent);
-    --warn: var(--dark-warn);
-  --code-comment: var(--dark-code-comment);
-  --code-keyword: var(--dark-code-keyword);
-  --code-string: var(--dark-code-string);
-  --code-number: var(--dark-code-number);
-  --code-name: var(--dark-code-name);
-  --code-punctuation: var(--dark-code-punctuation);
-  --code-deleted: var(--dark-code-deleted);
-  --code-deleted-bg: var(--dark-code-deleted-bg);
-  --code-inserted: var(--dark-code-inserted);
-  --code-inserted-bg: var(--dark-code-inserted-bg);
-    --code-comment: var(--dark-code-comment);
-    --code-keyword: var(--dark-code-keyword);
-    --code-string: var(--dark-code-string);
-    --code-number: var(--dark-code-number);
-    --code-name: var(--dark-code-name);
-    --code-punctuation: var(--dark-code-punctuation);
-    --code-deleted: var(--dark-code-deleted);
-    --code-deleted-bg: var(--dark-code-deleted-bg);
-    --code-inserted: var(--dark-code-inserted);
-    --code-inserted-bg: var(--dark-code-inserted-bg);
-    color-scheme: dark;
-  }
-}
-
-/* And for anybody who chose it, whatever their system says. */
 :root[data-theme="dark"] {
-  --ink: var(--dark-ink);
-  --ink-soft: var(--dark-ink-soft);
-  --paper: var(--dark-paper);
-  --paper-soft: var(--dark-paper-soft);
-  --line: var(--dark-line);
-  --accent: var(--dark-accent);
-  --warn: var(--dark-warn);
   color-scheme: dark;
 }
 
