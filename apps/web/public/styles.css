@@ -349,7 +349,7 @@ a {
   background: var(--paper);
   color: var(--ink);
   border: 1px solid var(--accent);
-  border-radius: 0 0 6px 0;
+  border-radius: 0 0 var(--radius-sm) 0;
 }
 
 .skip:focus-visible {
@@ -1163,7 +1163,7 @@ a {
   margin: 1.25rem 0 0;
   padding: 0.9rem 1rem;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--paper-soft);
   max-width: var(--measure);
 }
@@ -1328,15 +1328,28 @@ a {
 
 /* A principal's own comments (§49.2) ------------------------------------- */
 
+/*
+ * A profile's other two tabs are lists of things to choose between, like the first one.
+ *
+ * They were rows separated by hairlines, next to an Articles tab that is a grid of cards, so
+ * moving between the three tabs of one profile changed what kind of page it was. One column
+ * rather than two: a comment is a sentence and a citation is a claim, and neither is a title
+ * somebody scans a grid for.
+ */
 .authored {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  gap: 0.75rem;
 }
 
 .authored__item {
-  padding: 1.25rem 0;
-  border-bottom: 1px solid var(--line);
+  padding: 1.125rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
 }
 
 /*
@@ -1385,11 +1398,16 @@ a {
   list-style: none;
   margin: 0;
   padding: 0;
+  display: grid;
+  gap: 0.75rem;
 }
 
 .citations__item {
-  padding: 1.25rem 0;
-  border-bottom: 1px solid var(--line);
+  padding: 1.125rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
 }
 
 /*
@@ -1853,7 +1871,7 @@ a {
   margin-bottom: 0.5rem;
   border: 1px solid var(--line);
   border-left-width: 3px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--paper-soft);
 }
 
@@ -2040,7 +2058,7 @@ a {
   margin: 2rem 0 0;
   padding: 1.25rem;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius);
   background: var(--paper-soft);
   max-width: var(--measure);
 }
@@ -2279,7 +2297,7 @@ a {
   font-size: var(--text-md);
   padding: 0.75rem;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--paper);
   /* A token is one long unbroken string; without this it forces the page sideways. */
   word-break: break-all;
@@ -2505,7 +2523,7 @@ a {
   line-height: 1.5;
   padding: 0.0625rem 0.375rem;
   border: 1px solid var(--line);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   color: var(--ink-soft);
   white-space: nowrap;
 }
@@ -2544,7 +2562,7 @@ a {
   align-items: baseline;
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   margin-bottom: 0.375rem;
   cursor: pointer;
 }
@@ -2607,7 +2625,7 @@ a {
  */
 .issue {
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   padding: 0.625rem 1rem;
 }
 
@@ -2641,7 +2659,7 @@ a {
   width: 100%;
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
   font: inherit;
@@ -2816,7 +2834,7 @@ a {
   display: inline-block;
   padding: 0.25rem 0.625rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: var(--text-md);
   text-decoration: none;
   color: var(--ink);
@@ -3199,7 +3217,7 @@ a {
   font-size: var(--text-sm);
   padding: 0.125rem 0.625rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--ink-soft);
   cursor: pointer;
@@ -3246,7 +3264,7 @@ img.avatar {
   padding: 1rem 1.125rem;
   border: 1px solid var(--line);
   border-left: 3px solid var(--warn);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--paper-soft);
 }
 
@@ -3296,7 +3314,7 @@ img.avatar {
   margin: 0 0 2rem;
   padding: 0.875rem 1rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--paper-soft);
 }
 
@@ -3371,7 +3389,7 @@ img.avatar {
 .state__fact {
   padding: 0.125rem 0.5rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: var(--text-sm);
 }
 
@@ -3465,7 +3483,7 @@ img.avatar {
   display: inline-block;
   padding: 0.125rem 0.5rem;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--ink-soft);
   font-size: var(--text-sm);
   cursor: pointer;
@@ -3594,12 +3612,21 @@ img.avatar {
   font-size: var(--text-md);
 }
 
+/*
+ * The two counts, on the tokens the diff body already uses.
+ *
+ * They were literals — #1a7f37 and #b3261e — and a literal has one value, so on a dark page
+ * they were dark green and dark red on #171a20: about 3.4:1 and 3.0:1, under what WCAG 2.2
+ * AA asks of text. The lines below them were correct the whole time, because a line uses
+ * `--code-inserted` and `--code-deleted` and those carry both values. The summary of a diff
+ * and the diff disagreed about what "added" looks like.
+ */
 .diff__added {
-  color: #1a7f37;
+  color: var(--code-inserted);
 }
 
 .diff__removed {
-  color: #b3261e;
+  color: var(--code-deleted);
   margin-left: 0.5rem;
 }
 
@@ -3619,7 +3646,7 @@ img.avatar {
   width: 100%;
   margin: 0 0 1rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border-collapse: collapse;
   font-family: var(--mono);
   font-size: var(--text-sm);
@@ -3774,7 +3801,7 @@ img.avatar {
   align-items: baseline;
   padding: 0.5rem 0.7rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   margin-bottom: 0.4rem;
   cursor: pointer;
 }
@@ -3936,7 +3963,7 @@ img.avatar {
 .kinds__select {
   padding: 0.25rem 0.5rem;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
   font: inherit;
