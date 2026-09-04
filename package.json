@@ -26,16 +26,16 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",
-    "@cloudflare/workers-types": "^5.20260820.1",
+    "@cloudflare/workers-types": "^5.20260903.1",
     "@eslint/js": "^10.0.1",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@vitest/coverage-v8": "^4.1.11",
-    "eslint": "^10.8.1",
+    "eslint": "^10.9.1",
     "prettier": "^3.9.6",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.67.0",
+    "typescript-eslint": "^8.69.0",
     "vitest": "^4.1.11",
-    "wrangler": "^4.124.0",
-    "zod": "^4.4.3"
+    "wrangler": "^4.129.0",
+    "zod": "^4.5.4"
   }
 }
