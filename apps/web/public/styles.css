@@ -1627,6 +1627,29 @@ a {
   max-width: var(--prose);
 }
 
+/*
+ * A step down on a phone, and it is the reading that asks for it rather than the fit.
+ *
+ * 19px is right for an article in a 44rem column; in a 390px viewport the same size is about
+ * 34 characters a line, which is short enough that the eye returns to the left margin more
+ * often than it reads. 17px gives roughly 38 — the low end of a comfortable measure rather
+ * than under it.
+ */
+@media (max-width: 40rem) {
+  .prose {
+    font-size: var(--text-base);
+  }
+
+  .prose h2 {
+    font-size: var(--text-2xl);
+    margin-top: 2.25rem;
+  }
+
+  .prose h3 {
+    font-size: var(--text-lg);
+  }
+}
+
 .prose > * + * {
   margin-top: 1.2em;
 }
